@@ -1,0 +1,44 @@
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Frontend
+node_modules/
+dist/
+build/
+.next/
+
+# Local data and model binaries
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+*.pkl
+*.joblib
+*.sqlite
+*.sqlite3
+*.db
+private_data/
+patient_uploads/
+
+# Platform
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Note: original screenshots needed for submissions should be kept in a controlled evidence directory.
