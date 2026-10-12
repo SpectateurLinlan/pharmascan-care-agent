@@ -33,9 +33,9 @@
       "acceptance": "git status shows copied docs and existing work preserved",
       "requirement": "Repo",
       "dependency": "",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "done",
+      "evidence": "commit 3a78023: docs package + migration + static tests merged; pre-existing PROJECT_BRIEF/README compared before overwrite; docs/WORKBUDDY_START.md removed as superseded by prompts/; no teammate code overwritten",
+      "updated_at": "2026-10-13T03:40:00+08:00"
     },
     {
       "id": "D003",
@@ -48,9 +48,9 @@
       "acceptance": "Record actual repo URL, branch and pre-existing files",
       "requirement": "Repo",
       "dependency": "",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "done",
+      "evidence": "remote origin=https://github.com/SpectateurLinlan/pharmascan-care-agent.git, branch main, base commit d03a5fe 'chore: initialize PharmaScan Care project'; working tree contained only docs+migration from handoff, no pre-existing app code",
+      "updated_at": "2026-10-13T03:40:00+08:00"
     },
     {
       "id": "D004",
@@ -123,9 +123,9 @@
       "acceptance": "PK FK uniqueness check RLS and rollback tests",
       "requirement": "Medication management",
       "dependency": "B001",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "in_progress",
+      "evidence": "supabase/migrations/202610130001_core.sql + rollback written; static checks pytest 23/23 passed (real DB execution BLOCKED per B02: no local PostgreSQL/Supabase)",
+      "updated_at": "2026-10-13T03:40:00+08:00"
     },
     {
       "id": "B003",

@@ -9,3 +9,4 @@
 | B05 | Stage1 multi-pill detector unverified; single pill → duplicate boxes in `/scan` | Vision owner | guarded single-pill manual crop path + regression test | fix/demonstrate detector stability | open |
 | B06 | Cover, social URL, demo video, final web URL missing | Submission owner | prepare slots, storyboard and checklist | create/upload externally | open |
 | B07 | Exact submissions form marks for Architecture PPT and Demo optionality not independently verified | Submission owner | distinguish target from verified organiser requirement | inspect final submission portal | open |
+| B08 | Stray reserved-name junk file `nul` (34 bytes) in repo root, created by an accidental `2>nul` redirect in Git Bash; agent tooling gets ACCESS_DENIED on delete/rename (likely open handle). Already `.gitignore`d, harmless to git ops | App owner | none (ignored by git) | from own terminal run: `del \\.\D:\Projects\pharmascan-care-agent\nul` | open |
