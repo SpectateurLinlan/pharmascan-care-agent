@@ -11,7 +11,6 @@ from datetime import timedelta
 from uuid import UUID
 
 import pytest
-
 from app.contracts.dto import (
     DoseEventInput,
     DoseRuleDTO,

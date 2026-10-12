@@ -16,7 +16,6 @@ from ..contracts.dto import (
     ActivationResultDTO,
     ConfirmationChallengeDTO,
     EnrollmentResultDTO,
-    FrequencyRuleDTO,
     MissingInstruction,
     PatientMedicationDTO,
     RegimenDraftInput,

@@ -304,6 +304,13 @@ class InMemoryAgentSessionRepository:
     def update(self, session: AgentSessionDTO) -> None:
         self._store.sessions[(session.patient_id, session.id)] = session
 
+    def is_owned_by_other_patient(self, patient_id: UUID, session_id: UUID) -> bool:
+        """Ownership probe: a session id may never be shared across patients."""
+        return any(
+            owner != patient_id and sid == session_id
+            for owner, sid in self._store.sessions
+        )
+
 
 class InMemoryConfirmationChallengeRepository:
     """** SIMULATED ** in-memory repository with token_hash uniqueness."""

@@ -8,7 +8,7 @@ reproducible and unit-testable (AGENTS.md rules 21-23, 46-47 equivalent).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -27,7 +27,6 @@ from ..contracts.enums import (
     IntakeStatus,
     PolicyRuleId,
     RegimenState,
-    SourceReviewStatus,
     VisualStatus,
 )
 from .errors import (

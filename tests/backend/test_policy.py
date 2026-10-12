@@ -11,8 +11,7 @@ from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
-
-from app.contracts.dto import FrequencyRuleDTO
+from app.contracts.dto import FrequencyRuleDTO, PatientMedicationDTO, RegimenVersionDTO, SourceDocumentDTO
 from app.contracts.enums import (
     FieldName,
     IdentityStatus,
@@ -22,7 +21,6 @@ from app.contracts.enums import (
     SourceReviewStatus,
     VisualStatus,
 )
-from app.contracts.dto import PatientMedicationDTO, RegimenVersionDTO, SourceDocumentDTO
 from app.domain import policy
 from app.domain.errors import (
     ConfirmationExpiredError,

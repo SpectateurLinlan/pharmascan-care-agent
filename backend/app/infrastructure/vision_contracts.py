@@ -12,7 +12,6 @@ this repository may claim a real Stage2 result.
 from __future__ import annotations
 
 from typing import Literal, Protocol
-from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 

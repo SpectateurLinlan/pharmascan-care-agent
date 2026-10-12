@@ -9,7 +9,6 @@ from __future__ import annotations
 from uuid import UUID
 
 import pytest
-
 from app.contracts.dto import FrequencyRuleDTO, RegimenDraftInput
 from app.contracts.enums import FieldName, IdentityStatus, RegimenState
 from app.domain.errors import (

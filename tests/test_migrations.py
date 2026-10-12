@@ -3,7 +3,6 @@
 import re
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION_PATH = ROOT / "supabase" / "migrations" / "202610130001_core.sql"
 ROLLBACK_PATH = ROOT / "supabase" / "rollback" / "202610130001_core.sql"

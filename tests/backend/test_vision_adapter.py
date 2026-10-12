@@ -10,7 +10,6 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-
 from app.infrastructure.stage2_adapter import (
     FakeVisionProvider,
     HttpStage2VisionProvider,

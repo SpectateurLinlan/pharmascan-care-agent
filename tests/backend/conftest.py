@@ -33,7 +33,11 @@ from app.infrastructure.memory_repos import (  # noqa: E402
     InMemoryToolTraceRepository,
 )
 
-FIXED_NOW = datetime(2026, 10, 13, 1, 30, tzinfo=UTC)  # 09:30 Asia/Singapore
+#: 2026-10-13 07:00 Asia/Singapore (= 2026-10-12 23:00 UTC).
+#: Chosen so that today's 08:00 SG dose is still ahead of "now", which lets a
+#: freshly activated regimen produce a today occurrence that becomes due once
+#: the clock advances past 08:00 SG.
+FIXED_NOW = datetime(2026, 10, 12, 23, 0, tzinfo=UTC)
 
 
 class FixedClock:

@@ -21,11 +21,10 @@ from ..contracts.dto import (
     DoseOccurrenceDTO,
     DoseRuleDTO,
     DueDoseResultDTO,
-    PatientMedicationDTO,
     RegimenVersionDTO,
     SelfReportResultDTO,
 )
-from ..contracts.enums import IntakeStatus, OccurrenceStatus, RegimenState, RuleKind, VisualStatus
+from ..contracts.enums import OccurrenceStatus, RegimenState, RuleKind, VisualStatus
 from ..contracts.ports import (
     Clock,
     DoseEventRepository,
@@ -42,6 +41,9 @@ from .timezone import LOCAL_TZ_PROVIDER, LocalTzProvider, to_utc
 
 class DoseScheduleService:
     """Materialise dose occurrences deterministically from a regimen rule."""
+
+    #: How far back an unreported occurrence may still be surfaced as "due".
+    DUE_LOOKBACK = timedelta(days=1)
 
     def __init__(
         self,
@@ -78,6 +80,10 @@ class DoseScheduleService:
     ) -> list[DoseOccurrenceDTO]:
         """Generate occurrences for the next `days` local days.
 
+        The window starts at **local midnight of today**, not at "now": a dose
+        scheduled earlier today must still exist as an occurrence so the patient
+        can report it (otherwise today's dose could never be recorded).
+
         PRN regimens generate NO scheduled occurrence — a PRN dose only exists
         when the patient reports taking it (no inferred occurrence).
         """
@@ -89,14 +95,18 @@ class DoseScheduleService:
 
         tz = self._tz.local_tz(patient_id)
         now = self._clock.now()
-        horizon_end = now + timedelta(days=days)
+        local_today = now.astimezone(tz).date()
+        window_start = datetime(
+            local_today.year, local_today.month, local_today.day, tzinfo=tz
+        ).astimezone(UTC)
+        horizon_end = window_start + timedelta(days=days)
         generated: list[DoseOccurrenceDTO] = []
 
         for rule in self._rules.list_for_regimen(patient_id, regimen_id):
             if rule.rule_kind != RuleKind.SCHEDULED or not rule.enabled:
                 continue
-            for due_at in self._expand(rule, now, horizon_end, tz):
-                if due_at < (regimen.effective_from or now):
+            for due_at in self._expand(rule, window_start, horizon_end, tz):
+                if due_at < (regimen.effective_from or window_start):
                     continue
                 key = f"{regimen_id}:{rule.id}:{due_at.astimezone(UTC).isoformat()}"
                 existing = self._occurrences.find_by_generation_key(patient_id, key)
@@ -152,7 +162,12 @@ class DoseScheduleService:
     def find_due(
         self, *, patient_id: UUID, regimen_id: UUID, at: datetime | None = None
     ) -> DueDoseResultDTO:
-        """Return the earliest un-reported occurrence up to `at`, if any."""
+        """Return the earliest occurrence that has come due and has no report.
+
+        An occurrence is *due* when its ``due_at`` is at or before ``at`` (an
+        upcoming future dose is not yet actionable). The look-back window is
+        bounded so a long-untouched regimen does not resurface ancient doses.
+        """
         regimen = self._require_regimen(patient_id, regimen_id)
         moment = at or self._clock.now()
         if regimen.is_prn:
@@ -162,11 +177,13 @@ class DoseScheduleService:
                 is_prn=True,
             )
         window = self._occurrences.list_for_regimen(
-            patient_id, regimen_id, moment - timedelta(days=1), moment + timedelta(seconds=1)
+            patient_id, regimen_id, moment - self.DUE_LOOKBACK, moment + timedelta(seconds=1)
         )
         for occurrence in window:
             if occurrence.status == OccurrenceStatus.CLOSED:
                 continue
+            if occurrence.due_at > moment:
+                continue  # not actionable yet
             return DueDoseResultDTO(
                 occurrence=occurrence,
                 medication_display_name="",
