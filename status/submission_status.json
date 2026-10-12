@@ -1,0 +1,20 @@
+{
+  "as_of": "2026-10-13",
+  "submission_deadline_date": "2026-10-16",
+  "deadline_exact_time": null,
+  "project_name_proposed": "PharmaScan Care",
+  "status_legend": ["missing", "draft", "ready_verified", "submitted_verified"],
+  "items": {
+    "project_title": {"status": "draft", "value": "PharmaScan Care", "owner": "Submission"},
+    "short_blurb": {"status": "draft", "value": "A voice-first agent for safer medication routines.", "word_count_whitespace": 7, "hard_limit": "under 10"},
+    "project_description": {"status": "draft", "path": "docs/SUBMISSION.md"},
+    "cover_image": {"status": "missing", "path": "assets/cover_16x9.png"},
+    "web_link": {"status": "missing", "url": null, "original_brief": "optional/bonus; user portal target"},
+    "demo_video_link": {"status": "missing", "url": null, "target_length_minutes": [5, 8], "original_brief": "optional; user target"},
+    "workbuddy_chat_history": {"status": "missing", "evidence": null},
+    "workbuddy_chat_screenshots": {"status": "missing", "required_minimum": 3, "actual_count": 0},
+    "architecture_ppt": {"status": "missing", "path": "assets/architecture_diagram.pptx", "challenge2_hard_requirement": "unconfirmed"},
+    "github_source_url": {"status": "missing", "url": null},
+    "social_media_bonus": {"status": "missing", "url": null, "optional": true}
+  }
+}

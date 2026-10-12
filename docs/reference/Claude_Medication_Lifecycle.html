@@ -1,0 +1,696 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>PharmaScan 用药周期</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap">
+<style>
+/* Layout: one long sequence. Overview diagram first, then four phases; each step is a row of
+   number | what happens on screen | the API call panel. Stacks to one column on phones.
+   Chinese glyphs fall back from the Latin faces to Noto Sans SC. */
+:root {
+  --bg: #f4f7f6;
+  --surface: #ffffff;
+  --ink: #15211f;
+  --muted: #586966;
+  --line: #d6dfdc;
+  --accent: #0e6a5a;
+  --code-bg: #edf2f1;
+  --live: #1b7443;
+  --planned: #9a5800;
+  --gap: #b0281f;
+  --web: #2a58a3;
+  --mate: #74399b;
+  --sim: #5f6669;
+  --ok: #1b7443;
+  --warn: #9a5800;
+  --bad: #b0281f;
+  --font-display: "Bricolage Grotesque", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, "Noto Sans SC", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1514; --surface: #151f1d; --ink: #e4edea; --muted: #9db0ab; --line: #2a3835;
+    --accent: #52c4a9; --code-bg: #1a2624;
+    --live: #5fd08f; --planned: #f0ad4e; --gap: #ff7f75; --web: #8fb4ff; --mate: #d39cf5; --sim: #a9b1b4;
+    --ok: #5fd08f; --warn: #f0ad4e; --bad: #ff7f75;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1514; --surface: #151f1d; --ink: #e4edea; --muted: #9db0ab; --line: #2a3835;
+  --accent: #52c4a9; --code-bg: #1a2624;
+  --live: #5fd08f; --planned: #f0ad4e; --gap: #ff7f75; --web: #8fb4ff; --mate: #d39cf5; --sim: #a9b1b4;
+  --ok: #5fd08f; --warn: #f0ad4e; --bad: #ff7f75;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 16px/1.7 var(--font-body);
+  padding-inline: 16px; padding-block: 0 56px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 40px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.3; }
+h1 { font-size: clamp(1.8rem, 4vw, 2.5rem); }
+h2 { font-size: 1.4rem; }
+h3 { font-size: 1.06rem; }
+p { margin: 0; }
+code, pre { font-family: var(--font-mono); }
+a { color: var(--accent); }
+
+header { padding-top: 40px; display: grid; gap: 14px; max-width: 44em; }
+.eyebrow { font-size: .8rem; letter-spacing: .08em; color: var(--accent); font-weight: 700; }
+.lede { color: var(--muted); font-size: 1.04rem; }
+
+/* status chips */
+.chip {
+  --c: var(--sim);
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  font: 700 .76rem/1 var(--font-body); letter-spacing: .03em;
+  color: var(--c); padding: 5px 9px; border-radius: 999px;
+  background: color-mix(in srgb, var(--c) 11%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c) 38%, transparent);
+}
+.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+.chip.live { --c: var(--live); }
+.chip.planned { --c: var(--planned); }
+.chip.gap { --c: var(--gap); }
+.chip.web { --c: var(--web); }
+.chip.mate { --c: var(--mate); }
+.chip.sim { --c: var(--sim); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+
+/* overview diagram */
+.overview { display: grid; gap: 12px; }
+.diagram {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px; overflow-x: auto;
+}
+.diagram pre.mermaid { margin: 0; background: transparent; min-width: 720px; }
+
+/* phases and steps */
+.phase { display: grid; gap: 16px; }
+.phase-head { display: grid; gap: 6px; border-top: 2px solid var(--ink); padding-top: 14px; }
+.phase-head .tag { font: 700 .8rem/1.2 var(--font-body); letter-spacing: .06em; color: var(--muted); }
+.phase-head p { color: var(--muted); max-width: 44em; }
+
+.step {
+  display: grid; grid-template-columns: 2.6rem minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 12px 20px; padding: 18px 0; border-bottom: 1px solid var(--line);
+}
+.num {
+  font: 700 1.05rem/1 var(--font-display); color: var(--accent);
+  width: 2.2rem; height: 2.2rem; border-radius: 50%; display: grid; place-items: center;
+  border: 1.5px solid var(--accent); font-variant-numeric: tabular-nums;
+}
+.what { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.who { font-size: .8rem; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
+.what ul { margin: 0; padding-left: 1.15em; display: grid; gap: 4px; }
+.click {
+  font-weight: 700; color: var(--accent);
+  border-bottom: 1.5px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.call {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 14px; display: grid; gap: 10px; align-content: start; min-width: 0;
+}
+.call-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.method {
+  font: 600 .75rem/1 var(--font-mono); padding: 4px 6px; border-radius: 4px;
+  background: var(--ink); color: var(--bg);
+}
+.path { font: 500 .9rem/1.3 var(--font-mono); overflow-wrap: anywhere; }
+.call-head .chip { margin-left: auto; }
+.call pre {
+  margin: 0; background: var(--code-bg); border-radius: 6px; padding: 10px 12px;
+  font-size: .78rem; line-height: 1.5; overflow-x: auto; white-space: pre;
+}
+.call .label { font-size: .78rem; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
+.call.none { background: transparent; border-style: dashed; }
+.call.none p { color: var(--muted); font-size: .93rem; }
+
+/* example result screen */
+.screen {
+  border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: grid; gap: 8px;
+  background: var(--surface); max-width: 380px;
+}
+.screen .title { font-size: .8rem; color: var(--muted); letter-spacing: .05em; font-weight: 700; }
+.result { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 8px; align-items: start; font-size: .92rem; }
+.result i { width: 12px; height: 12px; border-radius: 50%; margin-top: 7px; background: var(--c); }
+.result.ok { --c: var(--ok); } .result.bad { --c: var(--bad); } .result.warn { --c: var(--warn); }
+.summary-bar {
+  font-size: .9rem; padding: 8px 10px; border-radius: 8px;
+  background: color-mix(in srgb, var(--bad) 10%, transparent); border-left: 3px solid var(--bad);
+}
+
+/* closing tables */
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+.box { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 10px; align-content: start; }
+.box ul { margin: 0; padding-left: 1.15em; display: grid; gap: 5px; }
+.box h3 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.loopback {
+  display: flex; gap: 10px; align-items: center; color: var(--accent); font-weight: 700; font-size: .95rem;
+}
+.loopback svg { flex: none; }
+
+@media (max-width: 780px) {
+  .step { grid-template-columns: 2.6rem minmax(0, 1fr); }
+  .call { grid-column: 2; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+
+<div class="wrap" lang="zh-Hans">
+
+<header>
+  <p class="eyebrow">PharmaScan · 第一至第三阶段</p>
+  <h1>从医生到患者的一个完整用药周期</h1>
+  <p class="lede">从开出新处方到疗程结束的每一步：每个人点击什么、系统中哪一部分在工作，以及对应的 PharmaScan API
+  调用。示例患者服用二甲双胍（metformin）500 mg、氨氯地平（amlodipine）5 mg 和立普妥（Lipitor，即阿托伐他汀）10 mg；之后医生加开克拉霉素（clarithromycin）。</p>
+  <div class="legend" aria-label="图例">
+    <span class="chip live">已上线（API 中可用）</span>
+    <span class="chip planned">已规划（features.md）</span>
+    <span class="chip gap">尚未开发</span>
+    <span class="chip web">网站团队</span>
+    <span class="chip mate">第一阶段队友</span>
+    <span class="chip sim">原型中为模拟</span>
+  </div>
+  <p class="lede" style="font-size:.93rem">API 地址：<code>https://davidpansx-pharmascan-api.hf.space</code>。网站直接从浏览器调用它；API 不保存任何数据。</p>
+</header>
+
+<section class="overview" aria-labelledby="ov">
+  <h2 id="ov">整个周期一览</h2>
+  <div class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+  actor Dr as 医生
+  participant Feed as 健康记录数据源
+  participant BE as 我们的后端
+  participant API as PharmaScan API
+  actor P as 使用网站的患者
+  participant S1 as 第一阶段检测器
+  Dr->>Feed: 开处方（药名、剂量、服药时间）
+  Feed->>BE: 新处方
+  BE->>API: POST /v1/safety/medications
+  API-->>BE: 相互作用和重复用药警报
+  BE->>API: GET /v1/pills/search
+  API-->>BE: 匹配的药片产品和图片
+  BE->>API: 目录嵌入向量（尚未开发）
+  API-->>BE: 患者的个人图库
+  P->>BE: 用 Singpass 登录
+  BE-->>P: 我的药物、图片、警报、个人图库
+  opt 第一次服用某种药
+    P->>API: POST /v1/embed，3 到 5 张照片
+    API-->>P: 嵌入向量，存入个人图库
+  end
+  loop 每一次服药
+    BE-->>P: 服药时间提醒
+    P->>S1: 这一剂药的照片
+    S1-->>P: 每颗药片的框
+    P->>API: POST /v1/scan，附照片、框、个人图库、服药安排
+    API-->>P: 每颗药片的名称或「不是您的药」，以及剂量警报
+    P->>BE: 记录这次服药结果
+  end
+  Feed->>BE: 处方变更或疗程结束
+  BE->>Dr: 服药依从性摘要
+</pre>
+  </div>
+</section>
+
+<!-- ============================ 阶段 A ============================ -->
+<section class="phase" aria-labelledby="pa">
+  <div class="phase-head">
+    <span class="tag">阶段 A · 每张处方一次</span>
+    <h2 id="pa">医生开处方，我们的系统做准备</h2>
+    <p>在患者打开任何页面之前，在后台完成。不需要患者拍任何照片。</p>
+  </div>
+
+  <article class="step">
+    <div class="num">1</div>
+    <div class="what">
+      <p class="who">医生 · 诊所系统</p>
+      <h3>医生开出处方</h3>
+      <ul>
+        <li>二甲双胍 500 mg，08:00 和 20:00 各 1 片</li>
+        <li>氨氯地平 5 mg，08:00 1 片</li>
+        <li>立普妥 10 mg，21:00 1 片</li>
+      </ul>
+      <p>记录里最好也带上所配药品的产品代码（NDC）：它能准确告诉我们药房发的是哪一种药片，因为每个厂家的药片外观都不一样。</p>
+    </div>
+    <div class="call none">
+      <div class="call-head"><span class="chip sim">模拟</span></div>
+      <p>不调用 PharmaScan。真正接入国家健康记录需要其管理方批准；原型使用字段相同的模拟数据源。</p>
+    </div>
+  </article>
+
+  <article class="step">
+    <div class="num">2</div>
+    <div class="what">
+      <p class="who">健康记录数据源 → 我们的后端</p>
+      <h3>处方存入我们的数据库</h3>
+      <p>以内部患者 ID 保存，药物 ID 为 <code>m1</code>、<code>m2</code>、<code>m3</code>，并附服药时间和疗程长度。NRIC
+      只留在登录环节，绝不出现在 PharmaScan 调用中。</p>
+    </div>
+    <div class="call none">
+      <div class="call-head"><span class="chip web">网站团队</span></div>
+      <p>后端和数据库工作。不调用 PharmaScan。</p>
+    </div>
+  </article>
+
+  <article class="step">
+    <div class="num">3</div>
+    <div class="what">
+      <p class="who">我们的后端 → PharmaScan API · 第三阶段</p>
+      <h3>检查整份药单的相互作用和重复用药</h3>
+      <p>每次药单变更都会发送。对这份药单，API 返回一条琥珀色警报（氨氯地平与立普妥，中度：向患者语音朗读）和两条灰色警报（有相互作用记录，但严重程度未分级：只显示）。如果出现红色警报，会在患者看到药单之前先发给药剂师或医生。</p>
+    </div>
+    <div class="call">
+      <div class="call-head"><span class="method">POST</span><span class="path">/v1/safety/medications</span><span class="chip live">已上线</span></div>
+<pre>{"medications": [
+  {"id": "m1", "name": "Metformin 500 mg"},
+  {"id": "m2", "name": "Amlodipine 5 mg"},
+  {"id": "m3", "name": "Lipitor 10 mg"}]}</pre>
+      <span class="label">回复</span>
+<pre>{"alerts": [
+  {"type": "interaction", "severity": "moderate", "colour": "amber",
+   "medication_ids": ["m2", "m3"],
+   "message": "Amlodipine 5 mg and Lipitor 10 mg have a moderate
+               interaction. Check with your pharmacist."},
+  {"severity": "ungraded", "colour": "grey", ...},   // m1 + m2
+  {"severity": "ungraded", "colour": "grey", ...}],  // m1 + m3
+ "all_identified": true}</pre>
+    </div>
+  </article>
+
+  <article class="step">
+    <div class="num">4</div>
+    <div class="what">
+      <p class="who">我们的后端 → PharmaScan API · 第二阶段</p>
+      <h3>查找每种药的外观</h3>
+      <p>根据药名和剂量找到所有匹配的药片产品，并提供图片给网站。如果有 NDC，后端只保留那一个确切的产品。</p>
+    </div>
+    <div class="call">
+      <div class="call-head"><span class="method">GET</span><span class="path">/v1/pills/search?name=metformin&amp;strength=500 MG</span><span class="chip live">已上线</span></div>
+<pre>{"products": [
+  {"pill_id": "000937267_1", "manufacturer": "TEVA",
+   "rxnorm_name": "24 HR metformin hydrochloride 500 MG
+                   Extended Release Oral Tablet",
+   "imprint": "93;7267", "shape": "OVAL", "colour": "WHITE",
+   "images": [{"url": "/v1/pills/000937267_1/image/0"}],
+   "match": "same"},
+  {"pill_id": "537460178_1", "manufacturer": "AMNEAL ...", ...},
+  ...]}</pre>
+    </div>
+  </article>
+
+  <article class="step">
+    <div class="num">5</div>
+    <div class="what">
+      <p class="who">我们的后端 → PharmaScan API · 第二阶段</p>
+      <h3>用目录为患者建立个人图库</h3>
+      <p>每个产品的参考图片转换成 256 个数字的嵌入向量，连同模型版本以及第 4 步得到的药片印记，一起保存为该药物的个人图库。模型的个性化就来自这里：它把每张药片照片与这个图库比较，所以不需要用患者的药物来训练。</p>
+    </div>
+    <div class="call">
+      <div class="call-head"><span class="method">GET</span><span class="path">/v1/pills/{pill_id}/embeddings</span><span class="chip gap">尚未开发</span></div>
+<pre>// 建议的接口；后端保存为
+{"medication_id": "m1", "name": "Metformin 500 mg", "imprint": "93;7267",
+ "embeddings": [[...256 个数字...], ...],
+ "model_version": "stage2_run4@2026-10-09"}</pre>
+      <p style="color:var(--muted);font-size:.88rem">用目录建立的图库准确率还没有测量：我们 76% 正确、0% 错误的数字，用的是日常照片建立的图库。</p>
+    </div>
+  </article>
+</section>
+
+<!-- ============================ 阶段 B ============================ -->
+<section class="phase" aria-labelledby="pb">
+  <div class="phase-head">
+    <span class="tag">阶段 B · 患者打开网站</span>
+    <h2 id="pb">登录、查看药物，可选择添加自己的照片</h2>
+  </div>
+
+  <article class="step">
+    <div class="num">6</div>
+    <div class="what">
+      <p class="who">患者 · 网站</p>
+      <h3>点击 <span class="click">用 Singpass 登录</span>，然后打开 <span class="click">我的药物</span></h3>
+      <p>网站从我们的后端载入药单、服药安排、警报和个人图库。每种药的图片直接来自 API。</p>
+    </div>
+    <div class="call">
+      <div class="call-head"><span class="method">GET</span><span class="path">/v1/pills/000937267_1/image/0</span><span class="chip live">已上线</span></div>
+<pre>&lt;img src="BASE/v1/pills/000937267_1/image/0"&gt;   // JPEG</pre>
+      <div class="call-head"><span class="chip web">网站团队</span><span class="chip sim">登录为模拟</span></div>
+    </div>
+  </article>
+
+  <article class="step">
+    <div class="num">7</div>
+    <div class="what">
+      <p class="who">患者 · 网站 → 第一阶段 → PharmaScan API</p>
+      <h3>可选，第一次服用时：<span class="click">为这种药添加照片</span></h3>
+      <p>用患者自己的手机拍 3 到 5 张，正反两面。这些照片比目录图片匹配得更好（同一部相机、同样的光线），也能覆盖目录里没有的药物。</p>
+    </div>
+    <div class="call">
+      <div class="call-head"><span class="method">POST</span><span class="path">/v1/embed</span><span class="chip live">已上线</span></div>
+<pre>multipart: image = photo.jpg
+           box   = [412, 300, 655, 540]   // 来自第一阶段</pre>
+      <span class="label">回复，由后端加入 m1 的个人图库</span>
+<pre>{"embedding": [0.0213, -0.0871, ...256...], "dim": 256,
+ "model_version": "stage2_run4@2026-10-09", "framed_by": "box"}</pre>
+    </div>
+  </article>
+
+  <article class="step">
+    <div class="num">8</div>
+    <div class="what">
+      <p class="who">患者 · 网站 → PharmaScan API</p>
+      <h3>可选：<span class="click">从药盒添加药物</span></h3>
+      <p>用于自行购买的非处方药。患者拍下药盒或药房标签，确认读出的药名，后端再对新药单重新执行第 3 步。</p>
+    </div>
+    <div class="call">
+      <div class="call-head"><span class="method">POST</span><span class="path">/v1/read-label</span><span class="chip live">已上线</span></div>
+<pre>{"candidates": [{"name": "Panadol Extra 500 mg, 65 mg",
+  "brand": "Panadol Extra", "rxcui": "1872070",
+  "ingredients": [{"rxcui": "161", "name": "acetaminophen"},
+                  {"rxcui": "1886", "name": "caffeine"}]}],
+ "note": "Medicines read from the photo. Check the name and strength ..."}</pre>
+    </div>
+  </article>
+</section>
+
+<!-- ============================ 阶段 C ============================ -->
+<section class="phase" aria-labelledby="pc">
+  <div class="phase-head">
+    <span class="tag">阶段 C · 每一次服药，一直重复到疗程结束</span>
+    <h2 id="pc">服药前先检查这一剂药</h2>
+    <p>示例：08:00 这一剂应该是一片二甲双胍和一片氨氯地平。</p>
+  </div>
+
+  <article class="step">
+    <div class="num">9</div>
+    <div class="what">
+      <p class="who">我们的后端 → 患者</p>
+      <h3>08:00 提醒；患者点击 <span class="click">检查我 8:00 的药</span></h3>
+      <p>患者把药片分开放在素色平面上，拍一张照片。</p>
+    </div>
+    <div class="call none">
+      <div class="call-head"><span class="chip web">网站团队</span></div>
+      <p>提醒（推送、短信或电子邮件）和拍照页面。不调用 PharmaScan。</p>
+    </div>
+  </article>
+
+  <article class="step">
+    <div class="num">10</div>
+    <div class="what">
+      <p class="who">网站 → 第一阶段检测器</p>
+      <h3>找出照片中的每一颗药片</h3>
+      <p>检测器为每颗药片返回一个框，单位是照片像素。它在哪里运行（浏览器还是服务器），还需要与第一阶段队友商定。</p>
+    </div>
+    <div class="call none">
+      <div class="call-head"><span class="chip mate">第一阶段队友</span></div>
+<pre>[[412, 300, 655, 540], [720, 310, 930, 520], [180, 620, 390, 820]]</pre>
+      <p>在检测器完成之前，<code>/v1/scan</code> 可以在素色背景上自己找出药片。</p>
+    </div>
+  </article>
+
+  <article class="step">
+    <div class="num">11</div>
+    <div class="what">
+      <p class="who">网站 → PharmaScan API · 第二和第三阶段一次完成</p>
+      <h3>识别每颗药片并检查剂量</h3>
+      <p>网站发送照片、框、患者的个人图库和这一剂的服药安排。API 还会读取每颗药片上的印记，并与个人图库中的印记核对：可以确认匹配、在两种外观相似的药之间做出区分，或者当印记属于患者的另一种药时，请患者重新拍照。大约 2 到 3 秒。</p>
+    </div>
+    <div class="call">
+      <div class="call-head"><span class="method">POST</span><span class="path">/v1/scan</span><span class="chip live">已上线</span></div>
+<pre>multipart: image    = dose.jpg
+           boxes    = [[412,300,655,540], ...]
+           gallery  = [{"medication_id":"m1","name":"Metformin 500 mg",
+                        "embeddings":[[...],...]}, ...]
+           schedule = [{"medication_id":"m1","count":1},
+                       {"medication_id":"m2","count":1}]
+           model_version = stage2_run4@2026-10-09</pre>
+      <span class="label">回复</span>
+<pre>{"pills": [
+  {"box": [...], "decision": "match", "medication_id": "m1",
+   "message": "This is your Metformin 500 mg.", "imprint_check": "confirmed"},
+  {"box": [...], "decision": "match", "medication_id": "m2", ...},
+  {"box": [...], "decision": "unknown", "medication_id": null,
+   "message": "This pill isn't one of your medicines. Set it aside. Check with your pharmacist."}],
+ "dose": {"alerts": [{"type": "unknown_pill", "colour": "...", ...}],
+          "summary": {"pills_seen": 3, "matched": 2, "unknown": 1, "all_ok": false}}}</pre>
+    </div>
+  </article>
+
+  <article class="step">
+    <div class="num">12</div>
+    <div class="what">
+      <p class="who">患者 · 网站</p>
+      <h3>在照片上查看结果</h3>
+      <ul>
+        <li><strong>match</strong>：显示药名，绿色。</li>
+        <li><strong>unknown</strong>：「不是您的药，请放到一边」。</li>
+        <li><strong>ambiguous</strong>：「请把药片翻过来再拍一次」：回到第 9 步。</li>
+      </ul>
+      <p>警报按颜色处理：红色和琥珀色会语音朗读，红色还会通知照护者。</p>
+    </div>
+    <div class="screen" aria-label="示例结果页面">
+      <span class="title">示例页面 · 08:00 这一剂</span>
+      <div class="result ok"><i></i><span><strong>二甲双胍 500 mg</strong>：这是您的二甲双胍 500 mg。</span></div>
+      <div class="result ok"><i></i><span><strong>氨氯地平 5 mg</strong>：这是您的氨氯地平 5 mg。</span></div>
+      <div class="result bad"><i></i><span><strong>不是您的药</strong>：请把这颗药放到一边，并咨询您的药剂师。</span></div>
+      <div class="summary-bar">两种应服的药都找到了。另外有一颗药不是您的药。</div>
+      <span class="chip web" style="justify-self:start">由网站团队绘制</span>
+    </div>
+  </article>
+
+  <article class="step">
+    <div class="num">13</div>
+    <div class="what">
+      <p class="who">患者 · 网站 → PharmaScan API</p>
+      <h3>可选：针对多出来的药片点击 <span class="click">这是什么药？</span></h3>
+      <p>与整个美国药片目录比较。输入药片上的印记能大大缩小范围。结果始终显示为可能的匹配，绝不是确定的药名。</p>
+    </div>
+    <div class="call">
+      <div class="call-head"><span class="method">POST</span><span class="path">/v1/identify</span><span class="chip live">已上线</span></div>
+<pre>multipart: images = stray.jpg, imprint = "M 547"
+→ {"candidates": [{"name": "...", "imprint": "...",
+     "images": [...], "similarity": 0.95}],
+   "note": "Possible matches ... Check with your pharmacist."}</pre>
+      <div class="call-head"><span class="chip live">已上线：同时从照片读取印记</span></div>
+    </div>
+  </article>
+
+  <article class="step">
+    <div class="num">14</div>
+    <div class="what">
+      <p class="who">患者 · 网站 → 我们的后端</p>
+      <h3>点击 <span class="click">我已经服药</span></h3>
+      <p>后端记录时间、扫描结果和所有警报。漏服会触发追加提醒，多次漏服可以通知照护者。</p>
+    </div>
+    <div class="call none">
+      <div class="call-head"><span class="chip web">网站团队</span></div>
+      <p>服药记录和通知。API 上的可选功能：患者询问时，用 <code>GET /v1/safety/label?rxcui=…</code> 查看官方警告（已上线）；征得同意后，用
+      <code>POST /v1/feedback</code> 分享照片（已开发，但处于关闭状态；F5 仍只是在考虑中）。</p>
+    </div>
+  </article>
+</section>
+
+<!-- ============================ 阶段 D ============================ -->
+<section class="phase" aria-labelledby="pd">
+  <div class="phase-head">
+    <span class="tag">阶段 D · 结束周期</span>
+    <h2 id="pd">处方变更或疗程结束，开始下一个周期</h2>
+  </div>
+
+  <article class="step">
+    <div class="num">15</div>
+    <div class="what">
+      <p class="who">医生 → 数据源 → 我们的后端 → PharmaScan API · 第三阶段</p>
+      <h3>医生加开克拉霉素 500 mg，服用 7 天</h3>
+      <p>变更后的药单再次经过第 3 步，这次出现红色警报，在患者看到新药之前先发给药剂师或医生。然后第 4、5 步把克拉霉素加入个人图库。</p>
+    </div>
+    <div class="call">
+      <div class="call-head"><span class="method">POST</span><span class="path">/v1/safety/medications</span><span class="chip live">已上线</span></div>
+<pre>{"alerts": [
+  {"type": "interaction", "severity": "major", "colour": "red",
+   "notify_caregiver": true, "medication_ids": ["m3", "m4"],
+   "message": "Lipitor 10 mg and Clarithromycin 500 mg have a
+               serious interaction. Check with your pharmacist."},
+  ...其他药对的 3 条琥珀色和 2 条灰色警报...]}</pre>
+      <p style="color:var(--muted);font-size:.88rem">第 3、4 和 15 步中的回复来自 2026-10-12 的线上 API。</p>
+    </div>
+  </article>
+
+  <article class="step">
+    <div class="num">16</div>
+    <div class="what">
+      <p class="who">我们的后端</p>
+      <h3>一个疗程结束</h3>
+      <p>第 7 天之后，克拉霉素从个人图库和服药安排中移除。如果之后再拍到这种药，会被标记为不是患者的药。后端向医生或药剂师发送服药依从性摘要：检查过的剂次、漏服的剂次，以及发现的多余药片。</p>
+    </div>
+    <div class="call none">
+      <div class="call-head"><span class="chip web">网站团队</span></div>
+      <p>更新个人图库和服药安排，以及摘要报告。不调用 PharmaScan。</p>
+    </div>
+  </article>
+
+  <article class="step">
+    <div class="num">17</div>
+    <div class="what">
+      <p class="who">我们的后端 → PharmaScan API</p>
+      <h3>当我们发布新模型时</h3>
+      <p>不同模型版本的嵌入向量不能互相比较。如果 <code>/v1/scan</code> 返回 <code>409</code>，后端会为保存的登记照片重新生成嵌入向量，并刷新目录嵌入向量，然后重试。</p>
+    </div>
+    <div class="call">
+      <div class="call-head"><span class="method">POST</span><span class="path">/v1/scan</span><span class="chip live">已上线</span></div>
+<pre>409 → {"detail": "gallery embedded with model stage2_run4@2026-10-09,
+        but stage2_run5@... is served"}</pre>
+      <div class="call-head"><span class="method">POST</span><span class="path">/v1/embed</span><span class="chip live">已上线</span></div>
+<pre>// 每张保存的登记照片调用一次，然后重试扫描</pre>
+    </div>
+  </article>
+
+  <p class="loopback">
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg>
+    然后带着新药单回到阶段 A：下一个周期开始。
+  </p>
+</section>
+
+<!-- ============================ 谁负责做什么 ============================ -->
+<section class="phase" aria-labelledby="pw">
+  <div class="phase-head">
+    <span class="tag">总结</span>
+    <h2 id="pw">谁负责做什么</h2>
+  </div>
+  <div class="split">
+    <div class="box">
+      <h3>PharmaScan API <span class="chip live">已上线</span></h3>
+      <ul>
+        <li><code>/v1/safety/medications</code>（第 3、15 步）</li>
+        <li><code>/v1/pills/search</code> 和图片（第 4、6 步）</li>
+        <li><code>/v1/embed</code>（第 7、17 步）</li>
+        <li><code>/v1/scan</code>（第 11 步）</li>
+        <li><code>/v1/identify</code>（第 13 步），并从照片读取印记</li>
+        <li><code>/v1/read-label</code>（第 8 步）</li>
+        <li><code>/v1/safety/label</code>、<code>/v1/match</code>、<code>/v1/safety/dose</code></li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>API 中还需开发</h3>
+      <ul>
+        <li><span class="chip gap">尚未开发</span> 用于个人图库的目录嵌入向量（第 5 步），以及测量这种图库的准确率</li>
+        <li><span class="chip planned">F9</span> 书面的嵌入向量规范和 <code>/v1/verify</code></li>
+        <li>在真实手机照片上测试药盒和标签识别：目前只用打印的示例测试过</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>网站团队 <span class="chip web">网站</span></h3>
+      <ul>
+        <li>Singpass 登录（原型中为模拟）</li>
+        <li>从数据源接收处方（模拟）</li>
+        <li>数据库：药单、个人图库、服药安排、服药记录</li>
+        <li>提醒、结果页面、照护者警报、服药依从性摘要</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>第一阶段队友 <span class="chip mate">检测器</span></h3>
+      <ul>
+        <li>为每颗药片给出一个框，格式为 <code>[x0, y0, x1, y1]</code>，单位是照片像素（第 10 步）</li>
+        <li>商定在哪里运行：浏览器还是服务器</li>
+      </ul>
+    </div>
+  </div>
+  <div class="box">
+    <h3>谁保存哪些数据</h3>
+    <ul>
+      <li><strong>我们的后端</strong>保存身份（Singpass）、处方、个人图库、服药安排和服药记录。</li>
+      <li><strong>PharmaScan API 不保存任何数据。</strong>它只看到药片照片、匿名的药物 ID 和药名，回答后即丢弃。</li>
+      <li>新加坡 PDPC 的规定限制收集 NRIC 号码：请通过 Singpass 登录，并且不要把 NRIC 放进其他任何数据表。</li>
+    </ul>
+  </div>
+</section>
+
+</div>
+
+<!--claude-mermaid-runtime-begin:3477-->
+<style>.mermaid-diagram{margin-block:4px}.mermaid-diagram svg{display:block;margin:0 auto;max-width:100%;height:auto}</style>
+<script src="/_runtime/mermaid-11.16.1.min.js"></script>
+<script>(function(){
+var CFG={"palettes":{"light":{"surface":"#f4efe4","text":"#42392e","line":"#8a7f6d","border":"#7a6c52","bg":"#fffdf8"},"dark":{"surface":"#262b34","text":"#f2f3f5","line":"#a8adb8","border":"#9aa4b8","bg":"#1f232b"}}};
+if(typeof mermaid==='undefined')return;
+var pres=Array.prototype.slice.call(document.querySelectorAll('pre.mermaid')).filter(function(p){if(p.hasAttribute('data-claude-mermaid-claimed'))return false;p.setAttribute('data-claude-mermaid-claimed','1');return true;});
+if(!pres.length)return;
+var mq=window.matchMedia?window.matchMedia('(prefers-color-scheme: dark)'):null;
+var root=document.documentElement;
+var items=pres.map(function(pre){
+var mount=document.createElement('div');mount.className='mermaid-diagram';
+return {pre:pre,mount:mount,src:pre.textContent||''};
+});
+var seq=0;
+var renderGen=0;
+var lastKey='';
+function pageBg(fallback){
+var els=[document.body,document.documentElement];
+for(var i=0;i<els.length;i++){
+var c=els[i]&&getComputedStyle(els[i]).backgroundColor;
+if(c&&c!=='transparent'&&c!=='rgba(0, 0, 0, 0)')return c;
+}
+return fallback;
+}
+function render(){
+var theme=root.getAttribute('data-theme');
+var dark=theme==='dark'||(!!(mq&&mq.matches)&&theme!=='light');
+var pal=dark?CFG.palettes.dark:CFG.palettes.light;
+var bg=pageBg(pal.bg);
+var key=(dark?'d':'l')+'|'+bg;
+if(key===lastKey)return;
+lastKey=key;
+var gen=++renderGen;
+var font=getComputedStyle(document.body).fontFamily||'sans-serif';
+var nat={useMaxWidth:false};
+mermaid.initialize({
+startOnLoad:false,securityLevel:'strict',theme:'base',
+flowchart:nat,sequence:nat,er:nat,state:nat,class:nat,pie:nat,
+gantt:nat,journey:nat,timeline:nat,gitGraph:nat,mindmap:nat,xyChart:nat,
+quadrantChart:nat,sankey:nat,c4:nat,requirement:nat,block:nat,
+packet:nat,kanban:nat,architecture:nat,radar:nat,
+themeVariables:{background:bg,mainBkg:pal.surface,primaryColor:pal.surface,
+primaryTextColor:pal.text,lineColor:pal.line,primaryBorderColor:pal.border,
+nodeBorder:pal.border,clusterBorder:pal.border,edgeLabelBackground:bg,
+clusterBkg:'rgba(127,127,127,0.07)',titleColor:pal.text,
+darkMode:dark,rowOdd:bg,rowEven:'rgba(127,127,127,0.07)',
+attributeBackgroundColorOdd:bg,attributeBackgroundColorEven:'rgba(127,127,127,0.07)',
+fontSize:'16px',fontFamily:font},
+themeCSS:'.node rect, .node circle, .node polygon, .node path, .cluster rect { stroke-width: 2px; }'
+});
+items.forEach(function(it){
+var id='claude-mermaid-'+seq++;
+mermaid.render(id,it.src).then(function(r){
+if(gen!==renderGen)return;
+var prev=it.pre.previousElementSibling;
+if(prev&&prev.className==='mermaid-diagram'&&prev!==it.mount)return;
+it.mount.innerHTML=r.svg;
+if(!it.mount.parentNode)it.pre.parentNode.insertBefore(it.mount,it.pre);
+it.pre.style.display='none';
+},function(){
+var scratch=document.getElementById(id);
+if(scratch)scratch.parentNode.removeChild(scratch);
+scratch=document.getElementById('d'+id);
+if(scratch)scratch.parentNode.removeChild(scratch);
+if(gen!==renderGen)return;
+if(it.mount.parentNode)it.mount.parentNode.removeChild(it.mount);
+it.pre.style.display='';
+});
+});
+}
+render();
+if(mq&&mq.addEventListener)mq.addEventListener('change',render);
+if(typeof MutationObserver!=='undefined')new MutationObserver(render).observe(root,{attributes:true,attributeFilter:['data-theme']});
+})();</script>
+<!--claude-mermaid-runtime-end-->
+
+</body></html>

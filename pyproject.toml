@@ -1,0 +1,28 @@
+[project]
+name = "pharmascan-care-backend"
+version = "0.1.0"
+description = "PharmaScan Care agent backend (FastAPI, typed tools, deterministic safety policy)"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "pydantic>=2.7",
+    "uvicorn[standard]>=0.30",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -20,6 +20,7 @@ node_modules/
 dist/
 build/
 .next/
+coverage/
 
 # Local data and model binaries
 *.pt
@@ -40,5 +41,17 @@ patient_uploads/
 Thumbs.db
 .vscode/
 .idea/
+
+credentials.json
+uploads/
+personal_data/
+private/
+models/checkpoints/
+evidence/private/
+
+# Stray reserved-name junk file created by a '2>nul' redirect in Git Bash.
+# Cannot be deleted by agent tooling (ACCESS_DENIED, likely open handle).
+# Manual removal: del \\.\D:\Projects\pharmascan-care-agent\nul
+nul
 
 # Note: original screenshots needed for submissions should be kept in a controlled evidence directory.
