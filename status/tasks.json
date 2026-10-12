@@ -1,5 +1,5 @@
 {
-  "snapshot": "2026-10-13T00:17:00+08:00",
+  "snapshot": "2026-10-13T04:30:00+08:00",
   "status_legend": {
     "todo": "not verified/unfinished",
     "in_progress": "being worked on (verified log needed)",
@@ -108,9 +108,9 @@
       "acceptance": "Domain/application/adapter/transport separation and DI demonstrated",
       "requirement": "Technical execution",
       "dependency": "D002",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "done",
+      "evidence": "backend/app layers created (contracts/domain/application/infrastructure/agent) with DI via constructor protocols; 109 tests use it",
+      "updated_at": "2026-10-13T04:30:00+08:00"
     },
     {
       "id": "B002",
@@ -124,8 +124,8 @@
       "requirement": "Medication management",
       "dependency": "B001",
       "status": "in_progress",
-      "evidence": "supabase/migrations/202610130001_core.sql + rollback written; static checks pytest 23/23 passed (real DB execution BLOCKED per B02: no local PostgreSQL/Supabase)",
-      "updated_at": "2026-10-13T03:40:00+08:00"
+      "evidence": "migration + rollback written and static-checked (23 tests). Real DB execution remains BLOCKED (B02: no local PostgreSQL/Supabase) - NOT claimed as verified",
+      "updated_at": "2026-10-13T04:30:00+08:00"
     },
     {
       "id": "B003",
@@ -153,9 +153,9 @@
       "acceptance": "Missing regimen instructions stay pending",
       "requirement": "Medication management",
       "dependency": "B002",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "done",
+      "evidence": "MedicationEnrollmentService: draft with provenance fields; missing instructions stay pending_clarification; never infers a dose. Tests: tests/backend/test_enrollment.py",
+      "updated_at": "2026-10-13T04:30:00+08:00"
     },
     {
       "id": "B005",
@@ -168,9 +168,9 @@
       "acceptance": "New version retains old and rewrites future schedule only",
       "requirement": "Medication management",
       "dependency": "B004",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "done",
+      "evidence": "reviewed regimen versioning: review_source_fields promotes identity; activation supersedes prior active version; historical states immutable (guarded in service + repo). Tests: test_enrollment.py",
+      "updated_at": "2026-10-13T04:30:00+08:00"
     },
     {
       "id": "B006",
@@ -183,9 +183,9 @@
       "acceptance": "Taken/not_taken/unsure and no-photo states persisted; duplicate writes blocked",
       "requirement": "Adherence support",
       "dependency": "B005",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "done",
+      "evidence": "DoseScheduleService (daily/weekly/interval, PRN produces no occurrence) + SelfReportService (taken/not_taken/unsure, no-photo visual_status=not_checked, idempotency key, one event per occurrence). Tests: test_dosing.py",
+      "updated_at": "2026-10-13T04:30:00+08:00"
     },
     {
       "id": "B007",
@@ -198,9 +198,9 @@
       "acceptance": "Agent resumes tasks; tool calls and blocked actions auditable",
       "requirement": "AI interaction",
       "dependency": "B002",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "in_progress",
+      "evidence": "AgentSessionRepository + ConfirmationChallengeRepository + ToolTraceRepository ports, in-memory implementation and redacted trace writes implemented; not yet wired to PostgreSQL (B02)",
+      "updated_at": "2026-10-13T04:30:00+08:00"
     },
     {
       "id": "V001",
@@ -228,9 +228,9 @@
       "acceptance": "Single reference pill processed as at most one distinct pill; regression artifact",
       "requirement": "Responsible AI",
       "dependency": "",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "in_progress",
+      "evidence": "Single-pill -> duplicate/overlapping box regression reproduced as a test with measured flags (duplicate_boxes, overlapping_boxes) and usable_for_dose_count=False. Upstream detector itself not fixed (B05)",
+      "updated_at": "2026-10-13T04:30:00+08:00"
     },
     {
       "id": "V003",
@@ -288,9 +288,9 @@
       "acceptance": "Tool registry with no direct Agent ORM imports; contract tests",
       "requirement": "AI interaction",
       "dependency": "B001",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "done",
+      "evidence": "Typed tool DTOs + allowlist ToolRegistry; structural test asserts the agent package never imports SQL/ORM/supabase. Tests: test_agent.py",
+      "updated_at": "2026-10-13T04:30:00+08:00"
     },
     {
       "id": "A002",
@@ -303,9 +303,9 @@
       "acceptance": "Reject wrong/current/missing source and cross-patient actions",
       "requirement": "Responsible AI",
       "dependency": "B005",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "done",
+      "evidence": "backend/app/domain/policy.py: pure deterministic functions covering source review, complete regimen, active version, explicit confirmation (hash/session/expiry/single-use), duplicate event, PRN rules, self-report-is-not-ingestion. Tests: test_policy.py (20 tests)",
+      "updated_at": "2026-10-13T04:30:00+08:00"
     },
     {
       "id": "A003",
@@ -318,9 +318,9 @@
       "acceptance": "At least 3 tasks use actual tools, clarification, persistence",
       "requirement": "AI interaction",
       "dependency": "A001,B007,A002",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "in_progress",
+      "evidence": "AgentOrchestrator with bounded steps, real state transitions, session persistence and confirmation gating. Intent routing is DETERMINISTIC DEGRADED MODE (no LLM key) and always labelled as such; NOT verified LLM agent behaviour",
+      "updated_at": "2026-10-13T04:30:00+08:00"
     },
     {
       "id": "A004",
@@ -333,9 +333,9 @@
       "acceptance": "Live status labeled; mock never reported as real success",
       "requirement": "Technical execution",
       "dependency": "A001,V001",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "in_progress",
+      "evidence": "Stage2 adapter with timeout/unavailable/schema/version-mismatch handling; live behaviour UNVERIFIED (B01); FakeVisionProvider clearly marked SIMULATED",
+      "updated_at": "2026-10-13T04:30:00+08:00"
     },
     {
       "id": "A005",
