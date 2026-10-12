@@ -1,0 +1,119 @@
+/**
+ * Tests for the typed API client's error handling.
+ *
+ * The important invariant: a refusal from the backend must surface as a typed
+ * ApiError carrying the stable code. The UI must never be able to mistake a
+ * refusal for a success.
+ */
+
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError, api } from '../api/client';
+
+function mockFetch(status: number, body: unknown) {
+  return vi.fn().mockResolvedValue({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  });
+}
+
+describe('api client', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('parses a successful health response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetch(200, {
+        status: 'ok',
+        service: 'pharmascan-care-agent',
+        database: 'simulated_in_memory',
+        llm: 'unavailable_deterministic_degraded',
+        stage2_vision: 'simulated',
+      }),
+    );
+
+    const health = await api.health();
+    expect(health.database).toBe('simulated_in_memory');
+    expect(health.llm).toBe('unavailable_deterministic_degraded');
+  });
+
+  it('turns a domain refusal into a typed ApiError with the code', async () => {
+    vi.stubGlobal(
+      'fetch',
+      mockFetch(409, {
+        code: 'SOURCE_UNREVIEWED',
+        message: 'Source must be reviewed before activation',
+        rule_id: 'SOURCE_REVIEW_REQUIRED',
+      }),
+    );
+
+    await expect(api.listMedications()).rejects.toBeInstanceOf(ApiError);
+
+    try {
+      await api.listMedications();
+      throw new Error('expected the request to fail');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ApiError);
+      const apiError = error as ApiError;
+      expect(apiError.code).toBe('SOURCE_UNREVIEWED');
+      expect(apiError.ruleId).toBe('SOURCE_REVIEW_REQUIRED');
+      expect(apiError.status).toBe(409);
+    }
+  });
+
+  it('falls back to a generic error when the body is not JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => {
+          throw new Error('not json');
+        },
+      }),
+    );
+
+    try {
+      await api.health();
+      throw new Error('expected the request to fail');
+    } catch (error) {
+      const apiError = error as ApiError;
+      expect(apiError.code).toBe('INTERNAL_ERROR');
+      expect(apiError.status).toBe(500);
+    }
+  });
+
+  it('sends the client id as a query parameter, never in the body', async () => {
+    const fetchMock = mockFetch(200, { item_count: 0, medications: [], note: '' });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await api.listMedications();
+
+    const calledUrl = fetchMock.mock.calls[0]?.[0] as string;
+    expect(calledUrl).toContain('client_id=');
+  });
+
+  it('posts a draft as JSON', async () => {
+    const fetchMock = mockFetch(200, {
+      medication_id: 'm',
+      regimen_id: 'r',
+      state: 'draft',
+      source_id: 's',
+      missing_instructions: [],
+      reviewable_field_ids: [],
+      note: '',
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await api.createDraft({ medication_name: 'Amlodipine', dose_amount: 5 });
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({
+      medication_name: 'Amlodipine',
+      dose_amount: 5,
+    });
+  });
+});
