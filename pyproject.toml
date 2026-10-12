@@ -30,6 +30,9 @@ ignore = []
 "tests/test_migrations.py" = ["E501"]
 # The integration notes file is a route/contract checklist, not code.
 "backend/integrations/pharmascan_api.py" = ["E501"]
+# FastAPI's documented idiom is Depends()/Query() as an argument default; B008
+# exists to catch mutable-default bugs, which this is not.
+"backend/app/transport/**/*.py" = ["B008"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

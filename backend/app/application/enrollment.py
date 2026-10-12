@@ -15,6 +15,7 @@ from uuid import UUID
 from ..contracts.dto import (
     ActivationResultDTO,
     ConfirmationChallengeDTO,
+    DoseRuleDTO,
     EnrollmentResultDTO,
     MissingInstruction,
     PatientMedicationDTO,
@@ -27,6 +28,7 @@ from ..contracts.enums import (
     FieldName,
     IdentityStatus,
     RegimenState,
+    RuleKind,
     SourceKind,
     SourceReviewStatus,
 )
@@ -340,9 +342,44 @@ class MedicationEnrollmentService:
         self._medications.update(
             medication.model_copy(update={"identity_status": IdentityStatus.USER_REVIEWED_DOCUMENT})
         )
+        # Persist the schedule rule now that the regimen is active. Without
+        # this an activated regimen would have no rule and could never produce
+        # a due dose (the patient would have a medication with no schedule).
+        self._persist_dose_rule(patient_id=patient_id, regimen=regimen)
         return ActivationResultDTO(
             regimen=self._require_regimen(patient_id, regimen_id),
             superseded_regimen_ids=superseded,
+        )
+
+    def _persist_dose_rule(self, *, patient_id: UUID, regimen: RegimenVersionDTO) -> None:
+        """Create the scheduling rule implied by an activated regimen.
+
+        Idempotent: re-activating the same regimen does not duplicate the rule.
+        A PRN regimen gets a PRN rule (no scheduled times) so the rule kind
+        always matches the regimen, as ``DoseScheduleService.add_rule`` requires.
+        """
+        if self._dose_rules.list_for_regimen(patient_id, regimen.id):
+            return
+        frequency = regimen.frequency_rule or {}
+        if regimen.is_prn:
+            rule_kind = RuleKind.PRN
+            local_times: list[str] = []
+            days_of_week: list[int] = []
+        else:
+            rule_kind = RuleKind.SCHEDULED
+            local_times = list(frequency.get("local_times") or [])
+            days_of_week = list(frequency.get("days_of_week") or [])
+        self._dose_rules.add(
+            DoseRuleDTO(
+                id=self._ids.new_id(),
+                patient_id=patient_id,
+                regimen_id=regimen.id,
+                rule_kind=rule_kind,
+                local_times=local_times,
+                days_of_week=days_of_week,
+                timezone=str(self._tz.local_tz(patient_id)),
+                enabled=True,
+            )
         )
 
     def _require_regimen(self, patient_id: UUID, regimen_id: UUID) -> RegimenVersionDTO:

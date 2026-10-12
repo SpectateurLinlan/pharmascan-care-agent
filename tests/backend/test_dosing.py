@@ -72,7 +72,13 @@ def _add_daily_rule(wired, regimen_id):
 
 def test_occurrences_generate_from_active_scheduled_regimen(wired):
     _result, activated, _challenge = _activate_scheduled(wired)
-    rule = _add_daily_rule(wired, activated.regimen.id)
+    # Activation persists the schedule rule itself, so no manual rule is added
+    # here — that is the point of the test: an activated regimen is schedulable.
+    rules = wired.dose_rules.list_for_regimen(PATIENT, activated.regimen.id)
+    assert len(rules) == 1
+    rule = rules[0]
+    assert rule.rule_kind == RuleKind.SCHEDULED
+    assert rule.local_times == ["08:00"]
 
     occurrences = wired.schedule.materialize(
         patient_id=PATIENT, regimen_id=activated.regimen.id, days=3

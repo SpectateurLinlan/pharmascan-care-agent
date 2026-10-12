@@ -21,6 +21,7 @@ from uuid import UUID
 from ..contracts.dto import AgentSessionDTO
 from ..contracts.enums import AgentIntent, ToolName, ToolStatus
 from ..contracts.ports import AgentSessionRepository, Clock, IdGenerator
+from ..domain.errors import NotFoundError
 from .registry import ToolRegistry
 from .tools import (
     CheckDueDoseRequest,
@@ -140,6 +141,32 @@ class AgentOrchestrator:
         )
         self._sessions.add(session)
         return session
+
+    def get_session(self, *, patient_id: UUID, session_id: UUID) -> AgentSessionDTO | None:
+        """Patient-scoped session read. Returns None when absent or foreign."""
+        session = self._sessions.get(patient_id, session_id)
+        if session is not None and self._clock.now() >= session.expires_at:
+            session = session.model_copy(
+                update={
+                    "state": "expired",
+                    "updated_at": self._clock.now(),
+                    "state_version": session.state_version + 1,
+                }
+            )
+            self._sessions.update(session)
+        return session
+
+    def await_confirmation(self, *, patient_id: UUID, session_id: UUID) -> AgentSessionDTO:
+        """Move a live session into ``awaiting_confirmation``.
+
+        Called after a confirmation summary has been displayed. The returned
+        ``state_version`` is the one the client must echo back when activating,
+        so a stale tab cannot confirm a summary it never saw.
+        """
+        session = self._sessions.get(patient_id, session_id)
+        if session is None:
+            raise NotFoundError(f"Agent session {session_id} not found for this patient")
+        return self._mark_awaiting_confirmation(session)
 
     def handle_turn(
         self, *, patient_id: UUID, session_id: UUID, turn: AgentTurn
