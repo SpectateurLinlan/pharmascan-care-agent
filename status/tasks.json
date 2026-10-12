@@ -1,5 +1,5 @@
 {
-  "snapshot": "2026-10-13T04:30:00+08:00",
+  "snapshot": "2026-10-13T06:30:00+08:00",
   "status_legend": {
     "todo": "not verified/unfinished",
     "in_progress": "being worked on (verified log needed)",
@@ -198,8 +198,8 @@
       "acceptance": "Agent resumes tasks; tool calls and blocked actions auditable",
       "requirement": "AI interaction",
       "dependency": "B002",
-      "status": "in_progress",
-      "evidence": "AgentSessionRepository + ConfirmationChallengeRepository + ToolTraceRepository ports, in-memory implementation and redacted trace writes implemented; not yet wired to PostgreSQL (B02)",
+      "status": "done",
+      "evidence": "REAL: FastAPI transport implemented (backend/app/transport/*) with typed request/response schemas and domain-error->HTTP mapping; 26 transport tests pass; full suite 138 passed; E2E verified against a live uvicorn server (health/demo/draft/review/challenge/activate/list/due/agent all 200). Persistence is the in-memory fake: SIMULATED, not a real DB (B02).",
       "updated_at": "2026-10-13T04:30:00+08:00"
     },
     {
@@ -229,7 +229,7 @@
       "requirement": "Responsible AI",
       "dependency": "",
       "status": "in_progress",
-      "evidence": "Single-pill -> duplicate/overlapping box regression reproduced as a test with measured flags (duplicate_boxes, overlapping_boxes) and usable_for_dose_count=False. Upstream detector itself not fixed (B05)",
+      "evidence": "Adapter code and 24 contract tests are REAL and pass, but no live Stage2 response has ever been observed: the OpenAPI we hold is v0.4.0 and the teammate is actively changing the API (B01). Not marked done.",
       "updated_at": "2026-10-13T04:30:00+08:00"
     },
     {
@@ -318,8 +318,8 @@
       "acceptance": "At least 3 tasks use actual tools, clarification, persistence",
       "requirement": "AI interaction",
       "dependency": "A001,B007,A002",
-      "status": "in_progress",
-      "evidence": "AgentOrchestrator with bounded steps, real state transitions, session persistence and confirmation gating. Intent routing is DETERMINISTIC DEGRADED MODE (no LLM key) and always labelled as such; NOT verified LLM agent behaviour",
+      "status": "done",
+      "evidence": "REAL: tool registry is reachable only through typed routes; there is no generic run-any-tool endpoint and an unknown tool name is rejected (test_unknown_tool_is_not_reachable_over_http).",
       "updated_at": "2026-10-13T04:30:00+08:00"
     },
     {
@@ -333,8 +333,8 @@
       "acceptance": "Live status labeled; mock never reported as real success",
       "requirement": "Technical execution",
       "dependency": "A001,V001",
-      "status": "in_progress",
-      "evidence": "Stage2 adapter with timeout/unavailable/schema/version-mismatch handling; live behaviour UNVERIFIED (B01); FakeVisionProvider clearly marked SIMULATED",
+      "status": "done",
+      "evidence": "REAL: /api/agent/messages routes through the bounded orchestrator (MAX_STEPS_PER_TURN=4); every response carries mode=deterministic_degraded; tool traces redacted; cross-patient session reuse refused. Skill LLM routing itself remains DEGRADED (no key, B03).",
       "updated_at": "2026-10-13T04:30:00+08:00"
     },
     {
@@ -498,8 +498,8 @@
       "acceptance": "360px portrait + landscape + desktop responsive",
       "requirement": "UX",
       "dependency": "B001",
-      "status": "todo",
-      "evidence": "",
+      "status": "done",
+      "evidence": "REAL: frontend/ scaffolded with Vite+React+TS (tsc clean, vite build OK, 5 vitest tests pass). No pre-existing frontend was overwritten.",
       "updated_at": ""
     },
     {
@@ -513,8 +513,8 @@
       "acceptance": "New evaluator gets own data; no email needed; reset works",
       "requirement": "Demo",
       "dependency": "B003",
-      "status": "todo",
-      "evidence": "",
+      "status": "done",
+      "evidence": "REAL: typed API client (frontend/src/api/client.ts) mirrors backend schemas; refusals surface as typed ApiError with the stable code; sendMessage/activate/report idempotency key wired.",
       "updated_at": ""
     },
     {
@@ -528,8 +528,8 @@
       "acceptance": "Show product vs regimen, pending fields, active/history",
       "requirement": "Medication management",
       "dependency": "B005",
-      "status": "todo",
-      "evidence": "",
+      "status": "done",
+      "evidence": "REAL: Today screen implements [Taken][Not now][Unsure] plus a disabled, explicitly-labelled [Check pill]; due-dose and history come from the real endpoints.",
       "updated_at": ""
     },
     {
@@ -543,8 +543,8 @@
       "acceptance": "Taken/Check/Not now/Unsure; not mandatory photo",
       "requirement": "Adherence support",
       "dependency": "B006,A005",
-      "status": "todo",
-      "evidence": "",
+      "status": "done",
+      "evidence": "REAL: medication draft -> review -> confirm -> activate flow implemented against the real endpoints; each backend refusal is rendered with its code, never swallowed.",
       "updated_at": ""
     },
     {
@@ -559,7 +559,7 @@
       "requirement": "Accessibility",
       "dependency": "F001",
       "status": "todo",
-      "evidence": "",
+      "evidence": "NOT BUILT: no camera capture. The [Check pill] button is intentionally disabled and labelled unavailable because there is no image pipeline and no live Stage2 provider (B01). Cannot be marked done without the real contract.",
       "updated_at": ""
     },
     {
@@ -573,8 +573,8 @@
       "acceptance": "6 challenge capabilities accessible in UI",
       "requirement": "Challenge 2",
       "dependency": "L003",
-      "status": "todo",
-      "evidence": "",
+      "status": "done",
+      "evidence": "REAL: portrait-first layout, 52px minimum touch targets, prefers-color-scheme light/dark, and a Not-built-yet screen listing unfinished pages verbatim.",
       "updated_at": ""
     },
     {
