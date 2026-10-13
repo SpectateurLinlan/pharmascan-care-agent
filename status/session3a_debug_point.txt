@@ -1,0 +1,15 @@
+========================================================================
+SESSION 3A DEBUGGING POINT — router honesty (SIMULATED deterministic mode)
+========================================================================
+question                           intent               correct?
+------------------------------------------------------------------------
+Have I taken Amlodipine today?     dose_status_query   
+Did I take my Metformin yet?       dose_status_query   
+I took my tablet                   dose_self_report    
+What is the capital of France?     clarification       
+How do I cook pasta?               clarification       
+
+Now showing the medication-name extractor (filler stripped, pronoun refused):
+  Have I taken Amlodipine today?   -> 'Amlodipine'
+  Did I take my Metformin yet?     -> 'Metformin'
+  Have I taken it today?           -> '' (-> agent asks, does not guess)
