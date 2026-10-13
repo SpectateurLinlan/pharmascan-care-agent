@@ -1,6 +1,0 @@
----
-description: Mandatory architecture, patient privacy, agent safety and test requirements for PharmaScan Care
-alwaysApply: true
-enabled: true
----
-For every development task, read `AGENTS.md` and follow its 30 mandatory rules. Read `PROJECT_BRIEF.md` and relevant docs before editing. Only communicate through public interfaces and DTOs with explicit dependency injection. LLM cannot directly write SQL or bypass safety policy. Test every code change and report actual command output. Never invent implementation evidence or treat visual similarity as verified pill identity. Unattended execution is restricted to reversible changes in this repository without secrets, cloud spend or production deployment.

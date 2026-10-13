@@ -51,16 +51,18 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  Enter[User: add/update medicine] --> Src{Input source?}
-  Src -->|Pharmacy bag / PDF / printed package| OCR[OCR structured extraction + source spans]
-  Src -->|Manual| Draft[Typed draft]
+  Enter[User: add/update medicine] --> Src{Identify source type}
+  Src -->|Readable box / pharmacy label| Label[PharmaScan /v1/read-label]
+  Src -->|Prescription / PDF / text| Doc[Document extraction fallback]
+  Src -->|Manual entry| Draft[Typed draft]
   Src -->|Mock institutional source| Draft
-  OCR --> Draft
-  Draft --> Identity[Check product: ingredient/brand/strength/form/market]
-  Identity --> Gaps{Enough reviewed source instructions?}
-  Gaps -->|No| Pending[Save pending draft + ask for specific missing label / prescription]
+  Label --> Draft
+  Doc --> Draft
+  Draft --> Identity[Product identity completeness: ingredient/brand/strength/form/market]
+  Identity --> Gaps{Regimen instruction completeness?}
+  Gaps -->|Missing| Pending[Save pending draft + ask specifically for label / prescription / manual field]
   Pending -->|new evidence| Draft
-  Gaps -->|Yes| Review[Patient reviews against original source]
+  Gaps -->|Complete| Review[Patient reviews against original source]
   Review --> Dedupe[Check active & historical regimen + ingredients/DDI advisory]
   Dedupe --> Version[Create new regimen version; close old if explicitly documented]
   Version --> Gallery{Reference photos available?}
@@ -79,6 +81,22 @@ flowchart TD
 - **To activate a specific scheduled regimen:** reviewed *written or explicitly entered source* for drug name + relevant strength + dosage form + dose amount/unit + frequency/timing or PRN + route where applicable, source review status. Unknown `start_date`/`end_date` nullable; avoid inventing duration. OTC/supplements may have `source_kind=package_user_defined`; need warnings and do not label it prescription verified. Patient confirmation cannot substitute for pharmacist verification.
 - **Optional:** ingredient/brand/manufacturer/registration number, date, expiry, quantity, clinician, diagnosis, delivery, allergies, conditions, package photo, 3–5 front/back loose-pill photos, caregiver, reminder preferences. Do not infer diagnosis from drug name; no NRIC.
 - **Agent-generated:** extraction suggestions; product duplicates; ingredient mapping coverage; draft; source conflicts; reminders; proposed summary; reference embeddings only if an appropriate picture and encoder contract exist. Do not invent dose or start a new treatment autonomously.
+
+### Source semantics
+
+`package`
+- primarily supports product identity:
+  name, strength, dosage form, ingredient, manufacturer/market identifiers
+  when visible;
+- does NOT automatically establish this patient's prescribed schedule.
+
+`pharmacy_label` / `prescription`
+- may additionally supply patient-specific regimen fields:
+  dose amount, frequency, timing, PRN, route, duration and special instructions;
+- only fields explicitly present in the source may be stored as extracted facts.
+
+A medication product may be recorded while its regimen remains
+`pending_clarification`.
 
 ### Reference sets / catalogue-first proposal
 
@@ -102,7 +120,7 @@ flowchart TD
   Choice -->|No photo / skipped photo| Report[Self-reported taken / not yet / unsure]
   Choice -->|Check pill| Mod{Input modality}
   Mod -->|Loose pill| Quality[Quality + crop; guard duplicate boxes]
-  Mod -->|Readable package| Text[OCR text → product/strength/form source compare]
+  Mod -->|Readable package / pharmacy label| Text[/v1/read-label → normalized product/source fields → compare against recorded product + active regimen]
   Mod -->|Unprinted blister| NoInfo[No reliable identity → request original label]
   Quality -->|usable| Embed[/v1/embed + /v1/match personal ref]
   Quality -->|unusable| Retake[Guided retake based on measured quality flags]
@@ -119,6 +137,8 @@ flowchart TD
   Save --> Next[Next reminder / unresolved follow-up]
 ```
 
+**Readable package / pharmacy label is identity-first:** a package or pharmacy label read through `/v1/read-label` is compared against the recorded product and the active regimen. General package information (brand, strength, form, manufacturer) must **not** be used to modify the patient's regimen; only fields explicitly present in the source and reviewed by the patient may create or change a regimen version.
+
 **Smart Check default:** suggest photo when new drug, changed ref, visual uncertainty, manufacturer/appearance change or user asks. Not mandatory per dose; default UI [Taken] [Check pill] [Not now] [Unsure]. Settings offer `SMART`, `ALWAYS_SUGGEST` and `REMINDERS_ONLY` without coercive checks. A photo cannot prove ingestion. When user already took a dose, log it as self-report without pretending it was visually checked.
 
 **Why a match failure?** Let tooling return explicit observable flags `blur/glare/too_small/crop_cutoff/multiple_overlapping_boxes/imprint_unreadable` *only when actually computed*. Return `good_quality_but_unmatched` and `ambiguous_candidates` if verified using trained thresholds. LLM may explain signals, but **never invent a photographic reason**. If no reliable model quality flags, generic uncertainty + options.
@@ -128,7 +148,7 @@ flowchart TD
 ## V. Unknown pill / package / unlabeled blister
 
 - `IDENTIFY_UNKNOWN` user intent bypasses personal medication dose checking. Stage2 `/identify` returns **possible US catalogue visual candidates**, not confirmed identity; imprint if user supplies it, and candidate metadata are source-tagged.
-- Printed package/label → OCR with exact product information, patient can separately choose to create **pending enrollment** after source review.
+- Printed package/label → `/v1/read-label` first → present the extracted product candidate → the patient may separately choose to create a **pending enrollment** after source review.
 - Transparent blister no readable text → can retain personal packaging photo if provenance exists, but **loose-pill encoder cannot be presumed valid through plastic reflections**; ask for original box/label/pharmacist without opening sealed packaging just for the app.
 - Opaque foil and no text → `unverified`, no image-based identification. Unknown drug cannot silently start regimen or become new model class/training sample.
 

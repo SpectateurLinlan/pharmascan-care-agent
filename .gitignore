@@ -1,9 +1,18 @@
-# Credentials and local configuration
+# Environment
 .env
 .env.*
 !.env.example
+
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Credentials
 *.pem
 *.key
+*.p12
+*.pfx
+credentials.json
 secrets/
 
 # Python
@@ -15,14 +24,19 @@ venv/
 .mypy_cache/
 .ruff_cache/
 
-# Frontend
+# Node / frontend
 node_modules/
 dist/
 build/
 .next/
 coverage/
 
-# Local data and model binaries
+# Local databases
+*.sqlite
+*.sqlite3
+*.db
+
+# Model binaries
 *.pt
 *.pth
 *.ckpt
@@ -30,28 +44,19 @@ coverage/
 *.safetensors
 *.pkl
 *.joblib
-*.sqlite
-*.sqlite3
-*.db
-private_data/
-patient_uploads/
 
-# Platform
-.DS_Store
-Thumbs.db
+# IDE / OS
 .vscode/
 .idea/
+.DS_Store
+Thumbs.db
+desktop.ini
 
-credentials.json
-uploads/
-personal_data/
-private/
-models/checkpoints/
-evidence/private/
+# Logs / temp
+*.log
+*.tmp
+*.temp
+*.bak
 
-# Stray reserved-name junk file created by a '2>nul' redirect in Git Bash.
-# Cannot be deleted by agent tooling (ACCESS_DENIED, likely open handle).
-# Manual removal: del \\.\D:\Projects\pharmascan-care-agent\nul
+# Windows accidental reserved file
 nul
-
-# Note: original screenshots needed for submissions should be kept in a controlled evidence directory.

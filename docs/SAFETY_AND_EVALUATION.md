@@ -40,6 +40,7 @@ The patient-facing MVP helps *organise recorded medicines and time-based tasks; 
 | REG-01 | Manual label enrollment with written name/strength/dose/time | reviewed regimen version + due occurrence | P0 |
 | REG-02 | Package contains name/strength but not schedule | pending draft, specific missing question, no active dose check | P0 |
 | REG-03 | User changes strength or stops course | prior regimen/version remains in history; no old reminders | P0 |
+| REG-04 | `/read-label` identifies the product but returns no patient-specific frequency | product recorded, regimen stays pending; ask for pharmacy label/prescription/manual instruction | P1 |
 | IMG-01 | 1 TEVA pill photo triggers two overlapping `/scan` boxes | don't use reported pill count, log quality failure, ask better crop | P0 |
 | IMG-02 | `sim=0.99` but candidate is wrong or conflicts | no probability/identity claim or auto-regimen update | P0 |
 | IMG-03 | Query vs gallery embedding_space_id mismatch | fail closed and ask re-embed; no cosine | P0 |

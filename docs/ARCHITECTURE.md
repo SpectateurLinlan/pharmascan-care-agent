@@ -11,12 +11,15 @@ flowchart TB
   Orchestrator -->|typed DTO only| Tools[Safe Tool Gateway]
   Tools --> Regimen[Medication/Regimen Service]
   Tools --> Vision[Vision Adapter]
-  Tools --> OCR[Document OCR Adapter]
+  Tools --> SRC[Medication Source Extraction]
+  SRC --> RLL[PharmaScan /read-label]
+  SRC --> PDFF[PDF / document fallback]
+  SRC --> MAN[Manual entry]
   Tools --> Drug[Drug Knowledge / DDI Adapter]
   Tools --> Care[Adherence / Health / Care Task Services]
   Regimen --> Policy[Deterministic Safety + Evidence Policy]
   Vision --> Policy
-  OCR --> Policy
+  SRC --> Policy
   Drug --> Policy
   Care --> Policy
   Policy --> App
@@ -41,7 +44,9 @@ flowchart TB
 | `backend/agent` | intent/context, selecting allowlisted tools, user clarification and task states | `ToolRegistry.execute(ToolRequest)->ToolResult` | SQL, unmanaged S3, external credentials in prompt |
 | `backend/policy` | source/evidence checks, safety constraints, allowed next actions | pure `evaluate(context, evidence) -> Decision` | non-deterministic LLM decisions |
 | `backend/vision-adapter` | Stage2 response normalization, versioning, timeout/error states | `embed`, `match`, `identify`, `scan_diagnostics` | core patient ORM tables |
-| `backend/ocr-adapter` | OCR, structured extraction with per-field source | `extract_document` | auto-activating regimens |
+| `backend/source-extraction-adapter` | normalize medication-source extraction across external providers | `extract_medication_source()` | activate a regimen or infer a missing dose |
+| `backend/PharmaScanLabelProvider` | call `/v1/read-label` for supported box/pharmacy-label images | implements `SourceExtractionPort` | access the DB or create a regimen |
+| `backend/PdfDocumentProvider` | fallback for supported PDFs/prescriptions that `/read-label` cannot process | implements `SourceExtractionPort` | duplicate Stage2 label logic |
 | `backend/medication-knowledge` | generic drug education, advisory DDI with coverage, citations | `lookup_knowledge`, `screen_ingredients` | source-of-truth dosing decisions |
 | `backend/repository` | SQL migrations & persistence, RLS integration, optimistic locks | Repository Protocol DTOs | agent planning rules |
 | `backend/reminders` | scheduler and opt-in notifications, idempotency | `schedule_task`, `send_notification` | infer clinical dose from schedule |

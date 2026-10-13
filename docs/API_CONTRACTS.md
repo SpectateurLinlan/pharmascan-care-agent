@@ -4,24 +4,24 @@
 
 ## A. Prior external endpoints vs app-level ownership (historical table; see current v0.8.0 section G)
 
-| Route (external) | Supported claim from earlier OpenAPI | App decision | Owner / blocker | Priority |
-|---|---|---|---|---|
-| `GET /health` | Health check | keep | vision owner; cold start tests | P0 |
-| `POST /v1/embed` | cropped pill → 256-d vector | keep; validate dimension & metadata; image via backend | vision owner; real JSON needed | P0 |
-| `POST /v1/match` | query vectors + caller-supplied gallery | keep Hackathon; app owns persistent refs | vision owner + app adapter | P0 |
-| `POST /v1/identify` | US catalogue ranked visual matches, optional imprint/shape/colour | keep, **candidate only** | vision owner | P0 |
-| `POST /v1/scan` | convenience multi-pill scan / stand-in finder | use **diagnostics** only until tested; known single-pill duplicate boxes | vision owner | P0 |
-| `GET /v1/pills/search` | US pill catalogue query | keep if product mapping confirmed | vision owner | P1 |
-| `GET /v1/pills/{pill_id}` | catalogue product details | keep; market caveat | vision owner | P1 |
-| `GET /v1/pills/{pill_id}/image/{n}` | catalogue reference images | keep as non-authoritative image; check permitted usage | vision owner | P1 |
-| `POST /v1/safety/medications` | ingredient duplication / advisory DDI | adapter now; future safety service boundary; no full-safety claim | app; license check | P1 |
-| `POST /v1/safety/dose` | compare supplied counts vs schedule | legacy diagnostic only; **move authoritative rules to main app service** | app | P0 |
-| `/v1/safety/label` | US labeling lookup | wrap as knowledge retrieval only, source citation | app | P1 |
-| `POST /v1/feedback` / delete | consent feedback flow | keep **out of MVP** or explicit opt-in queue, not gallery persistence | vision owner | P2 |
-| `GET /v1/model-info` | **proposed; not confirmed** | expose `embedding_space_id`, weights/preprocess, limits, calibration version | vision owner | P0 |
-| `POST /v1/detect` | **proposed; not confirmed** | optional validated detection + NMS/quality flags | vision owner | P1 |
-| `POST /v1/search-by-embedding` | **proposed; not confirmed** | avoid duplicate inferencing, evaluate after freeze | vision owner | P2 |
-| `/v1/read-label` | older Claude HTML may label available, previous OpenAPI **did not verify** | OCR belongs to app; do not assume API route exists | app | P1 |
+| Route (external)                      | Supported claim from earlier OpenAPI                              | App decision                                                                                                  | Owner / blocker                | Priority |
+| ------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------ | -------- |
+| `GET /health`                       | Health check                                                      | keep                                                                                                          | vision owner; cold start tests | P0       |
+| `POST /v1/embed`                    | cropped pill → 256-d vector                                      | keep; validate dimension & metadata; image via backend                                                        | vision owner; real JSON needed | P0       |
+| `POST /v1/match`                    | query vectors + caller-supplied gallery                           | keep Hackathon; app owns persistent refs                                                                      | vision owner + app adapter     | P0       |
+| `POST /v1/identify`                 | US catalogue ranked visual matches, optional imprint/shape/colour | keep,**candidate only**                                                                                 | vision owner                   | P0       |
+| `POST /v1/scan`                     | convenience multi-pill scan / stand-in finder                     | use**diagnostics** only until tested; known single-pill duplicate boxes                                 | vision owner                   | P0       |
+| `GET /v1/pills/search`              | US pill catalogue query                                           | keep if product mapping confirmed                                                                             | vision owner                   | P1       |
+| `GET /v1/pills/{pill_id}`           | catalogue product details                                         | keep; market caveat                                                                                           | vision owner                   | P1       |
+| `GET /v1/pills/{pill_id}/image/{n}` | catalogue reference images                                        | keep as non-authoritative image; check permitted usage                                                        | vision owner                   | P1       |
+| `POST /v1/safety/medications`       | ingredient duplication / advisory DDI                             | adapter now; future safety service boundary; no full-safety claim                                             | app; license check             | P1       |
+| `POST /v1/safety/dose`              | compare supplied counts vs schedule                               | legacy diagnostic only;**move authoritative rules to main app service**                                 | app                            | P0       |
+| `/v1/safety/label`                  | US labeling lookup                                                | wrap as knowledge retrieval only, source citation                                                             | app                            | P1       |
+| `POST /v1/feedback` / delete        | consent feedback flow                                             | keep**out of MVP** or explicit opt-in queue, not gallery persistence                                    | vision owner                   | P2       |
+| `GET /v1/model-info`                | **proposed; not confirmed**                                 | expose`embedding_space_id`, weights/preprocess, limits, calibration version                                 | vision owner                   | P0       |
+| `POST /v1/detect`                   | **proposed; not confirmed**                                 | optional validated detection + NMS/quality flags                                                              | vision owner                   | P1       |
+| `POST /v1/search-by-embedding`      | **proposed; not confirmed**                                 | avoid duplicate inferencing, evaluate after freeze                                                            | vision owner                   | P2       |
+| `POST /v1/read-label`                 | readable medicine box / pharmacy-label image                      | integrate existing Stage2 capability for product/label extraction; app owns source review and regimen mapping | vision owner + app adapter     | P1       |
 
 **KEEP external API separate from main application APIs.** Distinguish `GET /v1/pills/{id}` catalogue from `GET /api/patients/me/medications` patient medical records. The user has already sent prior API endpoint proposals to vision owner: changes require a new version + migration announcement, never silent deletion.
 
@@ -68,27 +68,81 @@ class CatalogueCandidateDTO:
     source_dataset: str
 ```
 
+
+### `/v1/read-label` responsibility
+
+Current evidence shows a deployed UI path for reading medicine boxes or pharmacy
+labels and returning structured medication information such as medicine,
+ingredients and RxNorm mapping.
+
+This endpoint MAY be used as the preferred image-label extraction provider.
+
+v0.8.0 now specifies `DocumentFields` with nullable Printed directions, quantity,
+dose_form, date and expiry_date. The adapter preserves each value + source line.
+The schema does NOT supply structured per-patient dose/frequency/timing/duration,
+and no image POST has been tested live. The app must NOT assume reliable fields such as:
+
+- dose quantity;
+- frequency;
+- explicit administration times;
+- PRN instructions;
+- duration;
+- route;
+- food instructions;
+- special patient-specific directions.
+
+The main application remains responsible for:
+
+1. storing the source and provenance;
+2. distinguishing product identity from regimen instructions;
+3. detecting missing regimen fields;
+4. asking the patient for the original pharmacy label/prescription or manual
+   clarification;
+5. requiring patient review before activating a regimen.
+
+`/v1/read-label` must never directly activate or modify a regimen.
+
+
 **Do not fabricate these fields as if the external API emits them.** Write an `ExternalPharmaScanAdapter` mapping real external JSON to these internal DTOs; absent fields remain unavailable/unknown. `ModelVersionMismatch`, `Timeout`, `UnsupportedModality`, `UpstreamSchemaError` each have explicit error pathways. Request contract should cap image and JSON size and redact patient identifiers from external model calls.
 
 ## C. Main FastAPI user-facing APIs (to implement)
 
-| Route | Input → Output | Side-effect/policy |
-|---|---|---|
-| `POST /api/demo/start` | authenticated **anonymous** principal → isolated synthetic seed status | idempotent user-owned seed, rate limit; no shared account |
-| `POST /api/agent/messages` | text + typed attachment refs + session_id → response/tool trace state | token verified, bounded steps, safe tool allowlist |
-| `GET /api/me/medications` | JWT → patient active/history snapshot | patient-owned RLS |
-| `POST /api/medications/drafts` | source/file/manual fields → pending draft | no plan activation without reviewed required inputs |
-| `POST /api/medications/drafts/{id}/confirm` | reviewed field IDs, origin evidence, explicit confirmation → regimen version | idempotent, scope and source check; historic preserved |
-| `POST /api/medication-sources/extract` | PDF/image document id → extracted fields + provenance | OCR suggestions only, not prescriptions |
-| `POST /api/reference-sets` | linked product + image modality + reviewed evidence → images + eligible embeddings | never place box/blister in loose-pill vector group |
-| `POST /api/vision/check-dose` | specific due-dose id + image reference → advisory evidence/quality | patient plan check + no auto-take flag |
-| `POST /api/doses/{occurrence_id}/report` | taken/not taken/unsure, timestamp, optional vision run → self report event | idempotent, no ingestion proof |
-| `GET /api/me/dose-history` | date range → state-aware history | not_reported ≠ missed |
-| `POST /api/health-observations` | measure type/value/unit/observed_at/source → record | no diagnosis or medication action |
-| `GET /api/me/care-tasks` | tasks/next dates | distinguish user-added vs source-backed |
-| `POST /api/reviews/summary` | selected time range → factual medicine/observation summary | requires user review before external sharing |
-| `GET/PUT /api/me/preferences` | visual mode, language, accessibility, timezone | `SMART` default, per-patient |
-| `POST /api/me/caregiver-contact` | email/phone, scope, consent intent → pending contact | external notification only after independent verification |
+| Route                                         | Input → Output                                                                     | Side-effect/policy                                        |
+| --------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `POST /api/demo/start`                      | authenticated**anonymous** principal → isolated synthetic seed status        | idempotent user-owned seed, rate limit; no shared account |
+| `POST /api/agent/messages`                  | text + typed attachment refs + session_id → response/tool trace state              | token verified, bounded steps, safe tool allowlist        |
+| `GET /api/me/medications`                   | JWT → patient active/history snapshot                                              | patient-owned RLS                                         |
+| `POST /api/medications/drafts`              | source/file/manual fields → pending draft                                          | no plan activation without reviewed required inputs       |
+| `POST /api/medications/drafts/{id}/confirm` | reviewed field IDs, origin evidence, explicit confirmation → regimen version       | idempotent, scope and source check; historic preserved    |
+| `POST /api/medication-sources/extract`      | medication source document/image → normalized extraction DTO + provenance          | source-extraction façade; routes by source type; never activates a regimen |
+| `POST /api/reference-sets`                  | linked product + image modality + reviewed evidence → images + eligible embeddings | never place box/blister in loose-pill vector group        |
+| `POST /api/vision/check-dose`               | specific due-dose id + image reference → advisory evidence/quality                 | patient plan check + no auto-take flag                    |
+| `POST /api/doses/{occurrence_id}/report`    | taken/not taken/unsure, timestamp, optional vision run → self report event         | idempotent, no ingestion proof                            |
+| `GET /api/me/dose-history`                  | date range → state-aware history                                                   | not_reported ≠ missed                                    |
+| `POST /api/health-observations`             | measure type/value/unit/observed_at/source → record                                | no diagnosis or medication action                         |
+| `GET /api/me/care-tasks`                    | tasks/next dates                                                                    | distinguish user-added vs source-backed                   |
+| `POST /api/reviews/summary`                 | selected time range → factual medicine/observation summary                         | requires user review before external sharing              |
+| `GET/PUT /api/me/preferences`               | visual mode, language, accessibility, timezone                                      | `SMART` default, per-patient                            |
+| `POST /api/me/caregiver-contact`            | email/phone, scope, consent intent → pending contact                               | external notification only after independent verification |
+
+### `/api/medication-sources/extract` responsibility
+
+Main-app source extraction façade. It is the single app-side entry point for
+turning a medication source into normalized fields, and it routes by source type:
+
+- readable box / pharmacy-label image
+  → PharmaScan `/v1/read-label`
+- supported prescription/image source not handled by PharmaScan
+  → application document extraction provider
+- PDF unsupported by current external provider
+  → PDF/OCR fallback or manual review
+- extraction unavailable
+  → manual enrollment fallback
+
+The endpoint normalizes provider-specific outputs into the application's
+`MedicationSourceExtractionDTO`.
+
+It does not activate a regimen.
 
 `POST /api/agent/messages` payload should include `client_turn_id` and `session_id`, to avoid duplicate tool actions under retried requests. Do not let the agent select arbitrary `patient_id`.
 
@@ -103,7 +157,7 @@ class CatalogueCandidateDTO:
 
 ## E. Tests and team-owner handoff (priority first)
 
-1. P0 Contract: request one **real** successful and one failed JSON response for `/embed`, `/match`, `/identify` and `/scan`, including HTTP status, content-type, timeouts, response size, `model_version`/`embedding_space_id` if available; redact images/patient data. Keep them under `tests/fixtures/stage2/` with source/version.
+1. P0 Contract: request one **real** successful and one failed JSON response for `/model-info`, `/detect`, `/embed`, `/match`, `/identify`, `/scan` and `/read-label`, including HTTP status, content-type, API version, timeouts and response size; `model_version`/`embedding_space_id` if available; redact images/patient data. Keep them under `tests/fixtures/stage2/` with source/version. For `/read-label`, additionally record which extracted fields are actually returned, which fields may be null, and whether confidence/provenance is present.
 2. P0 Vision: reproduce user TEVA single pill → two overlapping boxes; tests must reject duplicate count. Make sure /scan crop/box/identify logic is observable and not an implicit untestable blob.
 3. P0 Embeddings: correct normalization, dimensionality, vector compatibility and threshold/margin on held-out same-product/different-product pairs; explicitly include IR/XR and same-shape different-strength ambiguity.
 4. P0 Main App: gallery stored in private database; RLS prevents patient-A reading patient-B; no photo still produces only self-report; provider timeout must not be reported as match.
@@ -113,7 +167,7 @@ class CatalogueCandidateDTO:
 
 ## F. Stage2 owner requested response (can paste to teammate)
 
-> Please preserve existing v0.4.0 routes during our hackathon integration, but share latest actual JSON schemas and model metadata (encoder weights/preprocessing/normalization, embedding space, calibrated threshold/margin). Our app will persist personal gallery locally. We will call `/embed`, `/match`, `/identify` and only use `/scan` diagnostics until the single-pill double-box issue is fixed. Please confirm whether `/v1/model-info`, standalone detection/quality flags, and optional catalogue reference embeddings are feasible without breaking existing callers. Distinguish proposed from deployed routes and provide at least one reproducible success/failure payload for contract tests.
+> Historical v0.4.0 handoff request retained in Git history. Current request: please provide permitted synthetic/public image request conditions and actual v0.8.0 success/failure POST payloads, especially /embed, /match, /identify, /scan and /read-label. Clarify /v1/tools response shape and type the currently unconstrained ScanPill additions. No server changes are made by the main application team.
 
 ## G. Verified v0.8.0 adapter contract (2026-10-13)
 

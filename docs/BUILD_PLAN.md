@@ -42,10 +42,11 @@
 - [ ] **B007 · P0 · 2026-10-13 · App** — 保存 Agent 会话状态与调用日志 / Add persistent Agent session and tool traces. **Acceptance:** Agent resumes tasks; tool calls and blocked actions auditable. **Depends:** B002.
 
 ### Vision
-- [ ] **V001 · P0 · 2026-10-13 · Vision** — 提供 Stage2 最新真实请求响应与模型元数据 / Supply real JSON and metadata for Stage2 endpoints. **Acceptance:** Success/error payload fixtures for /embed,/match,/identify,/scan.
+- [ ] **V001 · P0 · 2026-10-13 · Vision** — 提供 Stage2 最新真实请求响应与模型元数据 / Freeze latest PharmaScan API contract and provide real payloads.
+  - **Acceptance:** real success/error responses for `/v1/model-info`, `/v1/detect`, `/v1/embed`, `/v1/match`, `/v1/identify`, `/v1/scan`, `/v1/read-label`; latest OpenAPI snapshot committed with version/provenance.
 - [ ] **V002 · P0 · 2026-10-13 · Vision** — 调查单药两框 bug / Investigate one-pill double bounding-box regression. **Acceptance:** Single reference pill processed as at most one distinct pill; regression artifact.
 - [ ] **V003 · P0 · 2026-10-14 · Vision** — 验证相似度阈值、歧义边际和拒识 / Calibrate threshold/margin/unknown detection. **Acceptance:** Validation split/metrics, no cosine-as-probability. **Depends:** V001.
-- [ ] **V004 · P1 · 2026-10-14 · Vision** — 公开模型与 Embedding Space 版本 / Expose model/embedding-space version contract. **Acceptance:** Versions and preprocessing contract verified by real response. **Depends:** V001.
+- [ ] **V004 · P1 · 2026-10-14 · Vision** — 公开模型与 Embedding Space 版本 / Expose model/embedding-space version contract. **Status:** in_progress — do NOT tick done merely because `/model-info` is observed online; keep in_progress until a real response fixture is received and `model_version`, `embedding_space_id`, `dimension`, `normalization`, `preprocessing`, `threshold`/`margin` are verified. **Acceptance:** Versions and preprocessing contract verified by real response. **Depends:** V001.
 - [ ] **V005 · P1 · 2026-10-14 · Vision** — 可选独立 Detection/Quality 工具 / Optional independent detection/quality API. **Acceptance:** One/multi-pill regression; measured flags, not invented. **Depends:** V002.
 
 ### Agent
@@ -66,7 +67,11 @@
 - [ ] **F006 · P1 · 2026-10-15 · UI** — 构建历史/健康/预防/复诊页面 / Build history/health/prevention/review screens. **Acceptance:** 6 challenge capabilities accessible in UI. **Depends:** L003.
 
 ### Features
-- [ ] **OCR01 · P1 · 2026-10-14 · App** — 药房标签/PDF OCR 与字段核对 / Build pharmacy-label/PDF OCR and field review. **Acceptance:** Missing dose remains null, user confirms source-linked fields. **Depends:** B004.
+- [ ] **OCR01 · P1 · 2026-10-14 · App** — 集成 PharmaScan 标签/包装提取与疗程字段核对 / Integrate PharmaScan label/package extraction and regimen field review. **Status:** in_progress.
+  - **Acceptance:** readable box/pharmacy-label image uses `/v1/read-label`; provider response normalized into the app DTO; source image/provenance preserved; product identity and patient regimen kept separate; missing dose/frequency/time/duration remain null; patient reviews regimen-relevant source fields; manual enrollment remains available.
+  - **Depends:** B004.
+- [ ] **OCR02 · P1 · 2026-10-14 · Vision + App** — 验证药房标签疗程指示提取 / Validate pharmacy-label regimen instruction extraction.
+  - **Acceptance:** test representative synthetic/Singapore-style pharmacy labels for medicine name, ingredient, strength, dosage form, dose quantity, frequency, administration time, food instruction, PRN, duration when explicitly present, and special instruction. Each extracted field must distinguish **present / missing / ambiguous**. Missing fields must not be inferred.
 - [ ] **K001 · P1 · 2026-10-14 · App** — 建立有来源的药物解释 Tool / Add source-backed medication education. **Acceptance:** Patient language info with source; personal dose from regimen. **Depends:** A001.
 - [ ] **K002 · P1 · 2026-10-15 · App** — 带覆盖率的潜在 DDI/重复成分提示 / Advisory DDI/duplicate screening with coverage. **Acceptance:** No-alert does not imply safe; NC licence disclosure. **Depends:** B005.
 - [ ] **L001 · P1 · 2026-10-15 · App** — 记录血压血糖症状与时间趋势 / Track dated health observations and trends. **Acceptance:** Units/date/source; no causal diagnosis. **Depends:** B002.
@@ -108,4 +113,4 @@
 
 For each completed task, update `status/tasks.json` status/evidence/updated_at and `status/WORK_LOG.md` with real tests. A task is **blocked** only when its dependency (secret, cloud grant, real Stage2 response, legal permission) cannot be satisfied; continue independent tasks and record in `status/BLOCKERS.md`. No human approval → no paid resources, cloud production mutation or repository push.
 
-**Initial completed documentation tasks: 1 of 60; implementation completion unverified.**
+**Initial completed documentation tasks: 1 of 61; implementation completion unverified.**
