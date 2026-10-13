@@ -46,6 +46,6 @@ SourceExtractionPort.extract_medication_source(*, source_document_id: UUID, sour
 <li><b>B02 / B03：</b>真实数据库迁移/RLS与LLM仍无授权。持久化in-memory、Agent deterministic_degraded均须标SIMULATED。</li>
 <li><b>B12 · 优先安全处理：</b>tracked .env.example有疑似实际凭据，未使用、不得提交。本次真实对话此前raw diff也出现过敏感值，应轮换凭据、迁至ignored配置、恢复placeholder，并在分享原对话/截图前脱敏。本报告不含值。</li></ul>
 <p>V001 = done，仅冻结schema+安全GET gate；V004 = done，仅metadata；V003 = todo；A004/OCR01/V002保持partial。无照片路径仍可继续，但本轮未重新执行浏览器端E2E或云端验收。</p></section>
-<section><h2>6. 本地提交与交接</h2><p id="commit-record">本报告将在本轮精确范围本地提交后追加实际hash；不以历史commit冒充。最终hash同时记录到 status/WORK_LOG.md。</p><p>既有共享文档/记忆改动使用局部index staging保留；.env.example和其他既有文档不整份纳入。任何后续remote动作由用户人工执行。</p></section>
+<section><h2>6. 本地提交与交接</h2><p id="commit-record">本轮实现提交：<code>9096de26c65b056dffeb744e8f06589f6b1c8008</code>（<b>9096de2</b>） · <code>feat(stage2): refresh v0.8 contracts and label extraction boundary</code>。42个文件，主要体积为完整生成schema审计；历史0.4被识别为100% rename。该hash已写入 <code>status/WORK_LOG.md</code>，本报告的hash说明将作为独立交接记录提交；无任何推送。</p><p>既有共享文档/记忆改动使用局部index staging保留；.env.example和其他既有文档不整份纳入。任何后续remote动作由用户人工执行。</p></section>
 <footer class="muted">PharmaScan Care · Research prototype · Visual similarity ≠ medication identity ≠ ingestion proof.</footer>
 </main></body></html>
