@@ -11,6 +11,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from ..domain.errors import (
+    AuthenticationRequiredError,
     ConfirmationExpiredError,
     ConfirmationRequiredError,
     DomainError,
@@ -26,6 +27,7 @@ from ..domain.errors import (
 
 #: Domain exception class -> (http status, stable code fallback)
 _STATUS_BY_ERROR: dict[type[DomainError], int] = {
+    AuthenticationRequiredError: 401,
     NotFoundError: 404,
     SourceUnreviewedError: 409,
     IncompleteRegimenError: 409,

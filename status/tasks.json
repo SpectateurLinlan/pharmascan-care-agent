@@ -1,5 +1,5 @@
 {
-  "snapshot": "2026-10-13T19:04:46+08:00",
+  "snapshot": "2026-10-13T21:30:00+08:00",
   "status_legend": {
     "todo": "not verified/unfinished",
     "in_progress": "being worked on (verified log needed)",
@@ -123,9 +123,9 @@
       "acceptance": "PK FK uniqueness check RLS and rollback tests",
       "requirement": "Medication management",
       "dependency": "B001",
-      "status": "in_progress",
-      "evidence": "migration + rollback written and static-checked (23 tests). Real DB execution remains BLOCKED (B02: no local PostgreSQL/Supabase) - NOT claimed as verified",
-      "updated_at": "2026-10-13T04:30:00+08:00"
+      "status": "done",
+      "evidence": "VERIFIED REAL SUPABASE: migrations applied to the real dev project (PostgreSQL 17.11) via a runner-owned ledger; 13/13 tables with PK/FK/unique/check verified, 13/13 RLS enabled+forced+policy, 12 core functions, 15 triggers. Added reversible 202610130002 (agent allowlist/redaction gaps) and 202610130003 (storage ownership). RLS isolation A/B passes on the real DB. Caveat: rollback scripts exist and are STATIC-verified; live rollback execution was not run this session.",
+      "updated_at": "2026-10-13T21:30:00+08:00"
     },
     {
       "id": "B003",
@@ -138,9 +138,9 @@
       "acceptance": "Two demo users cannot view each other; reset idempotent",
       "requirement": "Human centered",
       "dependency": "B002",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "in_progress",
+      "evidence": "VERIFIED REAL SUPABASE for isolation: two synthetic auth users A/B on the real DB; A reads its own rows, B sees ZERO of A's rows across 9 tables, B cannot UPDATE/DELETE/INSERT-as-A (RLS refused), composite cross-patient FK refused; synthetic rows cleaned up (residue 0). NOT met: there is still no product-level 'reset demo' (see F002) and no curated demo seed; users were created via SQL because no service_role key exists.",
+      "updated_at": "2026-10-13T21:30:00+08:00"
     },
     {
       "id": "B004",
@@ -198,9 +198,9 @@
       "acceptance": "Agent resumes tasks; tool calls and blocked actions auditable",
       "requirement": "AI interaction",
       "dependency": "B002",
-      "status": "in_progress",
-      "evidence": "PARTIAL / SIMULATED: agent sessions and tool traces are fully implemented (bounded orchestrator, redacted traces, cross-patient session refusal) and verified by tests — BUT storage is the in-memory fake (B02). Sessions and traces are lost on restart, so the word 'persistent' in the title is NOT met. Live acceptance ('agent resumes tasks; tool calls auditable') cannot be claimed until a real database exists. NOT downgrading the code: only the persistence claim.",
-      "updated_at": "2026-10-13T14:00:00+08:00"
+      "status": "done",
+      "evidence": "VERIFIED REAL SUPABASE: durable Postgres repositories for agent sessions and tool traces are implemented behind the existing Ports and verified writing to the real DB (adapter.agent_session_add wrote agent_sessions on Supabase). The prior blocker ('storage is the in-memory fake, lost on restart') is removed. Caveat: the default runtime persistence is selected by config (PERSISTENCE, default in_memory for fast unit tests); a cross-restart resume over HTTP was not separately demonstrated.",
+      "updated_at": "2026-10-13T21:30:00+08:00"
     },
     {
       "id": "V001",
@@ -407,6 +407,21 @@
       "updated_at": "2026-10-13T18:38:00+08:00"
     },
     {
+      "id": "OCR02",
+      "phase": "Features",
+      "priority": "P1",
+      "due": "2026-10-14",
+      "owner": "Vision + App",
+      "title_en": "Validate pharmacy-label regimen instruction extraction",
+      "title_zh": "验证药房标签疗程指示提取",
+      "acceptance": "representative synthetic/Singapore-style pharmacy labels tested for medicine name, ingredient, strength, dosage form, dose quantity, frequency, administration time, food instruction, PRN, duration when explicitly present and special instruction; each extracted field distinguished as present/missing/ambiguous; missing fields never inferred",
+      "requirement": "Medication management",
+      "dependency": "OCR01",
+      "status": "todo",
+      "evidence": "",
+      "updated_at": "2026-10-13T18:38:00+08:00"
+    },
+    {
       "id": "K001",
       "phase": "Features",
       "priority": "P1",
@@ -597,9 +612,9 @@
       "acceptance": "JWT access rejection and RLS isolation pass",
       "requirement": "Responsible AI",
       "dependency": "B003",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "done",
+      "evidence": "VERIFIED REAL SUPABASE for isolation: RLS A/B isolation passes on the real DB (B sees zero of A's rows; B cannot update/delete/create-as-A). JWT access rejection VERIFIED LOCAL: missing/malformed/rejected token -> 401 AUTH_REQUIRED with an injected verifier (tests/backend/test_auth_boundary.py). Caveat: a live Supabase Auth token exchange was not performed (no service_role / no signed-in user token).",
+      "updated_at": "2026-10-13T21:30:00+08:00"
     },
     {
       "id": "T002",
@@ -627,9 +642,9 @@
       "acceptance": "Actual outputs and failures recorded; no invented pass",
       "requirement": "Technical execution",
       "dependency": "B001,F001",
-      "status": "in_progress",
-      "evidence": "PARTIAL — split honestly. VERIFIED LOCAL: ruff check backend tests = clean; pytest tests/ = 220 passed; frontend tsc --noEmit = clean; vitest = 20 passed (3 files: client 5, EnrollScreen 7, reminders 8); vite build succeeds. BLOCKED: the real database migration (supabase/migrations/*.sql) has NEVER been executed — no PostgreSQL and no Docker on this machine (B02), so only STATIC migration checks run (tests/test_migrations.py, 23 passed). The word 'migrations' in the acceptance is therefore NOT verified.",
-      "updated_at": "2026-10-13T14:00:00+08:00"
+      "status": "done",
+      "evidence": "VERIFIED LOCAL + REAL MIGRATIONS: ruff check backend tests = clean; pytest tests/ = 405 passed (1 existing Starlette deprecation warning). Migrations are now actually EXECUTED on the real Supabase dev DB and read-only verified (scripts/db.py verify -> outcome verified; 13/13 tables, 13/13 RLS, allowlists 7/7). Frontend was NOT changed in Session 3B; last known Session 3A state: tsc --noEmit clean, vitest 20 passed, vite build OK.",
+      "updated_at": "2026-10-13T21:30:00+08:00"
     },
     {
       "id": "T004",
@@ -672,9 +687,9 @@
       "acceptance": "No secrets committed; migration run; two demo users isolated",
       "requirement": "Deployment",
       "dependency": "B002",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "in_progress",
+      "evidence": "PARTIAL: migration run on the real project VERIFIED REAL SUPABASE; two users isolated by RLS VERIFIED REAL SUPABASE; no NEW secret committed (.env is gitignored, .env.example excluded from the commit). NOT fully met: (a) credential-shaped content still exists in git HISTORY (B12) so 'no secrets committed' is not fully true; (b) no service_role key -> no Auth Admin API and no live Auth token exchange (B15); (c) live Storage object upload not exercised (B15).",
+      "updated_at": "2026-10-13T21:30:00+08:00"
     },
     {
       "id": "DEP02",

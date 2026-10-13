@@ -16,8 +16,8 @@ from fastapi import APIRouter, Depends, Query
 from ...contracts.dto import DoseEventInput
 from ...domain.errors import NotFoundError
 from ...domain.policy import intake_status_from_patient_choice
-from ..container import demo_patient_id
-from ..deps import ApplicationContainer, get_container
+from ..auth import AuthenticatedPrincipal
+from ..deps import ApplicationContainer, get_container, get_principal
 from ..schemas import (
     DoseHistoryEntryResponse,
     DoseHistoryResponse,
@@ -32,14 +32,14 @@ router = APIRouter(prefix="/api", tags=["doses"])
 @router.get("/doses/due", response_model=DueDoseResponse)
 def due_dose(
     regimen_id: UUID = Query(),
-    client_id: str = Query(min_length=1, max_length=128),
+    principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ) -> DueDoseResponse:
     """Return the currently due occurrence for a regimen, if any.
 
     No dose being due is a normal answer, not an error.
     """
-    patient_id = demo_patient_id(client_id)
+    patient_id = principal.patient_id
     regimen = container.enrollment._regimens.get(patient_id, regimen_id)
     if regimen is None:
         raise NotFoundError(f"Regimen {regimen_id} not found")
@@ -76,11 +76,11 @@ def due_dose(
 def report_dose(
     occurrence_id: UUID,
     payload: SelfReportRequest,
-    client_id: str = Query(min_length=1, max_length=128),
+    principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ) -> SelfReportResponse:
     """Record what the patient said. Idempotent on the idempotency key."""
-    patient_id = demo_patient_id(client_id)
+    patient_id = principal.patient_id
     # Reject an unmappable patient choice instead of silently defaulting.
     intake = intake_status_from_patient_choice(payload.intake_status)
     outcome = container.self_report.report(
@@ -105,11 +105,11 @@ def report_dose(
 @router.get("/me/dose-history", response_model=DoseHistoryResponse)
 def dose_history(
     regimen_id: UUID = Query(),
-    client_id: str = Query(min_length=1, max_length=128),
+    principal: AuthenticatedPrincipal = Depends(get_principal),
     days: int = Query(default=7, ge=1, le=90),
     container: ApplicationContainer = Depends(get_container),
 ) -> DoseHistoryResponse:
-    patient_id = demo_patient_id(client_id)
+    patient_id = principal.patient_id
     # Materialise first: a freshly activated regimen has occurrences only after
     # materialisation, and without this the history would render as an empty
     # list even though the patient has a real schedule. This is a read-side

@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 
 from ...agent.orchestrator import AgentTurn
-from ..container import demo_patient_id
-from ..deps import ApplicationContainer, get_container
+from ..auth import AuthenticatedPrincipal
+from ..deps import ApplicationContainer, get_container, get_principal
 from ..schemas import AgentMessageRequest, AgentMessageResponse, ToolTraceResponse
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
@@ -23,10 +23,10 @@ router = APIRouter(prefix="/api/agent", tags=["agent"])
 @router.post("/messages", response_model=AgentMessageResponse)
 def send_message(
     payload: AgentMessageRequest,
-    client_id: str = Query(min_length=1, max_length=128),
+    principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ) -> AgentMessageResponse:
-    patient_id = demo_patient_id(client_id)
+    patient_id = principal.patient_id
     session_id: UUID = payload.session_id or container.orchestrator.start_session(
         patient_id=patient_id
     ).id

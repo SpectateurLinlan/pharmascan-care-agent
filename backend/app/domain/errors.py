@@ -17,6 +17,19 @@ class ValidationError(DomainError):
     code = ErrorCode.INVALID_INPUT
 
 
+class AuthenticationRequiredError(DomainError):
+    """Raised at the transport boundary when no verified identity is present.
+
+    The message must never contain the presented token, header or any claim
+    value other than the identity that was successfully verified.
+    """
+
+    code = ErrorCode.AUTH_REQUIRED
+
+    def __init__(self, message: str = "Authentication is required") -> None:
+        super().__init__(message)
+
+
 class NotFoundError(DomainError):
     code = ErrorCode.NOT_FOUND
 

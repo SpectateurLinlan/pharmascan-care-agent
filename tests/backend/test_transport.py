@@ -600,7 +600,15 @@ def test_unknown_tool_is_not_reachable_over_http(client: TestClient) -> None:
 
 
 def test_missing_client_id_is_rejected(client: TestClient) -> None:
-    assert client.get("/api/me/medications").status_code == 422
+    """A request with no identity must be refused as unauthenticated.
+
+    This used to be a 422 query-validation error. The boundary is now explicit:
+    the route asks for a resolved principal, and an unresolvable principal is an
+    authentication failure (401 / AUTH_REQUIRED) rather than a malformed query.
+    """
+    response = client.get("/api/me/medications")
+    assert response.status_code == 401
+    assert response.json()["code"] == "AUTH_REQUIRED"
 
 
 def test_openapi_schema_is_generated(client: TestClient) -> None:

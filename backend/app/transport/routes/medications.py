@@ -1,7 +1,9 @@
 """Medication endpoints: list, draft, review, confirm, activate.
 
-Every route is scoped to the demo principal's synthetic patient id. Routes
-call application services only — they never touch a repository or the DB.
+Every route is scoped to the identity resolved by ``get_principal``: a
+verified Supabase JWT in ``AUTH_MODE=supabase``, or the explicitly
+unauthenticated demo principal otherwise. Routes call application services
+only — they never touch a repository or the DB.
 """
 
 from __future__ import annotations
@@ -13,8 +15,8 @@ from fastapi import APIRouter, Depends, Query
 from ...application.timezone import LOCAL_TZ_PROVIDER
 from ...contracts.dto import FrequencyRuleDTO, RegimenDraftInput
 from ...domain.errors import NotFoundError
-from ..container import demo_patient_id
-from ..deps import ApplicationContainer, get_container
+from ..auth import AuthenticatedPrincipal
+from ..deps import ApplicationContainer, get_container, get_principal
 from ..schemas import (
     ConfirmActivateRequest,
     ConfirmActivateResponse,
@@ -30,19 +32,12 @@ from ..schemas import (
 router = APIRouter(prefix="/api", tags=["medications"])
 
 
-def _require_patient(client_id: str) -> UUID:
-    """Demo principal -> synthetic patient id. Not authentication."""
-    if not client_id.strip():
-        raise NotFoundError("client_id is required")
-    return demo_patient_id(client_id)
-
-
 @router.get("/me/medications", response_model=MedicationListResponse)
 def list_medications(
-    client_id: str = Query(min_length=1, max_length=128),
+    principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ) -> MedicationListResponse:
-    patient_id = _require_patient(client_id)
+    patient_id = principal.patient_id
     summaries: list[MedicationSummary] = []
     for medication in container.enrollment._medications.list_for_patient(patient_id):
         regimen = container.enrollment._regimens.find_active_for_medication(
@@ -67,11 +62,11 @@ def list_medications(
 @router.post("/medications/drafts", response_model=DraftCreateResponse)
 def create_draft(
     payload: DraftCreateRequest,
-    client_id: str = Query(min_length=1, max_length=128),
+    principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ) -> DraftCreateResponse:
     """Create a draft. Missing required inputs keep it pending — never active."""
-    patient_id = _require_patient(client_id)
+    patient_id = principal.patient_id
 
     frequency: FrequencyRuleDTO | None = None
     if payload.frequency_kind is not None:
@@ -108,11 +103,11 @@ def create_draft(
 def review_draft(
     source_id: UUID,
     payload: DraftReviewRequest,
-    client_id: str = Query(min_length=1, max_length=128),
+    principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ) -> DraftReviewResponse:
     """Patient confirms extracted fields; required for any activation."""
-    patient_id = _require_patient(client_id)
+    patient_id = principal.patient_id
     count = container.enrollment.review_source_fields(
         patient_id=patient_id, source_id=source_id, field_ids=payload.field_ids
     )
@@ -125,7 +120,7 @@ def review_draft(
 )
 def request_challenge(
     regimen_id: UUID,
-    client_id: str = Query(min_length=1, max_length=128),
+    principal: AuthenticatedPrincipal = Depends(get_principal),
     session_id: UUID = Query(),
     container: ApplicationContainer = Depends(get_container),
 ) -> ConfirmChallengeResponse:
@@ -134,7 +129,7 @@ def request_challenge(
     The session is first moved to ``awaiting_confirmation``; the version it
     returns is what the client must echo back on activation.
     """
-    patient_id = _require_patient(client_id)
+    patient_id = principal.patient_id
     session = container.orchestrator.get_session(
         patient_id=patient_id, session_id=session_id
     )
@@ -176,11 +171,11 @@ def request_challenge(
 @router.post("/medications/activate", response_model=ConfirmActivateResponse)
 def activate(
     payload: ConfirmActivateRequest,
-    client_id: str = Query(min_length=1, max_length=128),
+    principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ) -> ConfirmActivateResponse:
     """Consume a confirmed challenge and activate the regimen version."""
-    patient_id = _require_patient(client_id)
+    patient_id = principal.patient_id
     container.enrollment.confirm_challenge(
         patient_id=patient_id, challenge_id=payload.challenge_id
     )

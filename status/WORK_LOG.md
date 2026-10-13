@@ -16,6 +16,37 @@
 | 2026-10-13 14:0x | WorkBuddy Session 3A (Local Product Gap Repair) | local P0 product gaps that need no Stage2/Supabase/LLM credential | `backend/app/contracts/enums.py` (AgentIntent.DOSE_STATUS_QUERY, ToolName.GET_DOSE_STATUS); `backend/app/agent/tools.py` (GetDoseStatusRequest); `backend/app/agent/registry.py` (read-only `_get_dose_status` + name resolution); `backend/app/agent/orchestrator.py` (dose_status_query routing + `extract_medication_name` + word-boundary keyword match + removed free-text intent carry-over + honest clarification boundary); `backend/app/application/enrollment.py` (`_persist_dose_rules` + `_normalise_local_time`); `backend/app/transport/routes/doses.py` (history now materialises); `supabase/migrations/202610130001_core.sql` (per-row time comment + `dose_rules_no_duplicate_slot_uk`); `frontend/src/components/EnrollScreen.tsx` (multi-time UI + `normaliseTime`); `frontend/src/components/TodayScreen.tsx` (`describeDueStatus` + reminder opt-in); `frontend/src/reminders.ts` (new); `frontend/src/styles.css`; `frontend/vite.config.ts`; `frontend/package.json`; new tests `tests/backend/{test_multi_time_schedule,test_transport_multi_time,test_dose_status_query,test_transport_dose_status_query,test_unsupported_questions,test_transport_self_report}.py`, `frontend/src/components/EnrollScreen.test.ts`, `frontend/src/reminders.test.ts` | **VERIFIED LOCAL:** `pytest tests/` → **220 passed**; `ruff check backend tests` → clean; static migration checks 23 passed; `tsc --noEmit` clean; `vitest run --pool=threads --poolOptions.threads.singleThread` → **20 passed (3 files)**; `vite build` → ✓ built. Live HTTP E2E on a real uvicorn: twice-daily (08:00+20:00) enrollment → challenge summary shows BOTH times → activation → dose-history returns 2 slots/day → "Have I taken Amlodipine today?" → `intent=dose_status_query`, tool `get_dose_status`, "No confirmed dose record … not the same as a missed dose" → unsupported question → honest capability boundary. **REAL DEFECTS FIXED:** (1) answering "Have I taken X today?" with "You have 1 active medication(s)." — the documented product defect; (2) unrelated free text inheriting the previous turn's intent ("capital of France" → dose tools); (3) "How do I cook pasta?" matching the `past` keyword — fixed with word-boundary matching; (4) `dose-history` returning `[]` for a freshly activated regimen; (5) daily rules written with `days_of_week=[]`, which VIOLATES the SQL `dose_rules_schedule_ck` on a real database (would have failed the very first insert); (6) entering the same time twice created two identical dose slots; (7) a discontinued regimen made a read-only status question BLOCKED. **STATUS RECONCILED (item 0):** A004 / F002 / F004 / F006 carried MIS-ATTRIBUTED evidence describing other work — all corrected to honestly-scoped `in_progress`; B007 kept `in_progress` (in-memory only, 'persistent' unmet); T003 kept `in_progress` (local checks verified, real migration NEVER run — B02); D004 set `todo` (no screenshot artefact exists); D005 set `done` (real artefacts in-repo); D001 gained its missing evidence. | Persistence in-memory (B02) — sessions/traces/RESET not durable; no live LLM (B03); no live Stage2 (B01) so [Check pill] stays disabled; background push reminders need a service worker (new B11) | pending |
 > WorkBuddy must append, never rewrite previous factual entries. Never fabricate screenshots or terminal logs.
 
+## 2026-10-13 — Stage2 label-reading capability observed
+
+Vision teammate demonstrated a deployed "Read a box or label" UI.
+
+Observed output columns:
+- medicine
+- ingredients
+- RxNorm code
+- RxNorm name
+
+This is evidence of an implemented product/label extraction path, but not yet
+evidence that patient-specific dose/frequency/timing/duration fields are
+returned reliably.
+
+Main-app `/read-label` integration remains IN_PROGRESS until a frozen response
+contract and fixtures are received.
+
+### Doc sync for the `/v1/read-label` ownership change
+
+- `docs/API_CONTRACTS.md` — `/v1/read-label` row corrected to `POST` + `P1`; responsibility section retained; `/api/medication-sources/extract` now documented as the source-extraction façade with routing; P0 contract-test requirement extended to `/model-info`, `/detect`, `/embed`, `/match`, `/identify`, `/scan`, `/read-label` (+ per-endpoint status/content-type/API version, and `/read-label` field/null/confidence notes).
+- `docs/WORKFLOWS.md` — enrollment source router (box/label → `/v1/read-label`, prescription/PDF → fallback, manual), new "Source semantics" subsection, readable-package branch in Daily Dose, unknown-package flow now `/v1/read-label` first.
+- `docs/ARCHITECTURE.md` — `backend/ocr-adapter` replaced by `source-extraction-adapter` + `PharmaScanLabelProvider` + `PdfDocumentProvider`; diagram node "Document OCR Adapter" → "Medication Source Extraction" with three branches.
+- `docs/BUILD_PLAN.md` — V001 endpoint list extended; V004 kept `in_progress`; OCR01 re-scoped and `in_progress`; OCR02 added.
+- `status/tasks.json` — V001 `required_endpoints`; V004 `in_progress`; OCR01 re-scoped/`in_progress` with observed-capability evidence; OCR02 added; snapshot → 18:38.
+- `status/BLOCKERS.md` — B01 updated to "not frozen" with observed capabilities and a detail section.
+- `prompts/03_MORNING_INTEGRATION.md` — Step 1 endpoint list extended + IN_PROGRESS-not-VERIFIED rule; Step 3 replaced with integrate-`/read-label`-do-not-duplicate-OCR.
+- `docs/DECISION_LOG.md` — OCR/label ownership decision added.
+- `docs/MASTER_SPEC.md` — Phase A provider routing; Phase C printed-package branch.
+- `docs/SAFETY_AND_EVALUATION.md` — REG-04 added (product identified ≠ regimen complete).
+- NOT changed (historical / engineering rules): `AGENTS.md`, `docs/DATA_MODEL.md`, `PROJECT_BRIEF.md`, `prompts/01_*`, `prompts/02_OVERNIGHT_BUILD_CRAFT.md`, Personal Gallery schema, Stage2 `/embed` `/match` `/identify`.
+
 ## 2026-10-13 — Session 3C Stage2 v0.8.0 contract refresh
 
 Scope approved: existing Stage2 adapter/typed contracts/fixtures/tests/docs only; no Stage2 server edits, no SQL/ORM access by Agent, no deployment/push/remote mutations. Patient source review and independent Safety Gate unchanged. Pre-edit acceptance: full response schema checks + typed metadata/vector/count guards + source Printed provenance/no activation + safe live GET + full pytest/ruff (and frontend regression).
@@ -68,3 +99,36 @@ Security observation: concurrent external edit inserted apparent live DB credent
 - `9096de26c65b056dffeb744e8f06589f6b1c8008` (`9096de2`) — feat(stage2): refresh v0.8 contracts and label extraction boundary; 42 files changed, 24,937 insertions / 664 deletions (mostly generated full schema audit JSON). Real 0.4 snapshot detected as 100% rename; new 0.8 unchanged. Includes typed Ports/adapters, identify request fix, 176/372 verification tests, 12 SCHEMA_FIXTURE + separate GET captures, scoped docs/status/memory and report.
 - Pre-commit staged-only credential-URL/private-key/token pattern scan: 42 files, no matches; `.env.example` explicitly absent. This is limited detection, not a guarantee against every secret format. `git diff --cached --check` passed. No hooks/signing were bypassed. No push/deploy/remote/server action.
 - Shared docs/log/memory were staged by individual Session 3C hunks using index patches/blobs; pre-existing read-label ownership docs and OCR02 remain unstaged. Raw work files remain intact. Complex first inline staging attempt failed shell parsing; three doc patches applied successfully, tasks patch failed EOF formatting and was replaced by a scoped index blob; final index check passed. No working-file overwrite or broad add.
+- `7d755e4aa752414165bfc14a281db09b753f7010` (`7d755e4`) — docs(stage2): record local commit and verified handoff; 3 files, 9 insertions / 1 deletion; persists the implementation commit hash in scoped WORK_LOG/memory and replaces report pending-hash text. This self-referential receipt is appended after commit and intentionally left uncommitted to avoid recursive receipt commits. Both hashes are real local commits; no push.
+- Post-commit verification: managed python `-m pytest -q` -> 372 passed, 1 existing warning, 3.94s; `-m ruff check backend tests` -> clean; `git diff --cached --name-only` empty. Existing docs/prompt/config working changes remain, plus the intentionally uncommitted receipt/report hash annotation.
+
+## 2026-10-13 — Session 3B: Supabase persistence, RLS and the authenticated patient boundary (real database)
+
+Scope: apply the existing migrations to the real Supabase dev project, implement the Postgres repository behind the existing Ports, add the authenticated patient boundary, and verify RLS/isolation against the real database. No push, no deploy, no paid action. The Session 3C Stage2 v0.8.0 contracts/fixtures were not touched.
+
+Environment (variable NAMES only, no values ever printed/logged/committed): `.env` present and gitignored (826 bytes); `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` present; `SUPABASE_SECRET_KEY` EMPTY -> no Auth Admin API. Target: Supabase pooler `***.pooler.supabase.com:5432/postgres`, PostgreSQL 17.11, `current_user=postgres`, `is_superuser=False`, `rolbypassrls=True` (so the backend direct connection BYPASSES RLS — RLS could only be verified by `SET LOCAL ROLE authenticated` + `set_config('request.jwt.claims', ...)`).
+
+Migrations actually executed (real project, runner-owned ledger `public.core_schema_migrations`):
+- `202610130001_core.sql` — applied; 13/13 tables; 13/13 RLS enabled+forced+policy; `authenticated` has SELECT only (13 objects); `service_role` SELECT 13 / INSERT 12 / UPDATE 10; 12 `core_*` functions; 15 triggers.
+- `202610130002_agent_enum_gaps.sql` (NEW, sha256 9de9037f…) — applied.
+- `202610130003_storage_ownership.sql` (NEW) — applied.
+
+Real defects found and fixed by `202610130002` (completeness fixes, NOT constraint weakening):
+1. `agent_tool_calls.tool_name` CHECK lacked `get_dose_status` (a registered read-only tool) -> every such turn's trace insert would violate the constraint.
+2. `agent_sessions.intent` CHECK lacked `dose_status_query`.
+3. `core_trace_summary_is_safe` rejected three legitimate values the app already produces: `already_recorded` (bool), `missing_count` (count), and `intake_status='no_report'`.
+The 1024-byte trace bound and the `visual_status='not_checked'`-only rule are preserved; the rollback restores the exact prior core definitions and is strictly narrower (test-guaranteed).
+
+Storage (`202610130003`): ownership model `<patient_id>/<opaque-filename>` where the first path segment must equal `auth.uid()`; both private buckets (`medication-sources`, `visual-references`) ensured present and non-public; four policies `pharmascan_objects_{select,insert,update,delete}_owner` on `storage.objects`; `anon` revoked. LIVE upload verification = IN_PROGRESS (the P0 slice has no photo path; real health data is never uploaded). No application-side storage abstraction exists yet — there is no upload code path.
+
+Postgres adapter (all 10 Ports) — VERIFIED REAL SUPABASE end-to-end: enroll_draft (draft v1), review_source_fields (4 fields -> identity `user_reviewed_document`), agent_session_add, request_activation_challenge, confirm_challenge, activate_regimen (active + effective_from), dose_rules_persisted (`08:00` / `1..7` / `Asia/Singapore`), materialize (2 occurrences), find_due. Every statement is scoped by `patient_id` because the app role bypasses RLS.
+
+RLS A/B isolation — VERIFIED REAL SUPABASE: A reads its own rows across 9 tables; B sees zero of A's rows; B cannot UPDATE/DELETE A's `patient_medications`/`regimen_versions` (0 rows); B cannot INSERT a row owned by A (`new row violates row-level security policy`); A can still create/read its own row; temporary grants rolled back. Composite-FK control: a cross-patient reference is refused. Synthetic rows fully cleaned up (residue 0). Evidence: `outputs/db_rls_isolation_report.json`.
+
+BLOCKED real defect (found, NOT fixed this session): `dose_events.confirmation_challenge_id` is NOT NULL and `core_guard_dose_event -> core_consume_confirmation` requires a confirmed, unconsumed `record_self_report` challenge, but the application self-report path never issues or consumes one (`RecordSelfReportRequest.confirmed_challenge_id` is declared but never populated; no `record_self_report` challenge is issued; the HTTP route passes none). The adapter refuses with `ConfirmationRequiredError` instead of fabricating consent -> the real-DB self-report write path is BLOCKED (B14). The in-memory fake masks this because it has no such constraint.
+
+Authenticated patient boundary: `backend/app/transport/auth.py` (`SupabaseAuthApiVerifier` via `GET {base}/auth/v1/user`; `StaticTokenVerifier` for tests), `deps.get_principal`, and all routes now resolve patient identity ONLY from the verified principal; `client_id` can no longer override a verified identity; a missing/malformed/rejected token -> 401 `AUTH_REQUIRED`. VERIFIED LOCAL with an injected verifier; a live Supabase token exchange was not performed.
+
+Verification (actual commands): `pytest tests/` -> **405 passed** (1 existing Starlette deprecation warning); `ruff check backend tests` -> **All checks passed**; `python scripts/db.py verify` -> `outcome: verified`, `rls_gaps: []`, `policy_gaps: []`, `agent_allowlists.all_present: true` (7/7). Frontend unchanged this session (last known Session 3A state: `tsc --noEmit` clean, vitest 20 passed, `vite build` OK).
+
+Recommended WorkBuddy screenshot point: the `python scripts/db.py verify` output showing `outcome: verified`, 13/13 RLS and `agent_allowlists.all_present: true` (7/7) — it documents the two real allowlist/redaction defects that were found and fixed by migration `202610130002`; a second shot of `outputs/db_rls_isolation_report.json` showing B sees zero of A's rows is the RLS isolation proof.
