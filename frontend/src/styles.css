@@ -276,6 +276,46 @@ select:focus-visible {
   gap: 0.5rem;
 }
 
+/* --- multi-time dose entry ------------------------------------------------ */
+
+.time-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.35rem 0;
+}
+
+.time-row input[type='time'] {
+  flex: 1 1 auto;
+}
+
+.time-row button {
+  flex: 0 0 auto;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+fieldset.field {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.8rem;
+}
+
+fieldset.field legend {
+  font-weight: 600;
+  padding: 0 0.3rem;
+}
+
 /* Landscape / tablet: two columns once there is room. */
 @media (min-width: 640px) {
   .grid-2 {

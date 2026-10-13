@@ -36,7 +36,9 @@ export function EnrollScreen({
   const [name, setName] = useState('');
   const [doseAmount, setDoseAmount] = useState('');
   const [doseUnit, setDoseUnit] = useState('mg');
-  const [time, setTime] = useState('08:00');
+  //: One entry per daily dose time. A twice-daily medicine has two entries and
+  //: the backend materialises one schedule rule per time.
+  const [times, setTimes] = useState<string[]>(['08:00']);
   const [isPrn, setIsPrn] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [error, setError] = useState<unknown>(null);
@@ -54,15 +56,33 @@ export function EnrollScreen({
     }
   }
 
+  const setTimeAt = (index: number, value: string) =>
+    setTimes((current) => current.map((existing, i) => (i === index ? value : existing)));
+
+  const addTime = () => setTimes((current) => [...current, '20:00']);
+
+  const removeTimeAt = (index: number) =>
+    setTimes((current) => (current.length <= 1 ? current : current.filter((_, i) => i !== index)));
+
+  /** Distinct, non-empty, sorted times — mirrors the backend's normalisation. */
+  const normalisedTimes = () =>
+    Array.from(
+      new Set(times.map((value) => normaliseTime(value)).filter((value) => value !== '')),
+    ).sort();
+
   const submitDraft = () =>
     run(async () => {
       const parsedAmount = doseAmount.trim() === '' ? null : Number(doseAmount);
+      const selectedTimes = normalisedTimes();
+      if (!isPrn && selectedTimes.length === 0) {
+        throw new Error('Add at least one time of day, or tick "only when needed".');
+      }
       const draft = await api.createDraft({
         medication_name: name.trim(),
         dose_amount: parsedAmount,
         dose_unit: parsedAmount === null ? null : doseUnit.trim() || null,
         frequency_kind: isPrn ? null : 'daily',
-        frequency_local_times: isPrn ? [] : [time],
+        frequency_local_times: isPrn ? [] : selectedTimes,
         is_prn: isPrn,
         food_instruction: isPrn ? 'as needed' : null,
       });
@@ -150,16 +170,43 @@ export function EnrollScreen({
             </div>
           </div>
 
-          <div className="field">
-            <label htmlFor="med-time">Time of day</label>
-            <input
-              id="med-time"
-              type="time"
-              value={time}
-              onChange={(event) => setTime(event.target.value)}
-              disabled={isPrn}
-            />
-          </div>
+          <fieldset className="field" disabled={isPrn}>
+            <legend>Times of day</legend>
+            <p className="notice" style={{ marginTop: 0 }}>
+              Add one entry per dose. Two entries (e.g. 08:00 and 20:00) means the
+              medication is taken twice daily.
+            </p>
+            {times.map((value, index) => (
+              <div key={index} className="time-row">
+                <label htmlFor={`med-time-${index}`} className="visually-hidden">
+                  Dose time {index + 1}
+                </label>
+                <input
+                  id={`med-time-${index}`}
+                  type="time"
+                  value={value}
+                  onChange={(event) => setTimeAt(index, event.target.value)}
+                  disabled={isPrn}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeTimeAt(index)}
+                  disabled={isPrn || times.length <= 1}
+                  aria-label={`Remove dose time ${index + 1}`}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button type="button" onClick={addTime} disabled={isPrn}>
+              Add another time
+            </button>
+            {!isPrn && normalisedTimes().length < times.length ? (
+              <span className="notice">
+                Duplicate times are treated as a single dose.
+              </span>
+            ) : null}
+          </fieldset>
 
           <div className="field">
             <label htmlFor="med-prn">
@@ -295,4 +342,25 @@ export function EnrollScreen({
 
 export function isAlreadyRecordedError(error: unknown): boolean {
   return error instanceof ApiError && error.code === 'DUPLICATE_EVENT';
+}
+
+/**
+ * Canonicalise a `<input type="time">` value to `HH:MM`, dropping anything
+ * malformed. Mirrors the backend's `_normalise_local_time` so the client and
+ * the server agree on what counts as the same dose slot.
+ */
+export function normaliseTime(value: string): string {
+  const match = /^(\d{1,2}):(\d{2})/.exec(value.trim());
+  if (!match) {
+    return '';
+  }
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (!Number.isInteger(hour) || !Number.isInteger(minute)) {
+    return '';
+  }
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return '';
+  }
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }

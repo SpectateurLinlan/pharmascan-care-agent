@@ -18,5 +18,10 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     setupFiles: ['./src/test-setup.ts'],
+    // Allow extension-less imports of .tsx components from tests; Vite's
+    // default list does not include .tsx for the SSR/node resolver.
+    resolve: {
+      extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
+    },
   },
 });
