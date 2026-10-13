@@ -49,6 +49,22 @@ from .timezone import LOCAL_TZ_PROVIDER, LocalTzProvider
 CONFIRMATION_TTL = timedelta(minutes=10)
 
 
+def _normalise_local_time(value: str) -> str:
+    """Return a canonical ``HH:MM`` string, rejecting malformed input.
+
+    Normalising means "8:00" and "08:00" collapse to one slot instead of
+    creating two rules for the same instant.
+    """
+    text = str(value).strip()
+    parts = text.split(":")
+    if len(parts) != 2 or not all(part.isdigit() for part in parts):
+        raise ValidationError(f"invalid local time {value!r}; expected HH:MM")
+    hour, minute = int(parts[0]), int(parts[1])
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        raise ValidationError(f"local time {value!r} is out of range")
+    return f"{hour:02d}:{minute:02d}"
+
+
 class MedicationEnrollmentService:
     """Draft -> reviewed -> active regimen with version history."""
 
@@ -345,42 +361,84 @@ class MedicationEnrollmentService:
         # Persist the schedule rule now that the regimen is active. Without
         # this an activated regimen would have no rule and could never produce
         # a due dose (the patient would have a medication with no schedule).
-        self._persist_dose_rule(patient_id=patient_id, regimen=regimen)
+        self._persist_dose_rules(patient_id=patient_id, regimen=regimen)
         return ActivationResultDTO(
             regimen=self._require_regimen(patient_id, regimen_id),
             superseded_regimen_ids=superseded,
         )
 
-    def _persist_dose_rule(self, *, patient_id: UUID, regimen: RegimenVersionDTO) -> None:
-        """Create the scheduling rule implied by an activated regimen.
+    def _persist_dose_rules(self, *, patient_id: UUID, regimen: RegimenVersionDTO) -> None:
+        """Create the schedule rule(s) implied by an activated regimen.
 
-        Idempotent: re-activating the same regimen does not duplicate the rule.
-        A PRN regimen gets a PRN rule (no scheduled times) so the rule kind
-        always matches the regimen, as ``DoseScheduleService.add_rule`` requires.
+        One regimen may carry **several** explicit dose times (e.g. 08:00 and
+        20:00). Multiple times are expressed as multiple ``dose_rules`` rows —
+        the existing schedule model — rather than by packing several times into
+        one string, so the SQL ``dose_rules.local_time time`` column stays a
+        single time per row and every rule remains independently addressable
+        (its own ``rule_id`` on each generated occurrence).
+
+        Rows are emitted to satisfy ``dose_rules_schedule_ck``:
+        - ``scheduled`` requires a non-null ``local_time`` **and** a non-empty
+          ``days_of_week``; a "daily" instruction is therefore stored as all
+          seven ISO weekdays, not as an empty array;
+        - ``prn`` requires both to be null / empty.
+
+        Idempotent: re-activating the same regimen does not duplicate rules.
         """
         if self._dose_rules.list_for_regimen(patient_id, regimen.id):
             return
-        frequency = regimen.frequency_rule or {}
+
+        timezone = str(self._tz.local_tz(patient_id))
         if regimen.is_prn:
-            rule_kind = RuleKind.PRN
-            local_times: list[str] = []
-            days_of_week: list[int] = []
-        else:
-            rule_kind = RuleKind.SCHEDULED
-            local_times = list(frequency.get("local_times") or [])
-            days_of_week = list(frequency.get("days_of_week") or [])
-        self._dose_rules.add(
-            DoseRuleDTO(
-                id=self._ids.new_id(),
-                patient_id=patient_id,
-                regimen_id=regimen.id,
-                rule_kind=rule_kind,
-                local_times=local_times,
-                days_of_week=days_of_week,
-                timezone=str(self._tz.local_tz(patient_id)),
-                enabled=True,
+            self._dose_rules.add(
+                DoseRuleDTO(
+                    id=self._ids.new_id(),
+                    patient_id=patient_id,
+                    regimen_id=regimen.id,
+                    rule_kind=RuleKind.PRN,
+                    local_times=[],
+                    days_of_week=[],
+                    timezone=timezone,
+                    enabled=True,
+                )
             )
-        )
+            return
+
+        frequency = regimen.frequency_rule or {}
+        kind = str(frequency.get("kind") or "daily")
+        local_times = [str(t) for t in (frequency.get("local_times") or [])]
+        days_of_week = [int(d) for d in (frequency.get("days_of_week") or [])]
+
+        if kind == "weekly":
+            # A weekly instruction has explicit days; one row per time.
+            days = days_of_week or list(range(1, 8))
+        else:
+            # 'daily' and 'interval' carry no explicit days: every day applies.
+            days = list(range(1, 8))
+
+        # Two identical times (e.g. "08:00" entered twice) describe ONE dose
+        # slot. Emitting two rules would show the patient the same dose twice
+        # and would violate dose_rules_no_duplicate_slot_uk on a real database,
+        # so duplicates are collapsed here while preserving input order.
+        unique_times: list[str] = []
+        for local_time in local_times or ["08:00"]:
+            normalised = _normalise_local_time(local_time)
+            if normalised not in unique_times:
+                unique_times.append(normalised)
+
+        for local_time in unique_times:
+            self._dose_rules.add(
+                DoseRuleDTO(
+                    id=self._ids.new_id(),
+                    patient_id=patient_id,
+                    regimen_id=regimen.id,
+                    rule_kind=RuleKind.SCHEDULED,
+                    local_times=[local_time],
+                    days_of_week=list(days),
+                    timezone=timezone,
+                    enabled=True,
+                )
+            )
 
     def _require_regimen(self, patient_id: UUID, regimen_id: UUID) -> RegimenVersionDTO:
         regimen = self._regimens.get(patient_id, regimen_id)

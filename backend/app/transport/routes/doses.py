@@ -110,6 +110,15 @@ def dose_history(
     container: ApplicationContainer = Depends(get_container),
 ) -> DoseHistoryResponse:
     patient_id = demo_patient_id(client_id)
+    # Materialise first: a freshly activated regimen has occurrences only after
+    # materialisation, and without this the history would render as an empty
+    # list even though the patient has a real schedule. This is a read-side
+    # materialisation of the *existing* rule set — it invents nothing.
+    regimen = container.enrollment._regimens.get(patient_id, regimen_id)
+    if regimen is None:
+        raise NotFoundError(f"Regimen {regimen_id} not found")
+    if not regimen.is_prn:
+        container.schedule.materialize(patient_id=patient_id, regimen_id=regimen_id, days=days)
     now = container.clock.now()
     entries = container.self_report.history(
         patient_id=patient_id,

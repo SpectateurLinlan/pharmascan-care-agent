@@ -14,7 +14,7 @@ budget, session persistence, confirmation gating and tool traces.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -27,6 +27,7 @@ from .tools import (
     CheckDueDoseRequest,
     ConfirmRegimenRequest,
     EnrollMedicationRequest,
+    GetDoseStatusRequest,
     ListActiveMedicationsRequest,
     MedicationHistoryRequest,
     RecordSelfReportRequest,
@@ -36,6 +37,22 @@ from .tools import (
 
 MAX_STEPS_PER_TURN = 4
 SESSION_TTL = timedelta(hours=2)
+
+#: Matches keyword occurrences at word boundaries so "past" does not fire
+#: inside "pasta" and "add" does not fire inside "address". Multi-word phrases
+#: ("did i take") still match because the boundary is only asserted at the
+#: outer edges of the phrase.
+_KEYWORD_PATTERN_CACHE: dict[str, object] = {}
+
+
+def _mentions(haystack: str, keyword: str) -> bool:
+    import re
+
+    pattern = _KEYWORD_PATTERN_CACHE.get(keyword)
+    if pattern is None:
+        pattern = re.compile(rf"(?<!\w){re.escape(keyword)}(?!\w)")
+        _KEYWORD_PATTERN_CACHE[keyword] = pattern
+    return bool(pattern.search(haystack))
 
 
 @dataclass(frozen=True)
@@ -80,29 +97,110 @@ class DeterministicIntentRouter:
     is_llm = False
 
     _KEYWORDS: tuple[tuple[AgentIntent, tuple[str, ...]], ...] = (
+        # A "did I take it / have I taken it" question is a READ, not a report.
+        # It must be matched before the self-report keywords, otherwise the
+        # word "taken" would route it into a write path.
+        (
+            AgentIntent.DOSE_STATUS_QUERY,
+            (
+                "have i taken",
+                "have i had",
+                "did i take",
+                "did i already take",
+                "did i miss",
+                "have i missed",
+                "should i have taken",
+                "is my dose recorded",
+                "did i record",
+                "did i log",
+            ),
+        ),
         (AgentIntent.DOSE_SELF_REPORT, ("took", "taken", "not taken", "unsure", "reported")),
         (AgentIntent.MEDICATION_HISTORY, ("history", "past", "last week", "summary")),
         (AgentIntent.MEDICATION_ENROLLMENT, ("add", "enroll", "new medication", "prescription")),
+    )
+
+    #: Filler removed before a question is treated as a medication name. These
+    #: are stripped, never guessed against: if nothing remains, the agent asks
+    #: which medication rather than matching an arbitrary one.
+    _QUERY_FILLERS: tuple[str, ...] = (
+        "have i taken",
+        "have i had",
+        "did i take",
+        "did i already take",
+        "did i miss",
+        "have i missed",
+        "should i have taken",
+        "is my dose recorded",
+        "did i record",
+        "did i log",
+        "my",
+        "the",
+        "today",
+        "tonight",
+        "this morning",
+        "this evening",
+        "yet",
+        "already",
+        "please",
+        "?",
+        ".",
+        ",",
     )
 
     def route(self, turn: AgentTurn, session: AgentSessionDTO) -> AgentIntent:
         # An explicit slot always wins over free text.
         if "intake_status" in turn.slots:
             return AgentIntent.DOSE_SELF_REPORT
-        if "medication_name" in turn.slots:
+        if "medication_name" in turn.slots and "ask_status" not in turn.slots:
             return AgentIntent.MEDICATION_ENROLLMENT
 
         lowered = turn.text.lower()
         for intent, keywords in self._KEYWORDS:
-            if any(keyword in lowered for keyword in keywords):
+            if any(_mentions(lowered, keyword) for keyword in keywords):
                 return intent
-        # An open session waiting on the patient keeps its intent.
-        if session.intent:
-            try:
-                return AgentIntent(session.intent)
-            except ValueError:
-                pass
+        # Free text never inherits a previous intent. A follow-up that belongs
+        # to an open flow (confirming a summary, supplying a missing field) is
+        # always expressed with an explicit slot, which is handled above — so
+        # an unrecognised sentence must fall through to clarification rather
+        # than being answered with whichever tool ran last. This is exactly how
+        # "What is the capital of France?" used to be answered with dose data.
         return AgentIntent.CLARIFICATION
+
+    #: Words that look like a name but carry no identity. Returning one of
+    #: these would match an arbitrary medication, so they are treated as "no
+    #: medication named" and the agent asks instead.
+    _NON_NAMES: frozenset[str] = frozenset(
+        {"it", "that", "this", "them", "those", "the", "my", "mine", "one", "any"}
+    )
+
+    @classmethod
+    def extract_medication_name(cls, text: str) -> str:
+        """Strip question filler from a status question to isolate the name.
+
+        Deterministic and conservative: only known filler phrases are removed.
+        If nothing legible remains the caller receives an empty string and must
+        ask a clarifying question instead of matching some arbitrary record.
+        """
+        working = text.strip()
+        lowered = working.lower()
+        # Remove filler phrases longest-first so "have i taken" is consumed
+        # before the shorter "taken".
+        for filler in sorted(cls._QUERY_FILLERS, key=len, reverse=True):
+            start = 0
+            while True:
+                index = lowered.find(filler, start)
+                if index == -1:
+                    break
+                working = working[:index] + " " + working[index + len(filler) :]
+                lowered = working.lower()
+                start = index + 1
+        cleaned = " ".join(working.split()).strip()
+        # A pronoun or determiner is not a medication name: ask rather than
+        # resolve it against whichever record happens to exist.
+        if cleaned.lower() in cls._NON_NAMES:
+            return ""
+        return cleaned
 
 
 class AgentOrchestrator:
@@ -246,6 +344,19 @@ class AgentOrchestrator:
 
     # -- planning (bounded, no recursion) -----------------------------------
 
+    def _router_medication_name(self, turn: AgentTurn) -> str:
+        """Ask the router to isolate a medication name, if it can.
+
+        A real LLM router would extract this as a typed slot; the deterministic
+        router exposes ``extract_medication_name``. When the router cannot do
+        it, an empty string is returned and the caller asks for clarification
+        rather than guessing.
+        """
+        extractor = getattr(self._router, "extract_medication_name", None)
+        if not callable(extractor):
+            return ""
+        return str(extractor(turn.text) or "")
+
     def _plan(
         self,
         intent: AgentIntent,
@@ -328,6 +439,24 @@ class AgentOrchestrator:
                 )
             return None
 
+        if intent == AgentIntent.DOSE_STATUS_QUERY:
+            # A read-only status question. The medication name comes from an
+            # explicit slot if present; otherwise filler is stripped from the
+            # question itself. If nothing legible remains the request is not
+            # attempted at all — the agent asks instead of matching an
+            # arbitrary medication (no plausible-but-wrong answers).
+            if ToolName.GET_DOSE_STATUS not in executed:
+                explicit = turn.slots.get("medication_name") or turn.slots.get(
+                    "query_medication_name"
+                )
+                name = str(explicit).strip() if explicit else self._router_medication_name(turn)
+                if not name:
+                    return None
+                return ToolName.GET_DOSE_STATUS, GetDoseStatusRequest(
+                    **base, medication_name=name, day_offset=0
+                )
+            return None
+
         if intent == AgentIntent.MEDICATION_HISTORY:
             if "regimen_id" not in turn.slots:
                 if ToolName.LIST_ACTIVE_MEDICATIONS not in executed:
@@ -341,9 +470,9 @@ class AgentOrchestrator:
                 )
             return None
 
-        # Clarification: gather the minimum context, then ask.
-        if intent == AgentIntent.CLARIFICATION and ToolName.LIST_ACTIVE_MEDICATIONS not in executed:
-            return ToolName.LIST_ACTIVE_MEDICATIONS, ListActiveMedicationsRequest(**base)
+        # Clarification: state the degraded capability and ask, but do not
+        # fetch medication data for a question that is not about medication —
+        # that would produce a plausible-but-irrelevant answer.
         return None
 
     def _mark_awaiting_confirmation(self, session: AgentSessionDTO) -> AgentSessionDTO:
@@ -397,6 +526,21 @@ class AgentOrchestrator:
     def _compose_message(self, intent: AgentIntent, results: list[ToolResult]) -> str:
         prefix = "[degraded: deterministic rule routing, not a live LLM] "
         if not results:
+            if intent == AgentIntent.DOSE_STATUS_QUERY:
+                return prefix + (
+                    "I can look up what you have already reported for a medication, "
+                    "but I could not tell which medication you mean. "
+                    "Tell me the name, for example: \u201cHave I taken Amlodipine today?\u201d "
+                    "You can also open Today to see a due dose, or Medication List for your records."
+                )
+            if intent == AgentIntent.CLARIFICATION:
+                return prefix + (
+                    "I can only help with a few things right now: add or review a "
+                    "medication, record whether you took a dose, check what you "
+                    "reported today, or show your dose history. I cannot answer "
+                    "general medical or unrelated questions in this build. "
+                    "Which of those would you like?"
+                )
             return prefix + "I could not determine what you need. Could you tell me more?"
 
         last = results[-1]
@@ -407,6 +551,10 @@ class AgentOrchestrator:
                 "I will not change your medication record without your confirmation."
             )
         if last.blocked:
+            # An unresolvable medication is a clarification, not a crash: state
+            # the limitation and offer the executable next step.
+            if last.tool_name == ToolName.GET_DOSE_STATUS and last.error_code == "NOT_FOUND":
+                return prefix + (last.error_message or "I could not find that medication.")
             return prefix + f"I could not complete that: {last.error_message or last.error_code}."
         if last.clarification_question and last.status == ToolStatus.SUCCESS:
             if last.payload.get("missing_count") or last.clarification_question.startswith("I still need"):
@@ -430,4 +578,57 @@ def _summarise(result: ToolResult) -> str:
         )
     if result.tool_name == ToolName.CHECK_DUE_DOSE:
         return f"{result.payload.get('item_count', 0)} dose(s) are due now."
+    if result.tool_name == ToolName.GET_DOSE_STATUS:
+        return _describe_dose_status(result)
     return f"{result.tool_name} completed."
+
+
+def _describe_dose_status(result: ToolResult) -> str:
+    """Render a dose-status answer without ever asserting ingestion.
+
+    Absence of a report is stated as "no confirmed record", never as a missed
+    dose. A reported "taken" is attributed to the patient, not to the system.
+    """
+    payload = result.payload
+    name = payload.get("medication_name")
+    if payload.get("resolution") == "unknown_medication":
+        return result.error_message or "I could not find that medication in your list."
+    if payload.get("resolution") == "no_regimen" or not payload.get("reported"):
+        if not payload.get("reported"):
+            return (
+                f"No confirmed dose record for {name or 'that medication'} today. "
+                "That is not the same as a missed dose, and I cannot tell whether "
+                "you took it."
+            )
+    status = payload.get("intake_status")
+    reported_at = payload.get("reported_at")
+    when = _local_time_label(reported_at)
+    if status == "reported_taken":
+        return (
+            f"You reported taking {name} today{when}."
+            " This is your own report and does not prove the medicine was taken."
+        )
+    if status == "reported_not_taken":
+        return f"You reported not taking {name} today{when}."
+    if status == "unsure":
+        return (
+            f"You reported being unsure whether you took {name} today{when}. "
+            "I will not guess — you can check again or record it once you know."
+        )
+    return f"No confirmed dose record for {name or 'that medication'} today."
+
+
+def _local_time_label(iso_timestamp: object) -> str:
+    """Best-effort local-time suffix; display only, never a schedule decision."""
+    if not isinstance(iso_timestamp, str) or not iso_timestamp:
+        return ""
+    try:
+        from datetime import UTC
+        from zoneinfo import ZoneInfo
+
+        moment = datetime.fromisoformat(iso_timestamp.replace("Z", "+00:00"))
+        local = moment.astimezone(ZoneInfo("Asia/Singapore"))
+        _ = UTC  # keep the import meaningful for linters
+        return f" at {local.strftime('%H:%M')}"
+    except (ValueError, TypeError):
+        return ""

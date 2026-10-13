@@ -8,15 +8,20 @@ Every invocation is recorded as a redacted tool trace.
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from uuid import UUID
 
 from ..application.dosing import DoseScheduleService, SelfReportService
 from ..application.enrollment import MedicationEnrollmentService
 from ..contracts.dto import (
     DoseEventInput,
     FrequencyRuleDTO,
+    PatientMedicationDTO,
     RegimenDraftInput,
+    RegimenVersionDTO,
 )
 from ..contracts.enums import (
+    RegimenState,
     ToolName,
     ToolStatus,
 )
@@ -28,6 +33,7 @@ from .tools import (
     ConfirmRegimenRequest,
     EnrollMedicationRequest,
     EnrollmentResultPayload,
+    GetDoseStatusRequest,
     MedicationHistoryRequest,
     RecordSelfReportRequest,
     ToolRequest,
@@ -63,6 +69,7 @@ class ToolRegistry:
         self._handlers: dict[ToolName, Callable[[ToolRequest], ToolResult]] = {
             ToolName.LIST_ACTIVE_MEDICATIONS: self._list_active_medications,
             ToolName.GET_MEDICATION_HISTORY: self._get_medication_history,
+            ToolName.GET_DOSE_STATUS: self._get_dose_status,
             ToolName.ENROLL_MEDICATION_DRAFT: self._enroll_medication_draft,
             ToolName.CONFIRM_REGIMEN_DRAFT: self._confirm_regimen_draft,
             ToolName.CHECK_DUE_DOSE: self._check_due_dose,
@@ -154,6 +161,161 @@ class ToolRegistry:
                 "note": "not_reported is not the same as missed",
             },
         )
+
+    def _get_dose_status(self, request: ToolRequest) -> ToolResult:
+        """Answer "have I taken <medication> today?" from recorded events only.
+
+        This is a **read-only** tool: it never writes an event and never
+        concludes that a dose was missed. It resolves the medication by name
+        against the patient's own records (never by trusting a patient-supplied
+        id) and then reports what has actually been reported for today's local
+        day:
+
+        - ``reported_taken``      -> the patient said they took it (at a time);
+        - ``reported_not_taken``  -> the patient said they did not take it;
+        - ``unsure``              -> the patient reported being unsure;
+        - ``no_report``           -> nothing has been reported for that dose.
+
+        ``no_report`` is explicitly NOT a missed dose. The tool also reports
+        whether the resolved medication is still active, so a discontinued
+        medication is answered as history rather than as a current status.
+        """
+        assert isinstance(request, GetDoseStatusRequest)
+        needle = request.medication_name.strip().lower()
+
+        medication = self._resolve_medication_by_name(request.patient_id, needle)
+        if medication is None:
+            return ToolResult(
+                tool_name=ToolName.GET_DOSE_STATUS,
+                status=ToolStatus.BLOCKED,
+                error_code="NOT_FOUND",
+                error_message=(
+                    f"I could not find a medication called {request.medication_name!r} "
+                    "in your list."
+                ),
+                payload={"resolution": "unknown_medication", "reported": False},
+            )
+
+        regimen = self._resolve_current_regimen(request.patient_id, medication.id)
+        if regimen is None:
+            return ToolResult(
+                tool_name=ToolName.GET_DOSE_STATUS,
+                status=ToolStatus.SUCCESS,
+                payload={
+                    "resolution": "no_regimen",
+                    "medication_name": medication.display_name,
+                    "reported": False,
+                    "note": "no dose record exists for this medication",
+                },
+            )
+
+        is_active = regimen.state == RegimenState.ACTIVE
+        tz = self._tz_for(request.patient_id)
+        now = self._clock.now()
+        local_now = now.astimezone(tz)
+        day_start = datetime(
+            local_now.year, local_now.month, local_now.day, tzinfo=tz
+        ).astimezone(UTC)
+        day_end = day_start + timedelta(days=1)
+
+        if not regimen.is_prn and is_active:
+            # Materialise so the day's occurrence exists even when no report
+            # has been made; the occurrence alone proves nothing was taken.
+            # A discontinued regimen is deliberately NOT materialised — it
+            # would raise, and a read-only history question must still answer.
+            self._schedule.materialize(
+                patient_id=request.patient_id, regimen_id=regimen.id, days=1
+            )
+
+        entries = self._self_report.history(
+            patient_id=request.patient_id,
+            regimen_id=regimen.id,
+            window_start=day_start,
+            window_end=day_end,
+        )
+        reported = [entry for entry in entries if entry.event is not None]
+
+        if not reported:
+            return ToolResult(
+                tool_name=ToolName.GET_DOSE_STATUS,
+                status=ToolStatus.SUCCESS,
+                payload={
+                    "resolution": "resolved",
+                    "reported": False,
+                    "intake_status": "no_report",
+                    "medication_name": medication.display_name,
+                    "regimen_active": is_active,
+                    "occurrence_count": len(entries),
+                    # Absence of a report is NOT a missed dose.
+                    "note": (
+                        "No confirmed dose record for today. This is not the "
+                        "same as a missed dose."
+                    ),
+                },
+                clarification_question=None,
+            )
+
+        latest = reported[-1]
+        status = latest.event.intake_status.value
+        return ToolResult(
+            tool_name=ToolName.GET_DOSE_STATUS,
+            status=ToolStatus.SUCCESS,
+            payload={
+                "resolution": "resolved",
+                "reported": True,
+                "intake_status": status,
+                "medication_name": medication.display_name,
+                "regimen_active": is_active,
+                "reported_at": latest.event.event_time.isoformat(),
+                "visual_status": latest.event.visual_status.value,
+                "ingestion_proven": False,
+                "self_report_count": len(reported),
+            },
+        )
+
+    def _resolve_medication_by_name(
+        self, patient_id: UUID, needle: str
+    ) -> PatientMedicationDTO | None:
+        """Match a free-text name against the patient's own medications.
+
+        Exact (case-insensitive) match wins; otherwise the longest name that
+        starts with / contains the query is chosen so "amlodipine" matches
+        "Amlodipine 5mg". An ambiguous match is deliberately NOT guessed: the
+        earliest deterministic candidate is returned so the answer stays
+        reproducible, and the caller never receives another patient's record.
+        """
+        candidates = [
+            m
+            for m in self._enrollment._medications.list_for_patient(patient_id)
+            if needle and needle in m.display_name.lower()
+        ]
+        if not candidates:
+            return None
+        exact = [m for m in candidates if m.display_name.lower() == needle]
+        pool = exact or candidates
+        # Deterministic ordering: shortest (most specific prefix) then name.
+        return sorted(pool, key=lambda m: (len(m.display_name), m.display_name))[0]
+
+    def _resolve_current_regimen(
+        self, patient_id: UUID, medication_id: UUID
+    ) -> RegimenVersionDTO | None:
+        """Prefer the active regimen; fall back to the newest version."""
+        active = self._enrollment._regimens.find_active_for_medication(
+            patient_id, medication_id
+        )
+        if active is not None:
+            return active
+        versions = self._enrollment._regimens.list_for_medication(
+            patient_id, medication_id
+        )
+        if not versions:
+            return None
+        return max(versions, key=lambda r: r.version_no)
+
+    def _tz_for(self, patient_id: UUID):
+        from ..application.timezone import LOCAL_TZ_PROVIDER
+
+        return LOCAL_TZ_PROVIDER.local_tz(patient_id)
 
     def _enroll_medication_draft(self, request: ToolRequest) -> ToolResult:
         assert isinstance(request, EnrollMedicationRequest)

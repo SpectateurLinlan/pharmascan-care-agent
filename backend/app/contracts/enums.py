@@ -93,6 +93,9 @@ class AgentSessionState(StrEnum):
 class AgentIntent(StrEnum):
     MEDICATION_ENROLLMENT = "medication_enrollment"
     DOSE_SELF_REPORT = "dose_self_report"
+    #: "Have I taken my Amlodipine today?" — a read-only question about what
+    #: has already been reported. It never records anything.
+    DOSE_STATUS_QUERY = "dose_status_query"
     MEDICATION_HISTORY = "medication_history"
     CLARIFICATION = "clarification"
 
@@ -112,6 +115,10 @@ class ToolName(StrEnum):
 
     LIST_ACTIVE_MEDICATIONS = "list_active_medications"
     GET_MEDICATION_HISTORY = "get_medication_history"
+    #: Read-only lookup of what the patient has *reported* for one medication
+    #: on the current local day. It writes nothing and never concludes that an
+    #: unreported dose was missed.
+    GET_DOSE_STATUS = "get_dose_status"
     ENROLL_MEDICATION_DRAFT = "enroll_medication_draft"
     CONFIRM_REGIMEN_DRAFT = "confirm_regimen_draft"
     CHECK_DUE_DOSE = "check_due_dose"

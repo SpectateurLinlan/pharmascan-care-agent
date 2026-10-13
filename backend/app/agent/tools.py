@@ -72,6 +72,18 @@ class MedicationHistoryRequest(ToolRequest):
     days: int = 7
 
 
+class GetDoseStatusRequest(ToolRequest):
+    """Read-only dose-status question: "Have I taken <medication> today?".
+
+    ``medication_name`` is free text from the patient turn; the handler is
+    responsible for resolving it to a patient-owned medication or reporting
+    that it could not be resolved. It is never treated as an identifier.
+    """
+
+    medication_name: str = Field(min_length=1, max_length=160)
+    day_offset: int = Field(default=0, ge=-30, le=0)
+
+
 class EnrollmentResultPayload(ToolDTO):
     """Serialised enrollment outcome; missing instructions stay explicit."""
 

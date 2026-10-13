@@ -206,6 +206,11 @@ CREATE TABLE public.dose_rules (
     patient_id uuid NOT NULL REFERENCES public.patient_profiles(user_id) ON DELETE RESTRICT,
     regimen_id uuid NOT NULL,
     rule_kind text NOT NULL CHECK (rule_kind IN ('scheduled', 'prn')),
+    -- One rule row carries exactly ONE local time. A regimen with several
+    -- daily times (e.g. 08:00 and 20:00) is represented by several rows, not
+    -- by packing times into a single value. This keeps every occurrence
+    -- attributable to a specific rule_id and keeps the column genuinely
+    -- time-typed.
     local_time time without time zone,
     days_of_week smallint[],
     timezone text NOT NULL DEFAULT 'Asia/Singapore',
@@ -213,6 +218,8 @@ CREATE TABLE public.dose_rules (
     demo_only boolean NOT NULL DEFAULT true CHECK (demo_only = true),
     UNIQUE (patient_id, id),
     UNIQUE (patient_id, regimen_id, id),
+    -- A patient must not accumulate two identical rules for one regimen.
+    CONSTRAINT dose_rules_no_duplicate_slot_uk UNIQUE NULLS NOT DISTINCT (patient_id, regimen_id, rule_kind, local_time),
     FOREIGN KEY (patient_id, regimen_id) REFERENCES public.regimen_versions(patient_id, id) ON DELETE RESTRICT,
     CONSTRAINT dose_rules_timezone_ck CHECK (
         timezone = 'UTC' OR timezone ~ '^[A-Za-z_]+/[A-Za-z0-9_+/-]+$'
