@@ -1,0 +1,94 @@
+{
+  "found_by": "SCHEMA-stand-in-finder",
+  "model_version": "SCHEMA-model-v0.8.0",
+  "detection": {
+    "boxes": [
+      [
+        10,
+        20,
+        50,
+        60
+      ]
+    ],
+    "box_flags": [
+      []
+    ],
+    "pill_count": 1,
+    "count_reliable": true,
+    "flags": [],
+    "found_by": "SCHEMA-stand-in-finder"
+  },
+  "pills": [
+    {
+      "box": [
+        10,
+        20,
+        50,
+        60
+      ],
+      "quality_flags": [],
+      "counted": true,
+      "imprint_reads": null,
+      "decision": "match",
+      "medication_id": "med-1",
+      "name": "Demo medicine",
+      "similarity": 0.99,
+      "closest": {
+        "medication_id": "med-1",
+        "name": "Demo medicine",
+        "similarity": 0.99
+      },
+      "runner_up": {
+        "medication_id": "med-2",
+        "name": "Demo runner-up medicine",
+        "similarity": 0.4
+      },
+      "message": "SCHEMA_FIXTURE / demo_only：合成视觉证据，不确认药品、剂量、安全性或服药。",
+      "imprint_check": null,
+      "imprint_read_for": []
+    }
+  ],
+  "dose": {
+    "alerts": [
+      {
+        "type": "SCHEMA_demo_only",
+        "severity": "SCHEMA-nonclinical",
+        "message": "SCHEMA_FIXTURE / demo_only：合成视觉证据，不确认药品、剂量、安全性或服药。",
+        "medication_ids": [
+          "med-1"
+        ],
+        "source": "SCHEMA_FIXTURE",
+        "severity_graded": false,
+        "colour": "SCHEMA-not-graded",
+        "speak": false,
+        "notify_caregiver": false,
+        "details": {
+          "demo_only": true
+        }
+      }
+    ],
+    "summary": {
+      "pills_seen": 1,
+      "matched": 1,
+      "unknown": 0,
+      "unsure": 0,
+      "all_ok": true,
+      "all_visually_matched": true,
+      "count_reliable": true,
+      "text": "SCHEMA_FIXTURE / demo_only：合成视觉证据，不确认药品、剂量、安全性或服药。"
+    },
+    "deprecated": true,
+    "note": "SCHEMA 合成旧式 advisory；后端拥有剂量决策，不用于临床"
+  },
+  "input_check": {
+    "type": "loose_pills",
+    "checked": true,
+    "abstained": false,
+    "caption": "SCHEMA 合成散装药片",
+    "message": null
+  },
+  "message": null,
+  "text_reading": "not_requested",
+  "evidence": "visual",
+  "limits": "SCHEMA_FIXTURE / demo_only：合成视觉证据，不确认药品、剂量、安全性或服药。"
+}

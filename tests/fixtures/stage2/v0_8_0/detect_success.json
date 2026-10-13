@@ -1,0 +1,24 @@
+{
+  "boxes": [
+    [
+      10,
+      20,
+      50,
+      60
+    ]
+  ],
+  "box_flags": [
+    []
+  ],
+  "pill_count": 1,
+  "count_reliable": true,
+  "flags": [],
+  "found_by": "SCHEMA-stand-in-finder",
+  "input_check": {
+    "type": "loose_pills",
+    "checked": true,
+    "abstained": false,
+    "caption": "SCHEMA 合成散装药片",
+    "message": null
+  }
+}

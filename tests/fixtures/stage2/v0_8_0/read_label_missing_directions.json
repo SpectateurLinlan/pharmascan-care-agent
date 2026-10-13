@@ -1,0 +1,49 @@
+{
+  "candidates": [
+    {
+      "name": "Demo medicine",
+      "brand": "SCHEMA synthetic brand",
+      "ingredients": [
+        {
+          "rxcui": "SCHEMA-not-a-real-rxcui",
+          "name": "SCHEMA synthetic ingredient"
+        }
+      ],
+      "strength": "SCHEMA synthetic strength",
+      "rxcui": "SCHEMA-not-a-real-rxcui",
+      "rxnorm_name": "SCHEMA synthetic name",
+      "found_in": [
+        "Demo medicine"
+      ],
+      "first_line": 0,
+      "fields": {
+        "directions": null,
+        "quantity": {
+          "value": "30",
+          "line": "30"
+        },
+        "dose_form": {
+          "value": "tablet",
+          "line": "tablet"
+        },
+        "date": {
+          "value": "2026-10-13",
+          "line": "2026-10-13"
+        },
+        "expiry_date": {
+          "value": "2027-10-13",
+          "line": "2027-10-13"
+        }
+      },
+      "list_check": {
+        "status": "not_on_list",
+        "medication_id": null,
+        "message": "SCHEMA_FIXTURE / demo_only：合成视觉证据，不确认药品、剂量、安全性或服药。"
+      }
+    }
+  ],
+  "note": "SCHEMA_FIXTURE / demo_only：合成视觉证据，不确认药品、剂量、安全性或服药。",
+  "ocr_model": "SCHEMA-model-v0.8.0",
+  "source": "photo",
+  "message": null
+}

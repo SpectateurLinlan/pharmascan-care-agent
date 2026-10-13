@@ -1,8 +1,8 @@
 # External PharmaScan Stage2, Main Backend and Agent Tool Contracts
 
-**Version:** hand-off 2026-10-13. The Stage2 teammate is actively updating the real API; preserve compatibility with `docs/reference/PharmaScan_Care_Agent_Workflow_2026-10-12.html` until jointly agreed versioned changes. The OpenAPI v0.4.0 is an **older documented contract**, not a guarantee of latest behavior.
+**Current integration candidate: v0.8.0 (2026-10-13).** Owner-supplied snapshot: `docs/external/pharmascan-api-openapi-0.8.0.json`; preserved actual historical snapshot: `docs/external/pharmascan-api-openapi-0.4.0.json` (recovered byte-for-byte from local Git HEAD, not regenerated). The v0.8.0 snapshot is frozen for local validation, not a promise that all deployed POST behavior or model performance is verified. Historical designs below do not override section G. Live GET /health and /v1/model-info were checked; image POST behavior remains SCHEMA-VERIFIED / LIVE-UNVERIFIED.
 
-## A. Prior external endpoints vs app-level ownership
+## A. Prior external endpoints vs app-level ownership (historical table; see current v0.8.0 section G)
 
 | Route (external) | Supported claim from earlier OpenAPI | App decision | Owner / blocker | Priority |
 |---|---|---|---|---|
@@ -114,3 +114,32 @@ class CatalogueCandidateDTO:
 ## F. Stage2 owner requested response (can paste to teammate)
 
 > Please preserve existing v0.4.0 routes during our hackathon integration, but share latest actual JSON schemas and model metadata (encoder weights/preprocessing/normalization, embedding space, calibrated threshold/margin). Our app will persist personal gallery locally. We will call `/embed`, `/match`, `/identify` and only use `/scan` diagnostics until the single-pill double-box issue is fixed. Please confirm whether `/v1/model-info`, standalone detection/quality flags, and optional catalogue reference embeddings are feasible without breaking existing callers. Distinguish proposed from deployed routes and provide at least one reproducible success/failure payload for contract tests.
+
+## G. Verified v0.8.0 adapter contract (2026-10-13)
+
+Evidence: `outputs/stage2_contract_audit.json` covers all 17 operations and 51 component schemas; `tests/fixtures/stage2/v0_8_0/manifest.json` labels all 12 synthetic payloads **SCHEMA_FIXTURE**, not LIVE. `live_manifest.json` and `outputs/stage2_live_smoke.json` separately record GET timestamps/status/content-type/hashes.
+
+| Endpoint | Frozen response / application handling |
+|---|---|
+| GET /health | Health: ready + version + component status; live HTTP 200/schema valid |
+| GET /v1/model-info | ModelInfo required metadata, calibration/imprint opaque objects; live HTTP 200/schema valid |
+| GET /v1/tools | 200 schema remains `{}`; audit only, NEVER populate trusted tool registry from it |
+| POST /v1/embed | multipart **image**, not file; embedding + **dim**, model_version, embedding_space_id, preprocess_version, normalized, framed_by, visual evidence; optional imprint_reads and text_reading |
+| POST /v1/match | results[], each decision/medication_id/name/**similarity/closest/runner_up/message**; response threshold, margin, model/space, evidence, limits. Requests send both model_version and embedding_space_id |
+| POST /v1/detect | boxes are **pixel [x0,y0,x1,y1]**, box_flags, pill_count, count_reliable, flags, found_by; no per-box score declared |
+| POST /v1/identify | multipart **images** array (single-photo public Port sends one part), NOT image; top_k schema 1–20, current app deliberately caps at 10. Candidates with similarity, dose_form, strength/ingredients/RxNorm/product metadata; optional conditional confidence not exposed as pill identity |
+| POST /v1/scan | nested detection, pills, optional dose/input_check, text_reading, evidence/limits; diagnostics ONLY. ScanPill adds unknown fields without typed decision/candidate definitions; do not map them |
+| POST /v1/read-label | candidates name/brand/ingredients/strength/rxcui/rxnorm_name/found_in; fields: DocumentFields; list_check optional; provider source photo/pdf_text/pdf_scan. Schema accepts PDF but current transport only validated PNG/JPEG |
+| GET /v1/pills/search, /v1/pills/{pill_id} | SearchResponse/Product; audit only, no new patient flow |
+| POST /v1/safety/medications, /v1/safety/dose; GET /v1/safety/label | MedicationsResponse/DoseResponse/LabelResponse; audit only, advisory evidence never substitutes for independent app Safety Gate |
+| POST /v1/feedback, DELETE /v1/feedback/{consent_id} | FeedbackStored/FeedbackDeleted; recorded only, NOT invoked/integrated |
+
+**Dimension caveat:** schema types embedding as number[], with no minItems/maxItems enforcing 256. The endpoint description and live ModelInfo declare 256; adapter additionally verifies actual length, dim, finite numeric values and declared normalization (norm tolerance 1e-3 is numeric consistency, NOT a clinical threshold). Missing required metadata fails, never falls back to configured values.
+
+**Public boundary:** `app.contracts.vision.VisionPort` and DTOs; legacy infrastructure/vision_contracts is compatibility re-export only. match accepts one **EmbeddingResult** query with model/space/preprocessing metadata plus GalleryReference metadata; multi-query rejected rather than silently truncating. `HttpStage2VisionProvider` validates frozen OpenAPI before projecting wire fields. Unexpected allowed fields are ignored; required fields and invalid typed fields fail closed. Similarity is raw cosine, NOT probability; threshold/margin are declarations, not independently calibrated metrics; threshold_version remains unknown.
+
+**Source boundary:** `app.contracts.source_extraction.SourceExtractionPort` → `PharmaScanLabelProvider`. Product identity and RegimenEvidence are separate. Preserve every Printed.value/line including dose_form, directions, quantity, date, expiry_date; null and omission both mean missing (explicit null tracked). Quantity is amount dispensed, not per-dose quantity; date is not an inferred start/stop date. No parsing printed directions into dose/frequency/times/duration, no direct activation or repositories. `/api/medication-sources/extract` remains a subsequent authenticated integration task; the new Port/provider is not yet wired into the patient HTTP flow.
+
+**Transport:** injected httpx client/config/schema/sleeper, HTTPS/no redirects, bounded response size/timeouts, PNG/JPEG content decode/pixel cap/EXIF stripping. GET network/5xx retries at most two with bounded exponential backoff; POST never auto-retried. 4xx, 5xx/network and malformed/HTML/schema errors are distinct explicit failure types. PDF uses manual fallback until a validated PDF transport exists.
+
+**Live coverage:** GET only, no auth, no patient data or image upload. Image POST, catalogue/knowledge calls and feedback not exercised. Schema conformance does not validate model accuracy, deployed detector fixes, OCR completeness, FAR/FRR or clinical safety; V003 remains incomplete.

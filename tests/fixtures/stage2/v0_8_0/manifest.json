@@ -1,0 +1,146 @@
+{
+  "provenance": "SCHEMA_FIXTURE",
+  "demo_only": true,
+  "nonclinical": true,
+  "generator": "tests/fixtures/stage2/generate_v0_8_0.py",
+  "generated_at_utc": "2026-10-13T11:29:40.009404+00:00",
+  "source": "docs/external/pharmascan-api-openapi-0.8.0.json",
+  "source_sha256": "393d323e1edb876130a15aa7940fb6e533aff2646769a814f12ca7f34af84ea4",
+  "api_version": "0.8.0",
+  "metadata": {
+    "model_version": "SCHEMA-model-v0.8.0",
+    "embedding_space_id": "SCHEMA-space-v0.8.0",
+    "preprocess_version": "SCHEMA-preprocess-v0.8.0",
+    "embedding_dim": 256,
+    "normalized": true
+  },
+  "synthetic_directions": "Take 1 tablet at 08:00",
+  "directions_are_not_medical_advice": true,
+  "thresholds_are_synthetic_not_calibrated": true,
+  "known_regression": {
+    "fixture": "detect_unreliable_count.json",
+    "note": "合成一物体两重叠框，仅回归形状，不是 LIVE 再现；不得自动计数"
+  },
+  "entries": {
+    "model_info_success.json": {
+      "provenance": "SCHEMA_FIXTURE",
+      "demo_only": true,
+      "nonclinical": true,
+      "schema_ref": "#/components/schemas/ModelInfo",
+      "sha256": "793a8bb2f1ef7686cce4dc30e6ebf28703ffc6e0ce0b339aa83b05e86138cd89",
+      "schema_errors": [],
+      "synthetic_data": true,
+      "live_request_performed": false
+    },
+    "detect_success.json": {
+      "provenance": "SCHEMA_FIXTURE",
+      "demo_only": true,
+      "nonclinical": true,
+      "schema_ref": "#/components/schemas/DetectResponse",
+      "sha256": "d5135e5997bc365ba0953f16a1698dde7eca1a781ef0309d861e4ca0129fb979",
+      "schema_errors": [],
+      "synthetic_data": true,
+      "live_request_performed": false
+    },
+    "detect_unreliable_count.json": {
+      "provenance": "SCHEMA_FIXTURE",
+      "demo_only": true,
+      "nonclinical": true,
+      "schema_ref": "#/components/schemas/DetectResponse",
+      "sha256": "1bbaf21ef53b485a98f4c0e5bbb92be612e731b18bbeb0181cb4e06a45fefd43",
+      "schema_errors": [],
+      "synthetic_data": true,
+      "live_request_performed": false
+    },
+    "embed_success.json": {
+      "provenance": "SCHEMA_FIXTURE",
+      "demo_only": true,
+      "nonclinical": true,
+      "schema_ref": "#/components/schemas/Embedding",
+      "sha256": "08a392b6f57a8ff6b7af6d558844a4c17ee9470c999ee384675b61a04ff45830",
+      "schema_errors": [],
+      "synthetic_data": true,
+      "live_request_performed": false
+    },
+    "match_success.json": {
+      "provenance": "SCHEMA_FIXTURE",
+      "demo_only": true,
+      "nonclinical": true,
+      "schema_ref": "#/components/schemas/MatchResponse",
+      "sha256": "f7fa01dd43649b61d43cb9b32c06688609cc34a497e3fd1a8c9b9b5d12f62bb0",
+      "schema_errors": [],
+      "synthetic_data": true,
+      "live_request_performed": false
+    },
+    "match_unknown.json": {
+      "provenance": "SCHEMA_FIXTURE",
+      "demo_only": true,
+      "nonclinical": true,
+      "schema_ref": "#/components/schemas/MatchResponse",
+      "sha256": "7c62a535d3a58ecb60c7e836986eaca524063fdf3746af9dd2a315d6e7dd0a2a",
+      "schema_errors": [],
+      "synthetic_data": true,
+      "live_request_performed": false
+    },
+    "match_ambiguous.json": {
+      "provenance": "SCHEMA_FIXTURE",
+      "demo_only": true,
+      "nonclinical": true,
+      "schema_ref": "#/components/schemas/MatchResponse",
+      "sha256": "e86143a194e40ee2c022fabdbc4b8503eed28bf49d1255f7f6f0c38b3bc3df47",
+      "schema_errors": [],
+      "synthetic_data": true,
+      "live_request_performed": false
+    },
+    "identify_success.json": {
+      "provenance": "SCHEMA_FIXTURE",
+      "demo_only": true,
+      "nonclinical": true,
+      "schema_ref": "#/components/schemas/IdentifyResponse",
+      "sha256": "3c28600873e6f9fd736b4d5b0239aab103ef8ddfd9628d9f9076fb03636bb45f",
+      "schema_errors": [],
+      "synthetic_data": true,
+      "live_request_performed": false
+    },
+    "scan_success.json": {
+      "provenance": "SCHEMA_FIXTURE",
+      "demo_only": true,
+      "nonclinical": true,
+      "schema_ref": "#/components/schemas/ScanResponse",
+      "sha256": "0c5d59118b39a2e2c872c670e19db28c02edf69ee640575f9f5656c109a35f96",
+      "schema_errors": [],
+      "synthetic_data": true,
+      "live_request_performed": false
+    },
+    "read_label_success.json": {
+      "provenance": "SCHEMA_FIXTURE",
+      "demo_only": true,
+      "nonclinical": true,
+      "schema_ref": "#/components/schemas/ReadLabelResponse",
+      "sha256": "9a8f43d4a8bb6ef15b5ac0ad9fd3f7d4a86e5a4e249e0106bc995022ad3f2ac1",
+      "schema_errors": [],
+      "synthetic_data": true,
+      "live_request_performed": false
+    },
+    "read_label_missing_directions.json": {
+      "provenance": "SCHEMA_FIXTURE",
+      "demo_only": true,
+      "nonclinical": true,
+      "schema_ref": "#/components/schemas/ReadLabelResponse",
+      "sha256": "e567534a7480c9d5ff4c1723348049a178755c917ffdd2a4db7c52632db530ee",
+      "schema_errors": [],
+      "synthetic_data": true,
+      "live_request_performed": false
+    },
+    "common_error.json": {
+      "provenance": "SCHEMA_FIXTURE",
+      "demo_only": true,
+      "nonclinical": true,
+      "schema_ref": "#/components/schemas/Error",
+      "sha256": "02b1b3283cc865780704e7ff79209c37c1d33b1063987f228d5c4091919af341",
+      "schema_errors": [],
+      "synthetic_data": true,
+      "live_request_performed": false
+    }
+  }
+}

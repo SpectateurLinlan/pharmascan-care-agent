@@ -1,0 +1,29 @@
+{
+  "results": [
+    {
+      "decision": "match",
+      "medication_id": "med-1",
+      "name": "Demo medicine",
+      "similarity": 0.99,
+      "closest": {
+        "medication_id": "med-1",
+        "name": "Demo medicine",
+        "similarity": 0.99
+      },
+      "runner_up": {
+        "medication_id": "med-2",
+        "name": "Demo runner-up medicine",
+        "similarity": 0.4
+      },
+      "message": "SCHEMA_FIXTURE / demo_only：合成视觉证据，不确认药品、剂量、安全性或服药。",
+      "imprint_check": null,
+      "imprint_read_for": []
+    }
+  ],
+  "model_version": "SCHEMA-model-v0.8.0",
+  "embedding_space_id": "SCHEMA-space-v0.8.0",
+  "threshold": 0.8,
+  "margin": 0.05,
+  "evidence": "visual",
+  "limits": "SCHEMA_FIXTURE / demo_only：合成视觉证据，不确认药品、剂量、安全性或服药。"
+}

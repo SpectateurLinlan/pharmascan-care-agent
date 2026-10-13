@@ -467,15 +467,43 @@ def test_vision_provider_timeout_never_becomes_a_successful_match():
         def post_multipart(self, path, files, data):  # type: ignore[no-untyped-def]
             raise TimeoutError("simulated timeout")
 
+    import json
+    from pathlib import Path
+
+    from app.contracts.vision import EmbeddingResult, GalleryReference
+    from app.infrastructure.stage2_schema import Stage2Contract
+
+    spec = json.loads(
+        (Path(__file__).resolve().parents[2] / "docs/external/pharmascan-api-openapi-0.8.0.json").read_text(
+            encoding="utf-8"
+        )
+    )
     provider = HttpStage2VisionProvider(
-        transport=TimeoutTransport(), embedding_space_id="s", model_version="m"
+        transport=TimeoutTransport(),
+        contract=Stage2Contract(spec),
+        embedding_space_id="s",
+        model_version="m",
+        preprocessing_version="p",
     )
     with pytest.raises(VisionUnavailable):
         provider.match(
-            queries=[[0.1] * 256],
+            queries=[
+                EmbeddingResult(
+                    embedding=[1.0] + [0.0] * 255,
+                    dimension=256,
+                    embedding_space_id="s",
+                    model_version="m",
+                    preprocessing_version="p",
+                    normalized=True,
+                )
+            ],
             gallery=[
-                __import__("app.infrastructure.vision_contracts", fromlist=["x"]).GalleryReference(
-                    medication_id="med-1", embeddings=[[0.1] * 256], embedding_space_id="s"
+                GalleryReference(
+                    medication_id="med-1",
+                    embeddings=[[1.0] + [0.0] * 255],
+                    embedding_space_id="s",
+                    model_version="m",
+                    preprocessing_version="p",
                 )
             ],
         )

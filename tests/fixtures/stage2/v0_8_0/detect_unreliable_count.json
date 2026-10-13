@@ -1,0 +1,38 @@
+{
+  "boxes": [
+    [
+      10,
+      20,
+      50,
+      60
+    ],
+    [
+      35,
+      20,
+      70,
+      60
+    ]
+  ],
+  "box_flags": [
+    [
+      "merged"
+    ],
+    [
+      "merged"
+    ]
+  ],
+  "pill_count": 2,
+  "count_reliable": false,
+  "flags": [
+    "count_uncertain"
+  ],
+  "found_by": "SCHEMA-stand-in-finder",
+  "input_check": {
+    "type": "loose_pills",
+    "checked": true,
+    "abstained": false,
+    "caption": "SCHEMA 合成散装药片",
+    "message": null
+  },
+  "message": null
+}

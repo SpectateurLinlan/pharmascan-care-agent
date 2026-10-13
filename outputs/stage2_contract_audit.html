@@ -1,0 +1,979 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PharmaScan 0.8.0 契约审计</title><style>body{font:15px/1.6 system-ui,sans-serif;background:#f5f8fc;color:#203047;margin:0}main{max-width:1250px;margin:auto;padding:32px}section{background:white;border:1px solid #dce5ef;border-radius:12px;padding:20px;margin:20px 0}h1{margin-bottom:8px}h2{font-size:20px}.badge{background:#e0f2fe;color:#075985;border-radius:6px;padding:5px 10px;display:inline-block}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;padding:10px;border-bottom:1px solid #e2e8f0;vertical-align:top}th{background:#eff6ff}small{display:block;color:#526579}code{overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:350px;overflow:auto;background:#f8fafc;padding:10px}li{margin:12px 0}.scroll{overflow:auto}summary{cursor:pointer;color:#0369a1}</style><main><h1>PharmaScan Stage2 · v0.8.0</h1><span class="badge">OpenAPI 契约审计 · 非模型性能评测</span><p>时间：2026-10-13T11:29:40.009404+00:00<br>来源：docs/external/pharmascan-api-openapi-0.8.0.json<br><small>SHA-256：393d323e1edb876130a15aa7940fb6e533aff2646769a814f12ca7f34af84ea4</small></p><section><h2>证据边界</h2><p>12 个 SCHEMA_FIXTURE 均为 demo_only 合成数据，provenance 在 sidecar manifest；payload 保持原响应结构。未 POST、DELETE、上传图片、使用 token 或跟随 redirect。</p><p>实时仅 health 与 model-info 的 HTTPS GET；实际状态、时间、哈希及漂移见 <code>outputs/stage2_live_smoke.json</code>，不将 schema 合法或 0.99 相似度视为临床成功。</p><p>历史 0.4.0 snapshot 保留，版本与 SHA-256 见 JSON 报告。</p></section><section><h2>LIVE GET 非临床证据</h2><p>总体 passed=True；blockers=0。不证明图像识别或临床安全。</p><ul><li><code>https://davidpansx-pharmascan-api.hf.space/health</code> — HTTP 200, application/json, 562 bytes, schema errors=0, passed=True<small>2026-10-13T11:28:22.271939+00:00 → 2026-10-13T11:28:23.195709+00:00</small><small>SHA-256: 7734c0e3b0767079521d237c9bd05eab8ed725b2d3004f54ee1965003a4f9755</small></li><li><code>https://davidpansx-pharmascan-api.hf.space/v1/model-info</code> — HTTP 200, application/json, 1291 bytes, schema errors=0, passed=True<small>2026-10-13T11:28:23.199338+00:00 → 2026-10-13T11:28:23.978464+00:00</small><small>SHA-256: 51e94a71f807cba74e02af86eba120e0e1ff98e6334b3a40ed3a6ef7613e496f</small></li></ul></section><section><h2>用户 endpoint 全量审计（含额外图片路径记录）</h2><div class="scroll"><table><thead><tr><th>操作 / 执行边界</th><th>请求</th><th>200 / required</th><th>错误 schema</th></tr></thead><tbody><tr><td><b>GET</b> <code>/health</code><small>LIVE GET 仅见 stage2_live_smoke.json</small></td><td>无 body/参数</td><td><code>#/components/schemas/Health</code><small>required: status, ready, api_version, started_at, model_repo, model, catalogue, safety_db, text_reading</small></td><td>401, 404, 409, 422, 500, 502, 503<details><summary>请求 / 200 / 错误详情</summary><pre>{
+  &quot;request&quot;: {
+    &quot;body_required&quot;: false,
+    &quot;body_schemas&quot;: {},
+    &quot;parameters&quot;: []
+  },
+  &quot;200&quot;: {
+    &quot;$ref&quot;: &quot;#/components/schemas/Health&quot;
+  },
+  &quot;errors&quot;: {
+    &quot;401&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;404&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;409&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;422&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;500&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;502&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;503&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    }
+  }
+}</pre></details></td></tr><tr><td><b>GET</b> <code>/v1/tools</code><small>仅审计 schema，未请求</small></td><td>无 body/参数</td><td><code>空 schema</code><small>required: 无</small></td><td>401, 404, 409, 422, 500, 502, 503<details><summary>请求 / 200 / 错误详情</summary><pre>{
+  &quot;request&quot;: {
+    &quot;body_required&quot;: false,
+    &quot;body_schemas&quot;: {},
+    &quot;parameters&quot;: []
+  },
+  &quot;200&quot;: {},
+  &quot;errors&quot;: {
+    &quot;401&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;404&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;409&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;422&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;500&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;502&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;503&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    }
+  }
+}</pre></details></td></tr><tr><td><b>GET</b> <code>/v1/model-info</code><small>LIVE GET 仅见 stage2_live_smoke.json</small></td><td>无 body/参数</td><td><code>#/components/schemas/ModelInfo</code><small>required: api_version, model_version, embedding_space_id, preprocess_version, embedding_dim, normalized, crop_window, threshold, margin, calibration, imprint, training_coverage, known_limits, evidence</small></td><td>401, 404, 409, 422, 500, 502, 503<details><summary>请求 / 200 / 错误详情</summary><pre>{
+  &quot;request&quot;: {
+    &quot;body_required&quot;: false,
+    &quot;body_schemas&quot;: {},
+    &quot;parameters&quot;: []
+  },
+  &quot;200&quot;: {
+    &quot;$ref&quot;: &quot;#/components/schemas/ModelInfo&quot;
+  },
+  &quot;errors&quot;: {
+    &quot;401&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;404&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;409&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;422&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;500&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;502&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;503&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    }
+  }
+}</pre></details></td></tr><tr><td><b>POST</b> <code>/v1/embed</code><small>仅审计 schema，未请求</small></td><td>#/components/schemas/Body_embed_v1_embed_post</td><td><code>#/components/schemas/Embedding</code><small>required: embedding, dim, model_version, embedding_space_id, preprocess_version, normalized, framed_by, evidence</small></td><td>401, 404, 409, 422, 500, 502, 503<details><summary>请求 / 200 / 错误详情</summary><pre>{
+  &quot;request&quot;: {
+    &quot;body_required&quot;: true,
+    &quot;body_schemas&quot;: {
+      &quot;multipart/form-data&quot;: {
+        &quot;schema&quot;: {
+          &quot;$ref&quot;: &quot;#/components/schemas/Body_embed_v1_embed_post&quot;
+        },
+        &quot;required&quot;: [
+          &quot;image&quot;
+        ]
+      }
+    },
+    &quot;parameters&quot;: []
+  },
+  &quot;200&quot;: {
+    &quot;$ref&quot;: &quot;#/components/schemas/Embedding&quot;
+  },
+  &quot;errors&quot;: {
+    &quot;401&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;404&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;409&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;422&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;500&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;502&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;503&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    }
+  }
+}</pre></details></td></tr><tr><td><b>POST</b> <code>/v1/match</code><small>仅审计 schema，未请求</small></td><td>#/components/schemas/MatchRequest</td><td><code>#/components/schemas/MatchResponse</code><small>required: results, model_version, embedding_space_id, threshold, margin, evidence, limits</small></td><td>401, 404, 409, 422, 500, 502, 503<details><summary>请求 / 200 / 错误详情</summary><pre>{
+  &quot;request&quot;: {
+    &quot;body_required&quot;: true,
+    &quot;body_schemas&quot;: {
+      &quot;application/json&quot;: {
+        &quot;schema&quot;: {
+          &quot;$ref&quot;: &quot;#/components/schemas/MatchRequest&quot;
+        },
+        &quot;required&quot;: [
+          &quot;queries&quot;,
+          &quot;gallery&quot;
+        ]
+      }
+    },
+    &quot;parameters&quot;: []
+  },
+  &quot;200&quot;: {
+    &quot;$ref&quot;: &quot;#/components/schemas/MatchResponse&quot;
+  },
+  &quot;errors&quot;: {
+    &quot;401&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;404&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;409&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;422&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;500&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;502&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;503&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    }
+  }
+}</pre></details></td></tr><tr><td><b>POST</b> <code>/v1/identify</code><small>仅审计 schema，未请求</small></td><td>#/components/schemas/Body_identify_v1_identify_post</td><td><code>#/components/schemas/IdentifyResponse</code><small>required: candidates, notes, note, model_version, evidence, limits</small></td><td>401, 404, 409, 422, 500, 502, 503<details><summary>请求 / 200 / 错误详情</summary><pre>{
+  &quot;request&quot;: {
+    &quot;body_required&quot;: true,
+    &quot;body_schemas&quot;: {
+      &quot;multipart/form-data&quot;: {
+        &quot;schema&quot;: {
+          &quot;$ref&quot;: &quot;#/components/schemas/Body_identify_v1_identify_post&quot;
+        },
+        &quot;required&quot;: [
+          &quot;images&quot;
+        ]
+      }
+    },
+    &quot;parameters&quot;: []
+  },
+  &quot;200&quot;: {
+    &quot;$ref&quot;: &quot;#/components/schemas/IdentifyResponse&quot;
+  },
+  &quot;errors&quot;: {
+    &quot;401&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;404&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;409&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;422&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;500&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;502&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;503&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    }
+  }
+}</pre></details></td></tr><tr><td><b>POST</b> <code>/v1/detect</code><small>仅审计 schema，未请求</small></td><td>#/components/schemas/Body_detect_v1_detect_post</td><td><code>#/components/schemas/DetectResponse</code><small>required: boxes, box_flags, pill_count, count_reliable, flags, found_by</small></td><td>401, 404, 409, 422, 500, 502, 503<details><summary>请求 / 200 / 错误详情</summary><pre>{
+  &quot;request&quot;: {
+    &quot;body_required&quot;: true,
+    &quot;body_schemas&quot;: {
+      &quot;multipart/form-data&quot;: {
+        &quot;schema&quot;: {
+          &quot;$ref&quot;: &quot;#/components/schemas/Body_detect_v1_detect_post&quot;
+        },
+        &quot;required&quot;: [
+          &quot;image&quot;
+        ]
+      }
+    },
+    &quot;parameters&quot;: []
+  },
+  &quot;200&quot;: {
+    &quot;$ref&quot;: &quot;#/components/schemas/DetectResponse&quot;
+  },
+  &quot;errors&quot;: {
+    &quot;401&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;404&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;409&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;422&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;500&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;502&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;503&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    }
+  }
+}</pre></details></td></tr><tr><td><b>POST</b> <code>/v1/scan</code><small>仅审计 schema，未请求</small></td><td>#/components/schemas/Body_scan_v1_scan_post</td><td><code>#/components/schemas/ScanResponse</code><small>required: found_by, model_version, detection, pills, evidence, limits</small></td><td>401, 404, 409, 422, 500, 502, 503<details><summary>请求 / 200 / 错误详情</summary><pre>{
+  &quot;request&quot;: {
+    &quot;body_required&quot;: true,
+    &quot;body_schemas&quot;: {
+      &quot;multipart/form-data&quot;: {
+        &quot;schema&quot;: {
+          &quot;$ref&quot;: &quot;#/components/schemas/Body_scan_v1_scan_post&quot;
+        },
+        &quot;required&quot;: [
+          &quot;image&quot;
+        ]
+      }
+    },
+    &quot;parameters&quot;: []
+  },
+  &quot;200&quot;: {
+    &quot;$ref&quot;: &quot;#/components/schemas/ScanResponse&quot;
+  },
+  &quot;errors&quot;: {
+    &quot;401&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;404&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;409&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;422&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;500&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;502&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;503&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    }
+  }
+}</pre></details></td></tr><tr><td><b>POST</b> <code>/v1/read-label</code><small>仅审计 schema，未请求</small></td><td>#/components/schemas/Body_read_label_v1_read_label_post</td><td><code>#/components/schemas/ReadLabelResponse</code><small>required: candidates, note, ocr_model</small></td><td>401, 404, 409, 422, 500, 502, 503<details><summary>请求 / 200 / 错误详情</summary><pre>{
+  &quot;request&quot;: {
+    &quot;body_required&quot;: true,
+    &quot;body_schemas&quot;: {
+      &quot;multipart/form-data&quot;: {
+        &quot;schema&quot;: {
+          &quot;$ref&quot;: &quot;#/components/schemas/Body_read_label_v1_read_label_post&quot;
+        },
+        &quot;required&quot;: [
+          &quot;image&quot;
+        ]
+      }
+    },
+    &quot;parameters&quot;: []
+  },
+  &quot;200&quot;: {
+    &quot;$ref&quot;: &quot;#/components/schemas/ReadLabelResponse&quot;
+  },
+  &quot;errors&quot;: {
+    &quot;401&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;404&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;409&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;422&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;500&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;502&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;503&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    }
+  }
+}</pre></details></td></tr><tr><td><b>GET</b> <code>/v1/pills/search</code><small>仅审计 schema，未请求</small></td><td>query:name *, query:strength, query:limit</td><td><code>#/components/schemas/SearchResponse</code><small>required: resolution, count, products, source</small></td><td>401, 404, 409, 422, 500, 502, 503<details><summary>请求 / 200 / 错误详情</summary><pre>{
+  &quot;request&quot;: {
+    &quot;body_required&quot;: false,
+    &quot;body_schemas&quot;: {},
+    &quot;parameters&quot;: [
+      {
+        &quot;name&quot;: &quot;name&quot;,
+        &quot;in&quot;: &quot;query&quot;,
+        &quot;required&quot;: true,
+        &quot;schema&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 2,
+          &quot;description&quot;: &quot;Brand or generic name, e.g. &#x27;metformin&#x27;, &#x27;Glucophage&#x27;&quot;,
+          &quot;title&quot;: &quot;Name&quot;
+        }
+      },
+      {
+        &quot;name&quot;: &quot;strength&quot;,
+        &quot;in&quot;: &quot;query&quot;,
+        &quot;required&quot;: false,
+        &quot;schema&quot;: {
+          &quot;anyOf&quot;: [
+            {
+              &quot;type&quot;: &quot;string&quot;
+            },
+            {
+              &quot;type&quot;: &quot;null&quot;
+            }
+          ],
+          &quot;description&quot;: &quot;e.g. &#x27;500 MG&#x27;&quot;,
+          &quot;title&quot;: &quot;Strength&quot;
+        }
+      },
+      {
+        &quot;name&quot;: &quot;limit&quot;,
+        &quot;in&quot;: &quot;query&quot;,
+        &quot;required&quot;: false,
+        &quot;schema&quot;: {
+          &quot;type&quot;: &quot;integer&quot;,
+          &quot;maximum&quot;: 200,
+          &quot;minimum&quot;: 1,
+          &quot;default&quot;: 50,
+          &quot;title&quot;: &quot;Limit&quot;
+        }
+      }
+    ]
+  },
+  &quot;200&quot;: {
+    &quot;$ref&quot;: &quot;#/components/schemas/SearchResponse&quot;
+  },
+  &quot;errors&quot;: {
+    &quot;401&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;404&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;409&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;422&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;500&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;502&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;503&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    }
+  }
+}</pre></details></td></tr><tr><td><b>GET</b> <code>/v1/pills/{pill_id}</code><small>仅审计 schema，未请求</small></td><td>path:pill_id *</td><td><code>#/components/schemas/Product</code><small>required: pill_id, name, rxnorm_name, generic_name, manufacturer, ingredients, shape, colour, size_mm, imprint, images</small></td><td>401, 404, 409, 422, 500, 502, 503<details><summary>请求 / 200 / 错误详情</summary><pre>{
+  &quot;request&quot;: {
+    &quot;body_required&quot;: false,
+    &quot;body_schemas&quot;: {},
+    &quot;parameters&quot;: [
+      {
+        &quot;name&quot;: &quot;pill_id&quot;,
+        &quot;in&quot;: &quot;path&quot;,
+        &quot;required&quot;: true,
+        &quot;schema&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;title&quot;: &quot;Pill Id&quot;
+        }
+      }
+    ]
+  },
+  &quot;200&quot;: {
+    &quot;$ref&quot;: &quot;#/components/schemas/Product&quot;
+  },
+  &quot;errors&quot;: {
+    &quot;401&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;404&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;409&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;422&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;500&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;502&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;503&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    }
+  }
+}</pre></details></td></tr><tr><td><b>GET</b> <code>/v1/pills/{pill_id}/image/{n}</code><small>仅审计 schema，未请求</small></td><td>path:pill_id *, path:n *</td><td><code>空 schema</code><small>required: 无</small></td><td>401, 404, 409, 422, 500, 502, 503<details><summary>请求 / 200 / 错误详情</summary><pre>{
+  &quot;request&quot;: {
+    &quot;body_required&quot;: false,
+    &quot;body_schemas&quot;: {},
+    &quot;parameters&quot;: [
+      {
+        &quot;name&quot;: &quot;pill_id&quot;,
+        &quot;in&quot;: &quot;path&quot;,
+        &quot;required&quot;: true,
+        &quot;schema&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;title&quot;: &quot;Pill Id&quot;
+        }
+      },
+      {
+        &quot;name&quot;: &quot;n&quot;,
+        &quot;in&quot;: &quot;path&quot;,
+        &quot;required&quot;: true,
+        &quot;schema&quot;: {
+          &quot;type&quot;: &quot;integer&quot;,
+          &quot;title&quot;: &quot;N&quot;
+        }
+      }
+    ]
+  },
+  &quot;200&quot;: {},
+  &quot;errors&quot;: {
+    &quot;401&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;404&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;409&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;422&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;500&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;502&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;503&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    }
+  }
+}</pre></details></td></tr><tr><td><b>POST</b> <code>/v1/feedback</code><small>仅审计 schema，未请求；feedback POST/DELETE 仅记录</small></td><td>#/components/schemas/Body_feedback_v1_feedback_post</td><td><code>#/components/schemas/FeedbackStored</code><small>required: stored, item, note</small></td><td>401, 404, 409, 422, 500, 502, 503<details><summary>请求 / 200 / 错误详情</summary><pre>{
+  &quot;request&quot;: {
+    &quot;body_required&quot;: true,
+    &quot;body_schemas&quot;: {
+      &quot;multipart/form-data&quot;: {
+        &quot;schema&quot;: {
+          &quot;$ref&quot;: &quot;#/components/schemas/Body_feedback_v1_feedback_post&quot;
+        },
+        &quot;required&quot;: [
+          &quot;image&quot;,
+          &quot;consent&quot;,
+          &quot;consent_id&quot;,
+          &quot;medication_name&quot;,
+          &quot;label_source&quot;
+        ]
+      }
+    },
+    &quot;parameters&quot;: []
+  },
+  &quot;200&quot;: {
+    &quot;$ref&quot;: &quot;#/components/schemas/FeedbackStored&quot;
+  },
+  &quot;errors&quot;: {
+    &quot;401&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;404&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;409&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;422&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;500&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;502&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;503&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    }
+  }
+}</pre></details></td></tr><tr><td><b>DELETE</b> <code>/v1/feedback/{consent_id}</code><small>仅审计 schema，未请求；feedback POST/DELETE 仅记录</small></td><td>path:consent_id *</td><td><code>#/components/schemas/FeedbackDeleted</code><small>required: deleted, local_photos_removed, removed_from_repo</small></td><td>401, 404, 409, 422, 500, 502, 503<details><summary>请求 / 200 / 错误详情</summary><pre>{
+  &quot;request&quot;: {
+    &quot;body_required&quot;: false,
+    &quot;body_schemas&quot;: {},
+    &quot;parameters&quot;: [
+      {
+        &quot;name&quot;: &quot;consent_id&quot;,
+        &quot;in&quot;: &quot;path&quot;,
+        &quot;required&quot;: true,
+        &quot;schema&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;title&quot;: &quot;Consent Id&quot;
+        }
+      }
+    ]
+  },
+  &quot;200&quot;: {
+    &quot;$ref&quot;: &quot;#/components/schemas/FeedbackDeleted&quot;
+  },
+  &quot;errors&quot;: {
+    &quot;401&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;404&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;409&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;422&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;500&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;502&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;503&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    }
+  }
+}</pre></details></td></tr><tr><td><b>POST</b> <code>/v1/safety/medications</code><small>仅审计 schema，未请求</small></td><td>#/components/schemas/MedicationsRequest</td><td><code>#/components/schemas/MedicationsResponse</code><small>required: alerts, medications, all_identified, coverage, note, sources</small></td><td>401, 404, 409, 422, 500, 502, 503<details><summary>请求 / 200 / 错误详情</summary><pre>{
+  &quot;request&quot;: {
+    &quot;body_required&quot;: true,
+    &quot;body_schemas&quot;: {
+      &quot;application/json&quot;: {
+        &quot;schema&quot;: {
+          &quot;$ref&quot;: &quot;#/components/schemas/MedicationsRequest&quot;
+        },
+        &quot;required&quot;: [
+          &quot;medications&quot;
+        ]
+      }
+    },
+    &quot;parameters&quot;: []
+  },
+  &quot;200&quot;: {
+    &quot;$ref&quot;: &quot;#/components/schemas/MedicationsResponse&quot;
+  },
+  &quot;errors&quot;: {
+    &quot;401&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;404&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;409&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;422&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;500&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;502&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;503&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    }
+  }
+}</pre></details></td></tr><tr><td><b>POST</b> <code>/v1/safety/dose</code><small>仅审计 schema，未请求</small></td><td>#/components/schemas/DoseRequest</td><td><code>#/components/schemas/DoseResponse</code><small>required: alerts, summary</small></td><td>401, 404, 409, 422, 500, 502, 503<details><summary>请求 / 200 / 错误详情</summary><pre>{
+  &quot;request&quot;: {
+    &quot;body_required&quot;: true,
+    &quot;body_schemas&quot;: {
+      &quot;application/json&quot;: {
+        &quot;schema&quot;: {
+          &quot;$ref&quot;: &quot;#/components/schemas/DoseRequest&quot;
+        },
+        &quot;required&quot;: [
+          &quot;schedule&quot;,
+          &quot;pills&quot;
+        ]
+      }
+    },
+    &quot;parameters&quot;: []
+  },
+  &quot;200&quot;: {
+    &quot;$ref&quot;: &quot;#/components/schemas/DoseResponse&quot;
+  },
+  &quot;errors&quot;: {
+    &quot;401&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;404&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;409&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;422&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;500&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;502&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;503&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    }
+  }
+}</pre></details></td></tr><tr><td><b>GET</b> <code>/v1/safety/label</code><small>仅审计 schema，未请求</small></td><td>query:rxcui, query:ingredient</td><td><code>#/components/schemas/LabelResponse</code><small>required: brand_name, generic_name, label_date, matched_by, sections, disclaimer</small></td><td>401, 404, 409, 422, 500, 502, 503<details><summary>请求 / 200 / 错误详情</summary><pre>{
+  &quot;request&quot;: {
+    &quot;body_required&quot;: false,
+    &quot;body_schemas&quot;: {},
+    &quot;parameters&quot;: [
+      {
+        &quot;name&quot;: &quot;rxcui&quot;,
+        &quot;in&quot;: &quot;query&quot;,
+        &quot;required&quot;: false,
+        &quot;schema&quot;: {
+          &quot;anyOf&quot;: [
+            {
+              &quot;type&quot;: &quot;string&quot;
+            },
+            {
+              &quot;type&quot;: &quot;null&quot;
+            }
+          ],
+          &quot;title&quot;: &quot;Rxcui&quot;
+        }
+      },
+      {
+        &quot;name&quot;: &quot;ingredient&quot;,
+        &quot;in&quot;: &quot;query&quot;,
+        &quot;required&quot;: false,
+        &quot;schema&quot;: {
+          &quot;anyOf&quot;: [
+            {
+              &quot;type&quot;: &quot;string&quot;
+            },
+            {
+              &quot;type&quot;: &quot;null&quot;
+            }
+          ],
+          &quot;title&quot;: &quot;Ingredient&quot;
+        }
+      }
+    ]
+  },
+  &quot;200&quot;: {
+    &quot;$ref&quot;: &quot;#/components/schemas/LabelResponse&quot;
+  },
+  &quot;errors&quot;: {
+    &quot;401&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;404&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;409&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;422&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;500&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;502&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    },
+    &quot;503&quot;: {
+      &quot;application/json&quot;: {
+        &quot;$ref&quot;: &quot;#/components/schemas/Error&quot;
+      }
+    }
+  }
+}</pre></details></td></tr></tbody></table></div></section><section><h2>关键契约缺口与额外安全要求</h2><ul><li><b>Embedding.embedding</b> — array&lt;number&gt; 无 minItems/maxItems；dim 无 const 256；256 仅为描述/运行时 model-info 的值<small>256 维、有限数值、单位范数、normalized=true、metadata 一致；非 OpenAPI 长度保证</small></li><li><b>MatchRequest</b> — queries/gallery 外层 minItems=1，内层向量无长度约束；版本字段非 required<small>至少一个版本/space 标识、实际匹配模型与预处理及 space；不能只依赖 schema</small></li><li><b>Detection.boxes / ScanPill.box</b> — PIXEL xyxy 描述，数组无四元素约束；不使用 x/y/w/h<small>四个有限像素坐标、边界合法；count_reliable=false 不自动计数</small></li><li><b>ScanPill</b> — 仅 box required、additionalProperties=true；decision/candidates 未类型化<small>合成 scan 扩展使用完整 MatchResult；测试另验该扩展，不声称 OpenAPI 强制</small></li><li><b>/v1/tools 200</b> — schema={}，不能证明任何输出字段存在<small></small></li><li><b>/v1/pills/{pill_id}/image/{n} 200</b> — 描述 JPEG，但声明 application/json schema={}；未请求<small></small></li><li><b>ModelInfo.calibration / imprint</b> — 自由对象，无内部 required；合成数据不得冒充校准<small></small></li><li><b>MatchResult.decision</b> — match/unknown/ambiguous enum；无跨字段决策约束<small>0.99 相似度非 99% 识别概率；合成阈值不提供临床性能证据</small></li><li><b>ReadLabelResponse / DocumentFields</b> — source 默认 photo 非 required；fields/directions 可省略或 null<small>directions 仅引用 synthetic Printed.value/line；缺失绝不补造用药指令</small></li><li><b>safety endpoints</b> — 无 alert 不等于安全；coverage 与 source 必须保留；剂量决策属于主后端<small></small></li></ul></section><section><h2>省略与 null</h2><p>detect_success.message 省略；detect_unreliable_count.message 显式 null。两者均合法但语义不同。MatchResult 的 medication_id/name/runner_up 为 required 且 nullable，不得省略。missing directions=null，不补造指令。</p><p>Take 1 tablet at 08:00 只在合成标签 Printed.value/line 中，非真实处方或建议。</p></section></main></html>

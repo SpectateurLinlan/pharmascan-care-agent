@@ -1,0 +1,5 @@
+{
+  "code": "invalid_input",
+  "detail": "SCHEMA 合成错误，未发送任何请求",
+  "retry_after": null
+}

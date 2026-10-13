@@ -1,0 +1,25 @@
+{
+  "api_version": "0.8.0",
+  "model_version": "SCHEMA-model-v0.8.0",
+  "embedding_space_id": "SCHEMA-space-v0.8.0",
+  "preprocess_version": "SCHEMA-preprocess-v0.8.0",
+  "embedding_dim": 256,
+  "normalized": true,
+  "crop_window": 1.4,
+  "threshold": 0.8,
+  "margin": 0.05,
+  "calibration": {
+    "provenance": "SCHEMA_FIXTURE",
+    "demo_only": true,
+    "note": "合成决策参数，不是临床校准结果"
+  },
+  "imprint": {
+    "synthetic": "demo_only",
+    "enabled": false
+  },
+  "training_coverage": "SCHEMA_FIXTURE：未知真实训练覆盖",
+  "known_limits": [
+    "SCHEMA_FIXTURE / demo_only：合成视觉证据，不确认药品、剂量、安全性或服药。"
+  ],
+  "evidence": "visual"
+}

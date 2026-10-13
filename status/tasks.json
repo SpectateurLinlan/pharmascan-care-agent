@@ -1,5 +1,5 @@
 {
-  "snapshot": "2026-10-13T14:00:00+08:00",
+  "snapshot": "2026-10-13T19:04:46+08:00",
   "status_legend": {
     "todo": "not verified/unfinished",
     "in_progress": "being worked on (verified log needed)",
@@ -208,14 +208,23 @@
       "priority": "P0",
       "due": "2026-10-13",
       "owner": "Vision",
-      "title_en": "Supply real JSON and metadata for Stage2 endpoints",
+      "title_en": "Freeze latest PharmaScan API contract and provide real payloads",
       "title_zh": "提供 Stage2 最新真实请求响应与模型元数据",
-      "acceptance": "Success/error payload fixtures for /embed,/match,/identify,/scan",
+      "acceptance": "v0.8.0 snapshot stored/versioned, adapter/tests use schema, required facts verified; safe live GET checked and POST schema-only versus live-unverified behavior explicitly distinguished (Session 3C scope). Original all-endpoint real payload acceptance remains a separate B01 live POST follow-up.",
       "requirement": "Vision/API",
       "dependency": "",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "required_endpoints": [
+        "/v1/model-info",
+        "/v1/detect",
+        "/v1/embed",
+        "/v1/match",
+        "/v1/identify",
+        "/v1/scan",
+        "/v1/read-label"
+      ],
+      "status": "done",
+      "evidence": "VERIFIED SCHEMA + LIVE GET ONLY: owner-supplied frozen v0.8.0 and real historical 0.4.0 snapshots; audit 17 operations/51 schemas; typed adapters updated; 12 SCHEMA_FIXTURE cases. Live GET /health and /v1/model-info HTTP 200/application/json, zero schema mismatches: outputs/stage2_live_smoke.json. Final relevant contract tests 176 passed. POST inference, safety and feedback live behavior NOT verified; V003 unchanged; B01 remains partially open.",
+      "updated_at": "2026-10-13T19:04:46+08:00"
     },
     {
       "id": "V002",
@@ -229,7 +238,7 @@
       "requirement": "Responsible AI",
       "dependency": "",
       "status": "in_progress",
-      "evidence": "Adapter code and 24 contract tests are REAL and pass, but no live Stage2 response has ever been observed: the OpenAPI we hold is v0.4.0 and the teammate is actively changing the API (B01). Not marked done.",
+      "evidence": "PARTIAL: v0.8.0 synthetic duplicate pixel-box fixture detected as overlapping/duplicate and remains unusable for automated dose count. GET conformance verified only. No live image regression or detector repair has been demonstrated; keep in_progress.",
       "updated_at": "2026-10-13T04:30:00+08:00"
     },
     {
@@ -255,12 +264,12 @@
       "owner": "Vision",
       "title_en": "Expose model/embedding-space version contract",
       "title_zh": "公开模型与 Embedding Space 版本",
-      "acceptance": "Versions and preprocessing contract verified by real response",
+      "acceptance": "Versions and preprocessing contract verified by real response: model_version, embedding_space_id, dimension, normalization, preprocessing, threshold/margin",
       "requirement": "Vision/API",
       "dependency": "V001",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "done",
+      "evidence": "VERIFIED LIVE GET metadata only: tests/fixtures/stage2/v0_8_0/model_info_live.json captured over verified HTTPS GET; v0.8.0 schema valid, dim=256, normalized=true, model/space/preprocess/threshold/margin present. Raw manifest records timestamps/status/hash; no validation of declared model performance/calibration.",
+      "updated_at": "2026-10-13T19:04:46+08:00"
     },
     {
       "id": "V005",
@@ -334,7 +343,7 @@
       "requirement": "Technical execution",
       "dependency": "A001,V001",
       "status": "in_progress",
-      "evidence": "PARTIAL: HttpStage2VisionProvider exists with timeout handling and mock isolation; a timeout is verified to raise VisionUnavailable and never to become a successful match (tests/backend/test_agent.py::test_vision_provider_timeout_never_becomes_a_successful_match). NOT verified against a live Stage2 endpoint — the live contract is unconfirmed (B01), so 'live status labeled' is only half-met. PREVIOUS EVIDENCE WAS MIS-ATTRIBUTED: it described the agent orchestrator, not this task.",
+      "evidence": "PARTIAL: v0.8.0 HttpStage2VisionProvider + injected HttpxStage2Transport enforce complete schema, metadata/vector/geometry guards, bounded GET retry, no POST retry, 4xx/network/schema separation. 70 adapter tests plus 106 independent schema tests pass; identify uses the required images multipart array field. Safe GETs verified; patient-facing image integration/live POST remains B01/B10. No inference or model performance claim.",
       "updated_at": "2026-10-13T14:00:00+08:00"
     },
     {
@@ -388,14 +397,14 @@
       "priority": "P1",
       "due": "2026-10-14",
       "owner": "App",
-      "title_en": "Build pharmacy-label/PDF OCR and field review",
-      "title_zh": "药房标签/PDF OCR 与字段核对",
-      "acceptance": "Missing dose remains null, user confirms source-linked fields",
+      "title_en": "Integrate package/pharmacy-label extraction and regimen field review",
+      "title_zh": "集成包装/药房标签提取与疗程字段核对",
+      "acceptance": "readable box/pharmacy-label image uses /v1/read-label; provider response normalized into app DTO; source image/provenance preserved; product identity and patient regimen kept separate; missing dose/frequency/time/duration remain null; patient reviews regimen-relevant source fields; manual enrollment remains available",
       "requirement": "Medication management",
       "dependency": "B004",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "in_progress",
+      "evidence": "PARTIAL: public SourceExtractionPort + PharmaScanLabelProvider implemented and fixture-tested for package/pharmacy_label/prescription; Printed value/line preserved, product identity separate, null/omitted instructions remain missing, no regimen activation or dose inference. Live read-label image POST and authenticated main API/UI wiring remain pending; PDF transport remains explicit B13/manual fallback.",
+      "updated_at": "2026-10-13T18:38:00+08:00"
     },
     {
       "id": "K001",

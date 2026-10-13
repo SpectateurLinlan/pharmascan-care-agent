@@ -1,298 +1,307 @@
-"""Stage2 HTTP adapter + explicitly SIMULATED fake provider.
+"""v0.8.0 Stage2 anti-corruption adapter; fixtures are NOT model evaluation.
 
-The HTTP adapter maps the *documented* v0.4.0 contract (docs/pharmascan-api-openapi.json)
-onto the internal DTOs. It performs no inference of its own and refuses to
-fabricate fields the API does not return.
-
-** BLOCKED / SIMULATED **
-- `HttpStage2VisionProvider` is written against OpenAPI v0.4.0 only; the live
-  deploy may differ (B01). Its tests use a stubbed transport, so they prove
-  mapping and failure handling — NOT that the real service behaves this way.
-- `FakeVisionProvider` is a deterministic stand-in and MUST stay clearly
-  labelled. It is never reported as a real recognition result.
+Only injected transports/schema are used. No database, safety-authority or source
+activation. Legacy undocumented aliases and silent metadata fallbacks removed.
 """
 
 from __future__ import annotations
 
+import json
 import math
-from typing import Any, Literal
+from typing import Literal, TypeVar
 
-from .vision_contracts import (
+from app.contracts.vision import (
     EmbeddingResult,
     GalleryReference,
+    MatchDecision,
     MatchOutcome,
+    ModelMetadata,
     ModelVersionMismatch,
     PillCandidate,
+    ReferenceSimilarity,
     ScanBox,
     ScanDiagnostics,
     UnsupportedModality,
     VisionSchemaError,
     VisionUnavailable,
 )
+from app.infrastructure.stage2_http import HttpTransport
+from app.infrastructure.stage2_schema import Stage2Contract
+from app.infrastructure.stage2_wire import (
+    DetectionWire,
+    EmbeddingWire,
+    IdentifyWire,
+    MatchWire,
+    ModelInfoWire,
+    ScanWire,
+    Wire,
+)
+from pydantic import ValidationError
+
+W = TypeVar("W", bound=Wire)
 
 
-class HttpTransport:
-    """Minimal injected transport so the adapter never owns a global client."""
+def project(contract: Stage2Contract, name: str, payload: object, wire: type[W]) -> W:
+    valid = contract.validate(name, payload)
+    try:
+        return wire.model_validate(valid)
+    except ValidationError as exc:
+        raise VisionSchemaError(f"Stage2 {name} invalid typed fields") from exc
 
-    def __init__(self, *, base_url: str, timeout_seconds: float) -> None:
-        self.base_url = base_url.rstrip("/")
-        self.timeout_seconds = timeout_seconds
 
-    def post_json(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
-        raise NotImplementedError(
-            "Inject a real HTTP transport (e.g. httpx) at the composition root"
-        )
+def _validate_vector(vector: list[float]) -> None:
+    if len(vector) != 256:
+        raise ModelVersionMismatch("embedding dimension must be 256 for this integration baseline")
+    if not all(type(v) in (int, float) and math.isfinite(v) for v in vector):
+        raise VisionSchemaError("embedding contains invalid/non-finite values")
 
-    def post_multipart(self, path: str, files: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:
-        raise NotImplementedError(
-            "Inject a real HTTP transport (e.g. httpx) at the composition root"
-        )
+
+def boxes_overlap(boxes: list[ScanBox]) -> bool:
+    """Public geometry utility: measured pixel overlap, not pill identity."""
+    for i, first in enumerate(boxes):
+        if first.x is None or first.y is None or first.w is None or first.h is None:
+            continue
+        for second in boxes[i + 1 :]:
+            if second.x is None or second.y is None or second.w is None or second.h is None:
+                continue
+            if min(first.x + first.w, second.x + second.w) > max(first.x, second.x) and min(
+                first.y + first.h, second.y + second.h
+            ) > max(first.y, second.y):
+                return True
+    return False
+
+
+def detection_dto(wire: DetectionWire, **extra: object) -> ScanDiagnostics:
+    if wire.pill_count < 0 or len(wire.box_flags) != len(wire.boxes):
+        raise VisionSchemaError("invalid detection count/flag alignment")
+    boxes = []
+    for coords in wire.boxes:
+        if len(coords) != 4 or not all(math.isfinite(v) and v >= 0 for v in coords):
+            raise VisionSchemaError("detection requires finite nonnegative pixel xyxy")
+        x0, y0, x1, y1 = coords
+        if x1 <= x0 or y1 <= y0:
+            raise VisionSchemaError("detection box has invalid pixel extent")
+        boxes.append(ScanBox(x=x0, y=y0, w=x1 - x0, h=y1 - y0))
+    overlap = boxes_overlap(boxes)
+    return ScanDiagnostics(
+        pill_count=wire.pill_count,
+        boxes=boxes,
+        box_flags=wire.box_flags,
+        provider_count_reliable=wire.count_reliable,
+        flags=wire.flags,
+        found_by=wire.found_by,
+        duplicate_boxes=overlap or (wire.pill_count == 1 and len(boxes) > 1),
+        overlapping_boxes=overlap,
+        usable_for_dose_count=False,
+        **extra,
+    )
 
 
 class HttpStage2VisionProvider:
-    """Stage2 client. Maps real JSON -> internal DTOs at ONE boundary.
-
-    ``transport`` is injected (AGENTS.md rule 2); there is no module-level
-    client, session or token.
-    """
-
-    #: Expected only if the live API confirms it (AGENTS.md rule 15).
     EXPECTED_DIMENSION = 256
 
     def __init__(
         self,
         *,
         transport: HttpTransport,
+        contract: Stage2Contract,
         embedding_space_id: str,
         model_version: str,
-        max_retries: int = 2,
+        preprocessing_version: str,
     ) -> None:
-        if max_retries < 0:
-            raise ValueError("max_retries must be >= 0")
-        self._transport = transport
-        self._space_id = embedding_space_id
-        self._model_version = model_version
-        self._max_retries = max_retries
+        if not all((embedding_space_id, model_version, preprocessing_version)):
+            raise ValueError("explicit expected model/space/preprocessing required")
+        self._transport, self._contract = transport, contract
+        self._space_id, self._model_version = embedding_space_id, model_version
+        self._preprocess = preprocessing_version
 
-    # -- /v1/embed -----------------------------------------------------------
+    def _check_versions(self, space: str, model: str, preprocess: str | None = None) -> None:
+        if (space, model) != (self._space_id, self._model_version):
+            raise ModelVersionMismatch("provider embedding space/model drift")
+        if preprocess is not None and preprocess != self._preprocess:
+            raise ModelVersionMismatch("provider preprocessing drift")
+
+    def model_info(self) -> ModelMetadata:
+        wire = project(self._contract, "ModelInfo", self._transport.get_json("/v1/model-info"), ModelInfoWire)
+        self._check_versions(wire.embedding_space_id, wire.model_version, wire.preprocess_version)
+        if wire.api_version != "0.8.0" or wire.embedding_dim != 256:
+            raise ModelVersionMismatch("provider API version/dimension changed")
+        return ModelMetadata(
+            api_version=wire.api_version,
+            model_version=wire.model_version,
+            embedding_space_id=wire.embedding_space_id,
+            preprocessing_version=wire.preprocess_version,
+            dimension=wire.embedding_dim,
+            normalized=wire.normalized,
+            crop_window=wire.crop_window,
+            threshold=wire.threshold,
+            margin=wire.margin,
+            calibration_json=json.dumps(wire.calibration, sort_keys=True),
+            training_coverage=wire.training_coverage,
+            known_limits=wire.known_limits,
+        )
 
     def embed(self, *, image_bytes: bytes, modality: Literal["loose_pill"]) -> EmbeddingResult:
         if modality != "loose_pill":
-            raise UnsupportedModality(
-                "only loose-pill crops belong in the loose-pill embedding space"
-            )
+            raise UnsupportedModality("package/blister cannot use the loose-pill embedding space")
         try:
-            payload = self._transport.post_multipart(
-                "/v1/embed", files={"file": image_bytes}, data={}
-            )
+            payload = self._transport.post_multipart("/v1/embed", {"image": image_bytes}, {})
         except TimeoutError as exc:
-            raise VisionUnavailable(f"/v1/embed timed out: {exc}") from exc
-
-        embedding = payload.get("embedding")
-        if not isinstance(embedding, list) or not embedding:
-            raise VisionSchemaError("/v1/embed returned no embedding array")
-        if not all(isinstance(v, (int, float)) and math.isfinite(v) for v in embedding):
-            raise VisionSchemaError("embedding contains non-finite values")
-        dimension = len(embedding)
-
-        space_id = str(payload.get("embedding_space_id") or self._space_id)
-        model_version = str(payload.get("model_version") or self._model_version)
-        if space_id != self._space_id or model_version != self._model_version:
-            raise ModelVersionMismatch(
-                f"adapter configured for {self._space_id}/{self._model_version}, "
-                f"provider reported {space_id}/{model_version}"
-            )
-        if dimension != self.EXPECTED_DIMENSION:
-            # Not fatal by itself, but must be surfaced: a dimension change
-            # invalidates every stored gallery embedding.
-            raise ModelVersionMismatch(
-                f"embedding dimension {dimension} != expected {self.EXPECTED_DIMENSION}; "
-                "gallery must be re-embedded before any matching"
-            )
+            raise VisionUnavailable("Stage2 embed timeout") from exc
+        wire = project(self._contract, "Embedding", payload, EmbeddingWire)
+        _validate_vector(wire.embedding)
+        if wire.dim != len(wire.embedding):
+            raise ModelVersionMismatch("embedding dim differs from actual vector length")
+        self._check_versions(wire.embedding_space_id, wire.model_version, wire.preprocess_version)
+        if wire.normalized and not math.isclose(sum(v * v for v in wire.embedding), 1.0, abs_tol=1e-3):
+            raise VisionSchemaError("provider normalized declaration conflicts with vector norm")
         return EmbeddingResult(
-            embedding=[float(v) for v in embedding],
-            dimension=dimension,
-            embedding_space_id=space_id,
-            model_version=model_version,
-            normalized=payload.get("normalized"),
-            provider_request_id=payload.get("request_id"),
+            embedding=wire.embedding,
+            dimension=wire.dim,
+            embedding_space_id=wire.embedding_space_id,
+            model_version=wire.model_version,
+            preprocessing_version=wire.preprocess_version,
+            normalized=wire.normalized,
+            imprint_reads=wire.imprint_reads,
+            text_reading=wire.text_reading,
         )
 
-    # -- /v1/match -----------------------------------------------------------
-
-    def match(
-        self, *, queries: list[list[float]], gallery: list[GalleryReference]
-    ) -> MatchOutcome:
-        if not queries:
-            raise VisionSchemaError("at least one query embedding is required")
-        if not gallery:
-            raise VisionSchemaError("at least one gallery reference is required")
-
-        for reference in gallery:
-            if reference.embedding_space_id != self._space_id:
-                raise ModelVersionMismatch(
-                    f"gallery reference {reference.medication_id} belongs to embedding space "
-                    f"{reference.embedding_space_id}, expected {self._space_id}"
-                )
-            for vector in reference.embeddings:
-                if len(vector) != len(queries[0]):
-                    raise ModelVersionMismatch(
-                        "gallery and query vectors have different dimensions"
-                    )
-
-        payload = {
-            "queries": queries,
+    def match(self, *, queries: list[EmbeddingResult], gallery: list[GalleryReference]) -> MatchOutcome:
+        # Existing public result is one dose-check outcome: do not silently drop multi-query results.
+        if len(queries) != 1 or not gallery:
+            raise VisionSchemaError("single-pill match requires one typed query and a nonempty gallery")
+        for query in queries:
+            if not isinstance(query, EmbeddingResult):
+                raise VisionSchemaError("query requires typed embedding metadata, not a bare vector")
+            self._check_versions(query.embedding_space_id, query.model_version, query.preprocessing_version)
+            _validate_vector(query.embedding)
+            if query.dimension != 256:
+                raise ModelVersionMismatch("query dimension declaration mismatch")
+        for ref in gallery:
+            if not isinstance(ref, GalleryReference):
+                raise VisionSchemaError("gallery requires typed reference metadata")
+            self._check_versions(ref.embedding_space_id, ref.model_version, ref.preprocessing_version)
+            if not ref.embeddings:
+                raise VisionSchemaError("gallery reference has no vectors")
+            for vector in ref.embeddings:
+                _validate_vector(vector)
+        request = {
+            "queries": [q.embedding for q in queries],
             "gallery": [
-                {
-                    "medication_id": r.medication_id,
-                    "name": r.name,
-                    "embeddings": r.embeddings,
-                }
+                {"medication_id": r.medication_id, "name": r.name, "embeddings": r.embeddings, "imprint": r.imprint}
                 for r in gallery
             ],
             "model_version": self._model_version,
+            "embedding_space_id": self._space_id,
         }
+        self._contract.validate("MatchRequest", request)
         try:
-            response = self._transport.post_json("/v1/match", payload)
+            payload = self._transport.post_json("/v1/match", request)
         except TimeoutError as exc:
-            # A timeout must NEVER be reported as "unmatched".
-            raise VisionUnavailable(f"/v1/match timed out: {exc}") from exc
-
-        pills = response.get("pills")
-        if not isinstance(pills, list) or not pills:
-            raise VisionSchemaError("/v1/match returned no pills array")
-        first = pills[0]
-        if not isinstance(first, dict):
-            raise VisionSchemaError("/v1/match pill entry is not an object")
-
-        decision = first.get("decision")
-        if decision not in ("match", "unknown", "ambiguous"):
-            raise VisionSchemaError(f"/v1/match returned unsupported decision {decision!r}")
-
+            raise VisionUnavailable("Stage2 match timeout") from exc
+        wire = project(self._contract, "MatchResponse", payload, MatchWire)
+        self._check_versions(wire.embedding_space_id, wire.model_version)
+        if len(wire.results) != 1:
+            raise VisionSchemaError("match result/query cardinality mismatch")
+        item = wire.results[0]
+        ids = {r.medication_id for r in gallery}
+        if item.closest.medication_id not in ids or (item.runner_up and item.runner_up.medication_id not in ids):
+            raise VisionSchemaError("provider referred to a medication outside the supplied gallery")
+        if item.decision == "match" and (not item.medication_id or item.medication_id not in ids):
+            raise VisionSchemaError("matched medication is missing or outside gallery")
+        if item.decision != "match" and item.medication_id is not None:
+            raise VisionSchemaError("nonmatch must not attach a confirmed medication")
         return MatchOutcome(
-            decision=decision,
-            medication_id=first.get("medication_id"),
-            # The v0.4.0 contract exposes no similarity score: leave it None
-            # rather than inventing a probability.
-            score=None,
-            margin=None,
-            model_version=self._model_version,
-            provenance=["stage2:/v1/match"],
+            decision=item.decision,
+            medication_id=item.medication_id,
+            score=item.similarity,
+            threshold=wire.threshold,
+            margin=wire.margin,
+            closest=ReferenceSimilarity(
+                medication_id=item.closest.medication_id, name=item.closest.name, score=item.closest.similarity
+            ),
+            runner_up=(
+                ReferenceSimilarity(
+                    medication_id=item.runner_up.medication_id,
+                    name=item.runner_up.name,
+                    score=item.runner_up.similarity,
+                )
+                if item.runner_up
+                else None
+            ),
+            model_version=wire.model_version,
+            embedding_space_id=wire.embedding_space_id,
+            limits=wire.limits,
+            provenance=["stage2:v0.8.0:/v1/match"],
         )
 
-    # -- /v1/scan (diagnostics only) -----------------------------------------
+    def detect(self, *, image_bytes: bytes) -> ScanDiagnostics:
+        try:
+            payload = self._transport.post_multipart("/v1/detect", {"image": image_bytes}, {})
+        except TimeoutError as exc:
+            raise VisionUnavailable("Stage2 detect timeout") from exc
+        wire = project(self._contract, "DetectResponse", payload, DetectionWire)
+        return detection_dto(wire, input_abstained=bool(wire.input_check and wire.input_check.abstained))
 
     def scan_diagnostics(self, *, image_bytes: bytes) -> ScanDiagnostics:
         try:
-            payload = self._transport.post_multipart(
-                "/v1/scan", files={"file": image_bytes}, data={}
-            )
+            payload = self._transport.post_multipart("/v1/scan", {"image": image_bytes}, {"input_type": "loose_pills"})
         except TimeoutError as exc:
-            raise VisionUnavailable(f"/v1/scan timed out: {exc}") from exc
-
-        raw_boxes = payload.get("boxes") or payload.get("detections") or []
-        boxes: list[ScanBox] = []
-        if isinstance(raw_boxes, list):
-            for raw in raw_boxes:
-                if isinstance(raw, dict):
-                    boxes.append(
-                        ScanBox(
-                            x=_as_float(raw.get("x") or raw.get("x1")),
-                            y=_as_float(raw.get("y") or raw.get("y1")),
-                            w=_as_float(raw.get("w")),
-                            h=_as_float(raw.get("h")),
-                            score=_as_float(raw.get("score")),
-                        )
-                    )
-
-        pill_count = payload.get("pill_count")
-        if not isinstance(pill_count, int):
-            pill_count = len(boxes)
-
-        duplicate = pill_count == 1 and len(boxes) > 1
-        overlapping = _has_overlap(boxes)
-        return ScanDiagnostics(
-            pill_count=pill_count,
-            boxes=boxes,
-            duplicate_boxes=duplicate,
-            overlapping_boxes=overlapping,
-            # Never usable for automated dose counting until the known
-            # single-pill duplicate-box regression is independently fixed.
-            usable_for_dose_count=False,
-            raw_decision=payload.get("decision"),
-            model_version=self._model_version,
+            raise VisionUnavailable("Stage2 scan timeout") from exc
+        wire = project(self._contract, "ScanResponse", payload, ScanWire)
+        if wire.model_version != self._model_version:
+            raise ModelVersionMismatch("scan model version drift")
+        return detection_dto(
+            wire.detection,
+            model_version=wire.model_version,
+            input_abstained=bool(wire.input_check and wire.input_check.abstained),
+            text_reading=wire.text_reading,
+            limits=wire.limits,
         )
 
-    # -- /v1/identify --------------------------------------------------------
-
     def identify_candidates(self, *, image_bytes: bytes, top_k: int = 5) -> list[PillCandidate]:
+        if type(top_k) is not int or not 1 <= top_k <= 10:
+            raise VisionSchemaError("top_k must be between 1 and 10")
         try:
-            payload = self._transport.post_multipart(
-                "/v1/identify", files={"file": image_bytes}, data={"top_k": str(top_k)}
-            )
+            payload = self._transport.post_multipart("/v1/identify", {"images": image_bytes}, {"top_k": str(top_k)})
         except TimeoutError as exc:
-            raise VisionUnavailable(f"/v1/identify timed out: {exc}") from exc
-
-        raw = payload.get("candidates") or payload.get("matches") or []
-        if not isinstance(raw, list):
-            raise VisionSchemaError("/v1/identify candidates is not a list")
-        candidates: list[PillCandidate] = []
-        for item in raw[:top_k]:
-            if not isinstance(item, dict):
-                continue
-            candidates.append(
-                PillCandidate(
-                    external_catalogue_id=str(item.get("pill_id") or item.get("id") or ""),
-                    display_name=item.get("name") or item.get("display_name"),
-                    brand=item.get("brand"),
-                    strength=item.get("strength"),
-                    form=item.get("form"),
-                    market=str(item.get("market") or "US"),
-                    visual_similarity=_as_float(item.get("score") or item.get("similarity")),
-                    source_dataset=item.get("source_dataset") or "stage2_catalogue",
-                )
+            raise VisionUnavailable("Stage2 identify timeout") from exc
+        wire = project(self._contract, "IdentifyResponse", payload, IdentifyWire)
+        if wire.model_version != self._model_version:
+            raise ModelVersionMismatch("identify model version drift")
+        if wire.input_check and wire.input_check.abstained:
+            return []
+        return [
+            PillCandidate(
+                external_catalogue_id=c.pill_id,
+                display_name=c.name,
+                brand=c.brand,
+                strength=c.strength,
+                form=c.dose_form,
+                rxcui=c.rxcui,
+                ingredients=c.ingredients,
+                market=c.market,
+                visual_similarity=c.similarity,
+                source_dataset="NLM C3PI",
+                model_version=wire.model_version,
+                limits=wire.limits,
             )
-        return candidates
-
-
-def _as_float(value: Any) -> float | None:
-    if isinstance(value, bool) or value is None:
-        return None
-    if isinstance(value, (int, float)) and math.isfinite(float(value)):
-        return float(value)
-    return None
-
-
-def _has_overlap(boxes: list[ScanBox]) -> bool:
-    """Measured overlap only; boxes missing geometry cannot be assessed."""
-    for i, first in enumerate(boxes):
-        if None in (first.x, first.y, first.w, first.h):
-            continue
-        for second in boxes[i + 1 :]:
-            if None in (second.x, second.y, second.w, second.h):
-                continue
-            x_overlap = max(0.0, min(first.x + first.w, second.x + second.w) - max(first.x, second.x))
-            y_overlap = max(0.0, min(first.y + first.h, second.y + second.h) - max(first.y, second.y))
-            if x_overlap > 0 and y_overlap > 0:
-                return True
-    return False
+            for c in wire.candidates[:top_k]
+        ]
 
 
 class FakeVisionProvider:
-    """** SIMULATED ** deterministic stand-in for the Stage2 service.
-
-    Used only in tests and in clearly-labelled degraded demo mode. It is NOT
-    a model and its outputs MUST NOT be presented as recognition results.
-    """
+    """SIMULATED deterministic stand-in, never reports live recognition."""
 
     SIMULATED = True
     embedding_space_id = "SIMULATED-space-v0"
     model_version = "SIMULATED-model-v0"
+    preprocessing_version = "SIMULATED-preprocess-v0"
 
     def __init__(
         self,
         *,
-        decision: str = "unknown",
+        decision: MatchDecision = "unknown",
         medication_id: str | None = None,
         dimension: int = 256,
         boxes: list[ScanBox] | None = None,
@@ -300,62 +309,72 @@ class FakeVisionProvider:
         raise_unavailable: bool = False,
         declared_pill_count: int | None = None,
     ) -> None:
-        self._decision = decision
-        self._medication_id = medication_id
-        self._dimension = dimension
-        self._boxes = boxes or []
-        self._candidates = candidates or []
-        self._raise_unavailable = raise_unavailable
-        self._declared_pill_count = declared_pill_count
+        self._decision, self._medication_id, self._dimension = decision, medication_id, dimension
+        self._boxes, self._candidates = boxes or [], candidates or []
+        self._raise_unavailable, self._count = raise_unavailable, declared_pill_count
+
+    def _check(self) -> None:
+        if self._raise_unavailable:
+            raise VisionUnavailable("SIMULATED provider unavailable")
+
+    def model_info(self) -> ModelMetadata:
+        self._check()
+        return ModelMetadata(
+            api_version="SIMULATED",
+            model_version=self.model_version,
+            embedding_space_id=self.embedding_space_id,
+            preprocessing_version=self.preprocessing_version,
+            dimension=self._dimension,
+            normalized=False,
+            crop_window=0,
+            threshold=0,
+            margin=0,
+            calibration_json="{}",
+            training_coverage="SIMULATED",
+            known_limits=["Not a model"],
+        )
 
     def embed(self, *, image_bytes: bytes, modality: Literal["loose_pill"]) -> EmbeddingResult:
+        self._check()
         if modality != "loose_pill":
-            raise UnsupportedModality("SIMULATED provider only supports loose_pill")
-        if self._raise_unavailable:
-            raise VisionUnavailable("SIMULATED provider is marked unavailable")
-        # Deterministic, non-learned vector derived from input length.
-        seed = float(len(image_bytes) % 97) / 97.0
-        vector = [seed] * self._dimension
+            raise UnsupportedModality("SIMULATED loose pill only")
         return EmbeddingResult(
-            embedding=vector,
+            embedding=[0.0] * self._dimension,
             dimension=self._dimension,
             embedding_space_id=self.embedding_space_id,
             model_version=self.model_version,
+            preprocessing_version=self.preprocessing_version,
             normalized=False,
-            provider_request_id="SIMULATED-embed",
+            provider_request_id="SIMULATED",
         )
 
-    def match(
-        self, *, queries: list[list[float]], gallery: list[GalleryReference]
-    ) -> MatchOutcome:
-        if self._raise_unavailable:
-            raise VisionUnavailable("SIMULATED provider is marked unavailable")
+    def match(self, *, queries: list[EmbeddingResult], gallery: list[GalleryReference]) -> MatchOutcome:
+        self._check()
         return MatchOutcome(
-            decision=self._decision,  # type: ignore[arg-type]
+            decision=self._decision,
             medication_id=self._medication_id,
-            score=None,
             model_version=self.model_version,
-            quality_flags=("SIMULATED",),
+            quality_flags=["SIMULATED"],
             provenance=["SIMULATED:fake_vision_provider"],
         )
 
     def scan_diagnostics(self, *, image_bytes: bytes) -> ScanDiagnostics:
-        if self._raise_unavailable:
-            raise VisionUnavailable("SIMULATED provider is marked unavailable")
-        count = self._declared_pill_count if self._declared_pill_count is not None else len(self._boxes)
-        # Mirrors the known real regression: one pill declared, several boxes
-        # returned -> duplicate/overlapping detections.
-        duplicate = count == 1 and len(self._boxes) > 1
+        self._check()
+        overlap = boxes_overlap(self._boxes)
         return ScanDiagnostics(
-            pill_count=count,
-            boxes=list(self._boxes),
-            duplicate_boxes=duplicate,
-            overlapping_boxes=_has_overlap(self._boxes),
-            usable_for_dose_count=False,
+            pill_count=self._count if self._count is not None else len(self._boxes),
+            boxes=self._boxes,
+            duplicate_boxes=overlap,
+            overlapping_boxes=overlap,
             model_version=self.model_version,
         )
 
+    def detect(self, *, image_bytes: bytes) -> ScanDiagnostics:
+        return self.scan_diagnostics(image_bytes=image_bytes)
+
     def identify_candidates(self, *, image_bytes: bytes, top_k: int = 5) -> list[PillCandidate]:
-        if self._raise_unavailable:
-            raise VisionUnavailable("SIMULATED provider is marked unavailable")
-        return list(self._candidates)[:top_k]
+        self._check()
+        return self._candidates[:top_k]
+
+
+__all__ = ["FakeVisionProvider", "HttpStage2VisionProvider", "HttpTransport", "boxes_overlap"]

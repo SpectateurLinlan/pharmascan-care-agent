@@ -18,3 +18,16 @@
 | ADP | vendor tool suggestion | own FastAPI Orchestrator | no ADP for MVP; WorkBuddy for developer assistance and evidence |
 
 **Important:** The prior interactive HTML (`docs/reference/...`) is preserved as a technical snapshot because another owner is already using its API endpoint proposals. Changes described here are client/back-end contracts and *negotiation points*, not instructions to delete/rename the vision owner's routes.
+
+## 2026-10-13 — Stage2 v0.8.0 contract refresh
+
+- Accepted owner-supplied `docs/external/pharmascan-api-openapi-0.8.0.json` as the current **integration candidate**, SHA-256 `393d323e1edb876130a15aa7940fb6e533aff2646769a814f12ca7f34af84ea4`.
+- The old working path was already deleted before this turn; recovered the actual 0.4.0 blob from local Git HEAD into `docs/external/pharmascan-api-openapi-0.4.0.json`, unchanged bytes, SHA-256 `ac5ff97ef7ade85fc36a1b96555a44e24791c4e185f4c24d09f8ede7903a5259`. No recreation from memory, no remote fetch.
+- Corrected historical adapter assumption: previous implementation consumed `/match.pills` and discarded similarity; v0.8.0 explicitly types `results/similarity/closest/runner_up`, threshold and margin. Actual 0.4.0 snapshot has `{}` success schemas for embed/match/identify/scan; the earlier log's statement that 'no similarity' was CONFIRMED by that snapshot was unsupported. The absence of a typed field did NOT prove the live response lacked it. Preserve the old log and append this correction; do not retroactively claim old test payloads were real response validation.
+- Full snapshot schema validation at the adapter boundary; public DTOs reside in contracts, wire projections remain in infrastructure. Additional allowed fields ignored, no aliases or missing-version fallback.
+- Typed query metadata now required; pixel xyxy detection mapped to app geometry. Automatic dose counting stays disabled despite `count_reliable` declarations.
+- Preferred source provider `/v1/read-label`; preserves Printed value/line and review requirement without deriving regimen dose/frequency/times. No second OCR, no activation dependency.
+- SCHEMA_FIXTURE and LIVE evidence stored separately. Two safe live GETs pass schema; no image POST or performance experiment. `/v1/tools` and ScanPill extra fields remain contract gaps. V003 is NOT completed by declared calibration.
+- No server edits, cloud mutations, deployment, remote Git changes or push.
+- Final request-body audit correction: identify uses required `images` array, unlike embed/detect/scan/read-label `image`; single-photo public Port submits one list part and transport rejects wrong endpoint fields. Response-only fixtures were insufficient, so a real multipart-construction test was added. Identify app top_k maximum 10 is intentionally narrower than provider schema 20.
+- Frontend regression runner must execute in frontend process cwd; repo-root --root collected no suites in this environment. No frontend product code change was needed; final 20 tests passed. Final backend counts after upload-security regressions: 176 contract tests / 372 full tests, not earlier 170/366.

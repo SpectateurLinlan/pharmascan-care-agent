@@ -1,0 +1,69 @@
+{
+  "candidates": [
+    {
+      "pill_id": "SCHEMA-pill-a",
+      "name": "Demo medicine",
+      "rxnorm_name": "SCHEMA synthetic name",
+      "generic_name": "SCHEMA synthetic ingredient",
+      "manufacturer": "SCHEMA synthetic manufacturer",
+      "ingredients": [
+        "SCHEMA synthetic ingredient"
+      ],
+      "strength": "SCHEMA synthetic strength",
+      "strengths": [
+        {
+          "ingredient": "SCHEMA-demo-only",
+          "strength": "SCHEMA-demo-only"
+        }
+      ],
+      "dose_form": "SCHEMA-demo-only",
+      "release": "IR",
+      "brand": "SCHEMA-demo-only",
+      "brand_or_generic": "brand",
+      "pack": [
+        {
+          "synthetic": "demo_only"
+        }
+      ],
+      "ndc9": "SCHEMA-demo-only",
+      "ndc11": "SCHEMA-demo-only",
+      "rxcui": "SCHEMA-not-a-real-rxcui",
+      "rxnorm_status": "SCHEMA-demo-only",
+      "market": "US",
+      "shape": "SCHEMA-demo-only",
+      "colour": "SCHEMA-demo-only",
+      "size_mm": 1,
+      "imprint": "SCHEMA-A",
+      "images": [
+        {
+          "url": "/demo_only/synthetic-pill.png",
+          "kind": "SCHEMA-synthetic-not-fetched"
+        }
+      ],
+      "image_licence": "SCHEMA-demo-only",
+      "similarity": 0.99,
+      "imprint_match": false,
+      "imprint_read": 0.0
+    }
+  ],
+  "notes": [
+    "SCHEMA_FIXTURE / demo_only：合成视觉证据，不确认药品、剂量、安全性或服药。"
+  ],
+  "note": "SCHEMA_FIXTURE / demo_only：合成视觉证据，不确认药品、剂量、安全性或服药。",
+  "confidence": null,
+  "catalogue_fit": "weak",
+  "verdict": "uncertain",
+  "verdict_message": "SCHEMA_FIXTURE / demo_only：合成视觉证据，不确认药品、剂量、安全性或服药。",
+  "imprint_reads": null,
+  "input_check": {
+    "type": "loose_pills",
+    "checked": true,
+    "abstained": false,
+    "caption": "SCHEMA 合成散装药片",
+    "message": null
+  },
+  "text_reading": "not_requested",
+  "model_version": "SCHEMA-model-v0.8.0",
+  "evidence": "visual",
+  "limits": "SCHEMA_FIXTURE / demo_only：合成视觉证据，不确认药品、剂量、安全性或服药。"
+}
