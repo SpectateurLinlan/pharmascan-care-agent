@@ -1,5 +1,5 @@
 {
-  "snapshot": "2026-10-13T06:30:00+08:00",
+  "snapshot": "2026-10-13T14:00:00+08:00",
   "status_legend": {
     "todo": "not verified/unfinished",
     "in_progress": "being worked on (verified log needed)",
@@ -19,8 +19,8 @@
       "requirement": "WorkBuddy prep",
       "dependency": "",
       "status": "done",
-      "evidence": "",
-      "updated_at": ""
+      "evidence": "REAL: canonical docs exist in-repo and are packaged — AGENTS.md (57 lines, 30 rules), docs/ARCHITECTURE.md (103), docs/DATA_MODEL.md (78), docs/API_CONTRACTS.md (116), docs/SAFETY_AND_EVALUATION.md (81), docs/BUILD_PLAN.md (110), plus MASTER_SPEC.md and an exported openapi.json. Acceptance met. (Evidence field was previously empty.)",
+      "updated_at": "2026-10-13T14:00:00+08:00"
     },
     {
       "id": "D002",
@@ -64,8 +64,8 @@
       "requirement": "Eligibility",
       "dependency": "",
       "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "evidence": "NOT DONE: acceptance requires an authentic WorkBuddy conversation screenshot plus a review of gaps. No such artefact exists in the repo (no screenshot, no review note). Marked todo rather than done — nothing to show. ",
+      "updated_at": "2026-10-13T14:00:00+08:00"
     },
     {
       "id": "D005",
@@ -78,9 +78,9 @@
       "acceptance": "Local code/tests produced; work log has real results",
       "requirement": "Eligibility",
       "dependency": "D004",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "done",
+      "evidence": "REAL: overnight Craft session produced local code + tests + an append-only work log. Session 2 commits 648d037 (transport layer) and 7248a84 (minimal UI); status/WORK_LOG.md records real commands and results; tests/ grew from 0 to 138 and to 220 by Session 3A. Acceptance ('local code/tests produced; work log has real results') is satisfied by artefacts in-repo.",
+      "updated_at": "2026-10-13T14:00:00+08:00"
     },
     {
       "id": "D006",
@@ -198,9 +198,9 @@
       "acceptance": "Agent resumes tasks; tool calls and blocked actions auditable",
       "requirement": "AI interaction",
       "dependency": "B002",
-      "status": "done",
-      "evidence": "REAL: FastAPI transport implemented (backend/app/transport/*) with typed request/response schemas and domain-error->HTTP mapping; 26 transport tests pass; full suite 138 passed; E2E verified against a live uvicorn server (health/demo/draft/review/challenge/activate/list/due/agent all 200). Persistence is the in-memory fake: SIMULATED, not a real DB (B02).",
-      "updated_at": "2026-10-13T04:30:00+08:00"
+      "status": "in_progress",
+      "evidence": "PARTIAL / SIMULATED: agent sessions and tool traces are fully implemented (bounded orchestrator, redacted traces, cross-patient session refusal) and verified by tests — BUT storage is the in-memory fake (B02). Sessions and traces are lost on restart, so the word 'persistent' in the title is NOT met. Live acceptance ('agent resumes tasks; tool calls auditable') cannot be claimed until a real database exists. NOT downgrading the code: only the persistence claim.",
+      "updated_at": "2026-10-13T14:00:00+08:00"
     },
     {
       "id": "V001",
@@ -333,9 +333,9 @@
       "acceptance": "Live status labeled; mock never reported as real success",
       "requirement": "Technical execution",
       "dependency": "A001,V001",
-      "status": "done",
-      "evidence": "REAL: /api/agent/messages routes through the bounded orchestrator (MAX_STEPS_PER_TURN=4); every response carries mode=deterministic_degraded; tool traces redacted; cross-patient session reuse refused. Skill LLM routing itself remains DEGRADED (no key, B03).",
-      "updated_at": "2026-10-13T04:30:00+08:00"
+      "status": "in_progress",
+      "evidence": "PARTIAL: HttpStage2VisionProvider exists with timeout handling and mock isolation; a timeout is verified to raise VisionUnavailable and never to become a successful match (tests/backend/test_agent.py::test_vision_provider_timeout_never_becomes_a_successful_match). NOT verified against a live Stage2 endpoint — the live contract is unconfirmed (B01), so 'live status labeled' is only half-met. PREVIOUS EVIDENCE WAS MIS-ATTRIBUTED: it described the agent orchestrator, not this task.",
+      "updated_at": "2026-10-13T14:00:00+08:00"
     },
     {
       "id": "A005",
@@ -513,9 +513,9 @@
       "acceptance": "New evaluator gets own data; no email needed; reset works",
       "requirement": "Demo",
       "dependency": "B003",
-      "status": "done",
-      "evidence": "REAL: typed API client (frontend/src/api/client.ts) mirrors backend schemas; refusals surface as typed ApiError with the stable code; sendMessage/activate/report idempotency key wired.",
-      "updated_at": ""
+      "status": "in_progress",
+      "evidence": "PARTIAL: 'Try Demo' works and needs no email — a fresh client_id gets its own anonymous patient id and its own seeded records; isolation verified by tests/backend/test_transport.py::test_demo_start_isolates_different_clients. BUT 'reset works' is NOT met: there is no Reset Demo endpoint or button. Also seeded_medication_count is currently 0, so the demo does not yet start from a curated 7-day synthetic record. PREVIOUS EVIDENCE WAS MIS-ATTRIBUTED (it described the frontend API client).",
+      "updated_at": "2026-10-13T14:00:00+08:00"
     },
     {
       "id": "F003",
@@ -543,9 +543,9 @@
       "acceptance": "Taken/Check/Not now/Unsure; not mandatory photo",
       "requirement": "Adherence support",
       "dependency": "B006,A005",
-      "status": "done",
-      "evidence": "REAL: medication draft -> review -> confirm -> activate flow implemented against the real endpoints; each backend refusal is rendered with its code, never swallowed.",
-      "updated_at": ""
+      "status": "in_progress",
+      "evidence": "PARTIAL: Taken / Not now / Unsure are implemented and wired to the real report endpoint (tests/backend/test_transport_self_report.py, 7 tests). 'Check' is deliberately DISABLED and labelled unavailable — no camera pipeline and no live vision provider (B01/B06). The 'not mandatory photo' half of the acceptance IS met (nothing forces a photo); the optional photo path itself is NOT built. PREVIOUS EVIDENCE WAS MIS-ATTRIBUTED (it described the enrollment draft flow).",
+      "updated_at": "2026-10-13T14:00:00+08:00"
     },
     {
       "id": "F005",
@@ -573,9 +573,9 @@
       "acceptance": "6 challenge capabilities accessible in UI",
       "requirement": "Challenge 2",
       "dependency": "L003",
-      "status": "done",
-      "evidence": "REAL: portrait-first layout, 52px minimum touch targets, prefers-color-scheme light/dark, and a Not-built-yet screen listing unfinished pages verbatim.",
-      "updated_at": ""
+      "status": "in_progress",
+      "evidence": "PARTIAL: Today (due dose + self report), Medications (list + enroll) and Assistant are real screens. History exists as an expandable section inside Today. Health / Prevention / Review are NOT built — they are listed verbatim on the 'Not built yet' screen, which is a disclosure, NOT completion evidence. So 3 of 6 capabilities are accessible, not 6. Downgraded from done->in_progress: a placeholder page must never be recorded as a finished screen.",
+      "updated_at": "2026-10-13T14:00:00+08:00"
     },
     {
       "id": "T001",
@@ -618,9 +618,9 @@
       "acceptance": "Actual outputs and failures recorded; no invented pass",
       "requirement": "Technical execution",
       "dependency": "B001,F001",
-      "status": "todo",
-      "evidence": "",
-      "updated_at": ""
+      "status": "in_progress",
+      "evidence": "PARTIAL — split honestly. VERIFIED LOCAL: ruff check backend tests = clean; pytest tests/ = 220 passed; frontend tsc --noEmit = clean; vitest = 20 passed (3 files: client 5, EnrollScreen 7, reminders 8); vite build succeeds. BLOCKED: the real database migration (supabase/migrations/*.sql) has NEVER been executed — no PostgreSQL and no Docker on this machine (B02), so only STATIC migration checks run (tests/test_migrations.py, 23 passed). The word 'migrations' in the acceptance is therefore NOT verified.",
+      "updated_at": "2026-10-13T14:00:00+08:00"
     },
     {
       "id": "T004",
