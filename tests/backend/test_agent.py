@@ -61,6 +61,7 @@ def test_tool_registry_exposes_only_the_documented_allowlist(agent):
     assert registry.allowlist == {
         ToolName.LIST_ACTIVE_MEDICATIONS,
         ToolName.GET_MEDICATION_HISTORY,
+        ToolName.GET_DOSE_STATUS,
         ToolName.ENROLL_MEDICATION_DRAFT,
         ToolName.CONFIRM_REGIMEN_DRAFT,
         ToolName.CHECK_DUE_DOSE,
