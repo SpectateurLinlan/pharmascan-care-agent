@@ -118,6 +118,51 @@ def test_tonight_queries_future_reviewed_occurrence_not_generic_count(agent, wir
     assert not wired.store.events
 
 
+@pytest.mark.parametrize("language,text", [("en", "Do I need medicine today?"), ("zh", "今天需要吃药吗？")])
+def test_today_question_lists_named_doses_including_later_today_without_intake_write(agent, wired, language, text):
+    orchestrator, _ = agent
+    result, _ = _activate_via_services(wired, times=("08:00", "20:00"), add_extra_rule=False)
+    session = orchestrator.start_session(patient_id=PATIENT)
+    reply = orchestrator.handle_turn(
+        patient_id=PATIENT, session_id=session.id, turn=AgentTurn(text=text, language=language)
+    )
+    payload = reply.tool_results[-1].payload
+    assert payload["window"] == "today"
+    assert {row["local_time"] for row in payload["schedule"]} == {"08:00", "20:00"}
+    assert result.medication.display_name in reply.message
+    assert "08:00" in reply.message and "20:00" in reply.message
+    assert "1 片" in reply.message if language == "zh" else "1 tablet" in reply.message
+    assert not wired.store.events and reply.pending_report is None
+    other = orchestrator.start_session(patient_id=OTHER_PATIENT)
+    isolated = orchestrator.handle_turn(
+        patient_id=OTHER_PATIENT, session_id=other.id, turn=AgentTurn(text=text, language=language)
+    )
+    assert result.medication.display_name not in isolated.message
+    assert isolated.tool_results[-1].payload["schedule"] == []
+
+
+@pytest.mark.parametrize("language", ["en", "zh"])
+def test_due_tool_returns_name_quantity_time_for_grounded_reply_without_new_intake(agent, wired, language):
+    from app.agent.tools import CheckDueDoseRequest
+
+    orchestrator, registry = agent
+    result, _ = _activate_via_services(wired, times=("00:00",), add_extra_rule=False)
+    wired.clock.advance(hours=17)
+    session = orchestrator.start_session(patient_id=PATIENT)
+    due = registry.execute(
+        ToolName.CHECK_DUE_DOSE,
+        CheckDueDoseRequest(
+            patient_id=PATIENT, session_id=session.id, correlation_id=UUID(int=700), client_turn_id="due-demo"
+        ),
+    )
+    row = due.payload["due_doses"][0]
+    assert row["medication_name"] == result.medication.display_name
+    assert row["dose_amount"] == 1 and row["dose_unit"] == "tablet" and row["local_time"] == "00:00"
+    message = orchestrator.render_results(AgentIntent.CLARIFICATION, [due], language)
+    assert result.medication.display_name in message and "00:00" in message
+    assert not wired.store.events
+
+
 @pytest.mark.parametrize("text", ["I'm not sure whether I took it.", "我不确定是否吃过药。"])
 def test_uncertainty_is_read_only_no_challenge_or_dose_event(agent, wired, text):
     orchestrator, _ = agent

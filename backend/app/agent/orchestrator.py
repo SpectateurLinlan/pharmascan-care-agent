@@ -556,11 +556,27 @@ class AgentOrchestrator:
 
         if intent == AgentIntent.CLARIFICATION and any(
             phrase in turn.text.lower()
-            for phrase in ("what is due", "what medicine should", "which medicine is due", "今晚", "吃什么药")
+            for phrase in (
+                "what is due",
+                "what medicine should",
+                "which medicine is due",
+                "medicine today",
+                "medication today",
+                "今晚",
+                "吃什么药",
+                "今天需要吃药",
+                "今天要吃药",
+                "今日用药",
+            )
         ):
             if ToolName.CHECK_DUE_DOSE not in executed:
                 return ToolName.CHECK_DUE_DOSE, CheckDueDoseRequest(
-                    **base, window="tonight" if ("tonight" in turn.text.lower() or "今晚" in turn.text) else "due"
+                    **base,
+                    window="tonight"
+                    if ("tonight" in turn.text.lower() or "今晚" in turn.text)
+                    else "today"
+                    if ("today" in turn.text.lower() or "今天" in turn.text or "今日" in turn.text)
+                    else "due",
                 )
             return None
 
@@ -806,22 +822,9 @@ def _summarise(result: ToolResult) -> str:
             "Doses with no report are not counted as missed."
         )
     if result.tool_name == ToolName.CHECK_DUE_DOSE:
-        if result.payload.get("window") == "tonight":
-            rows = result.payload.get("schedule", [])
-            if not rows:
-                return (
-                    "No evening dose is scheduled in your reviewed active record tonight (18:00-24:00, Asia/Singapore)."
-                )
-            return (
-                "Your reviewed schedule tonight: "
-                + "; ".join(
-                    f"{row['medication_name']}: {row['dose_amount']} {row['dose_unit']} "
-                    f"at {row['local_time']} ({row['intake_status'].replace('_', ' ')})"
-                    for row in rows
-                )
-                + ". These are your recorded instructions."
-            )
-        return f"{result.payload.get('item_count', 0)} dose(s) are due now."
+        from .schedule_reply import schedule_reply
+
+        return schedule_reply(result, "en")
     if result.tool_name == ToolName.GET_DOSE_STATUS:
         return _describe_dose_status(result)
     return f"{result.tool_name} completed."

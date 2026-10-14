@@ -140,16 +140,21 @@ def test_severe_health_description_gets_conditional_help_not_diagnosis_or_intake
     assert not wired.store.challenges
 
 
-def test_function_result_roundtrip_is_id_bound_and_no_fake_medication(agent, wired):
+@pytest.mark.parametrize(
+    "window,text", [("tonight", "What medicine should I take tonight?"), ("today", "今天需要吃药吗？")]
+)
+def test_function_result_roundtrip_is_id_bound_and_no_fake_medication(agent, wired, window, text):
     model = Scripted(
         [
-            ModelReply(calls=[FunctionCall(id="call-demo", name="check_due_dose", arguments={"window": "tonight"})]),
+            ModelReply(calls=[FunctionCall(id="call-demo", name="check_due_dose", arguments={"window": window})]),
             ModelReply(text="Take fabricated medicine now."),
         ]
     )
     session = agent[0].start_session(patient_id=PATIENT)
     reply = service(agent, wired, model).handle_turn(
-        patient_id=PATIENT, session_id=session.id, turn=AgentTurn(text="What medicine should I take tonight?")
+        patient_id=PATIENT,
+        session_id=session.id,
+        turn=AgentTurn(text=text, language="zh" if window == "today" else "en"),
     )
     assert reply.mode == "gemini" and "fabricated" not in reply.message
     result = model.requests[1]["history"][-1]

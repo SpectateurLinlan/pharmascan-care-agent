@@ -283,19 +283,71 @@ def test_live_preferences_reload_and_rls_isolation(live):
     response = app.put("/api/me/preferences", headers=headers, json={"preferred_language": "zh", "text_size": "large"})
     assert response.status_code == 200
     assert response.json()["speech_locale"] == "zh-CN"
+    assert response.json()["text_scale_percent"] == 125
+    scaled = app.put("/api/me/preferences", headers=headers, json={"text_scale_percent": 133})
+    assert scaled.status_code == 200 and scaled.json()["text_scale_percent"] == 133
+    assert app.get("/api/me/preferences", headers=headers).json()["text_scale_percent"] == 133
     assert app.get("/api/me/preferences", headers=headers).json()["preferred_language"] == "zh"
     # Intentionally no owner WHERE: profile RLS, not developer filtering.
     rows = clients[1].rows("patient_profiles")
     assert len(rows) == 1 and rows[0]["user_id"] == str(identities[1][0])
     assert rows[0]["language"] == "en"
+    assert rows[0]["text_scale_percent"] == 100
     assert (
         clients[1].request(
-            "PATCH", "/rest/v1/patient_profiles", params={"user_id": f"eq.{identities[0][0]}"}, body={"language": "en"}
+            "PATCH",
+            "/rest/v1/patient_profiles",
+            params={"user_id": f"eq.{identities[0][0]}"},
+            body={"language": "en", "text_scale_percent": 150},
         )
         == []
     )
     assert app.get("/api/me/preferences", headers=headers).json()["preferred_language"] == "zh"
+    assert app.get("/api/me/preferences", headers=headers).json()["text_scale_percent"] == 133
     app.put("/api/me/preferences", headers=headers, json={"preferred_language": "en", "text_size": "standard"})
+
+
+def test_live_caregiver_contacts_owned_persistent_and_never_verified(live):
+    _settings, identities, clients, app, _clock = live
+    a = {"Authorization": "Bearer " + identities[0][1]}
+    b = {"Authorization": "Bearer " + identities[1][1]}
+    contact_id = str(uuid4())
+    details = {
+        "id": contact_id,
+        "name": "DEMO Synthetic Caregiver",
+        "relationship": "DEMO relative",
+        "contact_type": "email",
+        "contact_value": "synthetic.caregiver@example.invalid",
+        "storage_consent": True,
+    }
+    saved = app.post("/api/me/caregivers", headers=a, json=details)
+    assert saved.status_code == 200
+    row = saved.json()
+    assert row["verification_status"] == "pending" and row["notifications_enabled"] is False
+    assert app.post("/api/me/caregivers", headers=a, json=details).json() == row
+    assert any(value["id"] == contact_id for value in app.get("/api/me/caregivers", headers=a).json())
+    # Deliberately omit an application owner filter: actual RLS must isolate.
+    assert not clients[1].rows("caregiver_contacts")
+    update = {key: value for key, value in details.items() if key != "id"}
+    assert app.put(f"/api/me/caregivers/{contact_id}", headers=b, json=update).status_code == 404
+    assert app.delete(f"/api/me/caregivers/{contact_id}", headers=b).status_code == 404
+    assert (
+        clients[1].request(
+            "PATCH", "/rest/v1/caregiver_contacts", params={"id": f"eq.{contact_id}"}, body={"name": "DEMO forged"}
+        )
+        == []
+    )
+    assert clients[1].request("DELETE", "/rest/v1/caregiver_contacts", params={"id": f"eq.{contact_id}"}) == []
+    with pytest.raises(AuthenticationRequiredError):
+        clients[1].request("POST", "/rest/v1/caregiver_contacts", body={**row, "id": str(uuid4())})
+    for body in [{"verification_status": "verified"}, {"notifications_enabled": True}, {"sharing_enabled": True}]:
+        with pytest.raises(ValidationError):
+            clients[0].request("PATCH", "/rest/v1/caregiver_contacts", params={"id": f"eq.{contact_id}"}, body=body)
+    changed = app.put(f"/api/me/caregivers/{contact_id}", headers=a, json={**update, "name": "DEMO Updated Caregiver"})
+    assert changed.status_code == 200 and changed.json()["name"] == "DEMO Updated Caregiver"
+    assert app.get("/api/me/caregivers", headers=a).json()[0]["sharing_enabled"] is False
+    assert app.delete(f"/api/me/caregivers/{contact_id}", headers=a).status_code == 200
+    assert app.get("/api/me/caregivers", headers=a).json() == []
 
 
 def test_live_reviewed_course_dates_persist_and_reject_outside_window(course_live):

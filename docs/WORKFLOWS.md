@@ -217,3 +217,19 @@ Current limitations: resolving the disposition of contradictory documents and me
 Latest final combined A/B/C run:1 passed (4.4m). Real provider/account paths, synthetic images. Linked source review/date views were exercised through Gallery. Main Gallery private-thumbnail capture uses a separate real Auth/DB/Storage test without model/speech calls, because an early screenshot captured the loading state before the authenticated image decoded.
 
 Thumbnail-only final test:1 passed (1.2m), real Auth/DB/Storage, zero model/speech calls. Artifacts: gallery-thumbnail390.png, gallery-thumbnail430.png, gallery-thumbnail-desktop.png; plus demoA-package390.png, demoA-today390.png, demoB-reference390.png, demoB-result390.png, demoC-conflict390.png, demoC-restored430.png, demoC-desktop.png and demoC-restored-zh390.png under outputs/gallery-demo.
+
+## Daily actions and schedule questions (2026-10-15)
+
+Today keeps each medicine's reviewed name/dose/times/course and report/reminder status visible. Expand View medication actions to reveal Compare a pill photo, patient self-report and snooze controls. Photo comparison has camera/upload guidance and cannot establish safe-to-take status. Preparing a report still opens the independent B14 sheet; no event before explicit confirmation.
+
+Ask Do I need medicine today? or the corresponding Chinese question to query window=today. The typed tool reads actual active reviewed plans and all local-day occurrences, including later times. Due-now queries use window=due; tonight uses the evening window. Responses list names, quantities, local times and patient report states from tool results; no report is not missed. PRN has no inferred scheduled time. Local and scripted model tests verify this change; no new live Gemini call was performed. Current live acceptance should recheck the question after backend restart.
+
+## Single daily overview and numeric text (2026-10-15)
+
+Today's medication is a single container. All current medicine names, reviewed amounts/units and fixed times or PRN are visible as compact choices; the detail carousel presents one at a time. Swipe, tap a choice or use previous/next. Offscreen slides remain inert and each regimen keeps the existing due/report/reminder workflow. No identity merging or record mutation occurs by navigating. Expand actions only for the selected medicine, then prepare/confirm a self-report normally.
+
+Me/Settings -> Accessibility -> Text size: drag100–150%, preview every interface font, release (or finish keyboard adjustment) to save through the same-user preference API. Reload restores the exact integer percentage; failed writes restore the last saved size. Larger text is allowed to increase content height, with adaptive header/navigation spacing, rather than hiding text to force a fixed-height card.
+
+## Add caregiver contact (2026-10-15)
+
+Me -> Caregiver contacts -> Add caregiver contact -> enter name, optional relationship, email or country-coded phone -> acknowledge permission to store -> Save. Saved contacts reload from owned persistence. Edit requires explicit storage acknowledgement; Delete opens a separate confirmation sheet, and Cancel retains the contact. Status remains Not verified / Notifications off / No record access. This flow sends no invitation or medical data, creates no dose event and never changes a regimen. Real backend A/B tests and synthetic Chrome150%/390px UI tests are separate verification evidence.

@@ -105,10 +105,12 @@ function withClient(path: string, extra?: Record<string, string>): string {
 export interface PatientPreferences {
   display_name?:string|null;
   patient_id:string;preferred_language:'en'|'zh';speech_locale:'en-SG'|'zh-CN';
-  text_size:'standard'|'large';voice_enabled:boolean;tts_autoplay:boolean;reminder_lead_minutes:number;
+  text_size:'standard'|'large';text_scale_percent?:number;voice_enabled:boolean;tts_autoplay:boolean;reminder_lead_minutes:number;
   timezone:string;created_at:string;updated_at:string;
 }
-export type PreferenceUpdate=Partial<Pick<PatientPreferences,'display_name'|'preferred_language'|'text_size'|'voice_enabled'|'tts_autoplay'|'reminder_lead_minutes'>>;
+export interface CaregiverDetails {name:string;relationship:string|null;contact_type:'email'|'phone';contact_value:string;storage_consent:true}
+export interface CaregiverContact extends CaregiverDetails {id:string;patient_id:string;verification_status:'pending';notifications_enabled:false;sharing_enabled:false;created_at:string;updated_at:string;demo_only:true}
+export type PreferenceUpdate=Partial<Pick<PatientPreferences,'display_name'|'preferred_language'|'text_size'|'text_scale_percent'|'voice_enabled'|'tts_autoplay'|'reminder_lead_minutes'>>;
 
 export interface HealthObservation {id:string;patient_id:string;description:string;occurred_at:string;severity:'mild'|'moderate'|'severe'|null;notes:string|null;medication_id:string|null;source:'patient_reported';created_at:string;updated_at:string;demo_only:true}
 export type ObservationInput=Pick<HealthObservation,'id'|'description'|'occurred_at'|'severity'|'notes'|'medication_id'> & {confirmed:boolean};
@@ -351,6 +353,10 @@ export const api = {
   })).blob(),
   agentUsage:()=>request<AgentUsage>(withClient("/api/agent/usage")),
   preferences:()=>request<PatientPreferences>(withClient('/api/me/preferences')),
+  caregivers:()=>request<CaregiverContact[]>(withClient('/api/me/caregivers')),
+  createCaregiver:(details:CaregiverDetails&{id:string})=>request<CaregiverContact>(withClient('/api/me/caregivers'),{method:'POST',body:JSON.stringify(details)}),
+  updateCaregiver:(id:string,details:CaregiverDetails)=>request<CaregiverContact>(withClient(`/api/me/caregivers/${encodeURIComponent(id)}`),{method:'PUT',body:JSON.stringify(details)}),
+  deleteCaregiver:(id:string)=>request<{deleted:true}>(withClient(`/api/me/caregivers/${encodeURIComponent(id)}`),{method:'DELETE'}),
   updatePreferences:(changes:PreferenceUpdate)=>request<PatientPreferences>(withClient('/api/me/preferences'),{method:'PUT',body:JSON.stringify(changes)}),
   health: () => request<HealthResponse>('/api/health'),
 

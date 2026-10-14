@@ -15,5 +15,5 @@ it('failed medication read is shown as unavailable instead of zero active medici
  vi.mocked(api.preferences).mockResolvedValue({patient_id:'demo-patient',preferred_language:'en',speech_locale:'en-SG',text_size:'standard',voice_enabled:true,tts_autoplay:false,reminder_lead_minutes:0,timezone:'Asia/Singapore',created_at:'2026-10-14T00:00:00Z',updated_at:'2026-10-14T00:00:00Z'});
  vi.mocked(api.startDemo).mockResolvedValue({patient_id:'demo-patient',session_id:'demo-session',demo_only:true,seeded_medication_count:0,note:'demo_only'});
  vi.mocked(api.listMedications).mockRejectedValue(new Error('Records unavailable'));vi.mocked(api.regimenHistory).mockResolvedValue([]);
- render(<App/>);await waitFor(()=>expect(screen.getByText(/unavailable record is not an empty medication list/)).toBeTruthy());expect(screen.queryByRole('button',{name:'Check my medicine'})).toBeNull();
+ render(<App/>);await waitFor(()=>expect(screen.getByText(/unavailable record is not an empty medication list/)).toBeTruthy());expect(screen.queryByRole('button',{name:'Compare a pill photo'})).toBeNull();
 });

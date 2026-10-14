@@ -125,13 +125,19 @@ The medication lifecycle connects four activities:
 
 | Destination | Current patient experience |
 |---|---|
-| **Today** | Reviewed medication/dose/course information, current occurrence, Check my medicine, intake-report actions, reminders and a compact voice/text composer. |
+| **Today** | One overview lists every current medicine with dose/time; tap a medicine, swipe the shared detail area or use previous/next. Expand the selected medicine's actions to compare a pill photo, prepare an intake report or snooze a reminder. |
 | **Medicines** | Current/upcoming medications, historical courses, unfinished registration and separate label/manual-add workflows. Personal gallery is grouped by product, with private thumbnails and current/historical courses. |
-| **Assistant** | Contextual questions, editable speech transcripts, typed fallback, response playback and separate consequential-action confirmation. |
+| **Assistant** | Contextual questions, editable speech transcripts, typed fallback, response playback and separate consequential-action confirmation. Send stays beside the microphone in the composer; empty messages cannot be sent. |
 | **History** | Patient-reported taken/not taken/unsure records, optional reviewed health notes and patient-initiated summary/export. |
 | **Me** | Independent profile, account, reminders, language/speech, accessibility, privacy, About and feedback pages. |
 
 The UI keeps PharmaScan's teal identity, fixed header Back control and mobile navigation. Its main design target is 390–430px portrait, with desktop support and accessible text/touch controls. Technical diagnostics are available through secondary views.
+
+First visit opens a short English/Chinese guide once records have loaded. White coach marks explain Today, Medicines, photo input, microphone/transcript/Send, dose confirmation, voice defaults and the account menu. Skip or finish remembers dismissal in this browser; reopen it from **Me → Quick start guide** or **Settings → Quick start guide**. The guide reads current preferences and never changes them. Automatic reading remains off by default; use **Settings → Language and speech → Read replies automatically** to enable it.
+
+The header provides a gear for Settings and a person icon for Me, labelled with the current Auth account state. It shows a guest/member/local-demo state without displaying email or internal identifiers. Guide completion is browser-local and contains no patient data.
+
+**Settings → Accessibility → Text size** uses a numeric **100–150%** slider. All interface text, including headings, buttons, navigation, messages and dialogs, scales together. Changes preview while dragging and save to the authenticated patient profile on release or keyboard adjustment; reload restores the value. Existing Standard/Large settings map to 100/125%. At large sizes content can scroll rather than being clipped; the header/navigation and composer spacing adapt to their measured height.
 
 ## Current capability status
 
@@ -150,6 +156,7 @@ The UI keeps PharmaScan's teal identity, fixed header Back control and mobile na
 | Reminders | Occurrence-bound snooze, server-derived due alerts, in-app prompts and optional browser notifications. | Active/reopened app only; no reliable closed-browser delivery. |
 | Health summaries | Reviewed health-note CRUD; deterministic week/month/course summaries from stored records. | Summarises stored schedules, reports, health notes and unresolved items. |
 | Account/feedback | Anonymous Auth, email OTP/Magic Link/password UI and private persisted feedback. | Email delivery/linking MANUAL PENDING; real Singpass/caregiver delivery not integrated. |
+| Caregiver contacts | Me → Caregiver contacts supports private add/edit/delete/reload with explicit storage permission. REAL LIVE Supabase A/B isolation verified. | Contacts remain unverified; no account linking, invitation, notification or record access is enabled. |
 
 ## Repository structure
 
@@ -182,7 +189,7 @@ pharmascan-care-agent/
 │   ├── e2e/                          # Playwright browser scenarios
 │   └── package.json                  # Frontend scripts/dependencies
 ├── supabase/
-│   ├── migrations/                   # Versioned PostgreSQL migrations 001–014
+│   ├── migrations/                   # Versioned PostgreSQL migrations 001–020
 │   └── rollback/                     # Corresponding rollback definitions
 ├── scripts/                          # Explicit DB setup/verification utilities
 ├── tests/                            # Backend/domain/contracts/live regressions
@@ -190,7 +197,7 @@ pharmascan-care-agent/
 ├── docs/                             # Canonical detailed documentation
 │   ├── external/                     # Frozen Stage2 OpenAPI snapshots
 │   └── reference/                    # Historical design/source references
-└── assets/                           # Asset documentation/submission assets
+└── assets/                           # Local submission media (ignored; not required to run)
 ```
 
 Local development records live in `status/`, `prompts/`, `outputs/` and `evidence/`, following the existing publication policy. Generated environments, caches and dependency directories are omitted from this tree.
@@ -270,7 +277,7 @@ Cloud TTS requires **both** deliberate server enablement (`TTS_PROVIDER=tencent`
 
 Stage2 is an independently maintained, stateless image service. The app integrates its [v0.8.0 OpenAPI contract](docs/external/pharmascan-api-openapi-0.8.0.json) through a typed adapter. The adapter supports compatible upstream 0.9 read-only responses while preserving embedding/reference compatibility checks.
 
-Check my medicine opens camera/upload, preview and consented evidence checking. Results include visual similarity and candidate evidence. Detector counts are used when `count_reliable=true`; query/reference model, embedding space and preprocessing must agree. Inadequate evidence or ineligible references return unknown/ambiguous.
+**Compare a pill photo / 拍照核对药片** opens camera/upload, preview and consented evidence checking. The page explains what the photo is used for and the limits of its result. Results include visual similarity and candidate evidence. Detector counts are used when `count_reliable=true`; query/reference model, embedding space and preprocessing must agree. Inadequate evidence or ineligible references return unknown/ambiguous.
 
 Read-label retains `Printed.value`/`Printed.line` and field-level provenance. Product strength is separate from personal dose. Patients review extracted evidence, complete missing dose/schedule/course/food instructions, and explicitly activate the regimen. See [Stage2 API gaps/owner handoff](docs/STAGE2_API_GAPS.md).
 
@@ -311,9 +318,9 @@ Latest recorded checks (15 October 2026):
 
 | Check | Recorded result / evidence |
 |---|---|
-| Full backend local suite | **573 passed, 19 skipped, 1 warning**; VERIFIED LOCAL. |
+| Full backend local suite | **586 passed, 20 skipped, 1 warning**; VERIFIED LOCAL (dependency deprecation; cache disabled). |
 | Ruff; frontend lint/typecheck/build | Passed; VERIFIED LOCAL. |
-| Frontend Vitest | **80 passed, 14 files**; VERIFIED LOCAL. |
+| Frontend Vitest | **93 passed, 18 files**; VERIFIED LOCAL. |
 | Expired-session reload | REAL LIVE Supabase: successful renewal, same patient identity, existing history preserved. |
 | Chrome `localhost:5173` initial/reload | Authenticated API, same patient identity, record endpoints 200, zero error banners; synthetic patient. |
 | Chrome/Edge TTS | **1 passed each**; AUTOMATED/SYNTHETIC service events, native API present but headless voice lists empty. |
@@ -327,7 +334,7 @@ Browser automation covers speech event handling and playback controls. Physical 
 ## Limitations and acceptance
 
 - **Manual acceptance:** English/Mandarin microphone and speaker, medicine/dose pronunciation, mobile keyboard, email delivery and account linking.
-- **Partial workflows:** caregiver management, PDF ingestion, professional source authentication and whole-package/blister automatic matching. Legacy same-name identities and contradictory-document disposition need explicit review; records are preserved.
+- **Partial workflows:** caregiver verification/account linking/notifications, PDF ingestion, professional source authentication and whole-package/blister automatic matching. Private caregiver contact management is available. Legacy same-name identities and contradictory-document disposition need explicit review; records are preserved.
 - **Delivery:** reminders operate while the app is open or reopened. Closed-browser push, SMS and caregiver delivery are planned extensions.
 - **Data coverage:** the app uses online patient APIs; summaries cover stored schedules, reports and notes. Oversized summary queries ask for a shorter period.
 - **Future capabilities:** knowledge retrieval, structured BP/glucose trends, preventive tasks, hospital/NEHR integration and Singpass.
@@ -362,6 +369,8 @@ See [Deployment checklist](docs/DEPLOYMENT_CHECKLIST.md) and [Safety and evaluat
 Local session logs, QA results and task tracking are maintained in `status/WORK_LOG.md`, `status/FINAL_QA.md`, `status/BLOCKERS.md` and `status/tasks.json`.
 
 ## Development and submission
+
+Local submission media (`assets/`), QA output/screenshots, uploads, internal status/prompts, tool workspaces and credential files are excluded from Git. Keep them locally or distribute approved submission media separately. Application source, `frontend/public/` icons/manifest, dependency lockfiles, schema migrations, synthetic test fixtures and public documentation remain versioned.
 
 Read applicable repository engineering guidance, including `AGENTS.md` when present. Preserve clean architecture, injected dependencies, strict schemas, versioned source provenance, patient ownership and confirmation/idempotency tests. Change business behavior through typed application use cases/ports, keeping credentials and administrative utilities outside the patient path.
 

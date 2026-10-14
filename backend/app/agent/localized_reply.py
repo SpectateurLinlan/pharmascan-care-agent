@@ -1,6 +1,7 @@
 """Chinese rendering of supported typed tool outcomes; never dosing inference."""
 
 from ..contracts.enums import AgentIntent, ToolName
+from .schedule_reply import schedule_reply
 from .tools import ToolResult
 
 
@@ -14,14 +15,8 @@ def chinese_reply(intent: AgentIntent, results: list[ToolResult]) -> str:
         return "请核对下方药物和自述内容，然后明确确认。确认前不会保存用药自述。患者自述不能证明实际吞服。"
     if last.blocked:
         return "无法完成此操作。请查看今日药物和记录，或先完成药物核对与激活。没有保存新的用药自述。"
-    if last.tool_name == ToolName.CHECK_DUE_DOSE and last.payload.get("window") == "tonight":
-        rows = last.payload.get("schedule", [])
-        if not rows:
-            return "已核对并激活的计划中，今晚没有安排用药（新加坡时间 18:00–24:00）。"
-        descriptions = [
-            f"{row['medication_name']}：{row['dose_amount']} {row['dose_unit']}，{row['local_time']}" for row in rows
-        ]
-        return "您已核对的今晚用药计划：" + "；".join(descriptions) + "。这仅显示已有计划，并非新的用药建议。"
+    if last.tool_name == ToolName.CHECK_DUE_DOSE:
+        return schedule_reply(last, "zh")
     if intent == AgentIntent.DOSE_SELF_REPORT and last.tool_name != ToolName.RECORD_SELF_REPORT:
         state = ""
         if last.tool_name == ToolName.GET_DOSE_STATUS:
@@ -42,8 +37,6 @@ def chinese_reply(intent: AgentIntent, results: list[ToolResult]) -> str:
             datetime.fromisoformat(last.payload["remind_at"]).astimezone(ZoneInfo("Asia/Singapore")).strftime("%H:%M")
         )
         return f"已保存提醒，时间为 {time}。应用打开或重新打开时可查看。用药计划没有改变。"
-    if last.tool_name == ToolName.CHECK_DUE_DOSE:
-        return f"当前有 {last.payload.get('item_count', 0)} 次已安排的用药到期，请在今日页面核对。"
     if last.tool_name == ToolName.GET_MEDICATION_HISTORY:
         return "请查看您的用药记录。没有自述记录不代表漏服。"
     return "请在今日页面查看药物，或在我的药物中完成核对与激活。"

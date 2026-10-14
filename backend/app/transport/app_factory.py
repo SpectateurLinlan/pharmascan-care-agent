@@ -16,6 +16,7 @@ from ..domain.errors import DomainError
 from .container import ApplicationContainer, build_container_from_settings
 from .error_mapping import domain_error_handler
 from .routes import agent as agent_routes
+from .routes import caregivers as caregiver_routes
 from .routes import demo as demo_routes
 from .routes import doses as dose_routes
 from .routes import evidence as evidence_routes
@@ -82,6 +83,7 @@ def create_app(container: ApplicationContainer | None = None, settings: Settings
     app.include_router(preference_routes.router)
     app.include_router(usage_routes.router)
     app.include_router(feedback_routes.router)
+    app.include_router(caregiver_routes.router)
     app.include_router(patient_record_routes.router)
 
     LOGGER.info("PharmaScan Care transport created (persistence=%s)", wired.persistence)

@@ -36,7 +36,7 @@ class Empty(Arguments):
 
 
 class Schedule(Arguments):
-    window: Literal["due", "tonight"] = "due"
+    window: Literal["due", "tonight", "today"] = "due"
     regimen_id: UUID | None = None
 
 
@@ -84,7 +84,11 @@ SPECS = MappingProxyType(
             "Request the consented camera/upload workflow. Requires a real image; never claim a match before Stage2.",
         ),
         "list_active_medications": (Empty, "Read reviewed active medication names and references."),
-        "check_due_dose": (Schedule, "Read current due or tonight's reviewed schedule; never prescribe."),
+        "check_due_dose": (
+            Schedule,
+            "Read named medicines, amounts and times: due now, all today, or tonight. "
+            "Use today for today's plan; never prescribe.",
+        ),
         "get_dose_status": (
             Status,
             "Read self-reported state. Use verified session references for it; no report is not missed.",

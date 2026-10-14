@@ -1,4 +1,4 @@
-﻿import { useLanguage } from '../language';
+import { useLanguage } from '../language';
 import { useEffect, useRef, useState } from 'react';
 import { api, type AgentUsage, type AgentMessageResponse } from '../api/client';
 import { ErrorNotice } from './primitives';
@@ -108,8 +108,8 @@ export function AssistantScreen({ sessionId, onSession, compact = false, active 
         onChange={event => setText(event.target.value)} placeholder={t("Ask about your medication...")}
         onKeyDown={event => { if (event.key === 'Enter') void send(); }} />
       {preferences.voice_enabled ? <VoiceInput key={language} onTranscript={setText} disabled={busy} /> : null}
+      <button className="primary composer-send" onClick={() => void send()} disabled={busy || !text.trim()} aria-busy={busy}>{t('Send')}</button>
     </div>
-    {text.trim() ? <div className="composer-actions"><span>{t('Review your words before sending.')}</span><button className="primary" onClick={() => void send()} disabled={busy}>{t(busy?'Checking your records...':'Send')}</button></div> : null}
     {usage ? <p className="ai-allowance" role="status">{t('AI demo')}: {usage.llm_user_turns} / {usage.limit} · {t('Resets at midnight Singapore time')} ({new Date(usage.next_reset_at).toLocaleString(language==='zh'?'zh-CN':'en-SG',{timeZone:'Asia/Singapore'})})</p> : null}
     {busy ? <p role="status">{t('Checking your records...')}</p> : null}
     {error ? <ErrorNotice error={error} /> : null}
@@ -119,7 +119,7 @@ export function AssistantScreen({ sessionId, onSession, compact = false, active 
         <p className="user-message">{sentTexts[index]}</p>
         <p>{patientMessage(turn.message)}</p>
         {turn.health_note_request?<button onClick={()=>onHealthReview?.(turn.health_note_request?.description??'')}>{t('Review health note')}</button>:null}
-        {turn.visual_check_request ? <button onClick={()=>onVisualCheck?.(turn.visual_check_request?.regimen_id??null)}>{t("Check my medicine")}</button> : null}
+        {turn.visual_check_request ? <button onClick={()=>onVisualCheck?.(turn.visual_check_request?.regimen_id??null)}>{t("Compare a pill photo")}</button> : null}
         {turn.intent === 'reminder' && !turn.tool_traces.some(trace => trace.tool_name === 'create_reminder') ? <div className="actions">{[15,30].map(minutes => <button key={minutes} onClick={() => setText(`Remind me again in ${minutes} minutes.`)}>In {minutes} min</button>)}</div> : null}
         {turn.pending_report?<button onClick={()=>setConfirmationIndex(index)}>{t('Review dose report')}</button>:null}
         <div className="actions">

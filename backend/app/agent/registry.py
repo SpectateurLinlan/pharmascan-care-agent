@@ -30,7 +30,7 @@ from ..contracts.enums import (
     ToolStatus,
 )
 from ..contracts.ports import Clock, IdGenerator, ToolTraceRepository
-from ..domain.errors import DomainError, NotFoundError, ProviderUnavailableError
+from ..domain.errors import DomainError, NotFoundError, ProviderUnavailableError, ValidationError
 from ..domain.policy import intake_status_from_patient_choice
 from .tools import (
     CheckDueDoseRequest,
@@ -392,16 +392,22 @@ class ToolRegistry:
 
     def _check_due_dose(self, request: ToolRequest) -> ToolResult:
         assert isinstance(request, CheckDueDoseRequest)
-        if request.window == "tonight":
+        timezone = self._schedule.local_timezone(request.patient_id)
+        if request.window in {"tonight", "today"}:
             rows = []
-            start, end = self._schedule.tonight_window(request.patient_id)
+            start, end = (
+                self._schedule.tonight_window(request.patient_id)
+                if request.window == "tonight"
+                else self._schedule.today_window(request.patient_id)
+            )
             for medication in self._enrollment.list_medications(request.patient_id):
                 regimen = self._enrollment.find_active_regimen(request.patient_id, medication.id)
                 if regimen is None or regimen.is_prn:
                     continue
-                for occurrence in self._schedule.scheduled_tonight(
-                    patient_id=request.patient_id, regimen_id=regimen.id
-                ):
+                scheduled = (
+                    self._schedule.scheduled_tonight if request.window == "tonight" else self._schedule.scheduled_today
+                )
+                for occurrence in scheduled(patient_id=request.patient_id, regimen_id=regimen.id):
                     history = self._self_report.history(
                         patient_id=request.patient_id, regimen_id=regimen.id, window_start=start, window_end=end
                     )
@@ -417,7 +423,8 @@ class ToolRegistry:
                             "dose_amount": regimen.dose_amount,
                             "dose_unit": regimen.dose_unit,
                             "due_at": occurrence.due_at.isoformat(),
-                            "local_time": occurrence.due_at.astimezone(ZoneInfo("Asia/Singapore")).strftime("%H:%M"),
+                            "local_time": occurrence.due_at.astimezone(ZoneInfo(timezone)).strftime("%H:%M"),
+                            "food_instruction": regimen.food_instruction,
                             "intake_status": report.intake_status.value if report else "not_reported",
                         }
                     )
@@ -425,8 +432,8 @@ class ToolRegistry:
                 tool_name=ToolName.CHECK_DUE_DOSE,
                 status=ToolStatus.SUCCESS,
                 payload={
-                    "window": "tonight",
-                    "local_timezone": "Asia/Singapore",
+                    "window": request.window,
+                    "local_timezone": timezone,
                     "schedule": rows,
                     "item_count": len(rows),
                 },
@@ -450,18 +457,32 @@ class ToolRegistry:
             self._schedule.materialize(patient_id=request.patient_id, regimen_id=regimen.id, days=2)
             due = self._schedule.find_due(patient_id=request.patient_id, regimen_id=regimen.id)
             if due.occurrence is not None:
+                medication = self._enrollment.get_medication(request.patient_id, regimen.patient_medication_id)
+                if medication is None:
+                    raise ValidationError("The scheduled medication record is unavailable.")
                 candidates.append(
                     {
                         "regimen_id": str(regimen.id),
                         "medication_id": str(regimen.patient_medication_id),
                         "occurrence_id": str(due.occurrence.id),
                         "due_at": due.occurrence.due_at.isoformat(),
+                        "medication_name": medication.display_name,
+                        "dose_amount": regimen.dose_amount,
+                        "dose_unit": regimen.dose_unit,
+                        "local_time": due.occurrence.due_at.astimezone(ZoneInfo(timezone)).strftime("%H:%M"),
+                        "food_instruction": regimen.food_instruction,
+                        "intake_status": "not_reported",
                     }
                 )
         return ToolResult(
             tool_name=ToolName.CHECK_DUE_DOSE,
             status=ToolStatus.SUCCESS,
-            payload={"item_count": len(candidates), "due_doses": candidates},
+            payload={
+                "window": "due",
+                "local_timezone": timezone,
+                "item_count": len(candidates),
+                "due_doses": candidates,
+            },
             clarification_question=None if candidates else "No dose is due right now.",
         )
 

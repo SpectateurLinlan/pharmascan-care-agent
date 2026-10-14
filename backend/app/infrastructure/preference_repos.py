@@ -49,6 +49,7 @@ class SupabasePreferences:
             preferred_language=row["language"],
             speech_locale=row["speech_locale"],
             text_size=row["text_size"],
+            text_scale_percent=row.get("text_scale_percent", 125 if row["text_size"] == "large" else 100),
             voice_enabled=row["voice_enabled"],
             tts_autoplay=row["tts_autoplay"],
             reminder_lead_minutes=row["reminder_lead_minutes"],

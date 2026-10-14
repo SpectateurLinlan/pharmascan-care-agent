@@ -40,6 +40,7 @@ from ..agent.model_tools import ModelTools
 from ..agent.orchestrator import AgentOrchestrator, DeterministicIntentRouter
 from ..agent.registry import ToolRegistry
 from ..application.ai_quota import QuotaAgent
+from ..application.caregivers import CaregiverService
 from ..application.dosing import DoseScheduleService, SelfReportService
 from ..application.enrollment import MedicationEnrollmentService
 from ..application.evidence_enrollment import EvidenceEnrollmentService
@@ -57,6 +58,7 @@ from ..config import Settings
 from ..contracts.model import ConversationalModel
 from ..contracts.ports import Clock, IdGenerator, PatientProvisioner
 from ..contracts.reminders import ReminderRepository
+from ..infrastructure.caregiver_repos import MemoryCaregivers, SupabaseCaregivers
 from ..infrastructure.feedback_repos import MemoryFeedback, SupabaseFeedback
 from ..infrastructure.memory_repos import (
     InMemoryAgentSessionRepository,
@@ -105,6 +107,7 @@ class ApplicationContainer:
     reminders: ReminderService | None = None
     reminder_alerts: ReminderAlertService | None = None
     feedback: FeedbackService | None = None
+    caregivers: CaregiverService | None = None
     observations: ObservationService | None = None
     review_summary: ReviewSummaryService | None = None
     persistence: str = "simulated_in_memory"
@@ -260,6 +263,7 @@ def build_container(
         review_summary=ReviewSummaryService(enrollment, occurrences, events, observations_service, the_clock),
         preferences=PreferenceService(MemoryPreferences(rows={}, clock=the_clock)),
         feedback=FeedbackService(MemoryFeedback({}), the_clock),
+        caregivers=CaregiverService(MemoryCaregivers(), the_clock),
         reminder_alerts=ReminderAlertService(
             enrollment=enrollment,
             schedule=schedule,
@@ -560,6 +564,7 @@ def build_supabase_container(
             ),
             ai_agent=ai_agent,
             feedback=FeedbackService(SupabaseFeedback(client), root.clock),
+            caregivers=CaregiverService(SupabaseCaregivers(client), root.clock),
             reminder_alerts=ReminderAlertService(
                 enrollment=services[0],
                 schedule=services[1],

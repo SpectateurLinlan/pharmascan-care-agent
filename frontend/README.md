@@ -18,6 +18,12 @@ See [complete setup](../README.md#local-setup-and-startup) for Python and runtim
 
 ## Patient destinations
 
+Each Today medicine keeps its name, reviewed dose, time, course and report/reminder status visible. View medication actions expands that medicine's photo comparison, self-report and snooze buttons. Compare a pill photo describes the camera/upload purpose; a photo does not establish safe-to-take status. Explicit dose confirmation remains separate.
+
+Today uses one overview of all medicine names/doses/times and a shared horizontal detail carousel. Native scroll-snap, direct selection and previous/next stay aligned; inactive slides are inert and cannot receive focus or trigger hidden actions. A reminder selects its referenced regimen. No automatic medication merge or change occurs.
+
+Accessibility uses a numeric100–150% slider stored in patient_profiles.text_scale_percent through the normal preference API. Root font scaling and rem-based text apply to all labels, navigation, buttons and dialogs; measured header/nav heights protect the composer. Legacy Large maps to125%. Drag previews locally; release/key-up/blur commits once, and failed save restores the previous preference. Migration019 must be applied before numeric writes; restart backend after updating the typed preference DTO.
+
 - **Today:** reviewed medication/dose/course information, current dose actions, reminders, visual Check and compact composer.
 - **Medicines:** grouped current/upcoming/history/drafts; choose label or manual registration before the specific form.
 - **Assistant:** contextual Gemini/tool path when configured, deterministic fallback when unavailable, six bounded recent turns.
@@ -25,6 +31,10 @@ See [complete setup](../README.md#local-setup-and-startup) for Python and runtim
 - **Me:** profile, account, reminders, language/speech, accessibility, privacy, About and feedback through separate pages.
 
 Self-report uses a B14 challenge and independent confirmation sheet. Confirm writes one retry-safe event; cancellation leaves records unchanged. Failed record reads offer a retry action.
+
+## First-use guide
+
+After a successful first load, a seven-step white coach-mark guide introduces navigation, photos, speech/transcript review, explicit Send, dose confirmation, voice settings and account status. Skip/finish is remembered in this browser (`pharmascan.quick-start.v1`); Me and Settings both offer Quick start guide to replay it. Blocked browser storage allows closing for the current visit; the guide can reappear on a later visit. It uses existing preference state without enabling speech, notifications, cloud TTS or automatic reading. Header gear opens Settings; person icon opens Me and reflects Auth account state.
 
 ## Voice and preferences
 
@@ -55,6 +65,6 @@ Start the frontend/backend, set `QA_BASE_URL` to the frontend origin and `PLAYWR
 
 ## Current limits
 
-Personal gallery private persistence and eligible loose-pill matching are implemented and real-browser verified with synthetic inputs. Packaging/blister automatic matching, PDF extraction and caregiver management remain unavailable/partial. See the root README and current workflows for Demo A/B/C. Device voice/audio, medicine pronunciation, mobile keyboard and email-account flows need manual acceptance. Reminders operate while the app is active or reopened; patient data uses online APIs. Singpass is a future integration.
+Personal gallery private persistence and eligible loose-pill matching are implemented and real-browser verified with synthetic inputs. Me → Caregiver contacts supports private add/edit/delete/reload through FastAPI and same-user RLS. Explicit storage permission is required; all contacts remain unverified with notifications and sharing disabled. Contact verification, caregiver account linking/delivery, packaging/blister automatic matching and PDF extraction remain unavailable/partial. See the root README and current workflows for Demo A/B/C. Device voice/audio, medicine pronunciation, mobile keyboard and email-account flows need manual acceptance. Reminders operate while the app is active or reopened; patient data uses online APIs. Singpass is a future integration.
 
 See [verification](../README.md#verification) and [acceptance checklist](../README.md#limitations-and-acceptance) for recorded checks and remaining work.

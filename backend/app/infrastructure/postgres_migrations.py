@@ -71,6 +71,7 @@ RLS_REQUIRED_TABLES: tuple[str, ...] = (
     "visual_reference_sets",
     "image_embeddings",
     "recognition_runs",
+    "caregiver_contacts",
 )
 
 

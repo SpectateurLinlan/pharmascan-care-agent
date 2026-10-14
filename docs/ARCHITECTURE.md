@@ -194,3 +194,13 @@ Gemini selects the read-only `reconcile_medication_sources` tool. Its bounded co
 Loose-pill reference upload -> sanitized image -> private immutable object -> real embedding with metadata -> atomic user-RLS reference-set/image/embedding RPC. Comparison -> compatible eligible owned gallery -> real Stage2 match -> independent current/course/source-conflict check -> stored recognition run. No dose-event port is present. Retire RPC only permits ineligibility; its trigger blocks ownership, content and eligibility-upgrade forgery. Storage and DB cannot share one transaction: failed DB commits may leave an unreferenced private object; they cannot create an eligible partial reference.
 
 External Stage2 declares v0.9.0; the frozen v0.8.0 schema remains unchanged. PersonalVisionGateway explicitly opts into the existing read-only metadata compatibility path, checks actual embedding metadata and uses the existing strict embed/match adapter. Packaging/blister input never enters loose-pill embeddings.
+
+## Numeric text and daily presentation (2026-10-15)
+
+LanguageProvider owns a temporary numeric text-scale preview and the existing authenticated Preferences DTO. TextSizeSlider previews locally and commits through the typed preference API on release/key-up/blur, keeping one pending save; failure restores persisted scale. Backend PreferenceService normalizes legacy Standard/Large and numeric100..150; the same-user profile adapter and migration019 retain RLS. Root font scaling plus rem-based text affects the whole UI without scaling clinical values or fixed icon sizes. Header/nav measured heights reserve composer space.
+
+TodayMedicationCarousel owns selection/scroll only. Its overview shows all current records and a shared scroll-snap detail area hosts the existing TodayScreen per regimen. Offscreen slides are inert, reminder references select the correct regimen, and clinical actions remain behind existing typed application/B14 services. No Agent/provider/repository redesign, new secret or clinical inference is introduced.
+
+## Private caregiver contact slice (2026-10-15)
+
+CaregiversScreen -> typed HTTP API -> verified AuthContext -> CaregiverService -> CaregiverRepository -> injected memory or same-user Supabase Data API implementation. Migration020 adds caregiver_contacts with composite ownership, normalized own-contact uniqueness, ENABLE/FORCE RLS and immutable-by-constraint pending/notifications-off/sharing-off status. Privileged DATABASE_URL is used only for schema application/verification. No messaging provider, caregiver login/access delegation or Gemini contact tool is added. The patient's storage-permission acknowledgement is not independent recipient verification or permission to disclose medication records.

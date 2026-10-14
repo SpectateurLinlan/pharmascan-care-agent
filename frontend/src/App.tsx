@@ -1,5 +1,5 @@
 ﻿import { LanguageProvider, useLanguage } from './language';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { api, type HealthResponse, type RegimenHistoryItem, type SourcePreview, type MedicationListResponse } from './api/client';
 import { AssistantScreen } from './components/AssistantScreen';
 import { EnrollScreen } from './components/EnrollScreen';
@@ -19,6 +19,10 @@ import {SettingsScreen} from './components/SettingsScreen';
 import {FeedbackScreen} from './components/FeedbackScreen';
 import {ReminderMonitor} from './components/ReminderMonitor';
 import {accountAuth} from './api/auth';
+import {HeaderAccountButton} from './components/HeaderAccountButton';
+import {OnboardingGuide,guideWasDismissed,rememberGuideDismissal} from './components/OnboardingGuide';
+import {TodayMedicationCarousel} from './components/TodayMedicationCarousel';
+import {CaregiversScreen} from './components/CaregiversScreen';
 
 type Tab = 'check' | 'today' | 'medicines' | 'history' | 'assistant' | 'me' | 'settings' | 'health-notes' | 'summary-week' | 'summary-month' | 'summary-course' | MedicineDestination | MeDestination;
 const tabs: { id: Tab; label: string; symbol: string }[] = [
@@ -29,6 +33,13 @@ const tabs: { id: Tab; label: string; symbol: string }[] = [
 export function App() { return <LanguageProvider><CompanionApp /></LanguageProvider>; }
 
 function CompanionApp() {
+  const headerRef=useRef<HTMLElement>(null),navRef=useRef<HTMLElement>(null);
+  useEffect(()=>{
+    const update=()=>{const root=headerRef.current?.parentElement;if(!root)return;root.style.setProperty('--app-header-height',`${headerRef.current?.getBoundingClientRect().height??66}px`);root.style.setProperty('--bottom-nav-height',`${navRef.current?.getBoundingClientRect().height??72}px`);};
+    update();const observer=typeof ResizeObserver==='undefined'?null:new ResizeObserver(update);
+    if(headerRef.current)observer?.observe(headerRef.current);if(navRef.current)observer?.observe(navRef.current);
+    window.addEventListener('resize',update);return()=>{observer?.disconnect();window.removeEventListener('resize',update);};
+  },[]);
   const {t,preferences,loadPreferences,preferenceError}=useLanguage();
   const [evidenceTaskId,setEvidenceTaskId]=useState<string|null>(null);
   const [healthDescription,setHealthDescription]=useState('');
@@ -49,6 +60,9 @@ function CompanionApp() {
   const [medications, setMedications] = useState<MedicationListResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [fatal, setFatal] = useState<unknown>(null);
+  const [guideOpen, setGuideOpen] = useState(()=>!guideWasDismissed());
+  const closeGuide=()=>{rememberGuideDismissal();setGuideOpen(false);};
+  const openGuide=()=>{setTab('today');setGuideOpen(true);};
   useEffect(()=>accountAuth.watchIdentity?.(()=>{window.localStorage.removeItem('pharmascan.agent-session');window.location.reload();}),[]);
   const refreshMedications = useCallback(async () => {
     try { const [active, versions] = await Promise.all([api.listMedications(), api.regimenHistory()]); setMedications(active); setVersions(versions); setDrafts(versions.filter(row => row.state === 'draft' || row.state === 'pending_clarification')); setFatal(null); } catch (caught) { setFatal(caught); }
@@ -75,15 +89,16 @@ function CompanionApp() {
   const detail=versions.find(row=>row.regimen_id===detailId);
   const calendarDate=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Singapore',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
   const currentMedications=medications?.medications.filter(row=>!isPastCourse(row,calendarDate)&&(!row.course_start_date||row.course_start_date<=calendarDate))??[];
-  return <div className={`app companion ${preferences.text_size === "large" ? "text-large" : ""}`}>
-    <header className="companion-header app-header">{navigation.length>1?<button className="back-button" aria-label={t('Back')} onClick={goBack}>‹</button>:null}<div className="brand">PharmaScan Care</div><button className="language-shortcut" aria-label={t('Language and speech')} onClick={()=>setTab('language-settings')}>{preferences.preferred_language==='zh'?'中文':'EN'}</button><button className="settings-button" aria-label={t('Settings')} onClick={()=>setTab('settings')}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button></header>
+  const guideVisible=guideOpen&&!loading&&!fatal&&Boolean(medications)&&tab==='today';
+  return <div className="app companion">
+    <header ref={headerRef} className="companion-header app-header">{navigation.length>1?<button className="back-button" aria-label={t('Back')} onClick={goBack}>‹</button>:null}<div className="brand">PharmaScan Care</div><button className="language-shortcut" aria-label={t('Language and speech')} onClick={()=>setTab('language-settings')}>{preferences.preferred_language==='zh'?'中文':'EN'}</button><button className="settings-button" data-guide="settings" title={t('Settings')} aria-label={t('Settings')} onClick={()=>setTab('settings')}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m9 3 1-1h4l1 1 .5 2 2 .9 2-.5 2 3.4-1.5 1.6v2.2l1.5 1.6-2 3.4-2-.5-2 .9-.5 2-1 1h-4l-1-1-.5-2-2-.9-2 .5-2-3.4 1.5-1.6v-2.2L2 8.8l2-3.4 2 .5 2-.9Z"/><circle cx="12" cy="11.5" r="3"/></svg></button><HeaderAccountButton ready={!loading} onOpen={()=>setTab('me')}/></header>
     {preferenceError ? <p role="alert">{preferenceError}</p> : null}
     {fatal ? <ErrorNotice error={fatal} /> : null}
     {loading&&!accountPage ? <Card title="Getting your records ready"><p role="status">{t('Starting your private demo session…')}</p></Card> : !medications&&!accountPage ? <Card title="Your records could not be loaded"><p>{t('Please retry the connection. An unavailable record is not an empty medication list.')}</p><button onClick={() => { if (health && sessionId) void refreshMedications(); else window.location.reload(); }}>{t('Retry loading records')}</button></Card> : <>
       {tab === 'check' ? <VisualCheckScreen regimenId={visualRegimen} onBack={()=>setTab('today')} onAddSource={()=>setTab('label')}/> : null}
       {tab === 'today' ? <>
         <section className="welcome"><p className="eyebrow">{t(greeting)}!</p><h1>{t('Your medication companion')}</h1></section>
-        {currentMedications.length?currentMedications.map((medication,index)=><TodayScreen key={medication.regimen_id} focusRegimenId={focusRegimen} onFeeling={()=>{setHealthDescription('');setTab('health-notes');}} onVisualCheck={id=>{setVisualRegimen(id);setTab('check');}} compact medications={[medication]} onChanged={refreshMedications} {...(index===0?{onMedicines:()=>setTab('medicines'),onHistory:()=>setTab('history')}:{})}/>):<TodayScreen compact medications={[]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('history')} onVisualCheck={()=>{setVisualRegimen(null);setTab('check');}}/>}
+        {currentMedications.length?<TodayMedicationCarousel medications={currentMedications} focusRegimenId={focusRegimen}>{medication=><TodayScreen key={medication.regimen_id} showTitle={false} focusRegimenId={focusRegimen} onFeeling={()=>{setHealthDescription('');setTab('health-notes');}} onVisualCheck={id=>{setVisualRegimen(id);setTab('check');}} compact medications={[medication]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('history')}/>}</TodayMedicationCarousel>:<TodayScreen compact medications={[]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('history')} onVisualCheck={()=>{setVisualRegimen(null);setTab('check');}}/>}
       </> : null}
       <div hidden={tab!=='today'&&tab!=='assistant'}><AssistantScreen active={tab==='today'||tab==='assistant'} onHealthReview={description=>{setHealthDescription(description);setTab('health-notes');}} onVisualCheck={id=>{setVisualRegimen(id);setTab('check');}} sessionId={sessionId} onSession={setSessionId} compact={tab!=='assistant'} onChanged={refreshMedications} onPhoto={()=>setTab('label')}/></div>
       {tab==='medicines'?<MedicinesHub medications={medications?.medications??[]} drafts={drafts} versions={versions} onOpen={openMedicine}/>:null}
@@ -97,17 +112,19 @@ function CompanionApp() {
       {tab==='health-notes'?<HealthTrackingScreen initialDescription={healthDescription} medications={medications?.medications??[]}/>:null}
       {tab.startsWith('summary-')?<ReviewSummaryScreen period={tab==='summary-week'?'week':tab==='summary-month'?'month':'course'} regimens={versions}/>:null}
       {tab === 'history' ? <><Card title="Medication and health summary"><div className="period-actions">{(['week','month','course'] as const).map(period=><button key={period} onClick={()=>setTab(`summary-${period}`)}>{t(period==='week'?'This week':period==='month'?'This month':'This course')}</button>)}</div><Entry title="My health notes" onClick={()=>setTab('health-notes')}/></Card><HistoryScreen /></> : null}
-      {tab==='me'?<PatientHub onOpen={setTab}/>:null}
+      {tab==='me'?<PatientHub onOpen={setTab} onGuide={openGuide}/>:null}
       {tab==='account'?<MeScreen onSettings={()=>setTab('settings')} onFeedback={()=>setTab('feedback')} onIdentityChanged={()=>{window.localStorage.removeItem('pharmascan.agent-session');window.location.reload();}}/>:null}
       {tab==='profile'?<ProfileScreen/>:null}
-      {tab==='privacy'||tab==='about'||tab==='caregivers'?<InformationScreen kind={tab} onHistory={()=>setTab('history')}/>:null}
-      {tab==='settings'?<Card title="Settings"><Entry title="Medication reminders" onClick={()=>setTab('reminder-settings')}/><Entry title="Language and speech" onClick={()=>setTab('language-settings')}/><Entry title="Accessibility" onClick={()=>setTab('accessibility')}/></Card>:null}
+      {tab==='privacy'||tab==='about'?<InformationScreen kind={tab} onHistory={()=>setTab('history')}/>:null}
+      {tab==='caregivers'?<CaregiversScreen/>:null}
+      {tab==='settings'?<Card title="Settings"><Entry title="Medication reminders" onClick={()=>setTab('reminder-settings')}/><Entry title="Language and speech" onClick={()=>setTab('language-settings')}/><Entry title="Accessibility" onClick={()=>setTab('accessibility')}/><Entry title="Quick start guide" onClick={openGuide}/></Card>:null}
       {tab==='reminder-settings'||tab==='language-settings'||tab==='accessibility'?<SettingsScreen section={tab==='reminder-settings'?'reminders':tab==='language-settings'?'language':'accessibility'}/>:null}
       {tab==='feedback'?<FeedbackScreen/>:null}
     </>}
-    <ReminderMonitor enabled={!loading&&!fatal} onReview={id=>{setFocusRegimen(id);setTab('today');}}/>
-    <nav className="patient-nav" aria-label="Main navigation">{tabs.map(entry => <button key={entry.id}
+    <ReminderMonitor enabled={!loading&&!fatal&&!guideVisible} onReview={id=>{setFocusRegimen(id);setTab('today');}}/>
+    <nav ref={navRef} className="patient-nav" aria-label="Main navigation">{tabs.map(entry => <button key={entry.id} data-guide={entry.id}
       aria-current={(tab === entry.id || (entry.id==='me'&&accountPage)||(entry.id==='medicines'&&['add-method','past-medicines','unfinished','gallery','medicine-detail','label','manual'].includes(tab))||(entry.id==='history'&&(tab.startsWith('summary-')||tab==='health-notes'))) ? 'page' : undefined} onClick={() => setTab(entry.id)}>
       <span aria-hidden="true">{entry.symbol}</span>{t(entry.label)}</button>)}</nav>
+    {guideVisible?<OnboardingGuide onClose={closeGuide} onSettings={()=>{closeGuide();setTab('language-settings');}}/>:null}
   </div>;
 }

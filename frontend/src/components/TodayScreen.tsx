@@ -57,11 +57,12 @@ export function describeDueStatus(
 export function TodayScreen({
   medications,
   onChanged, onFeeling,
-  reminderPort, compact = false, onMedicines, onHistory, onVisualCheck, focusRegimenId,
+  reminderPort, compact = false, onMedicines, onHistory, onVisualCheck, focusRegimenId, showTitle = true,
 }: {
   medications: MedicationSummary[];
   onChanged: () => void; onFeeling?:()=>void;
   focusRegimenId?: string|null;
+  showTitle?:boolean;
   onVisualCheck?: (regimenId:string|null) => void; reminderPort?: ReminderPort; compact?: boolean; onMedicines?: () => void; onHistory?: () => void;
 }) {
   const {language,t}=useLanguage();
@@ -212,12 +213,12 @@ export function TodayScreen({
         <p className="notice">
           {t('No dose due right now. Add your reviewed instructions in My Medicines.')}
         </p>
-        {compact ? <><button className="primary dominant" onClick={() => onVisualCheck?.(null)}>{t('Check my medicine')}</button><div className="quick-actions" hidden={!onMedicines&&!onHistory}><button onClick={onMedicines}>{t('My Medicines')}</button><button onClick={onHistory}>{t('My History')}</button></div></> : null}
+        {compact ? <><button className="primary dominant" onClick={() => onVisualCheck?.(null)}>{t('Compare a pill photo')}</button><div className="quick-actions" hidden={!onMedicines&&!onHistory}><button onClick={onMedicines}>{t('My Medicines')}</button><button onClick={onHistory}>{t('My History')}</button></div></> : null}
       </Card>
     );
   }
 
-  if(compact&&selected)return <CompactDoseCard medication={selected} due={due} busy={busy||confirmation!==null} onReport={choice=>void report(choice)} onCheck={()=>onVisualCheck?.(selected.regimen_id)} onSnooze={minutes=>run(async()=>{if(!due?.occurrence_id)return;const row=await api.snoozeReminder(due.occurrence_id,minutes);setReminderAt(row.remind_at);setReminderDue(false);})} reminderAt={reminderAt} reminderDue={reminderDue} onMedicines={onMedicines} onHistory={onHistory}>
+  if(compact&&selected)return <CompactDoseCard showTitle={showTitle} medication={selected} due={due} busy={busy||confirmation!==null} onReport={choice=>void report(choice)} onCheck={()=>onVisualCheck?.(selected.regimen_id)} onSnooze={minutes=>run(async()=>{if(!due?.occurrence_id)return;const row=await api.snoozeReminder(due.occurrence_id,minutes);setReminderAt(row.remind_at);setReminderDue(false);})} reminderAt={reminderAt} reminderDue={reminderDue} onMedicines={onMedicines} onHistory={onHistory}>
     {lastResult?<div className="status status--ok" role="status">{t(lastResult)}{onFeeling?<div className="actions"><button onClick={onFeeling}>{t('Record how I feel')}</button><button onClick={()=>setLastResult(null)}>{t('Skip for now')}</button></div>:null}</div>:null}
     {renderConfirmation()}{error?<ErrorNotice error={error}/>:null}
   </CompactDoseCard>;
@@ -254,7 +255,7 @@ export function TodayScreen({
         </div>
       ) : null}
 
-      {compact ? <><p className="dose-name">{selected?.display_name}</p><button className="primary dominant" disabled={busy} onClick={() => onVisualCheck?.(selected?.regimen_id ?? null)}>{t('Check my medicine')}</button><div className="quick-actions" hidden={!onMedicines&&!onHistory}><button onClick={onMedicines}>{t('My Medicines')}</button><button onClick={onHistory}>{t('My History')}</button></div></> : null}
+      {compact ? <><p className="dose-name">{selected?.display_name}</p><button className="primary dominant" disabled={busy} onClick={() => onVisualCheck?.(selected?.regimen_id ?? null)}>{t('Compare a pill photo')}</button><div className="quick-actions" hidden={!onMedicines&&!onHistory}><button onClick={onMedicines}>{t('My Medicines')}</button><button onClick={onHistory}>{t('My History')}</button></div></> : null}
       {selected?<div className="dose-details"><p><strong>{selected.dose_amount??t('Not specified')} {t(selected.dose_unit??'')}</strong> · {selected.is_prn?t('As needed'):selected.frequency_rule?.local_times.join(', ')??t('Not specified')}</p><p>{selected.food_instruction?.split('; ').map(t).join(' · ')??t('Food instructions not specified')}</p>{selected.course_start_date||selected.course_end_date?<p>{t('Course')}: {selected.course_start_date??t('Not specified')} → {selected.course_end_date??t('Not specified')}</p>:null}</div>:null}
       {due ? (
         due.occurrence_id ? (

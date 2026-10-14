@@ -14,6 +14,7 @@ class Preferences(BaseModel):
     preferred_language: Literal["en", "zh"] = "en"
     speech_locale: Literal["en-SG", "zh-CN"] = "en-SG"
     text_size: Literal["standard", "large"] = "standard"
+    text_scale_percent: int = Field(default=100, ge=100, le=150, strict=True)
     voice_enabled: bool = True
     tts_autoplay: bool = False
     reminder_lead_minutes: int = Field(default=0, ge=0, le=120)
@@ -27,6 +28,7 @@ class PreferenceUpdate(BaseModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=80)
     preferred_language: Literal["en", "zh"] | None = None
     text_size: Literal["standard", "large"] | None = None
+    text_scale_percent: int | None = Field(default=None, ge=100, le=150, strict=True)
     voice_enabled: bool | None = None
     tts_autoplay: bool | None = None
     reminder_lead_minutes: int | None = Field(default=None, ge=0, le=120)

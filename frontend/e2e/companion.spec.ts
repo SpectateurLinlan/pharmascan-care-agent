@@ -26,7 +26,7 @@ test('mobile companion synthetic speech -> real Agent -> consent -> synthetic br
       speak:(utterance:{lang:string})=>{document.documentElement.dataset.audioPlayed='true';document.documentElement.dataset.spokenLanguage=utterance.lang;}
     }});
   });
-  await page.goto('/'); await expect(page.getByRole('button',{name:'Check my medicine'})).toBeVisible();
+  await page.goto('/'); await expect(page.getByRole('button',{name:'Compare a pill photo'})).toBeVisible();
   await expect(page.getByRole('button',{name:'Speak your message'})).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(page.locator('h2:visible')).toHaveCount(1);
@@ -84,7 +84,7 @@ test('mobile companion synthetic speech -> real Agent -> consent -> synthetic br
   await page.getByRole('button',{name:'History',exact:true}).click(); await expect(page.getByText(/reported taking/).first()).toBeVisible({timeout:30000});
 
   await page.getByRole('button',{name:'Today',exact:true}).click();
-  await page.getByRole('button',{name:'Check my medicine'}).click();
+  await page.getByRole('button',{name:'Compare a pill photo'}).click();
   await expect(page.getByLabel('Take or choose a photo')).toBeVisible();
   const png=await page.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=320;canvas.height=320;const c=canvas.getContext('2d');if(!c)throw new Error('Canvas unavailable');c.fillStyle='white';c.fillRect(0,0,320,320);c.fillStyle='#eee';c.strokeStyle='#777';c.beginPath();c.ellipse(160,160,60,40,0,0,Math.PI*2);c.fill();c.stroke();return canvas.toDataURL('image/png').split(',')[1]!;});
   await page.getByLabel('Take or choose a photo').setInputFiles({name:'synthetic-pill.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});

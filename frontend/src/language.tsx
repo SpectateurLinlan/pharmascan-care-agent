@@ -1,7 +1,44 @@
 import {api,type PatientPreferences,type PreferenceUpdate} from './api/client';
-import {createContext,useContext,useState,useCallback,type ReactNode} from 'react';
+import {createContext,useContext,useState,useCallback,useEffect,type ReactNode} from 'react';
 export type Language='en'|'zh';
 const translations:Record<string,string>={
+ 'Save a contact for your own reference. This does not link their account, send an invitation or share your records.':'保存照护人的联系资料，供您自己查看；不会绑定对方账户、发送邀请或共享您的记录。',
+ 'Contact verification and caregiver notifications are not enabled yet.':'联系方式验证与照护人通知尚未开通。',
+ 'Add caregiver contact':'添加照护人', 'Loading contacts…':'正在读取联系人…', 'No caregiver contacts saved yet.':'尚未添加照护人。',
+ 'Not verified':'未验证', 'Notifications off':'通知未开启', 'No record access':'没有记录访问权限',
+ 'Edit contact':'编辑联系人', 'Delete contact':'删除联系人', 'Contact name':'联系人姓名',
+ 'Relationship (optional)':'与您的关系（可选）', 'Contact method':'联系方式类型', 'Phone':'电话',
+ 'Email address':'电子邮箱地址', 'Phone with country code':'电话号码（包含国家代码）',
+ 'I have permission to save this contact. This does not consent to sharing medication records or notifications.':'我有权保存此联系资料。这不代表同意共享用药记录或发送通知。',
+ 'Save contact':'保存联系人', 'Retry loading contacts':'重新读取联系人',
+ 'Delete caregiver contact?':'删除这位照护人的联系资料？',
+ 'This removes the saved contact. Your medication records will not change.':'只删除该联系资料，您的用药记录不会改变。',
+ 'Confirm deletion':'确认删除',
+ 'Private contact details':'仅供您查看的联系资料',
+ 'Applies to all text, including buttons and navigation. Release the slider to save.':'应用于所有文字，包括按钮和导航。松开滑动条即可保存。',
+ 'Saving text size…':'正在保存文字大小…',
+ 'All current medicines':'当前全部药物', 'medicines':'种药物',
+ 'Previous medicine':'上一种药物', 'Next medicine':'下一种药物',
+ 'Swipe or tap a medicine to view':'左右滑动或点击上方药物查看',
+ 'Quick start guide':'新手指南',
+ 'Learn the buttons and voice settings':'了解按钮和语音设置',
+ 'Your daily companion':'您的日常用药助手',
+ 'Today shows your reviewed schedule. Start by adding your medicine if your list is empty.':'“今日”显示您已核对的用药计划。如果列表为空，请先添加药物。',
+ 'Add and manage medicines':'添加与管理药物',
+ 'Open Medicines to read a label or enter instructions. Review and activate the plan before it appears in Today.':'在“药物”中读取标签或手动填写指示，核对并启用计划后，就能在“今日”中看到。',
+ 'Use a photo':'使用照片',
+ 'The photo button adds label or packaging information for review. Compare a pill photo on Today opens a separate visual check; a photo cannot tell you that a medicine is safe to take.':'图片按钮用于添加标签或包装资料，供您核对。“今日”的“核对我的药物”打开独立的视觉核对。照片无法证明药物可以安全服用。',
+ 'Speak, review, then send':'说话、核对，再发送',
+ 'Tap the microphone, allow speech recognition, then review or edit the words. Send is on the right. You can always type instead. Your browser may use an online speech service.':'点击麦克风并允许语音识别，然后核对或修改文字。发送按钮在右侧，您也可以随时打字。浏览器可能使用在线语音服务。',
+ 'Record and review your reports':'记录与查看服药自述',
+ 'After choosing I took it, confirm the separate summary to save your report. Cancel saves nothing. History contains your reports and summaries; a report does not prove ingestion. Reminders are prompts, not changes to your plan.':'选择“已服用”后，还需在独立弹窗中确认，才能保存自述；取消不会保存。“记录”中可查看自述和总结，自述不代表已证实吞服。提醒仅作提示，不会修改用药计划。',
+ 'Choose your voice settings':'选择语音设置',
+ 'Automatic reading is off by default. Turn on Read replies automatically in Language and speech if you want it. You can also use Play response and Stop audio. Browser voice is the default; cloud voice requires an explicit choice.':'自动朗读默认关闭。需要时，可在“语言与语音”中开启“自动朗读回答”，也可以使用“播放回答”和“停止语音”。默认使用浏览器语音，云端语音需要您主动选择。',
+ 'Current settings':'当前设置', 'Voice':'语音', 'On':'开启', 'Off':'关闭',
+ 'Open language and speech settings':'打开语言与语音设置',
+ 'Your account and settings':'账户与设置',
+ 'The person icon shows your account status and opens Me. Link a guest account using email to access it on another device. Settings contains language, speech, text size and reminder options. You can reopen this guide from Me or Settings.':'人物图标显示账户状态，点击进入“我”。访客可用邮箱绑定账户，以便在其他设备使用。设置中可调整语言、语音、字体和提醒。您可以从“我”或设置页再次查看本指南。',
+ 'Previous':'上一步', 'Next':'下一步', 'Got it':'知道了', 'Guest':'访客', 'Account':'账户',
  'Source registration saved. Continue your medication plan in My Medicines.':'资料登记已保存，请在“我的药物”中查看或继续确认用药计划。',
  'Source information and review':'查看来源与核对信息',
  'Patient supplied source':'由您提供的资料',
@@ -258,7 +295,9 @@ const translations:Record<string,string>={
  "History":"记录",
  "Assistant":"助手",
  "Demo":"演示",
- "Check my medicine":"检查我的药物",
+ "Compare a pill photo":"拍照核对药片",
+ "View medication actions":"展开用药操作",
+ "Compare a pill photo with your medication references. This does not establish that it is safe to take.":"拍摄或上传药片照片，与您的药物参考资料核对。结果不能证明可以安全服用。",
  "Record my report":"记录我的自述",
  "Remind me later":"稍后提醒",
  "Speak your message":"语音输入",
@@ -312,14 +351,17 @@ const translations:Record<string,string>={
 };
 const defaults={preferred_language:'en',speech_locale:'en-SG',text_size:'standard',voice_enabled:true,tts_autoplay:false,reminder_lead_minutes:0,timezone:'Asia/Singapore'} as const;
 type PlaybackPreferences={ttsProvider:'browser'|'tencent';speechRate:number;setTtsProvider:(provider:'browser'|'tencent')=>void;setSpeechRate:(rate:number)=>void};
-type Profile=Pick<PatientPreferences,'display_name'|'preferred_language'|'speech_locale'|'text_size'|'voice_enabled'|'tts_autoplay'|'reminder_lead_minutes'|'timezone'>;
-const Context=createContext<PlaybackPreferences & {language:Language;preferences:Profile;setLanguage:(value:Language)=>void;updatePreferences:(value:PreferenceUpdate)=>void;loadPreferences:()=>Promise<void>;preferenceError:string}>({ttsProvider:'browser',speechRate:.9,setTtsProvider:()=>undefined,setSpeechRate:()=>undefined,language:'en',preferences:defaults,setLanguage:()=>undefined,updatePreferences:()=>undefined,loadPreferences:async()=>undefined,preferenceError:''});
+type Profile=Pick<PatientPreferences,'display_name'|'preferred_language'|'speech_locale'|'text_size'|'text_scale_percent'|'voice_enabled'|'tts_autoplay'|'reminder_lead_minutes'|'timezone'>;
+const Context=createContext<PlaybackPreferences & {textScale:number;previewTextScale:(value:number|null)=>void;language:Language;preferences:Profile;setLanguage:(value:Language)=>void;updatePreferences:(value:PreferenceUpdate)=>Promise<void>;loadPreferences:()=>Promise<void>;preferenceError:string}>({textScale:100,previewTextScale:()=>undefined,ttsProvider:'browser',speechRate:.9,setTtsProvider:()=>undefined,setSpeechRate:()=>undefined,language:'en',preferences:defaults,setLanguage:()=>undefined,updatePreferences:async()=>undefined,loadPreferences:async()=>undefined,preferenceError:''});
 export function LanguageProvider({children}:{children:ReactNode}) {
  const [ttsProvider,setTtsProvider]=useState<'browser'|'tencent'>('browser'),[speechRate,setSpeechRate]=useState(.9);
  const [preferences,setValue]=useState<Profile>(defaults),[preferenceError,setError]=useState('');
+ const [previewScale,previewTextScale]=useState<number|null>(null);
+ const textScale=previewScale??preferences.text_scale_percent??(preferences.text_size==='large'?125:100);
+ useEffect(()=>{const root=document.documentElement,previous=root.style.getPropertyValue('--font-scale');root.style.setProperty('--font-scale',String(textScale/100));return()=>{if(previous)root.style.setProperty('--font-scale',previous);else root.style.removeProperty('--font-scale');};},[textScale]);
  const loadPreferences=useCallback(async()=>{const value=await api.preferences();setValue(value);setError('');},[]);
- function updatePreferences(value:PreferenceUpdate){setError('');void api.updatePreferences(value).then(saved=>{setValue(saved);}).catch(()=>setError('Could not save preferences. Your previous preference is retained.'));}
- function setLanguage(value:Language){updatePreferences({preferred_language:value});}
- return <Context.Provider value={{ttsProvider,setTtsProvider,speechRate,setSpeechRate,language:preferences.preferred_language,preferences,setLanguage,updatePreferences,loadPreferences,preferenceError}}>{children}</Context.Provider>;
+ async function updatePreferences(value:PreferenceUpdate){setError('');try{const saved=await api.updatePreferences(value);setValue(saved);}catch{setError('Could not save preferences. Your previous preference is retained.');}}
+ function setLanguage(value:Language){void updatePreferences({preferred_language:value});}
+ return <Context.Provider value={{textScale,previewTextScale,ttsProvider,setTtsProvider,speechRate,setSpeechRate,language:preferences.preferred_language,preferences,setLanguage,updatePreferences,loadPreferences,preferenceError}}>{children}</Context.Provider>;
 }
 export function useLanguage(){const context=useContext(Context);return {...context,t:(text:string)=>context.language==='zh'?(translations[text]??text):text};}

@@ -57,7 +57,7 @@ class ConfirmRegimenRequest(ToolRequest):
 
 
 class CheckDueDoseRequest(ToolRequest):
-    window: Literal["due", "tonight"] = "due"
+    window: Literal["due", "tonight", "today"] = "due"
     regimen_id: UUID | None = None
 
 

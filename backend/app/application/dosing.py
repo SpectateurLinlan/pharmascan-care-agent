@@ -216,6 +216,25 @@ class DoseScheduleService:
         start = local.replace(hour=18, minute=0, second=0, microsecond=0)
         return start.astimezone(UTC), (start.replace(hour=0) + timedelta(days=1)).astimezone(UTC)
 
+    def local_timezone(self, patient_id: UUID) -> str:
+        return self._tz.local_tz(patient_id).key
+
+    def today_window(self, patient_id: UUID) -> tuple[datetime, datetime]:
+        start = (
+            self._clock.now()
+            .astimezone(self._tz.local_tz(patient_id))
+            .replace(hour=0, minute=0, second=0, microsecond=0)
+        )
+        return start.astimezone(UTC), (start + timedelta(days=1)).astimezone(UTC)
+
+    def scheduled_today(self, *, patient_id: UUID, regimen_id: UUID) -> list[DoseOccurrenceDTO]:
+        regimen = self._require_regimen(patient_id, regimen_id)
+        if regimen.is_prn:
+            return []
+        self.materialize(patient_id=patient_id, regimen_id=regimen_id, days=2)
+        start, end = self.today_window(patient_id)
+        return self._occurrences.list_for_regimen(patient_id, regimen_id, start, end)
+
     def scheduled_tonight(self, *, patient_id: UUID, regimen_id: UUID) -> list[DoseOccurrenceDTO]:
         regimen = self._require_regimen(patient_id, regimen_id)
         if regimen.is_prn:

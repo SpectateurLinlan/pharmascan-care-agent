@@ -74,7 +74,7 @@ describe('dose report consent', () => {
 describe('compact primary medication card', () => {
   it('primary visual action opens the check flow instead of the medicines list',()=>{
     const visual=vi.fn(),medicines=vi.fn();render(<TodayScreen compact medications={[]} onChanged={vi.fn()} onVisualCheck={visual} onMedicines={medicines}/>);
-    fireEvent.click(screen.getByRole('button',{name:'Check my medicine'}));expect(visual).toHaveBeenCalledWith(null);expect(medicines).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button',{name:'Compare a pill photo'}));expect(visual).toHaveBeenCalledWith(null);expect(medicines).not.toHaveBeenCalled();
   });
   it('refreshes scheduled due and server reminder status while open without any dose write',async()=>{
     vi.useFakeTimers();
@@ -98,7 +98,12 @@ describe('compact primary medication card', () => {
     vi.mocked(api.dueDose).mockResolvedValue({occurrence_id:'demo-occurrence',regimen_id:'demo-regimen',medication_display_name:medication.display_name,dose_description:'1 tablet',due_at:'2026-10-14T00:00:00Z',is_prn:false,visual_status:'not_checked',ingestion_proven:false});
     render(<TodayScreen compact medications={[medication]} onChanged={vi.fn()}/>);
     await screen.findByText(/1 tablet/); expect(screen.getAllByRole('heading',{level:2})).toHaveLength(1);
-    expect(screen.getByRole('button',{name:'Check my medicine'})).toBeTruthy();
+    const actionGroup=screen.getByText('View medication actions').closest('details');
+    expect(actionGroup?.open).toBe(false);
+    fireEvent.click(screen.getByText('View medication actions'));
+    expect(actionGroup?.open).toBe(true);
+    expect(screen.getByRole('button',{name:'Compare a pill photo'})).toBeTruthy();
+    expect(api.requestReportChallenge).not.toHaveBeenCalled();expect(api.submitReport).not.toHaveBeenCalled();
   });
 });
 
