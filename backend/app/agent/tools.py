@@ -6,7 +6,7 @@ declares its parameters as a frozen DTO; nothing accepts a raw dict.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -31,6 +31,11 @@ class ToolRequest(ToolDTO):
     client_turn_id: str = Field(min_length=1, max_length=128)
 
 
+class CreateReminderRequest(ToolRequest):
+    occurrence_id: UUID
+    minutes: int = Field(ge=1, le=1440)
+
+
 class EnrollMedicationRequest(ToolRequest):
     medication_name: str = Field(min_length=1, max_length=160)
     dose_amount: float | None = None
@@ -52,6 +57,7 @@ class ConfirmRegimenRequest(ToolRequest):
 
 
 class CheckDueDoseRequest(ToolRequest):
+    window: Literal["due", "tonight"] = "due"
     regimen_id: UUID | None = None
 
 
@@ -80,7 +86,9 @@ class GetDoseStatusRequest(ToolRequest):
     that it could not be resolved. It is never treated as an identifier.
     """
 
-    medication_name: str = Field(min_length=1, max_length=160)
+    medication_name: str | None = Field(default=None, min_length=1, max_length=160)
+    medication_id: UUID | None = None
+    occurrence_id: UUID | None = None
     day_offset: int = Field(default=0, ge=-30, le=0)
 
 

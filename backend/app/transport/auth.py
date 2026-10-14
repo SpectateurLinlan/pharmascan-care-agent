@@ -36,10 +36,11 @@ import json
 import urllib.error
 import urllib.request
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 from uuid import UUID
 
+from ..config import validate_publishable_key
 from ..domain.errors import AuthenticationRequiredError
 
 #: Header the browser sends; never logged, never echoed.
@@ -56,6 +57,7 @@ class AuthenticatedPrincipal:
     email: str | None
     authenticated: bool
     mode: str
+    access_token: str | None = field(default=None, repr=False, compare=False)
 
     def describe(self) -> dict[str, Any]:
         """Diagnostic view safe to log (no token, no raw claims)."""
@@ -90,7 +92,7 @@ class SupabaseAuthApiVerifier:
         if not supabase_url or not api_key:
             raise ValueError("supabase_url and api_key are required")
         self._base = supabase_url.rstrip("/")
-        self._api_key = api_key
+        self._api_key = validate_publishable_key(api_key)
         self._timeout = timeout_s
 
     def verify(self, token: str) -> Mapping[str, Any]:
@@ -110,9 +112,7 @@ class SupabaseAuthApiVerifier:
                 f"Access token rejected by the identity provider (HTTP {exc.code})"
             ) from exc
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-            raise AuthenticationRequiredError(
-                "Could not verify the access token with the identity provider"
-            ) from exc
+            raise AuthenticationRequiredError("Could not verify the access token with the identity provider") from exc
 
         if not isinstance(payload, dict) or not payload.get("id"):
             raise AuthenticationRequiredError("Identity provider returned no subject")
@@ -157,9 +157,7 @@ class AuthBoundary:
     def mode(self) -> str:
         return self._mode
 
-    def resolve(
-        self, *, authorization: str | None, client_id: str | None
-    ) -> AuthenticatedPrincipal:
+    def resolve(self, *, authorization: str | None, client_id: str | None) -> AuthenticatedPrincipal:
         """Return the principal for this request, or raise ``AUTH_REQUIRED``."""
         if self._mode == "supabase":
             return self._resolve_supabase(authorization)
@@ -170,9 +168,7 @@ class AuthBoundary:
     def _resolve_supabase(self, authorization: str | None) -> AuthenticatedPrincipal:
         token = _bearer_token(authorization)
         if token is None:
-            raise AuthenticationRequiredError(
-                "A bearer access token is required for this endpoint"
-            )
+            raise AuthenticationRequiredError("A bearer access token is required for this endpoint")
         assert self._verifier is not None  # guaranteed by __init__
         claims = self._verifier.verify(token)
         subject = claims.get("sub")
@@ -181,9 +177,7 @@ class AuthBoundary:
         try:
             patient_id = UUID(str(subject))
         except ValueError as exc:
-            raise AuthenticationRequiredError(
-                "Verified token subject is not a valid patient identifier"
-            ) from exc
+            raise AuthenticationRequiredError("Verified token subject is not a valid patient identifier") from exc
         email = claims.get("email")
         return AuthenticatedPrincipal(
             patient_id=patient_id,
@@ -191,6 +185,7 @@ class AuthBoundary:
             email=str(email) if email else None,
             authenticated=True,
             mode=self._mode,
+            access_token=token,
         )
 
     def _resolve_demo(self, client_id: str | None) -> AuthenticatedPrincipal:

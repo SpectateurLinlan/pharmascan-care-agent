@@ -156,7 +156,7 @@ flowchart TD
 
 `reminder_due`/`followup_due`/`user_health_checkin` → get regimen history, counts by reliable status (exclude `unreported` from confirmed failure), maybe ask barrier: forgetful, unavailable medicine, unclear directions, adverse sensations, inconvenience → log own report and optionally health measurement (BP, glucose, symptoms, sleep) → date/unit-aware trend, not causal diagnosis → existing personalized preventive task (screening/vaccination/lifestyle/follow-up) from user/verified guidance → patient-reviewable review summary and pharmacist/doctor questions → next event. Regimen expired: end version, retain history/gallery, stop active scheduling; changed instruction creates new version and reevaluates DDI if mapped.
 
-## VII. Four representative real tool traces for Demo/Agent tests
+## VII. Target tool traces (design; actual implemented workflows below)
 
 **Trace A / Enrollment:** `resolve_intent(ADD)` → `extract_document(label)` → `find_product` → `compare_current_regimens` → `request_missing(dose_frequency)` → patient reply → `confirm_source_fields` → `screen_ingredients(coverage)` → `create_versioned_regimen` → `schedule_reminder` → persist.
 
@@ -174,3 +174,46 @@ flowchart TD
 - Discontinued medication recognized in reference set: report 'this resembles an item recorded in historical medications, but it is not listed as active'; do not activate it.
 - Duplicate `Taken` click: idempotent event key prevents double event; ask for clarification if different source actions conflict.
 - External label text prompt injection: never affect agent instructions/actions; treat as quoted source data only.
+
+
+## Current progressive evidence and gallery workflows
+
+Implementation date:2026-10-15. Browser journeys use real Gemini/Supabase/Stage2 and synthetic package/label/pill fixtures. `frontend/e2e/gallery-evidence.spec.ts` has no provider-response interception. Generated fixtures and screenshots are local-only under outputs/gallery-demo; do not force-add them.
+
+| Demo | Actual path and current evidence |
+|---|---|
+| A | Package -> real read-label -> owned identity/task -> Gemini reconcile_medication_sources -> missing instructions -> reload/continue -> supplementary label -> two original sources/zero conflicts -> patient review -> existing activation challenge -> explicit activation -> Today. REAL BROWSER E2E passed. |
+| B | Registered identity -> private loose-pill photo -> actual Stage2 embed -> atomic eligible reference -> reload -> current-course Check this dose -> actual Stage2 personal match with same-user eligible gallery -> stored RecognitionRun + independent course check. REAL BROWSER E2E and backend A/B integration passed. Identical synthetic images test the pipeline, not accuracy. |
+| C | Explicit existing-product selection -> conflicting1000mg source against500mg record -> preserved source/task conflict -> blocked review/activation -> next Agent turn calls reconciliation -> reload retains conflict. REAL BROWSER E2E passed. No source/regimen overwrite or intake event. |
+
+Reproduce with owned local API8001/Vite5173, existing configurations and generated synthetic fixtures:
+
+```powershell
+python scripts/generate_gallery_demo.py
+$env:RUN_GALLERY_DEMOS='1'
+$env:QA_BASE_URL='http://127.0.0.1:5173'
+cd frontend
+npx playwright test e2e/gallery-evidence.spec.ts
+```
+
+This consumes a bounded number of Gemini turns and Stage2 calls. Chrome response-body inspector eviction is handled by observing actual browser fetch JSON; no fake tool results. The fixture generator uses the current Singapore date and explicit seven-day source instructions; the review step uses the corresponding fixture dates. It generates inputs only, not recognition results. The test captures390px package/Today/reference/match/conflict and430px/desktop restored conflict screens. Original API/task evidence stays in owned Supabase; only synthetic screenshot artifacts are local. Physical camera, image usability and actual speech/audio remain MANUAL PENDING.
+
+Routing is task-specific: package/label/prescription image for enrollment -> extraction/source reconciliation; loose pill for current dose -> current regimen + personal gallery; unknown pill -> existing catalogue candidates; unsupported unprinted blister -> associated reference/manual verification. The model can request an image workflow but cannot manufacture image evidence. The consented image handler invokes typed deterministic use cases; it is not a generic LLM vision substitute.
+
+Supported scope: partial identity save, missing-source question, multi-source continuation, explicit duplicate-product choice, reviewed new-course version, category unknown/supplement, historical/source-conflict visual abstention and persistent reload. Conflicting source evidence is not automatically discarded or resolved by newer uploads; patient must obtain authoritative clarification. PDF parsing, whole-blister matcher and professional source authentication remain NOT IMPLEMENTED.
+
+Manual acceptance (synthetic files only):
+1. Read medication information -> package photo -> save; verify missing instructions and companion question.
+2. Reload -> Medicines -> unfinished source registration -> same product; add pharmacy label; inspect both original source lines.
+3. Review dose/unit/time/food/course dates -> explicit activation; Today and My Medicines show the same course.
+4. Personal gallery -> select product -> reviewed loose-pill photo -> save; thumbnail and eligible status survive reload.
+5. Check this dose -> photograph/query -> real evidence or explicit uncertainty; no safe-to-take/ingestion claim.
+6. Supplement conflicting strength/form; verify old product/course retained, blocked activation and next-turn/reload conflict continuation.
+7. Retire a pill photo; verify excluded from matching while original photo/history remain.
+8. Repeat with another anonymous session; no access to previous user's source/photo/reference/task.
+
+Current limitations: resolving the disposition of contradictory documents and merging legacy duplicate identities require explicit patient/source review; new uploads never silently clear conflicts. Catalogue-only unknown inquiries are not yet durable enrollment records. Existing-photo re-embedding after a model upgrade is not implemented; take a new reviewed compatible reference, or keep the result uncertain. Professional source authentication, multi-medication PDF extraction and whole-blister matching remain unavailable.
+
+Latest final combined A/B/C run:1 passed (4.4m). Real provider/account paths, synthetic images. Linked source review/date views were exercised through Gallery. Main Gallery private-thumbnail capture uses a separate real Auth/DB/Storage test without model/speech calls, because an early screenshot captured the loading state before the authenticated image decoded.
+
+Thumbnail-only final test:1 passed (1.2m), real Auth/DB/Storage, zero model/speech calls. Artifacts: gallery-thumbnail390.png, gallery-thumbnail430.png, gallery-thumbnail-desktop.png; plus demoA-package390.png, demoA-today390.png, demoB-reference390.png, demoB-result390.png, demoC-conflict390.png, demoC-restored430.png, demoC-desktop.png and demoC-restored-zh390.png under outputs/gallery-demo.

@@ -82,9 +82,7 @@ def _daily_draft(client: TestClient, **overrides: object) -> dict:
         "frequency_local_times": ["08:00"],
     }
     payload.update(overrides)
-    response = client.post(
-        "/api/medications/drafts", params=_params(), json=payload
-    )
+    response = client.post("/api/medications/drafts", params=_params(), json=payload)
     assert response.status_code == 200, response.text
     return response.json()
 
@@ -116,6 +114,49 @@ def _activate(client: TestClient, draft: dict, session_id: str) -> dict:
         },
     )
     return activated
+
+
+def _report(
+    client: TestClient,
+    *,
+    regimen_id: str,
+    occurrence_id: str,
+    intake_status: str,
+    idempotency_key: str,
+):
+    """Record a self report through the two-phase confirmation flow.
+
+    Phase 1 issues the single-use confirmation challenge (writing nothing);
+    phase 2 submits it. This is the real client contract: the database refuses
+    a ``dose_events`` row that does not cite a confirmed, unconsumed
+    ``record_self_report`` challenge. A replay is answered by the challenge
+    endpoint as ``already_recorded`` and the submit then returns the stored
+    event without needing a new challenge.
+    """
+    challenge = client.post(
+        f"/api/doses/{occurrence_id}/report/challenge",
+        params=_params(),
+        json={
+            "regimen_id": regimen_id,
+            "intake_status": intake_status,
+            "idempotency_key": idempotency_key,
+        },
+    )
+    assert challenge.status_code == 200, challenge.text
+    body = challenge.json()
+    # ``challenge_id`` is a required field of the request contract, but on a
+    # replay the route answers from the stored event before it is ever used.
+    challenge_id = body["challenge_id"] or str(UUID(int=0))
+    return client.post(
+        f"/api/doses/{occurrence_id}/report",
+        params=_params(),
+        json={
+            "regimen_id": regimen_id,
+            "intake_status": intake_status,
+            "idempotency_key": idempotency_key,
+            "challenge_id": challenge_id,
+        },
+    )
 
 
 # --- health & demo ----------------------------------------------------------
@@ -324,9 +365,7 @@ def test_due_dose_then_self_report_then_history(client: TestClient, clock: Fixed
     regimen_id = draft["regimen_id"]
 
     # 07:00 SG: today's 08:00 dose is not due yet.
-    before = client.get(
-        "/api/doses/due", params=_params(regimen_id=regimen_id)
-    ).json()
+    before = client.get("/api/doses/due", params=_params(regimen_id=regimen_id)).json()
     assert before["occurrence_id"] is None
 
     clock.advance(hours=10)  # 17:00 SG: the 08:00 dose is now due
@@ -336,14 +375,12 @@ def test_due_dose_then_self_report_then_history(client: TestClient, clock: Fixed
     assert due["visual_status"] == "not_checked"
     assert due["ingestion_proven"] is False
 
-    report = client.post(
-        f"/api/doses/{due['occurrence_id']}/report",
-        params=_params(),
-        json={
-            "regimen_id": regimen_id,
-            "intake_status": "Taken",
-            "idempotency_key": "turn-1",
-        },
+    report = _report(
+        client,
+        regimen_id=regimen_id,
+        occurrence_id=due["occurrence_id"],
+        intake_status="Taken",
+        idempotency_key="turn-1",
     )
     assert report.status_code == 200, report.text
     body = report.json()
@@ -352,9 +389,7 @@ def test_due_dose_then_self_report_then_history(client: TestClient, clock: Fixed
     assert body["ingestion_proven"] is False
     assert body["already_recorded"] is False
 
-    history = client.get(
-        "/api/me/dose-history", params=_params(regimen_id=regimen_id)
-    ).json()
+    history = client.get("/api/me/dose-history", params=_params(regimen_id=regimen_id)).json()
     reported = [e for e in history["entries"] if e["reported"]]
     assert len(reported) == 1
     assert reported[0]["intake_status"] == "reported_taken"
@@ -373,11 +408,19 @@ def test_self_report_is_idempotent(client: TestClient, clock: FixedClock) -> Non
         "intake_status": "Taken",
         "idempotency_key": "same-key",
     }
-    first = client.post(
-        f"/api/doses/{due['occurrence_id']}/report", params=_params(), json=payload
+    first = _report(
+        client,
+        regimen_id=regimen_id,
+        occurrence_id=due["occurrence_id"],
+        intake_status=payload["intake_status"],
+        idempotency_key=payload["idempotency_key"],
     ).json()
-    second = client.post(
-        f"/api/doses/{due['occurrence_id']}/report", params=_params(), json=payload
+    second = _report(
+        client,
+        regimen_id=regimen_id,
+        occurrence_id=due["occurrence_id"],
+        intake_status=payload["intake_status"],
+        idempotency_key=payload["idempotency_key"],
     ).json()
 
     assert first["already_recorded"] is False
@@ -385,25 +428,19 @@ def test_self_report_is_idempotent(client: TestClient, clock: FixedClock) -> Non
     assert second["event_id"] == first["event_id"]
 
 
-def test_unreported_dose_is_not_counted_as_missed(
-    client: TestClient, clock: FixedClock
-) -> None:
+def test_unreported_dose_is_not_counted_as_missed(client: TestClient, clock: FixedClock) -> None:
     started = _start(client)
     draft = _daily_draft(client)
     _activate(client, draft, started["session_id"])
     regimen_id = draft["regimen_id"]
     clock.advance(hours=10)
 
-    history = client.get(
-        "/api/me/dose-history", params=_params(regimen_id=regimen_id)
-    ).json()
+    history = client.get("/api/me/dose-history", params=_params(regimen_id=regimen_id)).json()
     assert "not_reported is NOT the same as missed" in history["note"]
     assert all(entry["intake_status"] is None for entry in history["entries"])
 
 
-def test_invalid_patient_choice_is_rejected_not_defaulted(
-    client: TestClient, clock: FixedClock
-) -> None:
+def test_invalid_patient_choice_is_rejected_not_defaulted(client: TestClient, clock: FixedClock) -> None:
     started = _start(client)
     draft = _daily_draft(client)
     _activate(client, draft, started["session_id"])
@@ -412,7 +449,7 @@ def test_invalid_patient_choice_is_rejected_not_defaulted(
     due = client.get("/api/doses/due", params=_params(regimen_id=regimen_id)).json()
 
     response = client.post(
-        f"/api/doses/{due['occurrence_id']}/report",
+        f"/api/doses/{due['occurrence_id']}/report/challenge",
         params=_params(),
         json={
             "regimen_id": regimen_id,
@@ -424,9 +461,7 @@ def test_invalid_patient_choice_is_rejected_not_defaulted(
     assert response.json()["code"] == "INVALID_INPUT"
 
 
-def test_patient_facing_choice_labels_are_accepted(
-    client: TestClient, clock: FixedClock
-) -> None:
+def test_patient_facing_choice_labels_are_accepted(client: TestClient, clock: FixedClock) -> None:
     started = _start(client)
     draft = _daily_draft(client)
     _activate(client, draft, started["session_id"])
@@ -434,14 +469,12 @@ def test_patient_facing_choice_labels_are_accepted(
     clock.advance(hours=10)
     due = client.get("/api/doses/due", params=_params(regimen_id=regimen_id)).json()
 
-    response = client.post(
-        f"/api/doses/{due['occurrence_id']}/report",
-        params=_params(),
-        json={
-            "regimen_id": regimen_id,
-            "intake_status": "Not now",
-            "idempotency_key": "k2",
-        },
+    response = _report(
+        client,
+        regimen_id=regimen_id,
+        occurrence_id=due["occurrence_id"],
+        intake_status="Not now",
+        idempotency_key="k2",
     )
     assert response.status_code == 200
     assert response.json()["intake_status"] == "reported_not_taken"
@@ -459,18 +492,14 @@ def test_prn_regimen_has_no_scheduled_due_dose(client: TestClient) -> None:
     )
     assert _activate(client, draft, started["session_id"]).status_code == 200
 
-    due = client.get(
-        "/api/doses/due", params=_params(regimen_id=draft["regimen_id"])
-    ).json()
+    due = client.get("/api/doses/due", params=_params(regimen_id=draft["regimen_id"])).json()
     assert due["is_prn"] is True
     assert due["occurrence_id"] is None
 
 
 def test_due_dose_for_unknown_regimen_is_404(client: TestClient) -> None:
     _start(client)
-    response = client.get(
-        "/api/doses/due", params=_params(regimen_id=UUID(int=777))
-    )
+    response = client.get("/api/doses/due", params=_params(regimen_id=UUID(int=777)))
     assert response.status_code == 404
 
 
@@ -557,6 +586,9 @@ def test_agent_is_bounded_and_budgeted(client: TestClient, clock: FixedClock) ->
     draft = _daily_draft(client)
     _activate(client, draft, started["session_id"])
     clock.advance(hours=10)
+    # The dose is due, but the previous two-hour conversation has expired.
+    # Keep the tool-budget assertions using a fresh authenticated session.
+    started = _start(client)
 
     response = client.post(
         "/api/agent/messages",
@@ -616,3 +648,27 @@ def test_openapi_schema_is_generated(client: TestClient) -> None:
     assert schema["info"]["title"] == "PharmaScan Care Agent API"
     assert "/api/medications/drafts" in schema["paths"]
     assert "/api/agent/messages" in schema["paths"]
+
+
+def test_explicit_app_origin_controls_cors_without_relaxing_patient_auth():
+    from dataclasses import replace
+
+    from app.config import Settings
+    from app.transport.container import build_container
+
+    settings = replace(Settings.from_env(), app_origin="https://demo.example.test")
+    client = TestClient(create_app(container=build_container(), settings=settings))
+    allowed = client.options(
+        "/api/agent/messages",
+        headers={
+            "Origin": "https://demo.example.test",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization",
+        },
+    )
+    assert allowed.status_code == 200
+    denied = client.options(
+        "/api/agent/messages", headers={"Origin": "https://other.example.test", "Access-Control-Request-Method": "POST"}
+    )
+    assert denied.status_code == 400
+    assert client.get("/api/me/medications").status_code == 401

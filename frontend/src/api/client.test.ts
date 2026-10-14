@@ -8,6 +8,9 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '../api/client';
+import { accessToken } from './auth';
+
+vi.mock('./auth', () => ({ accessToken: vi.fn().mockResolvedValue(null) }));
 
 function mockFetch(status: number, body: unknown) {
   return vi.fn().mockResolvedValue({
@@ -20,6 +23,7 @@ function mockFetch(status: number, body: unknown) {
 describe('api client', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.mocked(accessToken).mockResolvedValue(null);
   });
 
   it('parses a successful health response', async () => {
@@ -37,6 +41,22 @@ describe('api client', () => {
     const health = await api.health();
     expect(health.database).toBe('simulated_in_memory');
     expect(health.llm).toBe('unavailable_deterministic_degraded');
+  });
+
+  it('forwards the current authenticated access token to FastAPI', async () => {
+    vi.mocked(accessToken).mockResolvedValue('synthetic-test-token');
+    const fetchMock = mockFetch(200, { item_count: 0, medications: [] });
+    vi.stubGlobal('fetch', fetchMock);
+    await api.listMedications();
+    expect(fetchMock.mock.calls[0]?.[1].headers.Authorization).toBe('Bearer synthetic-test-token');
+  });
+
+  it('refuses a business request when identity acquisition fails', async () => {
+    vi.mocked(accessToken).mockRejectedValue(new Error('Anonymous sign-in unavailable'));
+    const fetchMock = mockFetch(200, {});
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(api.listMedications()).rejects.toThrow('Anonymous sign-in unavailable');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('turns a domain refusal into a typed ApiError with the code', async () => {

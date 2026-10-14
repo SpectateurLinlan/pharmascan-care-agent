@@ -445,3 +445,163 @@ details summary {
   border-bottom: 1px dashed var(--border);
   padding-bottom: 0.3rem;
 }
+
+/* Session 03: compact patient companion, consistent with the existing teal identity. */
+.companion { max-width: 430px; padding: 20px 18px 105px; gap: 22px; }
+.companion-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { display: flex; gap: 8px; align-items: center; font-size: 14px; font-weight: 750; }
+.brand-symbol { color: var(--accent); font-size: 24px; }
+.demo-badge { border: 1px solid var(--border); border-radius: 99px; padding: 4px 10px; font-size: 12px; color: var(--text-muted); }
+.welcome { padding: 18px 4px 4px; }
+.welcome h1 { font-size: clamp(28px, 8vw, 36px); line-height: 1.18; font-weight: 650; letter-spacing: -.04em; margin: 10px 0 14px; }
+.welcome p { font-size: 16px; color: var(--text-muted); margin: 0; }
+.welcome .eyebrow { color: var(--accent); font-weight: 600; }
+.check-entry { background: var(--surface); padding: 24px 20px; border: 1px solid var(--border); border-radius: 24px; box-shadow: 0 8px 24px rgba(20, 50, 50, .035); }
+.check-entry h2 { font-size: 22px; letter-spacing: -.02em; margin: 14px 0 8px; }
+.check-entry p { font-size: 16px; color: var(--text-muted); }
+.check-icon { background: var(--surface-alt); color: var(--accent); border-radius: 15px; padding: 10px; width: 48px; text-align: center; }
+.dominant { width: 100%; min-height: 56px; margin-top: 12px; border-radius: 16px; }
+.quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.quick-actions button { font-size: 15px; min-height: 48px; }
+.companion .card { border-radius: 22px; padding: 20px; }
+.companion .notice, .companion .card__hint { font-size: 15px; }
+.companion .actions { flex-wrap: wrap; }
+.companion .choice { flex: 1 1 85px; min-height: 48px; font-size: 16px; }
+.patient-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: min(100%, 430px); display: grid; grid-template-columns: repeat(5, 1fr); padding: 8px 8px max(10px, env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--surface); z-index: 10; }
+.patient-nav button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: none; font-size: 12px; color: var(--text-muted); border-radius: 12px; padding: 6px; min-height: 56px; }
+.patient-nav button span { font-size: 22px; line-height: 1; }
+.patient-nav button[aria-current="page"] { color: var(--accent); background: var(--surface-alt); font-weight: 750; }
+.demo-information { color: var(--text-muted); font-size: 14px; }
+.consent { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.5; }
+.consent input { width: 22px; height: 22px; min-height: 22px; flex: 0 0 22px; margin-top: 2px; }
+.voice-controls { display: flex; flex-direction: column; gap: 10px; }
+.companion input, .companion select, .companion textarea { max-width: 100%; min-width: 0; }
+.companion .history li { display: flex; flex-direction: column; gap: 6px; padding: 14px 0; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+@media (max-width: 340px) { .companion { padding-left: 12px; padding-right: 12px; } .brand { font-size: 12px; } }
+@media (orientation: landscape) and (max-height: 500px) { .patient-nav { padding-bottom: 5px; } .patient-nav button { min-height: 44px; } }
+
+/* Compact patient companion, 390?430px portrait. */
+.companion { max-width:430px; padding:18px 16px 88px; }
+.companion-header { gap:8px; margin-bottom:22px; }
+.companion-header .brand { font-size:17px; flex:1; }
+.settings-button { border:0; background:transparent; min-width:44px; padding:8px; font-size:22px; }
+.welcome { margin:0 0 18px; }
+.welcome .eyebrow { font-size:24px; font-weight:700; margin:0 0 5px; }
+.welcome h1 { font-size:17px; font-weight:400; line-height:1.4; margin:0; color:var(--muted,#526b68); }
+.companion .card { padding:20px; margin-bottom:16px; border-radius:22px; }
+.companion .card__title { font-size:18px; margin-bottom:12px; }
+.dose-name { font-size:21px; font-weight:700; margin:6px 0 14px; }
+.dominant { width:100%; min-height:48px; border-radius:24px; }
+.quick-actions { display:flex; gap:10px; margin-top:12px; }
+.quick-actions button { flex:1; background:#f4faf8; min-height:48px; }
+.companion-composer { position:relative; margin:18px 0 8px; }
+.composer-row { display:flex; align-items:center; border:1px solid #d4e3de; border-radius:28px; background:white; padding:5px; min-height:56px; box-shadow:0 4px 18px #16483b08; }
+.composer-row input { flex:1; min-width:0; border:0; background:transparent; padding:8px 4px; font-size:15px; }
+.photo-button,.mic-button { display:grid; place-items:center; min-width:44px; min-height:44px; border:0; border-radius:50%; padding:8px; }
+.photo-button { background:transparent; font-size:23px; color:#526b68; }
+.mic-button { background:#d9f3e9; color:#087965; }
+.mic-button.is-listening { background:#087965; color:white; animation:breathe 1.2s infinite alternate; }
+@keyframes breathe { to { box-shadow:0 0 0 5px #08796522; } }
+.voice-inline { position:static; }
+.speech-status,.speech-consent { display:block; font-size:13px; margin:8px 4px; }
+.voice-inline .speech-status,.voice-inline .speech-consent { position:absolute; top:58px; left:0; right:0; background:#f4faf8; padding:8px; border-radius:12px; z-index:1; }
+.companion-composer:has(.speech-status),.companion-composer:has(.speech-consent) { padding-bottom:72px; }
+.composer-actions { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; margin-top:10px; }
+.speech-disclosure { font-size:12px; margin:10px 5px; color:#526b68; }
+.transcript { padding:0; list-style:none; }
+.turn { border:1px solid #d4e3de; border-radius:18px; padding:14px; margin-top:12px; }
+.demo-information { font-size:12px; margin-top:16px; }
+[hidden] { display:none !important; }
+@media (prefers-reduced-motion:reduce) { .mic-button.is-listening { animation:none; } }
+
+/* Voice notices sit above the composer, leaving Send reachable. */
+.voice-inline { position:relative; width:44px; flex-shrink:0; }
+.voice-inline .speech-status,.voice-inline .speech-consent { top:auto; bottom:54px; left:auto; right:0; width:290px; max-width:calc(100vw - 60px); margin:0; border:1px solid #d4e3de; }
+.companion-composer:has(.speech-status),.companion-composer:has(.speech-consent) { padding-bottom:0; }
+
+.photo-preview {max-width:100%;max-height:260px;object-fit:contain;border-radius:16px;margin:12px 0;}
+.companion-header select { width:76px; min-height:44px; padding:6px; font-size:12px; }
+.companion-header .brand { min-width:0; font-size:15px; }
+.text-large p,.text-large input,.text-large button {font-size:21px;}
+
+.companion {padding-top:82px;}
+.app-header {position:fixed;top:0;left:50%;transform:translateX(-50%);width:min(100%,430px);min-height:66px;padding:10px 16px;background:#f8fcfaee;backdrop-filter:blur(10px);border-bottom:1px solid #d4e3de;z-index:20;margin:0;box-sizing:border-box;display:flex;align-items:center;}
+.back-button {border:0;background:transparent;min-width:44px;min-height:44px;font-size:32px;line-height:1;padding:0;}
+.dose-details {font-size:14px;color:#365850;border-top:1px solid #e0ece7;margin-top:14px;padding-top:8px;}
+.dose-details p {margin:5px 0;}
+.account-actions,.segmented {display:flex;flex-wrap:wrap;gap:8px;margin:14px 0;}
+.singpass-disabled {width:100%;background:#eceeed;color:#717b77;border-color:#d4d9d6;margin-top:16px;cursor:not-allowed;}
+.modal-backdrop {position:fixed;inset:0;background:#103c3266;z-index:100;display:flex;align-items:center;justify-content:center;padding:18px;}
+.reminder-dialog {width:min(100%,390px);max-height:85vh;overflow:auto;background:white;padding:24px;border-radius:24px;box-shadow:0 14px 50px #08382c44;}
+.reminder-dialog h2 {font-size:22px;line-height:1.35;}
+
+/* Patient task navigation and accessible independent confirmation. */
+.entry-group {padding:6px 18px!important;}
+.entry-row {display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;text-align:left;background:transparent;border:0;border-radius:0;padding:18px 0;min-height:64px;border-bottom:1px solid #e2ece8;}
+.entry-row:last-child {border-bottom:0;}
+.entry-row strong {font-size:17px;font-weight:650;display:block;}
+.entry-row small {display:block;font-size:14px;color:#526b68;margin-top:5px;line-height:1.5;}
+.entry-row>span:last-child {font-size:26px;color:#526b68;}
+.profile-overview {display:flex;align-items:center;gap:14px;}
+.companion .profile-overview {flex-direction:row;}
+.profile-overview h2 {font-size:21px;margin:0;}
+.profile-overview p {margin:6px 0 0;}
+.profile-overview>div:nth-child(2) {flex:1;min-width:0;overflow-wrap:anywhere;}
+.avatar {height:52px;width:52px;background:#d9f3e9;border-radius:50%;display:grid;place-items:center;font-size:25px;color:#087965;flex-shrink:0;}
+.language-shortcut {min-width:44px;border:0;background:transparent;font-size:14px;padding:5px;}
+.sheet-backdrop {align-items:flex-end;padding:0;}
+.bottom-sheet {background:white;width:min(100%,430px);max-height:calc(100dvh - 40px);overflow:auto;border-radius:26px 26px 0 0;padding:12px 24px max(24px,env(safe-area-inset-bottom));box-shadow:0 -10px 40px #08382c33;}
+.bottom-sheet h2 {font-size:23px;line-height:1.35;margin-top:20px;}
+.bottom-sheet .actions button {flex:1;min-height:52px;padding:12px 8px;font-size:18px;}
+.sheet-handle {height:4px;width:42px;background:#c8d9d3;border-radius:9px;margin:0 auto;}
+.period-actions {display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;}
+.period-actions button {min-height:56px;padding:8px;font-size:15px;}
+.summary-counts {display:flex;gap:12px;flex-wrap:wrap;background:#f0f8f5;padding:12px;border-radius:16px;}
+.summary-counts p {flex:1;min-width:80px;font-size:14px;margin:0;}
+.summary-counts strong {display:block;font-size:26px;color:#087965;margin-top:6px;}
+.health-note {padding:14px 0;border-bottom:1px solid #e2ece8;overflow-wrap:anywhere;}
+.health-note time {font-size:14px;color:#526b68;}
+.recent-chat {margin:12px 0;}
+.recent-chat article {border-bottom:1px solid #e2ece8;padding:10px 0;}
+.user-message {background:#e8f5ef;padding:10px 14px;border-radius:16px;}
+.companion input,.companion textarea,.companion select {scroll-margin-top:90px;scroll-margin-bottom:110px;font-size:16px;}
+.companion:has(>div:not([hidden])>.companion-composer) {padding-bottom:170px;}
+.companion-composer .composer-row,.companion-composer .composer-actions {position:fixed;left:50%;transform:translateX(-50%);width:min(calc(100% - 32px),398px);z-index:30;background:var(--surface);}
+.companion-composer .composer-row {bottom:calc(86px + env(safe-area-inset-bottom));}
+.companion-composer:has(.composer-actions) .composer-row {bottom:calc(152px + env(safe-area-inset-bottom));}
+.companion-composer .composer-actions {bottom:calc(86px + env(safe-area-inset-bottom));margin:0;border-radius:18px;padding:6px 10px;box-shadow:0 4px 18px #16483b15;}
+.companion-composer .composer-actions span {font-size:13px;}
+.companion-composer .turn {scroll-margin-top:85px;scroll-margin-bottom:230px;}
+.patient-nav button {font-size:13px;}
+.companion>h1 {font-size:28px;line-height:1.25;margin:12px 0 18px;}
+.companion .card {margin-bottom:12px;gap:8px;}
+.companion .entry-group {display:block;}
+.entry-row {padding:14px 0;}
+.companion {display:block;}
+.companion .card p {margin-top:10px;margin-bottom:10px;}
+.dose-details {border-top:0;margin-top:8px;}
+.dose-details p {margin:4px 0!important;font-size:16px;}
+.companion .compact-name {margin:0 0 4px;}
+.compact-plan p {font-size:16px;margin:4px 0!important;line-height:1.45;}
+.compact-dose-status {font-size:15px;margin:2px 0!important;color:var(--accent);}
+.compact-dose-status small {display:block;color:var(--text-muted);}
+.daily-actions {display:flex;gap:8px;margin-top:4px;}
+.daily-actions button {flex:1;font-size:16px;padding:8px 5px;min-height:48px;}
+.report-options {font-size:14px;color:var(--text-muted);}
+.compact-shortcuts {margin-top:4px;}
+.compact-shortcuts button {min-height:44px;}
+.text-large .compact-plan p,.text-large .compact-dose-status {font-size:21px;}
+.text-large .patient-nav button {font-size:14px;}
+.text-large .bottom-sheet .actions button,.text-large .dose-details p,.text-large .entry-row strong {font-size:21px;}
+.text-large .entry-row small {font-size:18px;}
+.companion.text-large input,.companion.text-large textarea,.companion.text-large select {font-size:21px;}
+@media (min-width:768px) {.companion {max-width:680px;padding-left:30px;padding-right:30px;}.app-header,.patient-nav {width:680px;}.bottom-sheet {width:520px;border-radius:26px;margin-bottom:32px;}.sheet-backdrop {align-items:center;}.patient-nav button {font-size:15px;}.companion-composer .composer-row,.companion-composer .composer-actions {width:620px;}}
+@media print {.app-header,.patient-nav,.no-print,.welcome,.companion-composer {display:none!important;}.companion {max-width:none;padding:0;}.card {box-shadow:none!important;border:0!important;}.print-report {color:black;}}
+@media (prefers-color-scheme:dark) {.app-header,.composer-row,.bottom-sheet,.reminder-dialog {background:var(--surface);}.entry-row small,.entry-row>span:last-child,.dose-details {color:var(--text-muted);}.user-message,.summary-counts,.avatar,.quick-actions button,.voice-inline .speech-consent,.voice-inline .speech-status {background:var(--surface-alt);}.avatar,.summary-counts strong {color:var(--accent);}}
+
+.gallery-entry {display:flex;flex-direction:column;align-items:flex-start;gap:8px;width:100%;text-align:left;}
+.gallery-thumbnail {width:112px;height:112px;object-fit:contain;border-radius:12px;background:#f4faf8;}
+.gallery-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;}
+.gallery-grid figure {margin:0;overflow-wrap:anywhere;}
+.evidence-review {display:grid;gap:12px;margin-top:16px;}

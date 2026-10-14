@@ -197,3 +197,106 @@ Evidence: `outputs/stage2_contract_audit.json` covers all 17 operations and 51 c
 **Transport:** injected httpx client/config/schema/sleeper, HTTPS/no redirects, bounded response size/timeouts, PNG/JPEG content decode/pixel cap/EXIF stripping. GET network/5xx retries at most two with bounded exponential backoff; POST never auto-retried. 4xx, 5xx/network and malformed/HTML/schema errors are distinct explicit failure types. PDF uses manual fallback until a validated PDF transport exists.
 
 **Live coverage:** GET only, no auth, no patient data or image upload. Image POST, catalogue/knowledge calls and feedback not exercised. Schema conformance does not validate model accuracy, deployed detector fixes, OCR completeness, FAR/FRR or clinical safety; V003 remains incomplete.
+
+## Internal patient auth and self-report boundary (Session 3D)
+
+Persistent business endpoints require `Authorization: Bearer <current user access token>`. `client_id` is ignored for authoritative identity in Supabase mode, including `/api/demo/start`; body/query/agent values cannot choose an owner. Local in-memory demo identity remains explicitly unauthenticated. No raw token appears in domain/application DTOs or error envelopes.
+
+Dose self-report is two-phase: `POST /api/doses/{occurrence_id}/report/challenge` returns a readable medication/version/dose/time/intake summary and challenge; `POST /api/doses/{occurrence_id}/report` submits explicit confirmation with `challenge_id`, `regimen_id`, `intake_status` and a stable `idempotency_key`. Choices map to `reported_taken`, `reported_not_taken`, or `unsure`. The latter write validates owner, purpose, session version, expiry, consumption and report bindings. Reissuing a live challenge reuses its original session/version. Replaying the same report returns the same event; reusing a key for different bindings is refused. `DoseEventRepository.add` may return the persisted DTO to report an atomic concurrent replay.
+
+The infrastructure-only Data API RPC `record_confirmed_self_report(p_event jsonb)` runs SECURITY INVOKER as authenticated. It checks `auth.uid()`, locks the patient's idempotency key, preserves all core trigger/NOT NULL/check/FK safeguards, and atomically inserts the event, consumes the confirmed challenge and closes the occurrence. It never claims proven ingestion. Public helper consumption RPC access is unavailable; the helper lives in nonexposed `pharmascan_private`. Normal business APIs do not expose provider response objects.
+
+Live Data API OpenAPI discovery returned HTTP 401 `Secret API key required` with the available publishable/user credentials. No secret key was requested or used. Implementation was checked against actual migration/schema definitions and real authenticated row/RPC responses. This is a discovery limitation, not a successful OpenAPI capture. Stage2 v0.8.0 is unchanged.
+
+## Session 03 internal integration endpoints
+
+- GET /api/speech/capabilities: configured provider availability, review_required and raw_audio_retained=false; configuration is not proof of account activation.
+- POST /api/speech/transcribe: authenticated audio/wav, X-Speech-Consent=true, maximum 960044 bytes/30 seconds; typed editable transcript, confidence=null (provider does not declare a confidence field). Failure returns an explicit error, never a synthetic transcript.
+- POST /api/speech/synthesize: authenticated {text, consent}; bounded concise text, PCM WAV response and Cache-Control:no-store. Sanitized provider Error.Code is retained; provider Message, audio and credentials are never logged.
+- POST /api/sources/preview: authenticated PNG/JPEG with X-Stage2-Consent=true and X-Demo-Only=true; extraction preview plus review_required, no regimen activation. Unsupported PDF uses manual fallback.
+- POST /api/prn/report/challenge and /api/prn/report: same challenge and consent payload semantics as scheduled self-report, occurrence_id absent. PRN rules store NULL time/days per existing database CHECK; PRN events appear in history with event_time.
+- GET /api/me/regimens: own versioned regimen view; historical versions do not generate new dose occurrences.
+
+Earlier GET-only Stage2 coverage descriptions are historical: the new synthetic read-label preview POST succeeded REAL LIVE. The external Stage2 v0.8.0 contract remains unchanged. No model accuracy/calibration or live gallery-match claim follows from this result.
+
+## Continuation 2026-10-14: active browser recognition and immutable source evidence
+
+This supersedes the standalone-ASR blocking decision above. Active demo STT uses native SpeechRecognition/webkitSpeechRecognition with feature detection, en-US short utterances, explicit consent, bounded lifecycle and editable review. Browsers may send audio to remote recognition services; this is not guaranteed offline/local-only or clinically reliable. Unsupported/error/denial/no-speech/abort/timeout states preserve typing. No final transcript auto-submits. Tencent SentenceRecognition remains an inactive alternative; its activation mismatch no longer blocks this demo provider choice. Tencent TextToVoice remains server-side.
+
+Home now uses one primary medication card and a compact photo/text/microphone composer. Send is independent of recognition; pending self-report still requires separate Confirm. Audio failure preserves text. Backend source_documents.extraction_evidence (migration006) retains a bounded immutable typed extraction payload, including Printed.value/line and separate product/regimen evidence. The payload is patient-submitted untrusted evidence, not a provider-authenticated prescription. Manual dose/schedule fields remain separately reviewed; source review and activation confirmation remain mandatory. No extraction implies missing dosing fields, safety or ingestion.
+
+PWA manifest provides install metadata only; no offline clinical workflow or reliable closed-browser push claim follows. Physical microphone acceptance remains manual pending until exercised on Chrome/Edge.
+
+### Reminder and active STT contracts
+
+POST /api/reminders {occurrence_id, minutes:1..1440} upserts an authenticated own occurrence preference; GET /api/reminders returns own open/active preferences. Ownership is verified server context; supplied patient_id is forbidden. Agent create_reminder accepts typed occurrence_id/minutes and resolves ownership in the application. Invalid/closed/historical/foreign occurrence is refused. No dose_event is generated.
+
+STT_PROVIDER defaults to browser. The standalone /api/speech/transcribe endpoint is inactive in that configuration; Tencent SentenceRecognition adapter remains available for explicit future configuration. /capabilities now distinguishes active standalone STT from configured TTS. Playing response still uses authenticated /synthesize and ephemeral WAV; browser speech transcript travels through the ordinary /api/agent/messages boundary.
+
+## Manual acceptance repair: internal endpoints
+
+- GET /api/health adds runtime_contract=session03-manual-acceptance-v2 (runtime compatibility, not external-service proof).
+- GET /api/medications/drafts/{regimen_id}: own draft/pending state only, same DraftCreateResponse; no activation/write.
+- POST /api/agent/messages accepts optional language=en|zh, defaulten; identity never comes from this field or slots.
+- POST /api/speech/synthesize accepts optional language=en|zh, defaulten; standard voice selection is server-owned.
+- GET /api/reminders adds is_due from server clock; browser polling is presentation refresh only.
+- POST /api/visual-check?regimen_id=<optional UUID>: authenticated PNG/JPEG, X-Stage2-Consent=true, X-Demo-Only=true; max8MB/16millionpixels, signature/content validation, EXIF stripped. Selected active regimen must belong to the verified principal. Typed unknown/ambiguous evidence returns comparison_available=false, ingestion_proven=false, safe_to_take_confirmed=false. Provider failure503 preserves recorded instructions/manual fallback; no clinical writes.
+
+Stage2 externalv0.8 contract unchanged. Live upstream announcesv0.9; only proven-compatible read-only detect/identify metadata is accepted explicitly. No personal-gallery/embedding API boundary has been relaxed.
+
+
+## Implemented personalised internal APIs
+
+GET/PUT /api/me/preferences returns/saves preferred_language(en|zh), derived speech_locale(en-SG|zh-CN), text_size,voice_enabled,tts_autoplay,reminder_lead_minutes(0..120),timezone and timestamps. PUT rejects identity, provider voice IDs and independently supplied speech locale. Current timezone update supports Asia/Singapore only.
+
+POST /api/demo/start optionally resumes an owned unexpired session_id; foreign/expired references start a fresh own session. POST /api/agent/messages uses the persisted language and accepts the existing session/client-turn fields. Replies disclose mode, optional usage and prepare-only visual_check_request or pending_report. GET /api/agent/usage returns successful llm_user_turns,model_requests,limit,usage_date and next Singapore midnight reset. Counter mutation is not exposed.
+
+Gemini exact allowlist: prepare_health_observation,list_active_medications,check_due_dose,get_dose_status,get_medication_history,prepare_self_report,create_reminder,check_medication_image. Tools reuse application capabilities; prepare_self_report can issue a B14 challenge but cannot confirm or write an event. check_medication_image prepares the owned upload action; the actual image goes through /api/visual-check with explicit consent. Function calls/results preserve matching call_id/name; unknown/malformed/oversized calls/results stop safely.
+
+Draft creation optionally accepts course_start_date/course_end_date (ISO calendar dates). End requires start and cannot precede it. List and activation summary return both bounds. End is inclusive, evaluated in schedule timezone. No end is inferred from medication/product or OCR. Draft ->review ->activation remains required. Uncertainty does not implicitly record taken. Confirm remains the independent patient HTTP action. Frozen Stage2 externalv0.8.0 is unchanged.
+
+
+### Patient app repair APIs
+
+GET /api/me/medications additionally returns dose_amount,dose_unit,frequency_rule,food_instruction and course bounds from the current reviewed version. Activation summary includes food_instruction. PRN due responses also return dose_description; no scheduled occurrence is invented.
+
+GET /api/reminders/alerts returns owned occurrence/regimen references, medication/dose/food metadata, due_at,remind_at and a presentation deduplication key. The server uses persisted preference lead/timezone and excludes reported/closed doses; future snoozes suppress the original alert. Notification is a review prompt, never intake confirmation.
+
+POST /api/feedback accepts {id:UUID,category:issue|suggestion,message:5..2000 characters}, rejects patient_id/extra fields, returns received status/id/created_at and is retry-safe. Text is stored under verified owner; no external delivery claim.
+
+Email OTP/Magic Link/password endpoints are Supabase Auth identity operations only. Anonymous linking uses updateUser/verifyOtp(email_change); login uses signInWithOtp/verifyOtp(email), or signInWithPassword. Password setup requires verified email. No Singpass endpoint.
+
+## Patient experience revision APIs
+
+GET/PUT /api/me/preferences additionally exposes display_name (1..80 trimmed characters), using the existing profile column. GET /api/me/regimens adds medication_id, reviewed dose/food/course/local-time/is_prn fields for grouped lists and owned details.
+
+GET /api/agent/sessions/{session_id}/recent-turns returns only up to six owned RecentTurn pairs. Unknown/foreign session404. Agent responses may contain health_note_request {description,requires_patient_review:true,urgent_help_advised:boolean}; allowlisted prepare_health_observation has no model parameters, preserves original user input and has no write authority. Final confirmation is the patient's health-note API operation, not a model call.
+
+GET /api/me/health-observations reads at most500 notes in the last366days. PUT accepts {id,occurred_at:timezone-aware,description:1..1000,severity?:mild|moderate|severe,notes?:max1000,medication_id?:UUID,confirmed:true}; owner and timestamps derive server-side. PUT is ID-upsert for retry/edit, rejects foreign medication/future observations and unconfirmed writes. DELETE /api/me/health-observations/{id} only deletes the owned selected note, not clinical history. Body patient_id is forbidden.
+
+GET /api/me/review-summary?period=week|month|course&regimen_id=<course> returns explicit window_start/window_end/generated_at/timezone, actual regimen metadata, stored occurrence counts/without_report, report-time taken/not_taken/unsure counts, bounded observations, review questions and coverage_note. It is read-only, not a clinical adherence or causality score. No stored gallery references or automatic caregiver delivery API is claimed. Frozen Stage2externalv0.8 unchanged.
+
+Current dose history/summary windows return complete stored occurrence/event collections or a provider-unavailable error when exact completeness cannot be verified or the2000record/20page ceiling is exceeded. No silently truncated full counts. Severe/breathing/chest-pain input can return a deterministic conditional help response before any model request, even at app quota capacity; it contains no pending dose/health save.
+
+## Speech cost boundary (2026-10-14)
+`GET /api/speech/capabilities` remains authenticated, returns default `provider=browser` and `cloud_tts_allowed` (server availability AND TTS_PROVIDER=tencent). It exposes no credentials. Browser synthesis does not call FastAPI. `POST /api/speech/synthesize` now requires literal `provider=tencent` in addition to text/consent/language. Missing/unknown provider is rejected (422), disabled cloud synthesis is 503 before budget/provider I/O. The persisted preferred language continues to select Tencent's existing English/Mandarin mapping. No Domain/Repository/schema/Stage2 contract change.
+
+
+## Patient evidence/gallery HTTP boundary (2026-10-15)
+
+Every route requires the existing verified user identity. Business IDs are ownership-checked; patient_id is never a model/request identity selector.
+
+| API | Contract |
+|---|---|
+| GET /api/evidence/tasks; GET /tasks/{id}; GET /tasks/{id}/sources | Typed bounded tasks, original source records and provenance for explicit resume. |
+| POST /api/evidence/tasks/{id}/sources | PNG/JPEG bytes; source_kind package/pharmacy_label/prescription; optional owned medication_id for explicit association; consent + demo headers required. Persist identity before plan. |
+| POST /api/evidence/tasks/{id}/review | Strict reviewed RegimenDraftInput; explicit distinct-product/new-course choice. Returns retry-safe draft; activation still uses the existing confirmation endpoint. |
+| GET /api/evidence/gallery | Identity-grouped products, all courses, actual photos and eligible count. |
+| POST /api/evidence/gallery/{medication_id}/images | Typed image_kind/source_description/reviewed/for_comparison; sanitized consented bytes; atomic eligible DB reference when supported. |
+| GET /api/evidence/images/{id} | Authenticated private PNG proxy, Cache-Control:no-store. |
+| POST /api/evidence/images/{id}/retire | Owned idempotent logical retirement; never erases source/history or upgrades eligibility. |
+| POST /api/evidence/check-dose | Real query embedding + compatible owned references + current-regimen/source reconciliation; stored RecognitionRun, never intake. |
+
+PNG/JPEG MIME/signature/byte/pixel/decompression checks precede provider use; EXIF is removed. Blank/tiny pill images are rejected as unsuitable inputs, not a calibrated clinical quality claim. PDF upload returns explicit unsupported input. Missing source fields remain missing; narrow literal quantity/unit/HH:MM daily proposals require human review and never derive from strength/dispensed quantity. External v0.8.0 contracts are unchanged.
+
+Source GET returns SourceEvidenceView: original extraction/review fields plus recorded_at/provided_by=patient. Source inspection is available from the Gallery product detail, including completed registrations. Explicitly printed finite course duration requires a reviewed matching start/end window. Generic-name/strength suffix formatting is normalized only for textual name comparison; independently conflicting strength/form remains blocking.

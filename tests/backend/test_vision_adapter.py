@@ -479,11 +479,11 @@ def test_sanitize_image_decompression_warning_fails_closed(monkeypatch):
 
 
 def test_structural_source_boundary_no_repository_or_activation_dependency():
-    text = (ROOT / "backend/app/infrastructure/stage2_label_adapter.py").read_text()
+    text = (ROOT / "backend/app/infrastructure/stage2_label_adapter.py").read_text(encoding="utf-8")
     assert "enrollment" not in text.split("class PharmaScanLabelProvider:")[1].replace("manual enrollment", "")
     assert "Repository" not in text and "activate_regimen(" not in text
     for file in (ROOT / "backend/app/application").glob("*.py"):
-        assert "stage2_wire" not in file.read_text()
+        assert "stage2_wire" not in file.read_text(encoding="utf-8")
 
 
 def test_fake_and_embedding_guard_stay_explicit():

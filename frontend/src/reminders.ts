@@ -50,7 +50,6 @@ export function createBrowserReminderPort(): ReminderPort {
       if (window.Notification.permission !== 'granted') {
         return false;
       }
-      // eslint-disable-next-line no-new
       new window.Notification(title, { body });
       return true;
     },

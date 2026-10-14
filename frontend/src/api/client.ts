@@ -9,6 +9,8 @@
  * if a field is not returned by the backend it is not declared.
  */
 
+import { accessToken } from './auth';
+
 const CLIENT_STORAGE_KEY = 'pharmascan.client_id';
 
 /** Stable error shape returned by the backend's domain error handler. */
@@ -47,12 +49,14 @@ export function clientId(): string {
   return generated;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function fetchResponse(path: string, init?: RequestInit): Promise<Response> {
+  const token = await accessToken();
   const response = await fetch(path, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
       ...(init?.headers ?? {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
 
@@ -74,8 +78,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new ApiError(response.status, body);
   }
-  return (await response.json()) as T;
+  return response;
 }
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  return (await (await fetchResponse(path, init)).json()) as T;
+}
+
+export interface SpeechCapabilities { cloud_tts_allowed: boolean; available: boolean; provider: string; review_required: true; raw_audio_retained: false }
+export interface TranscriptResponse { text: string; provider: string; request_id: string; confidence: null; review_required: true }
+export interface RegimenHistoryItem { regimen_id: string; display_name: string; version_no: number; state: string;
+  effective_from: string | null; effective_to: string | null; medication_id:string;course_start_date:string|null;course_end_date:string|null;
+  dose_amount:number|null;dose_unit:string|null;food_instruction:string|null;is_prn:boolean;local_times:string[] }
+export interface SourcePreview { source_document_id: string; source_kind: string; provider: string; extraction_model: string;
+  review_required: true; note: string; candidates: Array<{ product: { name: string; strength: string | null; source_lines: string[] };
+    regimen_evidence: { directions: { value: string; line: string } | null; dose_amount: null; frequency: null; administration_times: null; duration: null };
+    review_status: 'extracted'; can_activate_regimen: false }> }
 
 function withClient(path: string, extra?: Record<string, string>): string {
   const params = new URLSearchParams({ client_id: clientId(), ...(extra ?? {}) });
@@ -84,11 +102,25 @@ function withClient(path: string, extra?: Record<string, string>): string {
 
 // --- response types (mirror backend schemas.py) -----------------------------
 
+export interface PatientPreferences {
+  display_name?:string|null;
+  patient_id:string;preferred_language:'en'|'zh';speech_locale:'en-SG'|'zh-CN';
+  text_size:'standard'|'large';voice_enabled:boolean;tts_autoplay:boolean;reminder_lead_minutes:number;
+  timezone:string;created_at:string;updated_at:string;
+}
+export type PreferenceUpdate=Partial<Pick<PatientPreferences,'display_name'|'preferred_language'|'text_size'|'voice_enabled'|'tts_autoplay'|'reminder_lead_minutes'>>;
+
+export interface HealthObservation {id:string;patient_id:string;description:string;occurred_at:string;severity:'mild'|'moderate'|'severe'|null;notes:string|null;medication_id:string|null;source:'patient_reported';created_at:string;updated_at:string;demo_only:true}
+export type ObservationInput=Pick<HealthObservation,'id'|'description'|'occurred_at'|'severity'|'notes'|'medication_id'> & {confirmed:boolean};
+export interface ReviewSummary {period:'week'|'month'|'course';window_start:string;window_end:string;generated_at:string;timezone:string;reported_taken:number;reported_not_taken:number;unsure:number;observations:HealthObservation[];questions:string[];coverage_note:string;
+  medications:Array<{medication_id:string;regimen_id:string;name:string;version:number;state:string;is_prn:boolean;dose_amount:number|null;dose_unit:string|null;food_instruction:string|null;course_start:string|null;course_end:string|null;local_times:string[];recorded_occurrences:number;without_report:number}>}
+
 export interface HealthResponse {
+  runtime_contract?: string;
   status: 'ok';
   service: string;
-  database: 'simulated_in_memory' | 'postgres';
-  llm: 'unavailable_deterministic_degraded';
+  database: 'simulated_in_memory' | 'postgres' | 'supabase';
+  llm: 'unavailable_deterministic_degraded' | 'gemini_configured';
   stage2_vision: 'simulated' | 'live';
 }
 
@@ -101,6 +133,12 @@ export interface DemoStartResponse {
 }
 
 export interface MedicationSummary {
+  dose_amount?: number | null;
+  dose_unit?: string | null;
+  frequency_rule?: {kind:string;local_times:string[];days_of_week:number[]} | null;
+  food_instruction?: string | null;
+  course_start_date?: string | null;
+  course_end_date?: string | null;
   medication_id: string;
   regimen_id: string;
   display_name: string;
@@ -134,6 +172,9 @@ export interface ConfirmChallengeResponse {
   session_state_version: number;
   expires_at: string;
   summary: {
+    food_instruction?: string|null;
+    course_start_date?: string | null;
+    course_end_date?: string | null;
     medication_name: string;
     dose_amount: number | null;
     dose_unit: string | null;
@@ -152,6 +193,7 @@ export interface ConfirmActivateResponse {
 }
 
 export interface DueDoseResponse {
+  next_due_at?: string | null;
   occurrence_id: string | null;
   regimen_id: string;
   medication_display_name: string;
@@ -171,12 +213,39 @@ export interface SelfReportResponse {
   note: string;
 }
 
+export interface ReportChallengeResponse {
+  challenge_id: string | null;
+  occurrence_id: string | null;
+  regimen_id: string;
+  session_id: string | null;
+  session_state: string;
+  session_state_version: number;
+  expires_at: string | null;
+  summary: {
+    medication_display_name: string;
+    dose_amount: number | null;
+    dose_unit: string | null;
+    regimen_version_no: number;
+    occurrence_due_at: string | null;
+    local_due_time: string | null;
+    local_timezone: string;
+    intake_status: string;
+    intake_status_label: string;
+    safety_notice: string;
+    ingestion_proven: false;
+    visual_status: string;
+  };
+  already_recorded: boolean;
+  note: string;
+}
+
 export interface DoseHistoryEntry {
   occurrence_id: string | null;
   due_at: string | null;
   intake_status: string | null;
   visual_status: string | null;
   reported: boolean;
+  event_time?: string | null;
 }
 
 export interface DoseHistoryResponse {
@@ -194,7 +263,12 @@ export interface ToolTrace {
   payload: Record<string, unknown>;
 }
 
+export interface AgentUsage {llm_user_turns:number;model_requests:number;limit:number;usage_date:string;next_reset_at:string;}
+
 export interface AgentMessageResponse {
+  health_note_request?:{description:string;requires_patient_review:true;urgent_help_advised?:boolean}|null;
+  visual_check_request?: {regimen_id:string|null;requires_image:true;visual_status:"not_checked"}|null;
+  usage?: AgentUsage | null;
   message: string;
   intent: string;
   session_id: string;
@@ -203,11 +277,16 @@ export interface AgentMessageResponse {
   /** Always present so the UI can label degraded mode honestly. */
   mode: string;
   tool_traces: ToolTrace[];
+  pending_report?: { challenge_id: string; occurrence_id: string | null; regimen_id: string;
+    idempotency_key: string; expires_at: string; summary: ReportChallengeResponse['summary'] } | null;
 }
 
 // --- client -----------------------------------------------------------------
 
 export interface DraftInput {
+  course_start_date?: string | null;
+  course_end_date?: string | null;
+  extraction_evidence?: SourcePreview;
   medication_name: string;
   dose_amount?: number | null;
   dose_unit?: string | null;
@@ -220,13 +299,65 @@ export interface DraftInput {
   food_instruction?: string | null;
 }
 
+export interface ReminderRecord { is_due?: boolean; occurrence_id: string; patient_id: string; remind_at: string; demo_only: true }
+export interface DoseReminderAlert {key:string;occurrence_id:string;regimen_id:string;medication_name:string;dose_amount:number|null;dose_unit:string|null;food_instruction:string|null;due_at:string;remind_at:string}
+
+export interface VisualCheckResult { decision:'unknown'|'ambiguous'|'unavailable'; selected_medication:string|null; comparison_available:false; reason:string; candidates:Array<{external_catalogue_id:string;display_name:string|null;visual_similarity:number|null;market:'US';strength:string|null}>; count_reliable:boolean; ingestion_proven:false; safe_to_take_confirmed:false; next_action:string }
+
+export interface EvidenceProduct {name:string;strength:string|null;dose_form:string|null;formulation:string|null;brand:string|null;ingredients:string[];category:'unknown'|'POM'|'P'|'GSL'|'supplement';verification:'source_supplied'|'patient_reviewed'}
+export interface EvidenceDraft {medication_name:string;dose_amount:number|null;dose_unit:string|null;frequency_rule:{kind:string;local_times:string[];days_of_week:number[];every_hours:number|null}|null;is_prn:boolean;route?:string|null;food_instruction:string|null;course_start_date?:string|null;course_end_date?:string|null}
+export interface EvidenceTask {id:string;medication_id:string;version:number;status:'pending_information'|'conflict'|'ready_for_review'|'draft_created';product:EvidenceProduct;product_missing?:string[];source_ids:string[];missing:string[];conflicts:string[];possible_duplicate_ids:string[];draft_regimen_id:string|null;suggested_regimen:EvidenceDraft|null}
+export interface GalleryImage {id:string;medication_id:string;image_kind:'loose_pill'|'package'|'blister'|'source';source_description:string;reviewed:boolean;eligibility:'associated'|'eligible'|'ineligible';eligibility_reason:string;created_at:string}
+export interface GalleryEntry {evidence_task_id?:string|null;similar_name_records?:number;medication:{id:string;display_name:string;identity_status:string};product:EvidenceProduct|null;status:'current'|'upcoming'|'historical'|'pending';regimens:Array<{id:string;state:string;version_no:number;course_start_date:string|null;course_end_date:string|null;dose_amount:number|null;dose_unit:string|null}>;images:GalleryImage[];eligible_count:number}
+export interface RecognitionEvidence {id:string;decision:'match'|'unknown'|'ambiguous'|'conflict'|'missing_reference'|'unavailable';reason:string;reference_ids:string[];outcome:{decision:string;medication_id:string|null;score:number|null;closest:{medication_id:string;name:string;score:number}|null}|null;safe_to_take:false;ingestion_proven:false}
+
 export const api = {
+  evidenceTasks:()=>request<EvidenceTask[]>(withClient('/api/evidence/tasks')),
+  evidenceTask:(id:string)=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${id}`)),
+  evidenceSources:(id:string)=>request<Array<{id:string;source_kind:string;review_status:string;reviewed_at?:string|null;recorded_at?:string|null;provided_by?:'patient';extraction_evidence:SourcePreview|null}>>(withClient(`/api/evidence/tasks/${id}/sources`)),
+  attachEvidence:(id:string,file:File,kind:'package'|'pharmacy_label'|'prescription',medicationId?:string)=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${id}/sources`,{source_kind:kind,...(medicationId?{medication_id:medicationId}:{})}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'true'},body:file}),
+  reviewEvidence:(id:string,draft:EvidenceDraft,distinct_product_confirmed:boolean,options:{product_category?:EvidenceProduct['category'];replace_active_plan?:boolean}={})=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${id}/review`),{method:'POST',body:JSON.stringify({...options,draft,patient_reviewed:true,distinct_product_confirmed})}),
+  personalGallery:()=>request<GalleryEntry[]>(withClient('/api/evidence/gallery')),
+  retireReference:(id:string)=>request<GalleryImage>(withClient(`/api/evidence/images/${id}/retire`),{method:'POST',body:JSON.stringify({})}),
+  referencePhoto:async(id:string)=>(await fetchResponse(withClient(`/api/evidence/images/${id}`))).blob(),
+  addReference:(medicationId:string,file:File,kind:'loose_pill'|'package'|'blister',source:string,reviewed:boolean,compare:boolean)=>request<GalleryImage>(withClient(`/api/evidence/gallery/${medicationId}/images`,{image_kind:kind,source_description:source,reviewed:String(reviewed),for_comparison:String(compare)}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'true'},body:file}),
+  checkPersonalDose:(file:File,regimenId:string|null)=>request<RecognitionEvidence>(withClient('/api/evidence/check-dose',regimenId?{regimen_id:regimenId}:{}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'true'},body:file}),
+  recentTurns:(sessionId:string)=>request<Array<{user:string;assistant:string}>>(withClient(`/api/agent/sessions/${sessionId}/recent-turns`)),
+  observations:()=>request<HealthObservation[]>(withClient('/api/me/health-observations')),
+  saveObservation:(record:ObservationInput)=>request<HealthObservation>(withClient('/api/me/health-observations'),{method:'PUT',body:JSON.stringify(record)}),
+  deleteObservation:(id:string)=>request<{deleted:true}>(withClient(`/api/me/health-observations/${id}`),{method:'DELETE'}),
+  reviewSummary:(period:'week'|'month'|'course',regimenId?:string)=>request<ReviewSummary>(withClient('/api/me/review-summary',{period,...(regimenId?{regimen_id:regimenId}:{})})),
+  reminderAlerts:()=>request<DoseReminderAlert[]>(withClient('/api/reminders/alerts')),
+  feedback:(payload:{id:string;category:'issue'|'suggestion';message:string})=>request<{id:string;status:'received';created_at:string}>(withClient('/api/feedback'),{method:'POST',body:JSON.stringify(payload)}),
+  visualCheck: (image:File, regimenId:string|null) => request<VisualCheckResult>(withClient('/api/visual-check',regimenId ? {regimen_id:regimenId} : {}), {method:'POST',headers:{'Content-Type':image.type,'X-Stage2-Consent':'true','X-Demo-Only':'true'},body:image}),
+  resumeDraft: (regimenId: string) => request<DraftCreateResponse>(withClient(`/api/medications/drafts/${regimenId}`)),
+  reminders: () => request<ReminderRecord[]>(withClient('/api/reminders')),
+  snoozeReminder: (occurrence_id: string, minutes: number) => request<ReminderRecord>(withClient('/api/reminders'), {method:'POST',body:JSON.stringify({occurrence_id,minutes})}),
+  requestPrnReportChallenge: (payload: { regimen_id: string; intake_status: string; idempotency_key: string }) =>
+    request<ReportChallengeResponse>(withClient('/api/prn/report/challenge'), { method: 'POST', body: JSON.stringify(payload) }),
+  submitPrnReport: (payload: { regimen_id: string; intake_status: string; idempotency_key: string; challenge_id: string }) =>
+    request<SelfReportResponse>(withClient('/api/prn/report'), { method: 'POST', body: JSON.stringify(payload) }),
+  regimenHistory: () => request<RegimenHistoryItem[]>(withClient('/api/me/regimens')),
+  sourcePreview: (image: File, kind: 'package' | 'pharmacy_label') => request<SourcePreview>(
+    withClient('/api/sources/preview', { source_kind: kind }), {
+      method: 'POST', headers: { 'Content-Type': image.type, 'X-Stage2-Consent': 'true', 'X-Demo-Only': 'true' }, body: image,
+    }),
+  speechCapabilities: () => request<SpeechCapabilities>(withClient('/api/speech/capabilities')),
+  transcribe: (audio: Blob) => request<TranscriptResponse>(withClient('/api/speech/transcribe'), {
+    method: 'POST', headers: { 'Content-Type': 'audio/wav', 'X-Speech-Consent': 'true' }, body: audio,
+  }),
+  synthesize: async (text: string, language: 'en' | 'zh' = 'en') => (await fetchResponse(withClient('/api/speech/synthesize'), {
+    method: 'POST', body: JSON.stringify({ text, provider: "tencent", consent: true, language }),
+  })).blob(),
+  agentUsage:()=>request<AgentUsage>(withClient("/api/agent/usage")),
+  preferences:()=>request<PatientPreferences>(withClient('/api/me/preferences')),
+  updatePreferences:(changes:PreferenceUpdate)=>request<PatientPreferences>(withClient('/api/me/preferences'),{method:'PUT',body:JSON.stringify(changes)}),
   health: () => request<HealthResponse>('/api/health'),
 
   startDemo: () =>
     request<DemoStartResponse>('/api/demo/start', {
       method: 'POST',
-      body: JSON.stringify({ client_id: clientId() }),
+      body: JSON.stringify({ client_id: clientId(),session_id:window.localStorage.getItem("pharmascan.agent-session") }),
     }),
 
   listMedications: () => request<MedicationListResponse>(withClient('/api/me/medications')),
@@ -266,10 +397,21 @@ export const api = {
   dueDose: (regimenId: string) =>
     request<DueDoseResponse>(withClient('/api/doses/due', { regimen_id: regimenId })),
 
-  report: (occurrenceId: string, payload: {
+  requestReportChallenge: (occurrenceId: string, payload: {
     regimen_id: string;
     intake_status: string;
     idempotency_key: string;
+  }) =>
+    request<ReportChallengeResponse>(
+      withClient(`/api/doses/${occurrenceId}/report/challenge`),
+      { method: 'POST', body: JSON.stringify(payload) },
+    ),
+
+  submitReport: (occurrenceId: string, payload: {
+    regimen_id: string;
+    intake_status: string;
+    idempotency_key: string;
+    challenge_id: string;
   }) =>
     request<SelfReportResponse>(withClient(`/api/doses/${occurrenceId}/report`), {
       method: 'POST',
@@ -283,6 +425,7 @@ export const api = {
 
   sendMessage: (payload: {
     text: string;
+    language?: 'en' | 'zh';
     session_id: string | null;
     client_turn_id: string;
     slots: Record<string, unknown>;

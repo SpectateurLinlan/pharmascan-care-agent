@@ -1,4 +1,4 @@
-"""Dose self-report UX + confirmation invariants (Session 3A item 2).
+"""Dose self-report UX + confirmation invariants.
 
 ** SIMULATED ** persistence, real ASGI app and real policy.
 
@@ -11,6 +11,16 @@ The patient-facing acceptance criteria for the self-report flow:
 
 These are already enforced by the domain policy; this file locks the HTTP
 contract so a future refactor cannot quietly weaken it.
+
+Session 3D note: recording a report is now a two-phase flow — request a
+single-use ``record_self_report`` confirmation challenge (which returns the
+summary), then submit the patient's confirmation. The earlier single-phase
+contract could not work against the real schema
+(``dose_events.confirmation_challenge_id`` is ``NOT NULL`` and
+``core_guard_dose_event`` calls ``core_consume_confirmation``), so the
+lifecycle was completed rather than the database weakened. Every invariant
+below is preserved and, where the refusal now happens a phase earlier, it is
+asserted at the phase that actually decides it.
 """
 
 from __future__ import annotations
@@ -118,12 +128,56 @@ def _activate_due_regimen(client: TestClient, clock: FixedClock) -> tuple[str, s
     return draft["regimen_id"], due["occurrence_id"]
 
 
-def test_taken_report_is_recorded_without_claiming_ingestion(client: TestClient, clock: FixedClock) -> None:
-    regimen_id, occurrence_id = _activate_due_regimen(client, clock)
-    body = client.post(
+def _report(
+    client: TestClient,
+    *,
+    regimen_id: str,
+    occurrence_id: str,
+    intake_status: str,
+    idempotency_key: str,
+):
+    """Complete the two-phase report: request the challenge, then confirm it.
+
+    On a replay the challenge endpoint returns ``already_recorded=True`` and
+    no new ``challenge_id``; the submit endpoint answers with the stored event
+    before the (dummy) challenge id is ever consulted, so the required field is
+    still supplied but ignored.
+    """
+    challenge = client.post(
+        f"/api/doses/{occurrence_id}/report/challenge",
+        params=_params(),
+        json={
+            "regimen_id": regimen_id,
+            "intake_status": intake_status,
+            "idempotency_key": idempotency_key,
+        },
+    )
+    if challenge.status_code >= 400:
+        return challenge
+    body = challenge.json()
+    # ``challenge_id`` is a required field of the request contract, but on a
+    # replay the route answers from the stored event before it is ever used.
+    challenge_id = body["challenge_id"] or str(UUID(int=0))
+    return client.post(
         f"/api/doses/{occurrence_id}/report",
         params=_params(),
-        json={"regimen_id": regimen_id, "intake_status": "taken", "idempotency_key": "sr-1"},
+        json={
+            "regimen_id": regimen_id,
+            "intake_status": intake_status,
+            "idempotency_key": idempotency_key,
+            "challenge_id": challenge_id,
+        },
+    )
+
+
+def test_taken_report_is_recorded_without_claiming_ingestion(client: TestClient, clock: FixedClock) -> None:
+    regimen_id, occurrence_id = _activate_due_regimen(client, clock)
+    body = _report(
+        client,
+        regimen_id=regimen_id,
+        occurrence_id=occurrence_id,
+        intake_status="taken",
+        idempotency_key="sr-1",
     ).json()
     assert body["intake_status"] == "reported_taken"
     # The response must never assert ingestion.
@@ -133,10 +187,21 @@ def test_taken_report_is_recorded_without_claiming_ingestion(client: TestClient,
 
 def test_repeated_click_with_the_same_key_is_idempotent(client: TestClient, clock: FixedClock) -> None:
     regimen_id, occurrence_id = _activate_due_regimen(client, clock)
-    payload = {"regimen_id": regimen_id, "intake_status": "taken", "idempotency_key": "sr-idem"}
 
-    first = client.post(f"/api/doses/{occurrence_id}/report", params=_params(), json=payload).json()
-    second = client.post(f"/api/doses/{occurrence_id}/report", params=_params(), json=payload).json()
+    first = _report(
+        client,
+        regimen_id=regimen_id,
+        occurrence_id=occurrence_id,
+        intake_status="taken",
+        idempotency_key="sr-idem",
+    ).json()
+    second = _report(
+        client,
+        regimen_id=regimen_id,
+        occurrence_id=occurrence_id,
+        intake_status="taken",
+        idempotency_key="sr-idem",
+    ).json()
 
     assert first["already_recorded"] is False
     assert second["already_recorded"] is True
@@ -146,36 +211,53 @@ def test_repeated_click_with_the_same_key_is_idempotent(client: TestClient, cloc
 
 def test_a_second_distinct_report_on_the_same_occurrence_is_refused(client: TestClient, clock: FixedClock) -> None:
     regimen_id, occurrence_id = _activate_due_regimen(client, clock)
-    client.post(
-        f"/api/doses/{occurrence_id}/report",
-        params=_params(),
-        json={"regimen_id": regimen_id, "intake_status": "taken", "idempotency_key": "sr-a"},
+    _report(
+        client,
+        regimen_id=regimen_id,
+        occurrence_id=occurrence_id,
+        intake_status="taken",
+        idempotency_key="sr-a",
     )
-    blocked = client.post(
-        f"/api/doses/{occurrence_id}/report",
-        params=_params(),
-        json={"regimen_id": regimen_id, "intake_status": "taken", "idempotency_key": "sr-b"},
+    # The refusal now happens when the *challenge* is requested, i.e. before the
+    # patient is asked to confirm something that cannot be saved.
+    blocked = _report(
+        client,
+        regimen_id=regimen_id,
+        occurrence_id=occurrence_id,
+        intake_status="taken",
+        idempotency_key="sr-b",
     )
     assert blocked.status_code >= 400
     assert blocked.json()["code"] == "DUPLICATE_EVENT"
 
+    # And exactly one event exists for the occurrence.
+    history = client.get(
+        "/api/me/dose-history", params=_params(regimen_id=regimen_id, days=2)
+    ).json()
+    reported = [entry for entry in history["entries"] if entry["reported"]]
+    assert len(reported) == 1
+
 
 def test_unsure_report_is_accepted_and_not_converted(client: TestClient, clock: FixedClock) -> None:
     regimen_id, occurrence_id = _activate_due_regimen(client, clock)
-    body = client.post(
-        f"/api/doses/{occurrence_id}/report",
-        params=_params(),
-        json={"regimen_id": regimen_id, "intake_status": "unsure", "idempotency_key": "sr-unsure"},
+    body = _report(
+        client,
+        regimen_id=regimen_id,
+        occurrence_id=occurrence_id,
+        intake_status="unsure",
+        idempotency_key="sr-unsure",
     ).json()
     assert body["intake_status"] == "unsure"
 
 
 def test_not_now_report_maps_to_reported_not_taken(client: TestClient, clock: FixedClock) -> None:
     regimen_id, occurrence_id = _activate_due_regimen(client, clock)
-    body = client.post(
-        f"/api/doses/{occurrence_id}/report",
-        params=_params(),
-        json={"regimen_id": regimen_id, "intake_status": "Not now", "idempotency_key": "sr-notnow"},
+    body = _report(
+        client,
+        regimen_id=regimen_id,
+        occurrence_id=occurrence_id,
+        intake_status="Not now",
+        idempotency_key="sr-notnow",
     ).json()
     assert body["intake_status"] == "reported_not_taken"
 
@@ -183,9 +265,13 @@ def test_not_now_report_maps_to_reported_not_taken(client: TestClient, clock: Fi
 def test_an_unrecognised_choice_is_refused_not_defaulted(client: TestClient, clock: FixedClock) -> None:
     regimen_id, occurrence_id = _activate_due_regimen(client, clock)
     response = client.post(
-        f"/api/doses/{occurrence_id}/report",
+        f"/api/doses/{occurrence_id}/report/challenge",
         params=_params(),
-        json={"regimen_id": regimen_id, "intake_status": "probably maybe", "idempotency_key": "sr-bad"},
+        json={
+            "regimen_id": regimen_id,
+            "intake_status": "probably maybe",
+            "idempotency_key": "sr-bad",
+        },
     )
     assert response.status_code >= 400
     assert response.json()["code"] == "INVALID_INPUT"

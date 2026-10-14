@@ -21,6 +21,13 @@ def get_container(request: Request) -> ApplicationContainer:
     container = getattr(request.app.state, "container", None)
     if container is None:  # pragma: no cover - defensive, app_factory always sets it
         raise RuntimeError("application container is not configured")
+    if container.patient_factory is not None:
+        scoped = getattr(request.state, "patient_container", None)
+        if scoped is None:
+            principal = get_principal(request, request.query_params.get("client_id"))
+            scoped = container.patient_factory(principal)
+            request.state.patient_container = scoped
+        return scoped
     return container
 
 
@@ -41,11 +48,16 @@ def get_principal(
     Raises ``AUTH_REQUIRED`` when the configured mode cannot identify a patient,
     so an unauthenticated request can never reach a repository.
     """
-    container = get_container(request)
-    return container.auth.resolve(
+    existing = getattr(request.state, "principal", None)
+    if existing is not None:
+        return existing
+    container = request.app.state.container
+    principal = container.auth.resolve(
         authorization=request.headers.get("authorization"),
         client_id=client_id,
     )
+    request.state.principal = principal
+    return principal
 
 
 __all__ = ["ApplicationContainer", "get_container", "get_principal"]

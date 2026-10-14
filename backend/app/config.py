@@ -14,8 +14,10 @@ Design rules (AGENTS.md rule 2, docs/ARCHITECTURE.md):
 
 from __future__ import annotations
 
+import base64
+import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 ENV_FILE_VARIABLE = "PHARMASCAN_ENV_FILE"
@@ -27,6 +29,21 @@ class ConfigError(RuntimeError):
 
     The message contains the variable NAME only — never a value.
     """
+
+
+def validate_publishable_key(value: str) -> str:
+    """Reject secret/service-role keys even when stored under a public key name."""
+    if value.startswith("sb_secret_"):
+        raise ConfigError("SUPABASE_PUBLISHABLE_KEY must not contain a secret key")
+    if value.count(".") == 2:
+        try:
+            encoded = value.split(".")[1]
+            payload = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
+            if not isinstance(payload, dict) or payload.get("role") != "anon":
+                raise ConfigError("SUPABASE_PUBLISHABLE_KEY must use the legacy anon role")
+        except (ValueError, UnicodeDecodeError):
+            raise ConfigError("SUPABASE_PUBLISHABLE_KEY has invalid legacy key metadata") from None
+    return value
 
 
 def parse_env_file(path: Path) -> dict[str, str]:
@@ -66,10 +83,10 @@ def resolve_env_file(explicit: Path | None = None) -> Path | None:
 class Settings:
     """Immutable configuration snapshot."""
 
-    database_url: str | None
-    supabase_url: str | None
-    supabase_publishable_key: str | None
-    supabase_secret_key: str | None
+    database_url: str | None = field(repr=False)
+    supabase_url: str | None = field(repr=False)
+    supabase_publishable_key: str | None = field(repr=False)
+    supabase_secret_key: str | None = field(repr=False)
     app_env: str
     app_origin: str | None
     vision_api_base_url: str | None
@@ -77,6 +94,19 @@ class Settings:
     persistence: str
     auth_mode: str
     source: str
+    model_provider: str = "deterministic"
+    gemini_api_key: str | None = field(default=None, repr=False)
+    gemini_model: str = "gemini-3.5-flash-lite"
+    gemini_thinking_level: str = "low"
+    demo_agent_daily_turn_limit: int = 20
+    tts_provider: str = "browser"
+    stt_provider: str = "browser"
+    enable_speech: bool = False
+    tencent_speech_approved: bool = False
+    tencent_secret_id: str | None = field(default=None, repr=False)
+    tencent_secret_key: str | None = field(default=None, repr=False)
+    tencent_voice_type: int | None = None
+    tencent_speech_site: str = "domestic"
 
     # -- construction --------------------------------------------------------
 
@@ -99,6 +129,23 @@ class Settings:
             value = value.strip()
             return value or None
 
+        stt_provider = read("STT_PROVIDER") or "browser"
+        if stt_provider not in {"browser", "tencent"}:
+            raise ConfigError("STT_PROVIDER must be browser or tencent")
+        tts_provider = (read("TTS_PROVIDER") or "browser").strip().lower()
+        if tts_provider not in {"browser", "tencent"}:
+            raise ConfigError("TTS_PROVIDER must be browser or tencent")
+        model_provider = (read("MODEL_PROVIDER") or "deterministic").lower()
+        if model_provider not in {"deterministic", "gemini"}:
+            raise ConfigError("MODEL_PROVIDER must be deterministic or gemini")
+        if (read("GEMINI_THINKING_LEVEL") or "low") != "low":
+            raise ConfigError("GEMINI_THINKING_LEVEL must be low for this demo")
+        limit = read("DEMO_AGENT_DAILY_TURN_LIMIT") or "20"
+        if not limit.isdigit() or not 1 <= int(limit) <= 20:
+            raise ConfigError("DEMO_AGENT_DAILY_TURN_LIMIT must be 1..20")
+        voice_type = read("TENCENT_TTS_VOICE_TYPE")
+        if voice_type is not None and not voice_type.isdigit():
+            raise ConfigError("TENCENT_TTS_VOICE_TYPE must be a numeric provider voice ID")
         return cls(
             database_url=read("DATABASE_URL"),
             supabase_url=read("SUPABASE_URL"),
@@ -111,6 +158,18 @@ class Settings:
             persistence=(read("PERSISTENCE") or "in_memory").strip().lower(),
             auth_mode=(read("AUTH_MODE") or "demo").strip().lower(),
             source=str(path) if path is not None else "process_environment",
+            model_provider=model_provider,
+            gemini_api_key=read("GEMINI_API_KEY"),
+            gemini_model=read("GEMINI_MODEL") or "gemini-3.5-flash-lite",
+            demo_agent_daily_turn_limit=int(limit),
+            tts_provider=tts_provider,
+            stt_provider=stt_provider,
+            enable_speech=(read("ENABLE_SPEECH") or "").lower() in {"1", "true", "yes"},
+            tencent_speech_approved=(read("TENCENT_SPEECH_APPROVED") or "").lower() in {"1", "true", "yes"},
+            tencent_secret_id=read("TENCENT_SECRET_ID"),
+            tencent_secret_key=read("TENCENT_SECRET_KEY"),
+            tencent_voice_type=int(voice_type) if voice_type else None,
+            tencent_speech_site=read("TENCENT_SPEECH_SITE") or "domestic",
         )
 
     # -- safe diagnostics ----------------------------------------------------
@@ -153,4 +212,4 @@ class Settings:
     def require_publishable_key(self) -> str:
         if not self.supabase_publishable_key:
             raise ConfigError("SUPABASE_PUBLISHABLE_KEY is not configured")
-        return self.supabase_publishable_key
+        return validate_publishable_key(self.supabase_publishable_key)

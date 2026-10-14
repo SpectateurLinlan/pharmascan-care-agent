@@ -114,6 +114,42 @@ def _ask(client: TestClient, text: str, session_id: str | None = None) -> dict:
     return response.json()
 
 
+def _report(
+    client: TestClient,
+    *,
+    regimen_id: str,
+    occurrence_id: str,
+    intake_status: str,
+    idempotency_key: str,
+):
+    """Record a self report through the two-phase confirmation flow.
+
+    The database refuses a dose event that does not cite a confirmed,
+    unconsumed ``record_self_report`` challenge, so the request issues one and
+    submits it exactly as the real client does.
+    """
+    challenge = client.post(
+        f"/api/doses/{occurrence_id}/report/challenge",
+        params=_params(),
+        json={
+            "regimen_id": regimen_id,
+            "intake_status": intake_status,
+            "idempotency_key": idempotency_key,
+        },
+    )
+    assert challenge.status_code == 200, challenge.text
+    return client.post(
+        f"/api/doses/{occurrence_id}/report",
+        params=_params(),
+        json={
+            "regimen_id": regimen_id,
+            "intake_status": intake_status,
+            "idempotency_key": idempotency_key,
+            "challenge_id": challenge.json()["challenge_id"],
+        },
+    )
+
+
 def test_http_status_query_with_no_report_is_not_a_missed_dose(client: TestClient, clock: FixedClock) -> None:
     _activate_daily(client)
     clock.advance(hours=10)
@@ -136,14 +172,12 @@ def test_http_status_query_reports_a_recorded_taken_dose(client: TestClient, clo
 
     due = client.get("/api/doses/due", params=_params(regimen_id=regimen_id)).json()
     assert due["occurrence_id"] is not None, "a dose must be due after the clock advances"
-    report = client.post(
-        f"/api/doses/{due['occurrence_id']}/report",
-        params=_params(),
-        json={
-            "regimen_id": regimen_id,
-            "intake_status": "taken",
-            "idempotency_key": "http-taken-1",
-        },
+    report = _report(
+        client,
+        regimen_id=regimen_id,
+        occurrence_id=due["occurrence_id"],
+        intake_status="taken",
+        idempotency_key="http-taken-1",
     )
     assert report.status_code == 200, report.text
 
@@ -159,10 +193,12 @@ def test_http_status_query_reports_unsure_verbatim(client: TestClient, clock: Fi
     regimen_id = activated["regimen_id"]
     due = client.get("/api/doses/due", params=_params(regimen_id=regimen_id)).json()
 
-    client.post(
-        f"/api/doses/{due['occurrence_id']}/report",
-        params=_params(),
-        json={"regimen_id": regimen_id, "intake_status": "unsure", "idempotency_key": "http-unsure-1"},
+    _report(
+        client,
+        regimen_id=regimen_id,
+        occurrence_id=due["occurrence_id"],
+        intake_status="unsure",
+        idempotency_key="http-unsure-1",
     )
     body = _ask(client, "Have I taken Amlodipine today?")
     assert "unsure" in body["message"].lower()

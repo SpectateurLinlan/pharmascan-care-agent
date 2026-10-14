@@ -9,11 +9,17 @@ is always derived from the (demo) principal, never from the request body.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from ..contracts.dto import IDEMPOTENCY_KEY_PATTERN, PendingSelfReportDTO
+from ..contracts.observations import HealthNoteReview
+from ..contracts.quota import Usage
+from ..contracts.source_extraction import MedicationSourceExtractionDTO
+from ..contracts.visual_check import VisualCheckRequest
 
 
 class Request(BaseModel):
@@ -23,17 +29,19 @@ class Request(BaseModel):
 
 
 class HealthResponse(BaseModel):
+    runtime_contract: Literal["session03-manual-acceptance-v2"] = "session03-manual-acceptance-v2"
     model_config = ConfigDict(extra="forbid")
 
     status: Literal["ok"] = "ok"
     service: str = "pharmascan-care-agent"
     #: Honest capability flags. Nothing here claims a live external dependency.
-    database: Literal["simulated_in_memory", "postgres"] = "simulated_in_memory"
-    llm: Literal["unavailable_deterministic_degraded"] = "unavailable_deterministic_degraded"
+    database: Literal["simulated_in_memory", "postgres", "supabase"] = "simulated_in_memory"
+    llm: Literal["unavailable_deterministic_degraded", "gemini_configured"] = "unavailable_deterministic_degraded"
     stage2_vision: Literal["simulated", "live"] = "simulated"
 
 
 class DemoStartRequest(Request):
+    session_id: UUID | None = None
     """Start an isolated demo session for the anonymous principal.
 
     ``client_id`` identifies the browser tab so a reload can resume the same
@@ -54,6 +62,7 @@ class DemoStartResponse(BaseModel):
 
 
 class AgentMessageRequest(Request):
+    language: Literal["en", "zh"] = "en"
     text: str = Field(default="", max_length=2000)
     session_id: UUID | None = None
     client_turn_id: str = Field(default="turn-1", min_length=1, max_length=128)
@@ -73,6 +82,9 @@ class ToolTraceResponse(BaseModel):
 
 
 class AgentMessageResponse(BaseModel):
+    health_note_request: HealthNoteReview | None = None
+    visual_check_request: VisualCheckRequest | None = None
+    usage: Usage | None = None
     model_config = ConfigDict(extra="forbid")
 
     message: str
@@ -83,9 +95,16 @@ class AgentMessageResponse(BaseModel):
     #: Always surfaced so the UI can never present this as a live LLM agent.
     mode: str
     tool_traces: list[ToolTraceResponse] = Field(default_factory=list)
+    pending_report: PendingSelfReportDTO | None = None
 
 
 class MedicationSummary(BaseModel):
+    dose_amount: float | None = None
+    dose_unit: str | None = None
+    frequency_rule: dict[str, Any] | None = None
+    food_instruction: str | None = None
+    course_start_date: date | None = None
+    course_end_date: date | None = None
     model_config = ConfigDict(extra="forbid")
 
     medication_id: UUID
@@ -107,6 +126,16 @@ class MedicationListResponse(BaseModel):
 
 
 class DraftCreateRequest(Request):
+    course_start_date: date | None = None
+    course_end_date: date | None = None
+
+    @model_validator(mode="after")
+    def validate_course(self):
+        if self.course_end_date and (not self.course_start_date or self.course_end_date < self.course_start_date):
+            raise ValueError("A course end date requires a start date on or before it")
+        return self
+
+    extraction_evidence: MedicationSourceExtractionDTO | None = None
     medication_name: str = Field(min_length=1, max_length=200)
     dose_amount: float | None = None
     dose_unit: str | None = Field(default=None, max_length=40)
@@ -174,6 +203,7 @@ class ConfirmActivateResponse(BaseModel):
 
 
 class DueDoseResponse(BaseModel):
+    next_due_at: datetime | None = None
     model_config = ConfigDict(extra="forbid")
 
     occurrence_id: UUID | None
@@ -188,10 +218,66 @@ class DueDoseResponse(BaseModel):
 
 
 class SelfReportRequest(Request):
+    """The patient's explicit confirmation that records one dose report.
+
+    ``challenge_id`` is mandatory: the database refuses a ``dose_events`` row
+    that does not cite a confirmed, unconsumed ``record_self_report`` challenge,
+    so the transport must carry the one the patient just approved. It is never
+    optional and never derived from the request body's other fields.
+    """
+
     regimen_id: UUID
     occurrence_id: UUID | None = None
     intake_status: str = Field(min_length=1, max_length=40)
-    idempotency_key: str = Field(min_length=1, max_length=200)
+    idempotency_key: str = Field(min_length=1, max_length=128, pattern=IDEMPOTENCY_KEY_PATTERN)
+    challenge_id: UUID
+
+
+class ReportChallengeRequest(Request):
+    """Ask for a single-use confirmation challenge for a dose self-report."""
+
+    regimen_id: UUID
+    intake_status: str = Field(min_length=1, max_length=40)
+    idempotency_key: str = Field(min_length=1, max_length=128, pattern=IDEMPOTENCY_KEY_PATTERN)
+
+
+class ReportSummaryResponse(BaseModel):
+    """Exactly what the patient is about to record. Shown verbatim in the UI."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    medication_display_name: str
+    dose_amount: float | None
+    dose_unit: str | None
+    regimen_version_no: int
+    occurrence_due_at: datetime | None
+    local_due_time: str | None
+    local_timezone: str
+    intake_status: str
+    intake_status_label: str
+    safety_notice: str
+    ingestion_proven: Literal[False] = False
+    visual_status: str = "not_checked"
+
+
+class ReportChallengeResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    #: ``None`` only when ``already_recorded`` is true — no new challenge was
+    #: issued because the report already exists.
+    challenge_id: UUID | None
+    occurrence_id: UUID | None
+    regimen_id: UUID
+    session_id: UUID | None
+    session_state: str
+    session_state_version: int
+    expires_at: datetime | None
+    summary: ReportSummaryResponse
+    already_recorded: bool = False
+    note: str = (
+        "single-use; confirm the summary to record the report. A self report "
+        "records what you said, never proof that the medication was taken."
+    )
 
 
 class SelfReportResponse(BaseModel):
@@ -213,6 +299,7 @@ class DoseHistoryEntryResponse(BaseModel):
     intake_status: str | None
     visual_status: str | None
     reported: bool
+    event_time: datetime | None = None
 
 
 class DoseHistoryResponse(BaseModel):

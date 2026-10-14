@@ -118,6 +118,8 @@ def wired(store: InMemoryStore, clock: FixedClock):
         medications=medications,
         occurrences=occurrences,
         events=events,
+        challenges=challenges,
+        sessions=sessions,
         clock=clock,
         ids=ids,
     )

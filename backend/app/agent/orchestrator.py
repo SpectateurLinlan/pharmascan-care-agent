@@ -15,17 +15,24 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 from uuid import UUID
 
-from ..contracts.dto import AgentSessionDTO
+from ..contracts.agent_context import CandidateReference, ClarificationContext
+from ..contracts.dto import AgentSessionDTO, PendingSelfReportDTO
 from ..contracts.enums import AgentIntent, ToolName, ToolStatus
+from ..contracts.observations import HealthNoteReview
 from ..contracts.ports import AgentSessionRepository, Clock, IdGenerator
-from ..domain.errors import NotFoundError
+from ..contracts.quota import Usage
+from ..contracts.visual_check import VisualCheckRequest
+from ..domain.errors import DomainError, NotFoundError
+from ..domain.health_safety import needs_urgent_help_notice, urgent_help_notice
+from .memory import record_context
 from .registry import ToolRegistry
 from .tools import (
     CheckDueDoseRequest,
     ConfirmRegimenRequest,
+    CreateReminderRequest,
     EnrollMedicationRequest,
     GetDoseStatusRequest,
     ListActiveMedicationsRequest,
@@ -38,21 +45,28 @@ from .tools import (
 MAX_STEPS_PER_TURN = 4
 SESSION_TTL = timedelta(hours=2)
 
+
 #: Matches keyword occurrences at word boundaries so "past" does not fire
 #: inside "pasta" and "add" does not fire inside "address". Multi-word phrases
 #: ("did i take") still match because the boundary is only asserted at the
 #: outer edges of the phrase.
-_KEYWORD_PATTERN_CACHE: dict[str, object] = {}
-
-
 def _mentions(haystack: str, keyword: str) -> bool:
     import re
 
-    pattern = _KEYWORD_PATTERN_CACHE.get(keyword)
-    if pattern is None:
-        pattern = re.compile(rf"(?<!\w){re.escape(keyword)}(?!\w)")
-        _KEYWORD_PATTERN_CACHE[keyword] = pattern
-    return bool(pattern.search(haystack))
+    if any("\u3400" <= character <= "\u9fff" for character in keyword):
+        return keyword in haystack  # Mandarin sentences do not use word spaces.
+    return bool(re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", haystack))
+
+
+def _reported_choice(text: str) -> str:
+    lowered = text.lower()
+    if any(word in lowered for word in ("not sure", "unsure", "不确定", "不记得")):
+        return "unsure"
+    if "did not take" in lowered or "didn't take" in lowered or "not taking" in lowered:
+        return "not_taken"
+    if lowered.strip().startswith(("i took", "i already took", "我吃了", "我已经吃了", "我吃过")):
+        return "taken"
+    return "unsure"
 
 
 @dataclass(frozen=True)
@@ -60,11 +74,15 @@ class AgentTurn:
     """One inbound user turn: text plus optional typed slots."""
 
     text: str
+    language: Literal["en", "zh"] = "en"
     slots: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class AgentReply:
+    health_note_request: HealthNoteReview | None = field(default=None, kw_only=True)
+    visual_check_request: VisualCheckRequest | None = field(default=None, kw_only=True)
+    usage: Usage | None = field(default=None, kw_only=True)
     """One outbound reply with its tool trace for auditability."""
 
     message: str
@@ -74,6 +92,7 @@ class AgentReply:
     tool_results: list[ToolResult] = field(default_factory=list)
     requires_confirmation: bool = False
     mode: str = "deterministic_degraded"
+    pending_report: PendingSelfReportDTO | None = None
 
 
 class IntentRouter(Protocol):
@@ -97,6 +116,7 @@ class DeterministicIntentRouter:
     is_llm = False
 
     _KEYWORDS: tuple[tuple[AgentIntent, tuple[str, ...]], ...] = (
+        (AgentIntent.REMINDER, ("remind me",)),
         # A "did I take it / have I taken it" question is a READ, not a report.
         # It must be matched before the self-report keywords, otherwise the
         # word "taken" would route it into a write path.
@@ -115,7 +135,10 @@ class DeterministicIntentRouter:
                 "did i log",
             ),
         ),
-        (AgentIntent.DOSE_SELF_REPORT, ("took", "taken", "not taken", "unsure", "reported")),
+        (
+            AgentIntent.DOSE_SELF_REPORT,
+            ("took", "taken", "not taken", "unsure", "reported", "不确定", "不记得", "吃过", "吃了"),
+        ),
         (AgentIntent.MEDICATION_HISTORY, ("history", "past", "last week", "summary")),
         (AgentIntent.MEDICATION_ENROLLMENT, ("add", "enroll", "new medication", "prescription")),
     )
@@ -170,9 +193,7 @@ class DeterministicIntentRouter:
     #: Words that look like a name but carry no identity. Returning one of
     #: these would match an arbitrary medication, so they are treated as "no
     #: medication named" and the agent asks instead.
-    _NON_NAMES: frozenset[str] = frozenset(
-        {"it", "that", "this", "them", "those", "the", "my", "mine", "one", "any"}
-    )
+    _NON_NAMES: frozenset[str] = frozenset({"it", "that", "this", "them", "those", "the", "my", "mine", "one", "any"})
 
     @classmethod
     def extract_medication_name(cls, text: str) -> str:
@@ -225,6 +246,18 @@ class AgentOrchestrator:
 
     # -- session handling ----------------------------------------------------
 
+    def render_results(self, intent: AgentIntent, results: list[ToolResult], language: str = "en") -> str:
+        for result in results:
+            if result.tool_name == ToolName.RECONCILE_MEDICATION_SOURCES and result.ok:
+                return str(result.payload["patient_safe_summary"])
+        if language == "zh":
+            from .localized_reply import chinese_reply
+
+            return chinese_reply(intent, results)
+        return self._compose_message(intent, results).removeprefix(
+            "[degraded: deterministic rule routing, not a live LLM] "
+        )
+
     def start_session(self, *, patient_id: UUID) -> AgentSessionDTO:
         now = self._clock.now()
         session = AgentSessionDTO(
@@ -244,14 +277,10 @@ class AgentOrchestrator:
         """Patient-scoped session read. Returns None when absent or foreign."""
         session = self._sessions.get(patient_id, session_id)
         if session is not None and self._clock.now() >= session.expires_at:
-            session = session.model_copy(
-                update={
-                    "state": "expired",
-                    "updated_at": self._clock.now(),
-                    "state_version": session.state_version + 1,
-                }
-            )
-            self._sessions.update(session)
+            # Expiry is derived from the clock. A read must not PATCH a later
+            # updated_at: PostgreSQL requires expires_at > updated_at. Leave
+            # the historical session unchanged; bootstrap creates a new one.
+            session = session.model_copy(update={"state": "expired"})
         return session
 
     def await_confirmation(self, *, patient_id: UUID, session_id: UUID) -> AgentSessionDTO:
@@ -266,9 +295,7 @@ class AgentOrchestrator:
             raise NotFoundError(f"Agent session {session_id} not found for this patient")
         return self._mark_awaiting_confirmation(session)
 
-    def handle_turn(
-        self, *, patient_id: UUID, session_id: UUID, turn: AgentTurn
-    ) -> AgentReply:
+    def handle_turn(self, *, patient_id: UUID, session_id: UUID, turn: AgentTurn) -> AgentReply:
         session = self._sessions.get(patient_id, session_id)
         if session is None:
             # A caller-supplied session id is honoured so traces land on the
@@ -276,9 +303,7 @@ class AgentOrchestrator:
             # DIFFERENT patient, refuse: identities must never be shared
             # (AGENTS.md rule 22).
             if self._session_id_taken_by_other_patient(patient_id, session_id):
-                raise PermissionError(
-                    "session id belongs to another patient; refusing to reuse it"
-                )
+                raise PermissionError("session id belongs to another patient; refusing to reuse it")
             now = self._clock.now()
             session = AgentSessionDTO(
                 id=session_id,
@@ -292,21 +317,90 @@ class AgentOrchestrator:
             )
             self._sessions.add(session)
         if self._clock.now() >= session.expires_at:
-            session = session.model_copy(
-                update={
-                    "state": "expired",
-                    "updated_at": self._clock.now(),
-                    "state_version": session.state_version + 1,
-                }
+            return AgentReply(
+                message=(
+                    "对话已过期，请刷新页面开始新对话。您的用药记录没有改变。"
+                    if turn.language == "zh"
+                    else "This conversation expired. Reload to start a new conversation. "
+                    "Your medication records are unchanged."
+                ),
+                intent=AgentIntent.CLARIFICATION,
+                session_id=session_id,
+                session_state="expired",
             )
-            self._sessions.update(session)
 
+        if needs_urgent_help_notice(turn.text):
+            message = urgent_help_notice(turn.language)
+            context = record_context(
+                session.context,
+                text=turn.text,
+                message=message,
+                intent="health_safety",
+                language=turn.language,
+                results=[],
+            )
+            self._sessions.update(session.model_copy(update={"context": context}))
+            return AgentReply(
+                message=message,
+                intent=AgentIntent.CLARIFICATION,
+                session_id=session_id,
+                session_state=session.state,
+                mode="deterministic_degraded",
+            )
+        clarification = session.context.awaiting_clarification
+        if clarification:
+            query = turn.text.lower().strip().removeprefix("the ").strip(" .?!")
+            matches = [
+                candidate for candidate in clarification.candidates if query and query in candidate.display_name.lower()
+            ]
+            if len(matches) == 1 and clarification.requested_intake_status:
+                selected = matches[0]
+                turn = AgentTurn(
+                    text=turn.text,
+                    language=turn.language,
+                    slots={
+                        **turn.slots,
+                        "regimen_id": selected.regimen_id,
+                        "intake_status": clarification.requested_intake_status,
+                    },
+                )
+        lowered = turn.text.lower().strip()
+        if (
+            (lowered.startswith(("i took it", "i already took it")) or turn.text.startswith("我吃了这"))
+            and session.context.referenced_regimen_id
+            and session.context.referenced_occurrence_id
+            and not turn.slots.get("regimen_id")
+        ):
+            turn = AgentTurn(
+                text=turn.text,
+                language=turn.language,
+                slots={
+                    **turn.slots,
+                    "regimen_id": session.context.referenced_regimen_id,
+                    "occurrence_id": session.context.referenced_occurrence_id,
+                },
+            )
         intent = self._router.route(turn, session)
+        confirming_report = intent == AgentIntent.DOSE_SELF_REPORT and bool(turn.slots.get("confirm_challenge_id"))
+        prior = None
+        if intent == AgentIntent.DOSE_SELF_REPORT:
+            report_key = str(turn.slots.get("idempotency_key", f"turn-{turn.slots.get('client_turn_id', '1')}"))
+            prior = self._registry.find_self_report_confirmation(patient_id, report_key)
+        reuse_pending = (
+            prior is not None
+            and prior.session_id == session.id
+            and prior.session_state_version == session.state_version
+            and session.state == "awaiting_confirmation"
+            and prior.consumed_at is None
+            and prior.expires_at > self._clock.now()
+        )
         session = session.model_copy(
             update={
                 "intent": intent.value,
                 "updated_at": self._clock.now(),
-                "state_version": session.state_version + 1,
+                "state_version": session.state_version
+                if confirming_report or reuse_pending
+                else session.state_version + 1,
             }
         )
         self._sessions.update(session)
@@ -314,6 +408,7 @@ class AgentOrchestrator:
         results: list[ToolResult] = []
         message: str
         requires_confirmation = False
+        pending_report = None
 
         for step_index in range(self._max_steps):
             planned = self._plan(intent, turn, session, results)
@@ -325,14 +420,79 @@ class AgentOrchestrator:
 
             if result.requires_confirmation:
                 requires_confirmation = True
-                session = self._mark_awaiting_confirmation(session)
+                if not reuse_pending:
+                    session = self._mark_awaiting_confirmation(session)
+                if isinstance(request, RecordSelfReportRequest) and request.confirmed_challenge_id is None:
+                    try:
+                        issued = self._registry.prepare_self_report_confirmation(
+                            request, session_state_version=session.state_version
+                        )
+                        pending_report = PendingSelfReportDTO(
+                            challenge_id=issued.challenge.id,
+                            occurrence_id=issued.challenge.occurrence_id,
+                            regimen_id=issued.challenge.regimen_id,
+                            idempotency_key=issued.challenge.idempotency_key,
+                            expires_at=issued.challenge.expires_at,
+                            summary=issued.summary,
+                        )
+                    except DomainError as exc:
+                        requires_confirmation = False
+                        results[-1] = result.model_copy(
+                            update={
+                                "requires_confirmation": False,
+                                "error_code": exc.code.value,
+                                "error_message": str(exc),
+                            }
+                        )
                 break
             if result.status == ToolStatus.BLOCKED and step_index >= 1:
                 # Bounded: do not retry a blocked write in a loop.
                 break
 
         message = self._compose_message(intent, results)
+        if turn.language == "zh":
+            from .localized_reply import chinese_reply
+
+            message = chinese_reply(intent, results)
+        listed = next(
+            (
+                row.payload.get("medications", [])
+                for row in results
+                if row.tool_name == ToolName.LIST_ACTIVE_MEDICATIONS and row.status == ToolStatus.SUCCESS
+            ),
+            [],
+        )
+        awaiting = None
+        if (
+            intent == AgentIntent.DOSE_SELF_REPORT
+            and _reported_choice(turn.text) != "unsure"
+            and not requires_confirmation
+        ):
+            if len(listed) > 1 and not any(row.tool_name == ToolName.RECORD_SELF_REPORT for row in results):
+                candidates = [
+                    CandidateReference.model_validate(
+                        {k: row[k] for k in ["medication_id", "regimen_id", "display_name"]}
+                    )
+                    for row in listed[:10]
+                ]
+                awaiting = ClarificationContext(
+                    candidates=candidates, requested_intake_status=_reported_choice(turn.text)
+                )
+                names = ", ".join(candidate.display_name for candidate in candidates)
+                message = f"Which medicine did you mean — {names}? Nothing has been recorded."
+                if turn.language == "zh":
+                    message = f"您指的是哪一种药物：{names}？目前没有保存服药自述。"
         session = self._sessions.get(patient_id, session.id) or session
+        context = record_context(
+            session.context,
+            text=turn.text,
+            message=message,
+            intent=intent.value,
+            language=turn.language,
+            results=results,
+        )
+        context = context.model_copy(update={"awaiting_clarification": awaiting, "active_task": intent.value})
+        self._sessions.update(session.model_copy(update={"context": context}))
         return AgentReply(
             message=message,
             intent=intent,
@@ -340,6 +500,7 @@ class AgentOrchestrator:
             session_state=session.state,
             tool_results=results,
             requires_confirmation=requires_confirmation,
+            pending_report=pending_report,
         )
 
     # -- planning (bounded, no recursion) -----------------------------------
@@ -377,6 +538,32 @@ class AgentOrchestrator:
             "client_turn_id": str(turn.slots.get("client_turn_id", "turn-1")),
         }
 
+        if intent == AgentIntent.REMINDER:
+            import re
+
+            match = re.search(r"\bin (\d{1,4}) (?:minutes?|min)\b", turn.text.lower())
+            if match is None or not 1 <= int(match[1]) <= 1440:
+                return None
+            if ToolName.CHECK_DUE_DOSE not in executed:
+                return ToolName.CHECK_DUE_DOSE, CheckDueDoseRequest(**base)
+            due = next((r for r in done if r.tool_name == ToolName.CHECK_DUE_DOSE), None)
+            doses = due.payload.get("due_doses", []) if due else []
+            if len(doses) != 1 or ToolName.CREATE_REMINDER in executed:
+                return None
+            return ToolName.CREATE_REMINDER, CreateReminderRequest(
+                **base, occurrence_id=UUID(doses[0]["occurrence_id"]), minutes=int(match[1])
+            )
+
+        if intent == AgentIntent.CLARIFICATION and any(
+            phrase in turn.text.lower()
+            for phrase in ("what is due", "what medicine should", "which medicine is due", "今晚", "吃什么药")
+        ):
+            if ToolName.CHECK_DUE_DOSE not in executed:
+                return ToolName.CHECK_DUE_DOSE, CheckDueDoseRequest(
+                    **base, window="tonight" if ("tonight" in turn.text.lower() or "今晚" in turn.text) else "due"
+                )
+            return None
+
         if intent == AgentIntent.MEDICATION_ENROLLMENT:
             if ToolName.ENROLL_MEDICATION_DRAFT not in executed:
                 return ToolName.ENROLL_MEDICATION_DRAFT, EnrollMedicationRequest(
@@ -408,34 +595,55 @@ class AgentOrchestrator:
             return None
 
         if intent == AgentIntent.DOSE_SELF_REPORT:
+            if _reported_choice(turn.text) == "unsure" and "intake_status" not in turn.slots:
+                if ToolName.LIST_ACTIVE_MEDICATIONS not in executed:
+                    return ToolName.LIST_ACTIVE_MEDICATIONS, ListActiveMedicationsRequest(**base)
+                listed = next((row for row in done if row.tool_name == ToolName.LIST_ACTIVE_MEDICATIONS), None)
+                medications = listed.payload.get("medications", []) if listed else []
+                if len(medications) == 1 and ToolName.GET_DOSE_STATUS not in executed:
+                    return ToolName.GET_DOSE_STATUS, GetDoseStatusRequest(
+                        **base, medication_name=medications[0]["display_name"]
+                    )
+                return None
             if ToolName.LIST_ACTIVE_MEDICATIONS not in executed:
                 return ToolName.LIST_ACTIVE_MEDICATIONS, ListActiveMedicationsRequest(**base)
             if "regimen_id" not in turn.slots:
-                return None
+                if ToolName.CHECK_DUE_DOSE not in executed:
+                    return ToolName.CHECK_DUE_DOSE, CheckDueDoseRequest(**base)
+                due_result = next((r for r in done if r.tool_name == ToolName.CHECK_DUE_DOSE), None)
+                doses = due_result.payload.get("due_doses", []) if due_result else []
+                if len(doses) != 1:
+                    return None
+                turn.slots["regimen_id"] = UUID(doses[0]["regimen_id"])
+                turn.slots["occurrence_id"] = UUID(doses[0]["occurrence_id"])
             # For a scheduled regimen the report must reference the actual due
             # occurrence, so resolve it deterministically instead of guessing.
             if (
                 turn.slots.get("occurrence_id") is None
+                and not turn.slots.get("confirm_challenge_id")
                 and not turn.slots.get("is_prn")
                 and ToolName.CHECK_DUE_DOSE not in executed
             ):
-                return ToolName.CHECK_DUE_DOSE, CheckDueDoseRequest(
-                    **base, regimen_id=turn.slots["regimen_id"]
-                )
+                return ToolName.CHECK_DUE_DOSE, CheckDueDoseRequest(**base, regimen_id=turn.slots["regimen_id"])
             if ToolName.RECORD_SELF_REPORT not in executed:
                 occurrence_id = turn.slots.get("occurrence_id")
-                if occurrence_id is None:
+                if occurrence_id is None and not turn.slots.get("confirm_challenge_id"):
                     occurrence_id = self._resolve_occurrence(done, turn)
+                # A confirmed challenge id, when the client has completed the
+                # confirmation lifecycle, is passed through. When it is absent
+                # the tool returns CONFIRMATION_REQUIRED and the orchestrator
+                # moves the session to 'awaiting_confirmation' instead of
+                # writing a dose event the database would reject.
+                confirmed_challenge_id = turn.slots.get("confirm_challenge_id")
                 return ToolName.RECORD_SELF_REPORT, RecordSelfReportRequest(
                     **base,
                     regimen_id=turn.slots["regimen_id"],
                     occurrence_id=occurrence_id,
-                    intake_status=str(turn.slots.get("intake_status", "unsure")),
+                    intake_status=str(turn.slots.get("intake_status", _reported_choice(turn.text))),
                     idempotency_key=str(
-                        turn.slots.get(
-                            "idempotency_key", f"turn-{turn.slots.get('client_turn_id', '1')}"
-                        )
+                        turn.slots.get("idempotency_key", f"turn-{turn.slots.get('client_turn_id', '1')}")
                     ),
+                    confirmed_challenge_id=(UUID(str(confirmed_challenge_id)) if confirmed_challenge_id else None),
                 )
             return None
 
@@ -446,15 +654,17 @@ class AgentOrchestrator:
             # attempted at all — the agent asks instead of matching an
             # arbitrary medication (no plausible-but-wrong answers).
             if ToolName.GET_DOSE_STATUS not in executed:
-                explicit = turn.slots.get("medication_name") or turn.slots.get(
-                    "query_medication_name"
-                )
+                explicit = turn.slots.get("medication_name") or turn.slots.get("query_medication_name")
                 name = str(explicit).strip() if explicit else self._router_medication_name(turn)
+                if not name and session.context.referenced_medication_id:
+                    return ToolName.GET_DOSE_STATUS, GetDoseStatusRequest(
+                        **base,
+                        medication_id=session.context.referenced_medication_id,
+                        occurrence_id=session.context.referenced_occurrence_id,
+                    )
                 if not name:
                     return None
-                return ToolName.GET_DOSE_STATUS, GetDoseStatusRequest(
-                    **base, medication_name=name, day_offset=0
-                )
+                return ToolName.GET_DOSE_STATUS, GetDoseStatusRequest(**base, medication_name=name, day_offset=0)
             return None
 
         if intent == AgentIntent.MEDICATION_HISTORY:
@@ -526,6 +736,11 @@ class AgentOrchestrator:
     def _compose_message(self, intent: AgentIntent, results: list[ToolResult]) -> str:
         prefix = "[degraded: deterministic rule routing, not a live LLM] "
         if not results:
+            if intent == AgentIntent.REMINDER:
+                return (
+                    prefix + "When should I remind you? Say in 15 minutes or in 30 minutes. "
+                    "This leaves your medication schedule unchanged."
+                )
             if intent == AgentIntent.DOSE_STATUS_QUERY:
                 return prefix + (
                     "I can look up what you have already reported for a medication, "
@@ -543,11 +758,27 @@ class AgentOrchestrator:
                 )
             return prefix + "I could not determine what you need. Could you tell me more?"
 
+        if intent == AgentIntent.DOSE_SELF_REPORT and results and not any(row.requires_confirmation for row in results):
+            if results[-1].tool_name == ToolName.GET_DOSE_STATUS:
+                return (
+                    prefix + "No dose will be marked as taken from uncertainty. " + _describe_dose_status(results[-1])
+                )
+            if results[-1].tool_name in {ToolName.LIST_ACTIVE_MEDICATIONS, ToolName.CHECK_DUE_DOSE}:
+                return (
+                    prefix + "No intake has been recorded. Select a current medication in Today, "
+                    "or finish review and activation in My Medicines."
+                )
         last = results[-1]
+        if intent == AgentIntent.REMINDER and last.tool_name == ToolName.CHECK_DUE_DOSE:
+            return prefix + "Please select one current dose in Today before adding a reminder."
+        if last.tool_name == ToolName.CREATE_REMINDER and not last.blocked:
+            return (
+                prefix + f"Reminder saved {_local_time_label(last.payload['remind_at'])}. "
+                "It appears when the app is open or reopened; your medication schedule is unchanged."
+            )
         if last.requires_confirmation:
             return (
-                prefix
-                + "Please review the summary and confirm before I save it. "
+                prefix + "Please review the summary and confirm before I save it. "
                 "I will not change your medication record without your confirmation."
             )
         if last.blocked:
@@ -566,9 +797,7 @@ class AgentOrchestrator:
 
 def _summarise(result: ToolResult) -> str:
     if result.tool_name == ToolName.RECORD_SELF_REPORT:
-        return (
-            "Recorded as reported by you — this does not prove the medication was taken."
-        )
+        return "Recorded as reported by you — this does not prove the medication was taken."
     if result.tool_name == ToolName.LIST_ACTIVE_MEDICATIONS:
         return f"You have {result.payload.get('item_count', 0)} active medication(s)."
     if result.tool_name == ToolName.GET_MEDICATION_HISTORY:
@@ -577,6 +806,21 @@ def _summarise(result: ToolResult) -> str:
             "Doses with no report are not counted as missed."
         )
     if result.tool_name == ToolName.CHECK_DUE_DOSE:
+        if result.payload.get("window") == "tonight":
+            rows = result.payload.get("schedule", [])
+            if not rows:
+                return (
+                    "No evening dose is scheduled in your reviewed active record tonight (18:00-24:00, Asia/Singapore)."
+                )
+            return (
+                "Your reviewed schedule tonight: "
+                + "; ".join(
+                    f"{row['medication_name']}: {row['dose_amount']} {row['dose_unit']} "
+                    f"at {row['local_time']} ({row['intake_status'].replace('_', ' ')})"
+                    for row in rows
+                )
+                + ". These are your recorded instructions."
+            )
         return f"{result.payload.get('item_count', 0)} dose(s) are due now."
     if result.tool_name == ToolName.GET_DOSE_STATUS:
         return _describe_dose_status(result)

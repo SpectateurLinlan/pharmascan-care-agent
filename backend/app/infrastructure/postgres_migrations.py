@@ -60,6 +60,17 @@ RLS_REQUIRED_TABLES: tuple[str, ...] = (
     "agent_tool_calls",
     "audit_events",
     "medication_products",
+    "dose_reminders",
+    "demo_ai_usage",
+    "demo_ai_turns",
+    "patient_feedback",
+    "health_observations",
+    "medication_evidence_tasks",
+    "medication_source_links",
+    "medication_images",
+    "visual_reference_sets",
+    "image_embeddings",
+    "recognition_runs",
 )
 
 
@@ -319,8 +330,7 @@ def inspect_agent_allowlists(connection: psycopg.Connection) -> dict[str, object
     checks = {
         "tool_name_allows_get_dose_status": "'get_dose_status'"
         in definitions.get("agent_tool_calls_tool_name_check", ""),
-        "intent_allows_dose_status_query": "'dose_status_query'"
-        in definitions.get("agent_sessions_intent_check", ""),
+        "intent_allows_dose_status_query": "'dose_status_query'" in definitions.get("agent_sessions_intent_check", ""),
         "trace_allows_already_recorded": "'already_recorded'" in source,
         "trace_allows_missing_count": "'missing_count'" in source,
         "trace_allows_no_report": "'no_report'" in source,
@@ -366,11 +376,10 @@ def inspect_storage(connection: psycopg.Connection) -> dict[str, object]:
         "all_private": all(row["public"] is False for row in buckets),
         "policies": [{"name": row["policyname"], "command": row["cmd"]} for row in policies],
         "policy_count": len(policies),
-        "ownership_model": "<patient_id>/<opaque-filename> — first path segment must "
-                           "equal auth.uid()",
-        "live_verification": "IN_PROGRESS",
-        "live_verification_reason": "no object is uploaded: the P0 slice has no photo "
-                                    "path and real health data must never be uploaded",
+        "ownership_model": "<patient_id>/<opaque-filename> — first path segment must equal auth.uid()",
+        "live_verification": "SCHEMA_ONLY",
+        "live_verification_reason": "This read-only command checks bucket policies only. "
+        "Synthetic authenticated upload/read/delete isolation is tested separately in test_supabase_live.py.",
     }
 
 

@@ -121,10 +121,15 @@ class HttpStage2VisionProvider:
         if preprocess is not None and preprocess != self._preprocess:
             raise ModelVersionMismatch("provider preprocessing drift")
 
-    def model_info(self) -> ModelMetadata:
+    def model_info(self, *, read_only_v09_compatibility: bool = False) -> ModelMetadata:
         wire = project(self._contract, "ModelInfo", self._transport.get_json("/v1/model-info"), ModelInfoWire)
         self._check_versions(wire.embedding_space_id, wire.model_version, wire.preprocess_version)
-        if wire.api_version != "0.8.0" or wire.embedding_dim != 256:
+        # The live 0.9 release adds ModelInfo evidence and catalogue caveats;
+        # detect/identify request and response schemas remain unchanged.
+        # Only the read-only visual gateway opts in. Embedding/gallery callers
+        # retain the original strict v0.8 gate; no new contract fields inferred.
+        supported = {"0.8.0", "0.9.0"} if read_only_v09_compatibility else {"0.8.0"}
+        if wire.api_version not in supported or wire.embedding_dim != 256:
             raise ModelVersionMismatch("provider API version/dimension changed")
         return ModelMetadata(
             api_version=wire.api_version,

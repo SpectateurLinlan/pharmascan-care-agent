@@ -8,6 +8,9 @@ from enum import StrEnum
 
 
 class SourceKind(StrEnum):
+    PACKAGE = "package"
+    PHARMACY_LABEL = "pharmacy_label"
+    PRESCRIPTION = "prescription"
     MOCK_IMPORT = "mock_import"
     USER_MANUAL = "user_manual"
 
@@ -19,12 +22,12 @@ class SourceReviewStatus(StrEnum):
     REJECTED = "rejected"
 
 
-REVIEWED_STATUSES = frozenset(
-    {SourceReviewStatus.USER_REVIEWED, SourceReviewStatus.PROFESSIONAL_VERIFIED}
-)
+REVIEWED_STATUSES = frozenset({SourceReviewStatus.USER_REVIEWED, SourceReviewStatus.PROFESSIONAL_VERIFIED})
 
 
 class FieldName(StrEnum):
+    COURSE_START_DATE = "course_start_date"
+    COURSE_END_DATE = "course_end_date"
     MEDICATION_NAME = "medication_name"
     DOSE_AMOUNT = "dose_amount"
     DOSE_UNIT = "dose_unit"
@@ -91,6 +94,7 @@ class AgentSessionState(StrEnum):
 
 
 class AgentIntent(StrEnum):
+    REMINDER = "reminder"
     MEDICATION_ENROLLMENT = "medication_enrollment"
     DOSE_SELF_REPORT = "dose_self_report"
     #: "Have I taken my Amlodipine today?" — a read-only question about what
@@ -113,6 +117,9 @@ class PolicyRuleId(StrEnum):
 class ToolName(StrEnum):
     """Allowlisted agent tools; must match agent_tool_calls.tool_name CHECK."""
 
+    RECONCILE_MEDICATION_SOURCES = "reconcile_medication_sources"
+
+    CREATE_REMINDER = "create_reminder"
     LIST_ACTIVE_MEDICATIONS = "list_active_medications"
     GET_MEDICATION_HISTORY = "get_medication_history"
     #: Read-only lookup of what the patient has *reported* for one medication

@@ -101,6 +101,31 @@ def cmd_migrate(args: argparse.Namespace) -> int:
 
     results: list[dict[str, object]] = []
     with database.connect(autocommit=True) as connection:
+        if getattr(args, "only", None):
+            # Scoped mode never seeds/reconciles the ledger or replays older DDL.
+            recorded = applied_migrations(connection)
+            selected = [m for m in migrations if m.version == args.only]
+            if len(selected) != 1:
+                print("BLOCKED: exactly one known migration version is required")
+                return 2
+            target = selected[0]
+            if any(recorded.get(m.version) != m.sha256 for m in migrations if m.version < target.version):
+                print("BLOCKED: previous migration missing or hash mismatch")
+                return 3
+            if any(m.version in recorded and recorded[m.version] != m.sha256 for m in migrations):
+                print("BLOCKED: recorded migration hash mismatch")
+                return 3
+            if target.version in recorded:
+                print(f"already applied {target.label}")
+                return 0
+            try:
+                apply_migration(connection, target)
+                record_migration(connection, target)
+            except Exception as exc:  # noqa: BLE001 - redact all provider/DDL values
+                print(f"FAILED {target.label}: {type(exc).__name__}")
+                return 4
+            print(f"applied {target.label}; previous ledger hashes verified; no rollback")
+            return 0
         ensure_ledger(connection)
         recorded = applied_migrations(connection)
 
@@ -244,7 +269,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("status").set_defaults(func=cmd_status)
-    sub.add_parser("migrate").set_defaults(func=cmd_migrate)
+    migrate = sub.add_parser("migrate")
+    migrate.add_argument("--only", help="Apply exactly this version after validating every earlier ledger hash")
+    migrate.set_defaults(func=cmd_migrate)
     sub.add_parser("verify").set_defaults(func=cmd_verify)
     args = parser.parse_args()
     return int(args.func(args))

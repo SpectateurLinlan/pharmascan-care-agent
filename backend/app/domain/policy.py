@@ -83,9 +83,7 @@ def validate_frequency_rule(rule: FrequencyRuleDTO | None, *, is_prn: bool) -> N
             raise ValidationError(f"unsupported frequency kind: {rule.kind}")
 
 
-def missing_required_instructions(
-    draft_fields: dict[str, Any], *, is_prn: bool
-) -> list[FieldName]:
+def missing_required_instructions(draft_fields: dict[str, Any], *, is_prn: bool) -> list[FieldName]:
     """Return required instructions that are still absent — they stay pending.
 
     Missing dose instructions must never be inferred or defaulted
@@ -123,9 +121,7 @@ def check_activation_preconditions(
     if medication.archived_at is not None:
         raise StaleVersionError(f"Medication {medication.display_name} is archived")
     if medication.identity_status == IdentityStatus.UNVERIFIED:
-        raise SourceUnreviewedError(
-            "Medication identity is unverified; review the source document first"
-        )
+        raise SourceUnreviewedError("Medication identity is unverified; review the source document first")
     if source is None:
         raise SourceUnreviewedError("Regimen draft has no source document")
     if source.review_status not in REVIEWED_STATUSES:
@@ -135,36 +131,29 @@ def check_activation_preconditions(
         )
     unreviewed = [f for f in source_fields if f.review_status not in REVIEWED_STATUSES]
     if unreviewed:
-        raise SourceUnreviewedError(
-            f"{len(unreviewed)} source field(s) not reviewed"
-        )
+        raise SourceUnreviewedError(f"{len(unreviewed)} source field(s) not reviewed")
     if missing_instructions:
         names = ", ".join(m.value for m in missing_instructions)
-        raise IncompleteRegimenError(
-            f"Cannot activate: required instructions still missing: {names}"
-        )
+        raise IncompleteRegimenError(f"Cannot activate: required instructions still missing: {names}")
 
 
-def check_regimen_state_transition(
-    current: RegimenState, target: RegimenState
-) -> PolicyDecision:
+def check_regimen_state_transition(current: RegimenState, target: RegimenState) -> PolicyDecision:
     """Legal state transitions (mirrors core_guard_regimen)."""
     if current in (RegimenState.ENDED, RegimenState.SUPERSEDED):
-        return PolicyDecision(False, PolicyRuleId.CURRENT_VERSION_REQUIRED,
-                              "historical regimen is immutable")
+        return PolicyDecision(False, PolicyRuleId.CURRENT_VERSION_REQUIRED, "historical regimen is immutable")
     if current == RegimenState.ACTIVE and target not in (
         RegimenState.ENDED,
         RegimenState.SUPERSEDED,
     ):
-        return PolicyDecision(False, PolicyRuleId.CURRENT_VERSION_REQUIRED,
-                              "active regimen can only be retired, never edited")
+        return PolicyDecision(
+            False, PolicyRuleId.CURRENT_VERSION_REQUIRED, "active regimen can only be retired, never edited"
+        )
     if current in (RegimenState.DRAFT, RegimenState.PENDING_CLARIFICATION) and target not in (
         RegimenState.ACTIVE,
         RegimenState.PENDING_CLARIFICATION,
         RegimenState.DRAFT,
     ):
-        return PolicyDecision(False, PolicyRuleId.CURRENT_VERSION_REQUIRED,
-                              "only an active regimen can be retired")
+        return PolicyDecision(False, PolicyRuleId.CURRENT_VERSION_REQUIRED, "only an active regimen can be retired")
     return PolicyDecision(True)
 
 
@@ -180,8 +169,7 @@ def check_dose_write_preconditions(
     """Guards before persisting a self-report (mirrors core_guard_dose_event)."""
     if regimen.state != RegimenState.ACTIVE:
         raise StaleVersionError(
-            f"Regimen {regimen.id} is {regimen.state.value}; only the current "
-            "active regimen accepts dose reports"
+            f"Regimen {regimen.id} is {regimen.state.value}; only the current active regimen accepts dose reports"
         )
     if medication is None:
         raise NotFoundError("Medication for regimen not found")
@@ -199,9 +187,7 @@ def check_dose_write_preconditions(
         if occurrence is None:
             raise ValidationError("Scheduled regimen requires a due occurrence")
         if occurrence_has_event:
-            raise DuplicateEventError(
-                "A self report already exists for this occurrence"
-            )
+            raise DuplicateEventError("A self report already exists for this occurrence")
         if getattr(occurrence, "status", None) == "closed":
             raise DuplicateEventError("Occurrence is already closed")
 
@@ -223,13 +209,9 @@ def check_confirmation(
     if challenge is None:
         raise ConfirmationRequiredError("No confirmation challenge found")
     if not challenge.confirmed_at:  # type: ignore[attr-defined]
-        raise ConfirmationRequiredError(
-            "The patient has not explicitly confirmed this action yet"
-        )
+        raise ConfirmationRequiredError("The patient has not explicitly confirmed this action yet")
     if session_state != "awaiting_confirmation":
-        raise ConfirmationRequiredError(
-            f"Agent session state is {session_state!r}, expected 'awaiting_confirmation'"
-        )
+        raise ConfirmationRequiredError(f"Agent session state is {session_state!r}, expected 'awaiting_confirmation'")
     if challenge.session_state_version != session_state_version:  # type: ignore[attr-defined]
         raise StaleVersionError("Confirmation was issued against a stale session state")
     if now >= challenge.expires_at:  # type: ignore[attr-defined]
@@ -245,8 +227,7 @@ def check_confirmation(
     if challenge.intended_intake_status != expected_intake_status:  # type: ignore[attr-defined]
         raise ConfirmationRequiredError("Confirmation is bound to a different intake status")
     if (
-        expected_idempotency_key is not None
-        and challenge.idempotency_key != expected_idempotency_key  # type: ignore[attr-defined]
+        expected_idempotency_key is not None and challenge.idempotency_key != expected_idempotency_key  # type: ignore[attr-defined]
     ):
         raise ConfirmationRequiredError("Confirmation is bound to a different idempotency key")
 
@@ -271,7 +252,9 @@ def intake_status_from_patient_choice(choice: str) -> IntakeStatus:
     """
     mapping = {
         "taken": IntakeStatus.REPORTED_TAKEN,
+        "reported_taken": IntakeStatus.REPORTED_TAKEN,
         "not_taken": IntakeStatus.REPORTED_NOT_TAKEN,
+        "reported_not_taken": IntakeStatus.REPORTED_NOT_TAKEN,
         "not_taken_yet": IntakeStatus.REPORTED_NOT_TAKEN,
         "not_now": IntakeStatus.REPORTED_NOT_TAKEN,
         "later": IntakeStatus.REPORTED_NOT_TAKEN,
@@ -285,8 +268,7 @@ def intake_status_from_patient_choice(choice: str) -> IntakeStatus:
         return mapping[normalized]
     except KeyError:
         raise ValidationError(
-            f"Unsupported patient choice {choice!r}; expected one of "
-            "['Taken', 'Not now', 'Not taken', 'Unsure']"
+            f"Unsupported patient choice {choice!r}; expected one of ['Taken', 'Not now', 'Not taken', 'Unsure']"
         ) from None
 
 
@@ -297,3 +279,19 @@ def summarize_safety_notice(intake_status: IntakeStatus) -> str:
     if intake_status == IntakeStatus.UNSURE:
         return "Recorded as unsure — nothing was inferred about the actual intake."
     return "Recorded as reported by you."
+
+
+def intake_status_label(intake_status: IntakeStatus) -> str:
+    """Patient-facing label for a status, for the confirmation summary.
+
+    Kept separate from :func:`summarize_safety_notice` so the summary can show
+    *what* is being recorded without repeating the safety caveat, and so the
+    wording is asserted once in a unit test rather than duplicated in the UI.
+    """
+    labels = {
+        IntakeStatus.REPORTED_TAKEN: "Taken (as reported by you)",
+        IntakeStatus.REPORTED_NOT_TAKEN: "Not taken (as reported by you)",
+        IntakeStatus.UNSURE: "Unsure (as reported by you)",
+        IntakeStatus.NOT_REPORTED: "No report",
+    }
+    return labels.get(intake_status, "No report")

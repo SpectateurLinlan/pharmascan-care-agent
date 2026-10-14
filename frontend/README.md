@@ -1,72 +1,60 @@
-# PharmaScan Care — patient UI
+# PharmaScan Care — Patient UI
 
-Minimum patient-facing UI for the PharmaScan Care demo. Built for Gate 4 of
-`prompts/02_OVERNIGHT_BUILD_CRAFT.md`.
+React/TypeScript/Vite patient app, designed primarily for 390–430px mobile portrait with desktop support. The [project README](../README.md) is the current entry point for introduction, setup, architecture, capability status and release gates.
 
-## What this is
+## Start
 
-A portrait-first, large-text, single-patient interface that talks **only** to
-our own FastAPI backend over HTTPS JSON. It never connects to PostgreSQL, the
-Stage2 vision API, or any external service directly.
+With the current FastAPI backend running on port 8001:
 
-## What is real vs simulated
-
-| Area | State | Why |
-|---|---|---|
-| Backend HTTP API | **real** | `backend/app/transport/` — 26 HTTP tests, verified E2E |
-| Persistence | **simulated (in-memory)** | no PostgreSQL/Docker on this machine (B02) |
-| Assistant replies | **degraded mode** | no LLM key; deterministic rule router (B03). Every reply is tagged `mode=deterministic_degraded` |
-| Pill photo check | **not built** | no camera pipeline and no live Stage2 provider (B01). The button is disabled and labelled `unavailable` on purpose |
-
-The UI shows these states to the patient rather than hiding them.
-
-## Run it
-
-```bash
-# 1) backend (from the repository root)
-python -c "import sys; sys.path.insert(0,'backend'); import uvicorn; \
-from app.transport.app_factory import create_app; \
-uvicorn.run(create_app(), host='127.0.0.1', port=8000)"
-
-# 2) frontend
+```powershell
 cd frontend
-npm install
-npm run dev            # http://localhost:5173
+npm ci     # First install or lockfile changes only
+npm run dev
 ```
 
-The dev server proxies `/api` to `http://127.0.0.1:8000`, so no CORS setup is
-needed in development. Override with `VITE_API_TARGET` if the backend runs
-elsewhere.
+Open the URL Vite prints (normally localhost:5173). The dev server proxies `/api` to `http://127.0.0.1:8001`; `VITE_API_TARGET` sets the development proxy target.
 
-> **Note:** on some Windows setups `npm install` does not fetch the platform
-> native binaries. If `vite build` fails with `MODULE_NOT_FOUND`, run:
-> `npm i @rollup/rollup-win32-x64-msvc @esbuild/win32-x64` (see B09).
+See [complete setup](../README.md#local-setup-and-startup) for Python and runtime profiles. Frontend login uses `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY`; server credentials stay in the backend environment. Business data and Stage2 operations use typed FastAPI APIs.
 
-## Scripts
+## Patient destinations
+
+- **Today:** reviewed medication/dose/course information, current dose actions, reminders, visual Check and compact composer.
+- **Medicines:** grouped current/upcoming/history/drafts; choose label or manual registration before the specific form.
+- **Assistant:** contextual Gemini/tool path when configured, deterministic fallback when unavailable, six bounded recent turns.
+- **History:** independently confirmed patient reports, optional health notes and real-data week/month/course summaries.
+- **Me:** profile, account, reminders, language/speech, accessibility, privacy, About and feedback through separate pages.
+
+Self-report uses a B14 challenge and independent confirmation sheet. Confirm writes one retry-safe event; cancellation leaves records unchanged. Failed record reads offer a retry action.
+
+## Voice and preferences
+
+One persisted en/zh preference controls UI, Browser SpeechRecognition `en-SG`/`zh-CN` and Agent output. Patients review/edit their transcript and press Send to continue.
+
+Default playback is frontend **Browser SpeechSynthesis**, using available language-qualified voices with delayed `voiceschanged` loading. Play/Stop/replay/autoplay and a default 0.9x rate are supported. Missing/failed voices preserve text; no automatic Tencent fallback.
+
+Optional Cloud TTS requires explicit session-only selection in Settings plus backend permission. Reload restores Browser. Browser STT/TTS may use remote services and are not guaranteed offline. Details: [voice providers and cost](../README.md#voice-providers-and-cost).
+
+## Commands
 
 | Command | Purpose |
 |---|---|
-| `npm run dev` | dev server with API proxy |
-| `npm run build` | type-check + production build |
-| `npm run typecheck` | `tsc --noEmit` only |
-| `npm run test` | vitest (API client contract tests) |
+| `npm run dev` | Vite development server/API proxy |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | TypeScript check |
+| `npm run test` | Vitest local/synthetic regressions |
+| `npm run build` | TypeScript build and production assets |
+| `npm run test:browser` | Playwright scenarios; live journeys require explicit opt-in |
 
-## Screens
+Browser TTS adapter check:
 
-- **Today** — the dose that is due, with `[Taken] [Not now] [Unsure]` and a
-  disabled `[Check pill]`. History shows `not reported` distinctly from a
-  missed dose.
-- **Medications** — active list, plus the draft → review → confirm → activate
-  flow. A draft is never active on its own; activation needs a reviewed source
-  and an explicit, single-use confirmation.
-- **Assistant** — text (and optional browser speech input). Every reply shows
-  its `mode` tag so it cannot be mistaken for a live LLM.
-- **Settings** — lists what is deliberately not built.
+```powershell
+npm run test:browser -- e2e/browser-tts.spec.ts
+```
 
-## Design constraints honoured
+Start the frontend/backend, set `QA_BASE_URL` to the frontend origin and `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to an installed Chrome/Edge executable. QA defaults to port 5174. Application journeys use `RUN_LIVE_BROWSER=1` and synthetic records; speech-event automation covers the browser wiring.
 
-- portrait-first single column, landscape/tablet two-column at ≥640 px
-- minimum 52 px touch targets, base font 19 px
-- follows the system light/dark preference
-- state is never conveyed by colour alone — every status has a text label
-- no page claims a result the backend did not return
+## Current limits
+
+Personal gallery private persistence and eligible loose-pill matching are implemented and real-browser verified with synthetic inputs. Packaging/blister automatic matching, PDF extraction and caregiver management remain unavailable/partial. See the root README and current workflows for Demo A/B/C. Device voice/audio, medicine pronunciation, mobile keyboard and email-account flows need manual acceptance. Reminders operate while the app is active or reopened; patient data uses online APIs. Singpass is a future integration.
+
+See [verification](../README.md#verification) and [acceptance checklist](../README.md#limitations-and-acceptance) for recorded checks and remaining work.

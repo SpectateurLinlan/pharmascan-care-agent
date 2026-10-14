@@ -111,6 +111,42 @@ def _activate_twice_daily(client: TestClient, session_id: str, times: list[str])
     return draft
 
 
+def _report(
+    client: TestClient,
+    *,
+    regimen_id: str,
+    occurrence_id: str,
+    intake_status: str,
+    idempotency_key: str,
+):
+    """Record a self report through the two-phase confirmation flow.
+
+    The database refuses a dose event that does not cite a confirmed,
+    unconsumed ``record_self_report`` challenge, so the request issues one and
+    submits it exactly as the real client does.
+    """
+    challenge = client.post(
+        f"/api/doses/{occurrence_id}/report/challenge",
+        params=_params(),
+        json={
+            "regimen_id": regimen_id,
+            "intake_status": intake_status,
+            "idempotency_key": idempotency_key,
+        },
+    )
+    assert challenge.status_code == 200, challenge.text
+    return client.post(
+        f"/api/doses/{occurrence_id}/report",
+        params=_params(),
+        json={
+            "regimen_id": regimen_id,
+            "intake_status": intake_status,
+            "idempotency_key": idempotency_key,
+            "challenge_id": challenge.json()["challenge_id"],
+        },
+    )
+
+
 def test_two_times_survive_the_round_trip(client: TestClient) -> None:
     session = _start(client)
     draft = _activate_twice_daily(client, session["session_id"], ["08:00", "20:00"])
@@ -137,14 +173,12 @@ def test_both_slots_become_due_across_the_day(client: TestClient, clock: FixedCl
     morning = client.get("/api/doses/due", params=_params(regimen_id=regimen_id)).json()
     assert morning["occurrence_id"] is not None
 
-    report = client.post(
-        f"/api/doses/{morning['occurrence_id']}/report",
-        params=_params(),
-        json={
-            "regimen_id": regimen_id,
-            "intake_status": "Taken",
-            "idempotency_key": "morning-slot",
-        },
+    report = _report(
+        client,
+        regimen_id=regimen_id,
+        occurrence_id=morning["occurrence_id"],
+        intake_status="Taken",
+        idempotency_key="morning-slot",
     )
     assert report.status_code == 200, report.text
 
@@ -166,10 +200,12 @@ def test_history_shows_both_slots_with_distinct_outcomes(
     clock.advance(hours=10)
 
     morning = client.get("/api/doses/due", params=_params(regimen_id=regimen_id)).json()
-    client.post(
-        f"/api/doses/{morning['occurrence_id']}/report",
-        params=_params(),
-        json={"regimen_id": regimen_id, "intake_status": "Taken", "idempotency_key": "k-m"},
+    _report(
+        client,
+        regimen_id=regimen_id,
+        occurrence_id=morning["occurrence_id"],
+        intake_status="Taken",
+        idempotency_key="k-m",
     )
 
     history = client.get(

@@ -26,6 +26,7 @@ from ..contracts.dto import (
     SourceFieldDTO,
     ToolTraceDTO,
 )
+from ..contracts.reminders import ReminderDTO
 
 
 class SystemClock:
@@ -47,6 +48,7 @@ class InMemoryStore:
     """Single owner of all in-memory rows; injected into every repository."""
 
     def __init__(self) -> None:
+        self.reminders: dict[tuple[UUID, UUID], ReminderDTO] = {}
         self.sources: dict[tuple[UUID, UUID], SourceDocumentDTO] = {}
         self.source_fields: dict[tuple[UUID, UUID], SourceFieldDTO] = {}
         self.medications: dict[tuple[UUID, UUID], PatientMedicationDTO] = {}
@@ -83,9 +85,7 @@ class InMemorySourceFieldRepository:
 
     def list_for_source(self, patient_id: UUID, source_id: UUID) -> list[SourceFieldDTO]:
         return [
-            f
-            for (owner, _), f in self._store.source_fields.items()
-            if owner == patient_id and f.source_id == source_id
+            f for (owner, _), f in self._store.source_fields.items() if owner == patient_id and f.source_id == source_id
         ]
 
     def add(self, field: SourceFieldDTO) -> None:
@@ -127,9 +127,7 @@ class InMemoryRegimenVersionRepository:
     def get(self, patient_id: UUID, regimen_id: UUID) -> RegimenVersionDTO | None:
         return self._store.regimens.get((patient_id, regimen_id))
 
-    def list_for_medication(
-        self, patient_id: UUID, medication_id: UUID
-    ) -> list[RegimenVersionDTO]:
+    def list_for_medication(self, patient_id: UUID, medication_id: UUID) -> list[RegimenVersionDTO]:
         rows = [
             r
             for (owner, _), r in self._store.regimens.items()
@@ -137,9 +135,7 @@ class InMemoryRegimenVersionRepository:
         ]
         return sorted(rows, key=lambda r: r.version_no)
 
-    def find_active_for_medication(
-        self, patient_id: UUID, medication_id: UUID
-    ) -> RegimenVersionDTO | None:
+    def find_active_for_medication(self, patient_id: UUID, medication_id: UUID) -> RegimenVersionDTO | None:
         for regimen in self.list_for_medication(patient_id, medication_id):
             if regimen.state.value == "active":
                 return regimen
@@ -152,13 +148,9 @@ class InMemoryRegimenVersionRepository:
     def add(self, regimen: RegimenVersionDTO) -> None:
         self._guard_immutable_history(regimen)
         if regimen.state.value == "active":
-            current = self.find_active_for_medication(
-                regimen.patient_id, regimen.patient_medication_id
-            )
+            current = self.find_active_for_medication(regimen.patient_id, regimen.patient_medication_id)
             if current is not None and current.id != regimen.id:
-                raise ValueError(
-                    "one active regimen per medication is enforced by a unique index"
-                )
+                raise ValueError("one active regimen per medication is enforced by a unique index")
         self._store.regimens[(regimen.patient_id, regimen.id)] = regimen
 
     def update(self, regimen: RegimenVersionDTO) -> None:
@@ -170,9 +162,7 @@ class InMemoryRegimenVersionRepository:
         self._store.regimens[key] = regimen
 
     @staticmethod
-    def _guard_immutable_history(
-        regimen: RegimenVersionDTO, previous: RegimenVersionDTO | None = None
-    ) -> None:
+    def _guard_immutable_history(regimen: RegimenVersionDTO, previous: RegimenVersionDTO | None = None) -> None:
         """Mirror core_guard_regimen: ended/superseded rows are frozen."""
         if previous is None:
             return
@@ -197,9 +187,7 @@ class InMemoryDoseRuleRepository:
 
     def list_for_regimen(self, patient_id: UUID, regimen_id: UUID) -> list[DoseRuleDTO]:
         return [
-            r
-            for (owner, _), r in self._store.dose_rules.items()
-            if owner == patient_id and r.regimen_id == regimen_id
+            r for (owner, _), r in self._store.dose_rules.items() if owner == patient_id and r.regimen_id == regimen_id
         ]
 
     def add(self, rule: DoseRuleDTO) -> None:
@@ -227,9 +215,7 @@ class InMemoryDoseOccurrenceRepository:
         rows = [
             o
             for (owner, _), o in self._store.occurrences.items()
-            if owner == patient_id
-            and o.regimen_id == regimen_id
-            and window_start <= o.due_at < window_end
+            if owner == patient_id and o.regimen_id == regimen_id and window_start <= o.due_at < window_end
         ]
         return sorted(rows, key=lambda o: o.due_at)
 
@@ -266,9 +252,7 @@ class InMemoryDoseEventRepository:
                 return event
         return None
 
-    def list_for_patient(
-        self, patient_id: UUID, window_start: datetime, window_end: datetime
-    ) -> list[DoseEventDTO]:
+    def list_for_patient(self, patient_id: UUID, window_start: datetime, window_end: datetime) -> list[DoseEventDTO]:
         rows = [
             e
             for (owner, _), e in self._store.events.items()
@@ -306,10 +290,7 @@ class InMemoryAgentSessionRepository:
 
     def is_owned_by_other_patient(self, patient_id: UUID, session_id: UUID) -> bool:
         """Ownership probe: a session id may never be shared across patients."""
-        return any(
-            owner != patient_id and sid == session_id
-            for owner, sid in self._store.sessions
-        )
+        return any(owner != patient_id and sid == session_id for owner, sid in self._store.sessions)
 
 
 class InMemoryConfirmationChallengeRepository:
@@ -327,9 +308,18 @@ class InMemoryConfirmationChallengeRepository:
                 return challenge
         return None
 
+    def find_by_idempotency_key(self, patient_id: UUID, idempotency_key: str) -> ConfirmationChallengeDTO | None:
+        """Patient-scoped lookup; mirrors UNIQUE (patient_id, idempotency_key)."""
+        for (owner, _), challenge in self._store.challenges.items():
+            if owner == patient_id and challenge.idempotency_key == idempotency_key:
+                return challenge
+        return None
+
     def add(self, challenge: ConfirmationChallengeDTO) -> None:
         if self.find_by_token_hash(challenge.patient_id, challenge.token_hash) is not None:
             raise ValueError("duplicate token_hash would violate the unique index")
+        if self.find_by_idempotency_key(challenge.patient_id, challenge.idempotency_key) is not None:
+            raise ValueError("duplicate idempotency_key would violate the unique index")
         self._store.challenges[(challenge.patient_id, challenge.id)] = challenge
 
     def update(self, challenge: ConfirmationChallengeDTO) -> None:
@@ -346,9 +336,5 @@ class InMemoryToolTraceRepository:
         self._store.traces[(trace.patient_id, trace.id)] = trace
 
     def list_for_session(self, patient_id: UUID, session_id: UUID) -> list[ToolTraceDTO]:
-        rows = [
-            t
-            for (owner, _), t in self._store.traces.items()
-            if owner == patient_id and t.session_id == session_id
-        ]
+        rows = [t for (owner, _), t in self._store.traces.items() if owner == patient_id and t.session_id == session_id]
         return sorted(rows, key=lambda t: t.called_at)

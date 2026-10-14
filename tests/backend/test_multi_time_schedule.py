@@ -14,11 +14,17 @@ A regimen may carry several explicit times a day (for example 08:00 and
 
 from __future__ import annotations
 
+from datetime import timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import pytest
-from app.contracts.dto import DoseEventInput, FrequencyRuleDTO, RegimenDraftInput
+from app.contracts.dto import (
+    AgentSessionDTO,
+    DoseEventInput,
+    FrequencyRuleDTO,
+    RegimenDraftInput,
+)
 from app.contracts.enums import IntakeStatus, RegimenState, RuleKind
 from app.domain.errors import ValidationError
 
@@ -26,6 +32,50 @@ PATIENT = UUID(int=310)
 
 SINGAPORE = ZoneInfo("Asia/Singapore")
 ALL_WEEKDAYS = [1, 2, 3, 4, 5, 6, 7]
+
+
+def _report(wired, *, regimen_id, occurrence_id, intake_status, idempotency_key):
+    """Record a self report through the real confirmation lifecycle.
+
+    The database requires a confirmed, unconsumed ``record_self_report``
+    challenge for every dose event, so the test issues and confirms one exactly
+    as the transport does before recording.
+    """
+    session_id = UUID(int=800)
+    wired.sessions.add(
+        AgentSessionDTO(
+            id=session_id,
+            patient_id=PATIENT,
+            intent="record_self_report",
+            state="awaiting_confirmation",
+            state_version=1,
+            updated_at=wired.clock.now(),
+            expires_at=wired.clock.now() + timedelta(hours=1),
+        )
+    )
+    challenge = wired.self_report.request_confirmation(
+        patient_id=PATIENT,
+        regimen_id=regimen_id,
+        occurrence_id=occurrence_id,
+        intake_status=intake_status,
+        idempotency_key=idempotency_key,
+        session_id=session_id,
+        session_state_version=1,
+    )
+    wired.self_report.confirm_challenge(
+        patient_id=PATIENT, challenge_id=challenge.challenge.id
+    )
+    return wired.self_report.report(
+        patient_id=PATIENT,
+        payload=DoseEventInput(
+            regimen_id=regimen_id,
+            occurrence_id=occurrence_id,
+            intake_status=intake_status,
+            event_time=wired.clock.now(),
+            idempotency_key=idempotency_key,
+        ),
+        challenge_id=challenge.challenge.id,
+    )
 
 
 def _activate(wired, *, frequency, is_prn=False, name="Amlodipine 5mg"):
@@ -213,15 +263,12 @@ def test_second_slot_becomes_due_after_the_evening_time(wired):
     assert first.occurrence is not None
 
     # Report the morning dose, then move past the evening slot.
-    wired.self_report.report(
-        patient_id=PATIENT,
-        payload=DoseEventInput(
-            regimen_id=result.regimen.id,
-            occurrence_id=first.occurrence.id,
-            intake_status=IntakeStatus.REPORTED_TAKEN,
-            event_time=wired.clock.now(),
-            idempotency_key="slot-1",
-        ),
+    _report(
+        wired,
+        regimen_id=result.regimen.id,
+        occurrence_id=first.occurrence.id,
+        intake_status=IntakeStatus.REPORTED_TAKEN,
+        idempotency_key="slot-1",
     )
     wired.clock.advance(hours=4)  # 21:00 Singapore: the 20:00 slot is now due
     wired.schedule.materialize(patient_id=PATIENT, regimen_id=result.regimen.id, days=1)

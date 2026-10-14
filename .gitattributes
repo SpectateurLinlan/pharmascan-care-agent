@@ -1,0 +1,2 @@
+# Fixture manifests hash exact bytes; preserve canonical LF on Windows.
+tests/fixtures/stage2/**/*.json text eol=lf

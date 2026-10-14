@@ -33,6 +33,15 @@ class HttpTransport:
         raise NotImplementedError("Inject a concrete transport at the composition root")
 
 
+def sanitize_reference_image(content: bytes) -> bytes:
+    """Engineering input-quality checks, not a clinical recognition threshold."""
+    clean = sanitize_image(content)
+    with Image.open(io.BytesIO(clean)) as image:
+        if min(image.size) < 64 or all(low == high for low, high in image.getextrema()):
+            raise VisionSchemaError("Use a clear nonblank pill photo at least 64 pixels on each side")
+    return clean
+
+
 def sanitize_image(content: bytes, *, max_bytes: int = 8_000_000, max_pixels: int = 16_000_000) -> bytes:
     """Decode signature/MIME, cap pixels, remove EXIF by re-encoding to PNG."""
     if not content or len(content) > max_bytes:

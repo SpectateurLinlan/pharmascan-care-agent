@@ -8,15 +8,29 @@ implementation is selected by the composition root.
 
 Design rules honoured here
 --------------------------
-* **Explicit injection.** Every adapter receives a ``PostgresDatabase``; there
-  is no module-level engine, session or connection, so no code path can reach
-  the database without being handed one (AGENTS.md rule 2).
+* **Explicit injection.** Every adapter receives a ``SessionFactory``; there is
+  no module-level engine, session or connection, so no code path can reach the
+  database without being handed one (AGENTS.md rule 2).
 * **Short-lived transactions.** Each Port call opens its own connection and
   transaction, commits on success and rolls back on error. No connection is
   shared between calls and none outlives the call.
-* **Patient scoping in the adapter, not only in RLS.** The backend connects as
-  a role that bypasses RLS, so *every* statement here carries
-  ``patient_id = %s``. RLS is verified separately, as an independent control.
+* **Two connection modes, one adapter.** The adapter code is identical for both
+  trust boundaries; only the injected ``SessionFactory`` differs:
+
+  ``privileged_session(database)``
+      Runs as the ``DATABASE_URL`` role (``rolbypassrls = true`` on the Supabase
+      development project). Migrations, schema verification, maintenance, admin
+      setup and the evidence harness only.
+  ``patient_rls_session(database)``
+      Runs as ``pharmascan_patient`` (``NOBYPASSRLS``) with ``auth.uid()`` set
+      from the verified patient identity, so the database's own RLS policies
+      scope every statement. This is an explicit administrative RLS diagnostic path; HTTP uses the user JWT Data API.
+
+* **Patient scoping twice, deliberately.** Every statement here *also* carries
+  an explicit ``patient_id = %s`` predicate. On the privileged path that
+  predicate is the only control; on the patient path it is defence in depth
+  behind RLS. ``tests/backend/test_patient_scoping_regression.py`` fails if a
+  future statement drops it.
 * **No invented safety decisions.** Where the schema demands a column the
   application DTO does not carry, the adapter either derives it
   deterministically from data the application already produced, or refuses the
@@ -54,6 +68,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -78,6 +94,11 @@ from ..contracts.enums import RuleKind
 from ..domain.errors import ConfirmationRequiredError, NotFoundError, ValidationError
 from .postgres_db import PostgresDatabase
 
+#: Opens one short-lived, already-scoped session for a patient. The adapter
+#: never decides *which* trust boundary it is running under; the composition
+#: root injects either the privileged or the RLS-enforced factory below.
+SessionFactory = Callable[[UUID], AbstractContextManager[psycopg.Connection]]
+
 #: Timezone used when bootstrapping a patient_profiles row. Matches
 #: application.timezone.DEFAULT_PATIENT_TZ.
 DEFAULT_PATIENT_TIMEZONE = "Asia/Singapore"
@@ -86,6 +107,36 @@ DEFAULT_PATIENT_TIMEZONE = "Asia/Singapore"
 DETERMINISTIC_PROMPT_VERSION = "deterministic_router_v1"
 
 REVIEWED_SOURCE_STATUSES = ("user_reviewed", "professional_verified")
+
+
+# --------------------------------------------------------------------------- #
+# session factories — the only place the trust boundary is chosen
+# --------------------------------------------------------------------------- #
+
+
+def privileged_session(database: PostgresDatabase) -> SessionFactory:
+    """Session factory for the privileged role (BYPASSRLS).
+
+    The patient argument is deliberately ignored: this mode's isolation comes
+    entirely from the explicit ``patient_id`` predicate in each statement.
+    Reserved for migrations, schema verification, maintenance, admin setup and
+    the evidence harness — never the normal patient request path.
+    """
+
+    def open_session(patient_id: UUID) -> AbstractContextManager[psycopg.Connection]:
+        del patient_id
+        return database.transaction()
+
+    return open_session
+
+
+def patient_rls_session(database: PostgresDatabase) -> SessionFactory:
+    """Session factory for the RLS-enforced patient role (NOBYPASSRLS)."""
+
+    def open_session(patient_id: UUID) -> AbstractContextManager[psycopg.Connection]:
+        return database.patient_transaction(patient_id=patient_id)
+
+    return open_session
 
 
 # --------------------------------------------------------------------------- #
@@ -264,6 +315,8 @@ def _regimen(row: dict[str, Any]) -> RegimenVersionDTO:
         food_instruction=row["food_instruction"],
         effective_from=row["effective_from"],
         effective_to=row["effective_to"],
+        course_start_date=row["course_start_date"],
+        course_end_date=row["course_end_date"],
         supersedes_id=_as_uuid_or_none(row["supersedes_id"]),
         confirmation_challenge_id=_as_uuid_or_none(row["confirmation_challenge_id"]),
         created_at=row["created_at"],
@@ -315,6 +368,7 @@ def _dose_event(row: dict[str, Any]) -> DoseEventDTO:
 
 def _session(row: dict[str, Any]) -> AgentSessionDTO:
     return AgentSessionDTO(
+        context=row.get("context", {}),
         id=_as_uuid(row["id"]),
         patient_id=_as_uuid(row["patient_id"]),
         intent=row["intent"],
@@ -368,11 +422,11 @@ def _trace(row: dict[str, Any]) -> ToolTraceDTO:
 class PostgresSourceDocumentRepository:
     """``SourceDocumentRepository`` over ``public.source_documents``."""
 
-    def __init__(self, database: PostgresDatabase) -> None:
-        self._db = database
+    def __init__(self, session: SessionFactory) -> None:
+        self._session = session
 
     def get(self, patient_id: UUID, source_id: UUID) -> SourceDocumentDTO | None:
-        with self._db.transaction() as conn:
+        with self._session(patient_id) as conn:
             row = _one(
                 conn,
                 """
@@ -385,7 +439,7 @@ class PostgresSourceDocumentRepository:
         return _source_document(row) if row else None
 
     def add(self, document: SourceDocumentDTO) -> None:
-        with self._db.transaction() as conn:
+        with self._session(document.patient_id) as conn:
             ensure_patient_profile(conn, document.patient_id)
             _run(
                 conn,
@@ -406,7 +460,7 @@ class PostgresSourceDocumentRepository:
             )
 
     def update(self, document: SourceDocumentDTO) -> None:
-        with self._db.transaction() as conn:
+        with self._session(document.patient_id) as conn:
             changed = _run(
                 conn,
                 """
@@ -428,11 +482,11 @@ class PostgresSourceDocumentRepository:
 class PostgresSourceFieldRepository:
     """``SourceFieldRepository`` over ``public.source_fields``."""
 
-    def __init__(self, database: PostgresDatabase) -> None:
-        self._db = database
+    def __init__(self, session: SessionFactory) -> None:
+        self._session = session
 
     def list_for_source(self, patient_id: UUID, source_id: UUID) -> list[SourceFieldDTO]:
-        with self._db.transaction() as conn:
+        with self._session(patient_id) as conn:
             rows = _rows(
                 conn,
                 """
@@ -447,12 +501,11 @@ class PostgresSourceFieldRepository:
         return [_source_field(row) for row in rows]
 
     def add(self, field: SourceFieldDTO) -> None:
-        with self._db.transaction() as conn:
+        with self._session(field.patient_id) as conn:
             ensure_patient_profile(conn, field.patient_id)
             source_kind = _scalar(
                 conn,
-                "SELECT source_kind FROM public.source_documents "
-                "WHERE patient_id = %s AND id = %s",
+                "SELECT source_kind FROM public.source_documents WHERE patient_id = %s AND id = %s",
                 (field.patient_id, field.source_id),
             )
             # 'mock_import' provenance is generated from a synthetic fixture;
@@ -480,7 +533,7 @@ class PostgresSourceFieldRepository:
             )
 
     def update(self, field: SourceFieldDTO) -> None:
-        with self._db.transaction() as conn:
+        with self._session(field.patient_id) as conn:
             changed = _run(
                 conn,
                 """
@@ -504,31 +557,29 @@ class PostgresPatientMedicationRepository:
 
     _COLUMNS = "id, patient_id, product_id, display_name, source_id, identity_status, archived_at, demo_only"
 
-    def __init__(self, database: PostgresDatabase) -> None:
-        self._db = database
+    def __init__(self, session: SessionFactory) -> None:
+        self._session = session
 
     def get(self, patient_id: UUID, medication_id: UUID) -> PatientMedicationDTO | None:
-        with self._db.transaction() as conn:
+        with self._session(patient_id) as conn:
             row = _one(
                 conn,
-                f"SELECT {self._COLUMNS} FROM public.patient_medications "
-                "WHERE patient_id = %s AND id = %s",
+                f"SELECT {self._COLUMNS} FROM public.patient_medications WHERE patient_id = %s AND id = %s",
                 (patient_id, medication_id),
             )
         return _patient_medication(row) if row else None
 
     def list_for_patient(self, patient_id: UUID) -> list[PatientMedicationDTO]:
-        with self._db.transaction() as conn:
+        with self._session(patient_id) as conn:
             rows = _rows(
                 conn,
-                f"SELECT {self._COLUMNS} FROM public.patient_medications "
-                "WHERE patient_id = %s ORDER BY created_at, id",
+                f"SELECT {self._COLUMNS} FROM public.patient_medications WHERE patient_id = %s ORDER BY created_at, id",
                 (patient_id,),
             )
         return [_patient_medication(row) for row in rows]
 
     def add(self, medication: PatientMedicationDTO) -> None:
-        with self._db.transaction() as conn:
+        with self._session(medication.patient_id) as conn:
             ensure_patient_profile(conn, medication.patient_id)
             _run(
                 conn,
@@ -550,7 +601,7 @@ class PostgresPatientMedicationRepository:
             )
 
     def update(self, medication: PatientMedicationDTO) -> None:
-        with self._db.transaction() as conn:
+        with self._session(medication.patient_id) as conn:
             changed = _run(
                 conn,
                 """
@@ -588,26 +639,23 @@ class PostgresRegimenVersionRepository:
         "id, patient_id, patient_medication_id, source_id, version_no, state, "
         "dose_amount, dose_unit, frequency_rule, is_prn, route, food_instruction, "
         "effective_from, effective_to, supersedes_id, confirmation_challenge_id, "
-        "created_at, demo_only"
+        "course_start_date, course_end_date, created_at, demo_only"
     )
 
-    def __init__(self, database: PostgresDatabase) -> None:
-        self._db = database
+    def __init__(self, session: SessionFactory) -> None:
+        self._session = session
 
     def get(self, patient_id: UUID, regimen_id: UUID) -> RegimenVersionDTO | None:
-        with self._db.transaction() as conn:
+        with self._session(patient_id) as conn:
             row = _one(
                 conn,
-                f"SELECT {self._COLUMNS} FROM public.regimen_versions "
-                "WHERE patient_id = %s AND id = %s",
+                f"SELECT {self._COLUMNS} FROM public.regimen_versions WHERE patient_id = %s AND id = %s",
                 (patient_id, regimen_id),
             )
         return _regimen(row) if row else None
 
-    def list_for_medication(
-        self, patient_id: UUID, medication_id: UUID
-    ) -> list[RegimenVersionDTO]:
-        with self._db.transaction() as conn:
+    def list_for_medication(self, patient_id: UUID, medication_id: UUID) -> list[RegimenVersionDTO]:
+        with self._session(patient_id) as conn:
             rows = _rows(
                 conn,
                 f"SELECT {self._COLUMNS} FROM public.regimen_versions "
@@ -617,10 +665,8 @@ class PostgresRegimenVersionRepository:
             )
         return [_regimen(row) for row in rows]
 
-    def find_active_for_medication(
-        self, patient_id: UUID, medication_id: UUID
-    ) -> RegimenVersionDTO | None:
-        with self._db.transaction() as conn:
+    def find_active_for_medication(self, patient_id: UUID, medication_id: UUID) -> RegimenVersionDTO | None:
+        with self._session(patient_id) as conn:
             row = _one(
                 conn,
                 f"SELECT {self._COLUMNS} FROM public.regimen_versions "
@@ -630,7 +676,7 @@ class PostgresRegimenVersionRepository:
         return _regimen(row) if row else None
 
     def next_version_no(self, patient_id: UUID, medication_id: UUID) -> int:
-        with self._db.transaction() as conn:
+        with self._session(patient_id) as conn:
             current = _scalar(
                 conn,
                 "SELECT COALESCE(MAX(version_no), 0) AS n FROM public.regimen_versions "
@@ -640,7 +686,7 @@ class PostgresRegimenVersionRepository:
         return int(current or 0) + 1
 
     def add(self, regimen: RegimenVersionDTO) -> None:
-        with self._db.transaction() as conn:
+        with self._session(regimen.patient_id) as conn:
             ensure_patient_profile(conn, regimen.patient_id)
             provenance = self._bind_provenance(conn, regimen) if str(regimen.state) == "active" else {}
             _run(
@@ -652,9 +698,9 @@ class PostgresRegimenVersionRepository:
                      medication_name_field_id, quantity_field_id, unit_field_id,
                      frequency_field_id, prn_field_id, source_reviewed_at,
                      effective_from, effective_to, supersedes_id, confirmation_challenge_id,
-                     demo_only)
+                     course_start_date, course_end_date, demo_only)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, true)
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, true)
                 """,
                 (
                     regimen.id,
@@ -679,32 +725,29 @@ class PostgresRegimenVersionRepository:
                     regimen.effective_to,
                     regimen.supersedes_id,
                     regimen.confirmation_challenge_id,
+                    regimen.course_start_date,
+                    regimen.course_end_date,
                 ),
             )
 
     def update(self, regimen: RegimenVersionDTO) -> None:
-        with self._db.transaction() as conn:
+        with self._session(regimen.patient_id) as conn:
             current = _one(
                 conn,
-                "SELECT state FROM public.regimen_versions "
-                "WHERE patient_id = %s AND id = %s FOR UPDATE",
+                "SELECT state FROM public.regimen_versions WHERE patient_id = %s AND id = %s FOR UPDATE",
                 (regimen.patient_id, regimen.id),
             )
             if current is None:
                 raise NotFoundError(f"Regimen {regimen.id} not found")
             previous_state = current["state"]
             if previous_state in ("ended", "superseded"):
-                raise ValidationError(
-                    f"Regimen {regimen.id} is {previous_state}; historical versions are immutable"
-                )
+                raise ValidationError(f"Regimen {regimen.id} is {previous_state}; historical versions are immutable")
 
             if previous_state == "active":
                 # Retiring only: state + effective_to. Any other change is
                 # rejected by core_guard_regimen.
                 if str(regimen.state) not in ("ended", "superseded") or regimen.effective_to is None:
-                    raise ValidationError(
-                        "An active regimen may only be retired with an effective_to"
-                    )
+                    raise ValidationError("An active regimen may only be retired with an effective_to")
                 _run(
                     conn,
                     "UPDATE public.regimen_versions SET state = %s, effective_to = %s "
@@ -714,9 +757,7 @@ class PostgresRegimenVersionRepository:
                 return
 
             if str(regimen.state) not in ("draft", "pending_clarification", "active"):
-                raise ValidationError(
-                    f"Illegal regimen transition {previous_state} -> {regimen.state}"
-                )
+                raise ValidationError(f"Illegal regimen transition {previous_state} -> {regimen.state}")
 
             if str(regimen.state) == "active":
                 provenance = self._bind_provenance(conn, regimen)
@@ -732,16 +773,15 @@ class PostgresRegimenVersionRepository:
                            unit_field_id = %s, frequency_field_id = %s, prn_field_id = %s,
                            source_reviewed_at = %s,
                            effective_from = %s, effective_to = %s,
-                           supersedes_id = %s, confirmation_challenge_id = %s
+                           supersedes_id = %s, confirmation_challenge_id = %s,
+                           course_start_date = %s, course_end_date = %s
                      WHERE patient_id = %s AND id = %s
                     """,
                     (
                         regimen.source_id,
                         regimen.dose_amount,
                         regimen.dose_unit,
-                        Jsonb(regimen.frequency_rule)
-                        if regimen.frequency_rule is not None
-                        else None,
+                        Jsonb(regimen.frequency_rule) if regimen.frequency_rule is not None else None,
                         regimen.is_prn,
                         regimen.route,
                         regimen.food_instruction,
@@ -755,6 +795,8 @@ class PostgresRegimenVersionRepository:
                         regimen.effective_to,
                         regimen.supersedes_id,
                         regimen.confirmation_challenge_id,
+                        regimen.course_start_date,
+                        regimen.course_end_date,
                         regimen.patient_id,
                         regimen.id,
                     ),
@@ -829,8 +871,7 @@ class PostgresRegimenVersionRepository:
         missing = [name for name, value in required.items() if value is None]
         if missing:
             raise ValidationError(
-                "Cannot activate: reviewed source evidence is missing for "
-                + ", ".join(sorted(missing))
+                "Cannot activate: reviewed source evidence is missing for " + ", ".join(sorted(missing))
             )
 
         return {
@@ -851,11 +892,11 @@ class PostgresDoseRuleRepository:
     therefore rejected rather than silently collapsed.
     """
 
-    def __init__(self, database: PostgresDatabase) -> None:
-        self._db = database
+    def __init__(self, session: SessionFactory) -> None:
+        self._session = session
 
     def list_for_regimen(self, patient_id: UUID, regimen_id: UUID) -> list[DoseRuleDTO]:
-        with self._db.transaction() as conn:
+        with self._session(patient_id) as conn:
             rows = _rows(
                 conn,
                 """
@@ -873,13 +914,12 @@ class PostgresDoseRuleRepository:
         kind = str(rule.rule_kind)
         if kind == RuleKind.SCHEDULED and len(rule.local_times) != 1:
             raise ValidationError(
-                "a scheduled dose rule must carry exactly one local time; "
-                "express several times as several rules"
+                "a scheduled dose rule must carry exactly one local time; express several times as several rules"
             )
         local_time = rule.local_times[0] if kind == RuleKind.SCHEDULED else None
         days = [int(d) for d in rule.days_of_week] if kind == RuleKind.SCHEDULED else None
 
-        with self._db.transaction() as conn:
+        with self._session(rule.patient_id) as conn:
             # The patient profile timezone must match the rule timezone
             # (core_guard_rule), so it is created with the rule's own value.
             ensure_patient_profile(conn, rule.patient_id, timezone=rule.timezone)
@@ -909,25 +949,23 @@ class PostgresDoseOccurrenceRepository:
 
     _COLUMNS = "id, patient_id, regimen_id, rule_id, due_at, status, generation_key"
 
-    def __init__(self, database: PostgresDatabase) -> None:
-        self._db = database
+    def __init__(self, session: SessionFactory) -> None:
+        self._session = session
 
     def get(self, patient_id: UUID, occurrence_id: UUID) -> DoseOccurrenceDTO | None:
-        with self._db.transaction() as conn:
+        with self._session(patient_id) as conn:
             row = _one(
                 conn,
-                f"SELECT {self._COLUMNS} FROM public.dose_occurrences "
-                "WHERE patient_id = %s AND id = %s",
+                f"SELECT {self._COLUMNS} FROM public.dose_occurrences WHERE patient_id = %s AND id = %s",
                 (patient_id, occurrence_id),
             )
         return _occurrence(row) if row else None
 
     def find_by_generation_key(self, patient_id: UUID, key: str) -> DoseOccurrenceDTO | None:
-        with self._db.transaction() as conn:
+        with self._session(patient_id) as conn:
             row = _one(
                 conn,
-                f"SELECT {self._COLUMNS} FROM public.dose_occurrences "
-                "WHERE patient_id = %s AND generation_key = %s",
+                f"SELECT {self._COLUMNS} FROM public.dose_occurrences WHERE patient_id = %s AND generation_key = %s",
                 (patient_id, key),
             )
         return _occurrence(row) if row else None
@@ -935,7 +973,7 @@ class PostgresDoseOccurrenceRepository:
     def list_for_regimen(
         self, patient_id: UUID, regimen_id: UUID, window_start: datetime, window_end: datetime
     ) -> list[DoseOccurrenceDTO]:
-        with self._db.transaction() as conn:
+        with self._session(patient_id) as conn:
             rows = _rows(
                 conn,
                 f"SELECT {self._COLUMNS} FROM public.dose_occurrences "
@@ -946,7 +984,7 @@ class PostgresDoseOccurrenceRepository:
         return [_occurrence(row) for row in rows]
 
     def add(self, occurrence: DoseOccurrenceDTO) -> None:
-        with self._db.transaction() as conn:
+        with self._session(occurrence.patient_id) as conn:
             ensure_patient_profile(conn, occurrence.patient_id)
             _run(
                 conn,
@@ -968,11 +1006,10 @@ class PostgresDoseOccurrenceRepository:
             )
 
     def update(self, occurrence: DoseOccurrenceDTO) -> None:
-        with self._db.transaction() as conn:
+        with self._session(occurrence.patient_id) as conn:
             changed = _run(
                 conn,
-                "UPDATE public.dose_occurrences SET status = %s "
-                "WHERE patient_id = %s AND id = %s",
+                "UPDATE public.dose_occurrences SET status = %s WHERE patient_id = %s AND id = %s",
                 (str(occurrence.status), occurrence.patient_id, occurrence.id),
             )
         if changed == 0:
@@ -994,33 +1031,29 @@ class PostgresDoseEventRepository:
         "visual_status, ingestion_proven, idempotency_key, created_at"
     )
 
-    def __init__(self, database: PostgresDatabase) -> None:
-        self._db = database
+    def __init__(self, session: SessionFactory) -> None:
+        self._session = session
 
     def find_by_idempotency_key(self, patient_id: UUID, key: str) -> DoseEventDTO | None:
-        with self._db.transaction() as conn:
+        with self._session(patient_id) as conn:
             row = _one(
                 conn,
-                f"SELECT {self._COLUMNS} FROM public.dose_events "
-                "WHERE patient_id = %s AND idempotency_key = %s",
+                f"SELECT {self._COLUMNS} FROM public.dose_events WHERE patient_id = %s AND idempotency_key = %s",
                 (patient_id, key),
             )
         return _dose_event(row) if row else None
 
     def find_by_occurrence(self, patient_id: UUID, occurrence_id: UUID) -> DoseEventDTO | None:
-        with self._db.transaction() as conn:
+        with self._session(patient_id) as conn:
             row = _one(
                 conn,
-                f"SELECT {self._COLUMNS} FROM public.dose_events "
-                "WHERE patient_id = %s AND occurrence_id = %s",
+                f"SELECT {self._COLUMNS} FROM public.dose_events WHERE patient_id = %s AND occurrence_id = %s",
                 (patient_id, occurrence_id),
             )
         return _dose_event(row) if row else None
 
-    def list_for_patient(
-        self, patient_id: UUID, window_start: datetime, window_end: datetime
-    ) -> list[DoseEventDTO]:
-        with self._db.transaction() as conn:
+    def list_for_patient(self, patient_id: UUID, window_start: datetime, window_end: datetime) -> list[DoseEventDTO]:
+        with self._session(patient_id) as conn:
             rows = _rows(
                 conn,
                 f"SELECT {self._COLUMNS} FROM public.dose_events "
@@ -1034,10 +1067,8 @@ class PostgresDoseEventRepository:
         if event.ingestion_proven:
             raise ValidationError("ingestion_proven must never be true (CHECK constraint)")
         if str(event.visual_status) != "not_checked":
-            raise ValidationError(
-                "P0 slice: photo evidence is unsupported, visual_status must be not_checked"
-            )
-        with self._db.transaction() as conn:
+            raise ValidationError("P0 slice: photo evidence is unsupported, visual_status must be not_checked")
+        with self._session(event.patient_id) as conn:
             ensure_patient_profile(conn, event.patient_id)
             challenge_id = self._resolve_confirmed_challenge(conn, event)
             _run(
@@ -1100,27 +1131,23 @@ class PostgresDoseEventRepository:
 class PostgresAgentSessionRepository:
     """``AgentSessionRepository`` over ``public.agent_sessions``."""
 
-    _COLUMNS = (
-        "id, patient_id, intent, state, pending_field_names, state_version, "
-        "updated_at, expires_at"
-    )
+    _COLUMNS = "id, patient_id, intent, state, pending_field_names, state_version, updated_at, expires_at, context"
 
-    def __init__(self, database: PostgresDatabase) -> None:
-        self._db = database
+    def __init__(self, session: SessionFactory) -> None:
+        self._session = session
 
     def get(self, patient_id: UUID, session_id: UUID) -> AgentSessionDTO | None:
-        with self._db.transaction() as conn:
+        with self._session(patient_id) as conn:
             row = _one(
                 conn,
-                f"SELECT {self._COLUMNS} FROM public.agent_sessions "
-                "WHERE patient_id = %s AND id = %s",
+                f"SELECT {self._COLUMNS} FROM public.agent_sessions WHERE patient_id = %s AND id = %s",
                 (patient_id, session_id),
             )
         return _session(row) if row else None
 
     def is_owned_by_other_patient(self, patient_id: UUID, session_id: UUID) -> bool:
         """True when the session id already belongs to a different patient."""
-        with self._db.transaction() as conn:
+        with self._session(patient_id) as conn:
             found = _scalar(
                 conn,
                 "SELECT 1 FROM public.agent_sessions WHERE id = %s AND patient_id <> %s LIMIT 1",
@@ -1129,15 +1156,15 @@ class PostgresAgentSessionRepository:
         return found is not None
 
     def add(self, session: AgentSessionDTO) -> None:
-        with self._db.transaction() as conn:
+        with self._session(session.patient_id) as conn:
             ensure_patient_profile(conn, session.patient_id)
             _run(
                 conn,
                 """
                 INSERT INTO public.agent_sessions
                     (id, patient_id, intent, state, pending_field_names, prompt_version,
-                     state_version, updated_at, expires_at, demo_only)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, true)
+                     state_version, updated_at, expires_at, context, demo_only)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, true)
                 """,
                 (
                     session.id,
@@ -1149,17 +1176,18 @@ class PostgresAgentSessionRepository:
                     session.state_version,
                     session.updated_at,
                     session.expires_at,
+                    Jsonb(session.context.model_dump(mode="json")),
                 ),
             )
 
     def update(self, session: AgentSessionDTO) -> None:
-        with self._db.transaction() as conn:
+        with self._session(session.patient_id) as conn:
             changed = _run(
                 conn,
                 """
                 UPDATE public.agent_sessions
                    SET intent = %s, state = %s, pending_field_names = %s,
-                       state_version = %s, updated_at = %s, expires_at = %s
+                       state_version = %s, updated_at = %s, expires_at = %s, context = %s
                  WHERE patient_id = %s AND id = %s
                 """,
                 (
@@ -1169,6 +1197,7 @@ class PostgresAgentSessionRepository:
                     session.state_version,
                     session.updated_at,
                     session.expires_at,
+                    Jsonb(session.context.model_dump(mode="json")),
                     session.patient_id,
                     session.id,
                 ),
@@ -1194,33 +1223,40 @@ class PostgresConfirmationChallengeRepository:
         "issued_at, expires_at, confirmed_at, consumed_at"
     )
 
-    def __init__(self, database: PostgresDatabase) -> None:
-        self._db = database
+    def __init__(self, session: SessionFactory) -> None:
+        self._session = session
 
     def get(self, patient_id: UUID, challenge_id: UUID) -> ConfirmationChallengeDTO | None:
-        with self._db.transaction() as conn:
+        with self._session(patient_id) as conn:
             row = _one(
                 conn,
-                f"SELECT {self._COLUMNS} FROM public.confirmation_challenges "
-                "WHERE patient_id = %s AND id = %s",
+                f"SELECT {self._COLUMNS} FROM public.confirmation_challenges WHERE patient_id = %s AND id = %s",
                 (patient_id, challenge_id),
             )
         return _challenge(row) if row else None
 
-    def find_by_token_hash(
-        self, patient_id: UUID, token_hash: str
-    ) -> ConfirmationChallengeDTO | None:
-        with self._db.transaction() as conn:
+    def find_by_token_hash(self, patient_id: UUID, token_hash: str) -> ConfirmationChallengeDTO | None:
+        with self._session(patient_id) as conn:
             row = _one(
                 conn,
-                f"SELECT {self._COLUMNS} FROM public.confirmation_challenges "
-                "WHERE patient_id = %s AND token_hash = %s",
+                f"SELECT {self._COLUMNS} FROM public.confirmation_challenges WHERE patient_id = %s AND token_hash = %s",
                 (patient_id, token_hash),
             )
         return _challenge(row) if row else None
 
+    def find_by_idempotency_key(self, patient_id: UUID, idempotency_key: str) -> ConfirmationChallengeDTO | None:
+        """Patient-scoped lookup; mirrors UNIQUE (patient_id, idempotency_key)."""
+        with self._session(patient_id) as conn:
+            row = _one(
+                conn,
+                f"SELECT {self._COLUMNS} FROM public.confirmation_challenges "
+                "WHERE patient_id = %s AND idempotency_key = %s",
+                (patient_id, idempotency_key),
+            )
+        return _challenge(row) if row else None
+
     def add(self, challenge: ConfirmationChallengeDTO) -> None:
-        with self._db.transaction() as conn:
+        with self._session(challenge.patient_id) as conn:
             ensure_patient_profile(conn, challenge.patient_id)
             _run(
                 conn,
@@ -1239,9 +1275,7 @@ class PostgresConfirmationChallengeRepository:
                     challenge.action,
                     challenge.regimen_id,
                     challenge.occurrence_id,
-                    str(challenge.intended_intake_status)
-                    if challenge.intended_intake_status is not None
-                    else None,
+                    str(challenge.intended_intake_status) if challenge.intended_intake_status is not None else None,
                     challenge.idempotency_key,
                     challenge.token_hash,
                     challenge_request_hash(
@@ -1264,7 +1298,7 @@ class PostgresConfirmationChallengeRepository:
             )
 
     def update(self, challenge: ConfirmationChallengeDTO) -> None:
-        with self._db.transaction() as conn:
+        with self._session(challenge.patient_id) as conn:
             current = _one(
                 conn,
                 "SELECT confirmed_at, consumed_at FROM public.confirmation_challenges "
@@ -1302,11 +1336,11 @@ class PostgresToolTraceRepository:
         "request_summary, response_summary, called_at, duration_ms"
     )
 
-    def __init__(self, database: PostgresDatabase) -> None:
-        self._db = database
+    def __init__(self, session: SessionFactory) -> None:
+        self._session = session
 
     def add(self, trace: ToolTraceDTO) -> None:
-        with self._db.transaction() as conn:
+        with self._session(trace.patient_id) as conn:
             ensure_patient_profile(conn, trace.patient_id)
             _run(
                 conn,
@@ -1331,7 +1365,7 @@ class PostgresToolTraceRepository:
             )
 
     def list_for_session(self, patient_id: UUID, session_id: UUID) -> list[ToolTraceDTO]:
-        with self._db.transaction() as conn:
+        with self._session(patient_id) as conn:
             rows = _rows(
                 conn,
                 f"SELECT {self._COLUMNS} FROM public.agent_tool_calls "
@@ -1346,6 +1380,9 @@ class PostgresRepositories:
     """Bundle of every Port implementation backed by one database target."""
 
     database: PostgresDatabase
+    #: Which trust boundary this bundle runs under. Recorded so a diagnostic
+    #: report can state it instead of assuming it.
+    session_mode: str
     sources: PostgresSourceDocumentRepository
     source_fields: PostgresSourceFieldRepository
     medications: PostgresPatientMedicationRepository
@@ -1358,18 +1395,42 @@ class PostgresRepositories:
     traces: PostgresToolTraceRepository
 
 
-def build_postgres_repositories(database: PostgresDatabase) -> PostgresRepositories:
-    """Construct the adapter bundle; the caller injects it into services."""
+def build_postgres_repositories(
+    database: PostgresDatabase, *, session: SessionFactory | None = None
+) -> PostgresRepositories:
+    """Construct the adapter bundle over one database target.
+
+    ``session`` selects the trust boundary. It defaults to the **privileged**
+    factory so existing admin/verification callers are unchanged, but any code
+    path that serves a patient request must pass ``patient_rls_session(database)``
+    explicitly — see ``build_patient_rls_repositories``.
+    """
+    if session is None:
+        session = privileged_session(database)
+        mode = "privileged_bypassrls"
+    else:
+        mode = "patient_rls_enforced"
     return PostgresRepositories(
         database=database,
-        sources=PostgresSourceDocumentRepository(database),
-        source_fields=PostgresSourceFieldRepository(database),
-        medications=PostgresPatientMedicationRepository(database),
-        regimens=PostgresRegimenVersionRepository(database),
-        dose_rules=PostgresDoseRuleRepository(database),
-        occurrences=PostgresDoseOccurrenceRepository(database),
-        events=PostgresDoseEventRepository(database),
-        sessions=PostgresAgentSessionRepository(database),
-        challenges=PostgresConfirmationChallengeRepository(database),
-        traces=PostgresToolTraceRepository(database),
+        session_mode=mode,
+        sources=PostgresSourceDocumentRepository(session),
+        source_fields=PostgresSourceFieldRepository(session),
+        medications=PostgresPatientMedicationRepository(session),
+        regimens=PostgresRegimenVersionRepository(session),
+        dose_rules=PostgresDoseRuleRepository(session),
+        occurrences=PostgresDoseOccurrenceRepository(session),
+        events=PostgresDoseEventRepository(session),
+        sessions=PostgresAgentSessionRepository(session),
+        challenges=PostgresConfirmationChallengeRepository(session),
+        traces=PostgresToolTraceRepository(session),
     )
+
+
+def build_patient_rls_repositories(database: PostgresDatabase) -> PostgresRepositories:
+    """Adapter bundle for the **normal authenticated patient** path.
+
+    Every statement runs as ``pharmascan_patient`` with ``auth.uid()`` set from
+    the verified identity, so the database's RLS policies are an independent
+    control behind the adapter's own ``patient_id`` predicate.
+    """
+    return build_postgres_repositories(database, session=patient_rls_session(database))

@@ -1,19 +1,17 @@
+import { useLanguage } from '../language';
 /**
  * Today screen: the currently due dose and the four patient choices
- * [Taken] [Check pill] [Not now] [Unsure].
- *
- * "Check pill" is explicitly NOT implemented in this build: there is no camera
- * pipeline and no live Stage2 vision provider (B01). The button is present but
- * disabled and labelled as unavailable — it must never pretend to have run a
- * visual match.
+ * [Taken] [Not now] [Unsure], with independent confirmation.
+ * The primary visual CTA opens the read-only photo evidence flow separately.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import {
   api,
   type DoseHistoryResponse,
   type DueDoseResponse,
   type MedicationSummary,
+  type ReportChallengeResponse,
 } from '../api/client';
 import {
   createBrowserReminderPort,
@@ -21,6 +19,8 @@ import {
   type ReminderPort,
   type ReminderSupport,
 } from '../reminders';
+import {BottomSheet} from './BottomSheet';
+import {CompactDoseCard} from './CompactDoseCard';
 import { Card, ErrorNotice, Tag } from './primitives';
 
 const CHOICES: { label: string; value: string }[] = [
@@ -56,19 +56,28 @@ export function describeDueStatus(
 
 export function TodayScreen({
   medications,
-  onChanged,
-  reminderPort,
+  onChanged, onFeeling,
+  reminderPort, compact = false, onMedicines, onHistory, onVisualCheck, focusRegimenId,
 }: {
   medications: MedicationSummary[];
-  onChanged: () => void;
-  reminderPort?: ReminderPort;
+  onChanged: () => void; onFeeling?:()=>void;
+  focusRegimenId?: string|null;
+  onVisualCheck?: (regimenId:string|null) => void; reminderPort?: ReminderPort; compact?: boolean; onMedicines?: () => void; onHistory?: () => void;
 }) {
+  const {language,t}=useLanguage();
+  const selectorId=useId();
+  const [reminderDue, setReminderDue] = useState(false);
+  const [reminderAt, setReminderAt] = useState<string | null>(null);
+  const [showSnooze, setShowSnooze] = useState(false);
   const [selected, setSelected] = useState<MedicationSummary | null>(null);
   const [due, setDue] = useState<DueDoseResponse | null>(null);
   const [history, setHistory] = useState<DoseHistoryResponse | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [lastResult, setLastResult] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<{
+    challenge: ReportChallengeResponse; occurrenceId: string | null; choice: string; key: string;
+  } | null>(null);
   const [reminderPermission, setReminderPermission] = useState<ReminderSupport>('default');
 
   const reminders: ReminderPort =
@@ -83,10 +92,34 @@ export function TodayScreen({
   }, [reminders]);
 
   useEffect(() => {
-    if (medications.length > 0 && selected === null) {
+    if (medications.length > 0 && (!selected || !medications.some(row => row.regimen_id === selected.regimen_id))) {
       setSelected(medications[0] ?? null);
     }
   }, [medications, selected]);
+
+  useEffect(()=>{const found=medications.find(row=>row.regimen_id===focusRegimenId);if(found){setSelected(found);setDue(null);}},[focusRegimenId,medications]);
+
+  useEffect(() => {
+    if (!compact || !selected) return;
+    let live = true;
+
+    const refresh = () => { if (document.visibilityState === 'hidden') return;
+      void api.dueDose(selected.regimen_id).then(value => { if (live) setDue(value); }).catch(caught => { if (live) setError(caught); });
+    };
+    refresh(); const poll=setInterval(refresh,15000); document.addEventListener('visibilitychange',refresh);
+    return () => { live = false; clearInterval(poll); document.removeEventListener('visibilitychange',refresh); };
+  }, [compact, selected, medications]);
+
+  useEffect(() => {
+    if (!compact || !due?.occurrence_id) { setReminderAt(null); return; }
+    let live = true;
+    const occurrenceId = due.occurrence_id;
+    const refresh = () => { if(document.visibilityState === 'hidden') return;
+      void api.reminders().then(rows => { if(live) { const row=rows.find(value => value.occurrence_id===occurrenceId); setReminderAt(row?.remind_at ?? null); setReminderDue(row?.is_due ?? false); } }).catch(() => { if(live) {setReminderAt(null);setReminderDue(false);} });
+    };
+    refresh(); const poll=setInterval(refresh,15000); document.addEventListener('visibilitychange',refresh);
+    return () => { live = false; clearInterval(poll); document.removeEventListener('visibilitychange',refresh); };
+  }, [compact, due?.occurrence_id]);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -111,20 +144,53 @@ export function TodayScreen({
 
   const report = (choice: string) =>
     run(async () => {
-      if (!due?.occurrence_id) {
+      if (!due || (!due.occurrence_id && !due.is_prn)) {
         throw new Error('No dose is currently due for this medication.');
       }
-      const result = await api.report(due.occurrence_id, {
+      // Two-phase confirmation flow: the database requires every dose event to
+      // cite a confirmed, unconsumed ``record_self_report`` challenge, so the
+      // UI issues the challenge (showing the patient what will be recorded) and
+      // then confirms it in a second request.
+      const key = `report-${crypto.randomUUID()}`;
+      const payload = {
         regimen_id: due.regimen_id,
         intake_status: choice,
-        // One key per occurrence+choice: a retry is idempotent, a genuine
-        // second report on the same occurrence is prevented by the backend.
-        idempotency_key: `${due.occurrence_id}:${choice}`,
-      });
+        idempotency_key: key,
+      };
+      const challenge = due.occurrence_id ? await api.requestReportChallenge(due.occurrence_id, payload)
+        : await api.requestPrnReportChallenge(payload);
+      if (challenge.already_recorded) {
+        setLastResult(
+          'Your report was already saved. Nothing changed.',
+        );
+        onChanged();
+        if (selected) {
+          setHistory(await api.doseHistory(selected.regimen_id));
+        }
+        return;
+      }
+      if (!challenge.challenge_id) {
+        throw new Error('The server did not issue a confirmation challenge.');
+      }
+      setConfirmation({ challenge, occurrenceId: due.occurrence_id, choice, key });
+    });
+
+  const confirmReport = () =>
+    run(async () => {
+      if (!confirmation?.challenge.challenge_id) return;
+      const { challenge, occurrenceId, choice, key } = confirmation;
+      const payload = {
+        regimen_id: challenge.regimen_id,
+        intake_status: choice,
+        idempotency_key: key,
+        challenge_id: challenge.challenge_id!,
+      };
+      const result = occurrenceId ? await api.submitReport(occurrenceId, payload) : await api.submitPrnReport(payload);
+      setConfirmation(null);
       setLastResult(
         result.already_recorded
-          ? `Already recorded as "${result.intake_status}" — nothing changed.`
-          : `Recorded as "${result.intake_status}".`,
+          ? 'Your report was already saved. Nothing changed.'
+          : 'Your report was saved. This does not prove ingestion.',
       );
       onChanged();
       if (selected) {
@@ -132,25 +198,38 @@ export function TodayScreen({
       }
     });
 
+  const renderConfirmation=()=>confirmation?<BottomSheet title={t('Confirm your dose report')} busy={busy} onCancel={()=>setConfirmation(null)}>
+    <p>{confirmation.challenge.summary.medication_display_name}: {confirmation.challenge.summary.dose_amount} {t(confirmation.challenge.summary.dose_unit??'')}</p>
+    <p>{confirmation.challenge.summary.local_due_time??t('As needed')}</p>
+    <p>{language==='zh'?t(confirmation.challenge.summary.intake_status==='reported_taken'?'Patient reported taken':confirmation.challenge.summary.intake_status==='reported_not_taken'?'Patient reported not taken':'Patient is unsure'):confirmation.challenge.summary.intake_status_label}</p>
+    <p className="notice">{language==='zh'?t('A self-report does not prove ingestion.'):confirmation.challenge.summary.safety_notice}</p>
+    <div className="actions"><button className="primary" disabled={busy} onClick={()=>void confirmReport()}>{t('Confirm record')}</button><button disabled={busy} onClick={()=>setConfirmation(null)}>{t('Cancel')}</button></div>
+  </BottomSheet>:null;
+
   if (medications.length === 0) {
     return (
-      <Card title="Today">
+      <Card title={compact ? "Today's medication" : "Today"}>
         <p className="notice">
-          No active medication yet, so there is no dose to check.
+          {t('No dose due right now. Add your reviewed instructions in My Medicines.')}
         </p>
+        {compact ? <><button className="primary dominant" onClick={() => onVisualCheck?.(null)}>{t('Check my medicine')}</button><div className="quick-actions" hidden={!onMedicines&&!onHistory}><button onClick={onMedicines}>{t('My Medicines')}</button><button onClick={onHistory}>{t('My History')}</button></div></> : null}
       </Card>
     );
   }
 
+  if(compact&&selected)return <CompactDoseCard medication={selected} due={due} busy={busy||confirmation!==null} onReport={choice=>void report(choice)} onCheck={()=>onVisualCheck?.(selected.regimen_id)} onSnooze={minutes=>run(async()=>{if(!due?.occurrence_id)return;const row=await api.snoozeReminder(due.occurrence_id,minutes);setReminderAt(row.remind_at);setReminderDue(false);})} reminderAt={reminderAt} reminderDue={reminderDue} onMedicines={onMedicines} onHistory={onHistory}>
+    {lastResult?<div className="status status--ok" role="status">{t(lastResult)}{onFeeling?<div className="actions"><button onClick={onFeeling}>{t('Record how I feel')}</button><button onClick={()=>setLastResult(null)}>{t('Skip for now')}</button></div>:null}</div>:null}
+    {renderConfirmation()}{error?<ErrorNotice error={error}/>:null}
+  </CompactDoseCard>;
   return (
     <Card
-      title="Today"
-      hint="This records what you tell me. It is not proof that a medicine was swallowed."
+      title={compact ? "Today's medication" : "Today"}
+      hint={compact ? "" : "This records what you tell me. It is not proof that a medicine was swallowed."}
     >
-      <div className="field">
-        <label htmlFor="today-med">Medication</label>
+      <div className="field" hidden={compact && medications.length === 1}>
+        <label htmlFor={selectorId}>{t('Medication')}</label>
         <select
-          id="today-med"
+          id={selectorId}
           value={selected?.medication_id ?? ''}
           onChange={(event) => {
             const found = medications.find(
@@ -167,7 +246,7 @@ export function TodayScreen({
         </select>
       </div>
 
-      {due === null && selected !== null ? (
+      {!compact && due === null && selected !== null ? (
         <div className="actions">
           <button className="primary" onClick={() => void loadFor(selected)} disabled={busy}>
             Check what is due now
@@ -175,6 +254,8 @@ export function TodayScreen({
         </div>
       ) : null}
 
+      {compact ? <><p className="dose-name">{selected?.display_name}</p><button className="primary dominant" disabled={busy} onClick={() => onVisualCheck?.(selected?.regimen_id ?? null)}>{t('Check my medicine')}</button><div className="quick-actions" hidden={!onMedicines&&!onHistory}><button onClick={onMedicines}>{t('My Medicines')}</button><button onClick={onHistory}>{t('My History')}</button></div></> : null}
+      {selected?<div className="dose-details"><p><strong>{selected.dose_amount??t('Not specified')} {t(selected.dose_unit??'')}</strong> · {selected.is_prn?t('As needed'):selected.frequency_rule?.local_times.join(', ')??t('Not specified')}</p><p>{selected.food_instruction?.split('; ').map(t).join(' · ')??t('Food instructions not specified')}</p>{selected.course_start_date||selected.course_end_date?<p>{t('Course')}: {selected.course_start_date??t('Not specified')} → {selected.course_end_date??t('Not specified')}</p>:null}</div>:null}
       {due ? (
         due.occurrence_id ? (
           (() => {
@@ -185,44 +266,44 @@ export function TodayScreen({
                   className={status.overdue ? 'status status--warn' : 'status status--ok'}
                   role="status"
                 >
-                  <strong>{due.medication_display_name}</strong> is {status.label}
+                  {!compact?<strong>{due.medication_display_name}{language === "zh" ? "：" : " is "}</strong>:null}{t(status.label)}
                   {due.dose_description ? ` — ${due.dose_description}` : ''}.
                   {due.due_at ? (
                     <span className="status__code">
-                      due {new Date(due.due_at).toLocaleString()}
+                      {language === 'zh' ? '' : 'due '}{new Date(due.due_at).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-SG', {timeZone:'Asia/Singapore'})}
                     </span>
                   ) : null}
                   <span className="status__code">
-                    not reported <Tag muted>not a missed dose</Tag>
+                    {language === "zh" ? "尚无自述记录" : "not reported"} <Tag muted>{t("not a missed dose")}</Tag>
                   </span>
                 </div>
 
-                <div className="actions">
+                {compact ? <div className="reminder-inline"><button onClick={() => setShowSnooze(value => !value)} disabled={busy}>{t('Remind me later')}</button>
+                  {showSnooze ? <div className="actions">{[15,30].map(minutes => <button key={minutes} onClick={() => void run(async () => {
+                    const row = await api.snoozeReminder(due.occurrence_id!, minutes); setReminderAt(row.remind_at); setReminderDue(false); setShowSnooze(false);
+                  })}>{minutes} {t('min later')}</button>)}</div> : null}
+                  {reminderDue ? <p role="alert">{t('Your reminder is due. Review your scheduled medication.')}</p> : null}
+                  {reminderAt ? <p role="status">{t('Review reminder')}: {new Date(reminderAt).toLocaleTimeString('en-SG', {timeZone:'Asia/Singapore',hour:'2-digit',minute:'2-digit'})}. {t('Open the app to check it.')}</p> : null}
+                </div> : null}
+                <div className="actions" >
                   {CHOICES.map((choice) => (
                     <button
                       key={choice.value}
                       className="choice primary"
                       onClick={() => report(choice.value)}
-                      disabled={busy}
+                      disabled={busy || confirmation !== null}
                     >
-                      {choice.label}
+                      {t(choice.label)}
                     </button>
                   ))}
-                  <button
-                    className="choice"
-                    disabled
-                    title="No camera pipeline and no live vision provider in this build"
-                  >
-                    Check pill <Tag muted>unavailable</Tag>
-                  </button>
                 </div>
 
-                <p className="notice">
-                  <Tag muted>visual check not run</Tag> No photo was taken. Any photo
-                  comparison is advisory evidence only and would never prove identity.
+                <p className="notice" hidden={compact}>
+                  No visual evidence is attached to this self-report. A separate photo
+                  check is advisory evidence only and never proves identity or ingestion.
                 </p>
 
-                <ReminderOptIn
+                {!compact ? <ReminderOptIn
                   permission={reminderPermission}
                   onEnable={async () => {
                     const result = await reminders.requestPermission();
@@ -237,31 +318,50 @@ export function TodayScreen({
                   onRemind={async () => {
                     await reminders.notify(
                       'PharmaScan Care',
-                      `${due.medication_display_name} is still ${status.label}.`,
+                      `${due.medication_display_name} is still ${t(status.label)}.`,
                     );
                   }}
-                />
+                /> : null}
               </>
             );
           })()
         ) : (
           <div className="status status--ok" role="status">
+            {due.next_due_at ? <p>{due.dose_description} · {language === 'zh' ? '下次安排' : 'Next scheduled'}: {new Date(due.next_due_at).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-SG',{timeZone:'Asia/Singapore',hour12:false})}</p> : null}
             {due.is_prn
-              ? 'This medication is taken only when needed, so nothing is scheduled.'
-              : 'Nothing is due right now for this medication.'}
+              ? t('This medication is taken only when needed, so nothing is scheduled.')
+              : t('Nothing is due right now for this medication.')}
+            {due.is_prn ? <div className="actions">{CHOICES.map(choice => <button key={choice.value}
+              onClick={() => void report(choice.value)} disabled={busy || confirmation !== null}>{t(choice.label)}</button>)}</div> : null}
           </div>
         )
       ) : null}
 
       {lastResult ? (
         <div className="status status--ok" role="status">
-          {lastResult} A self report never proves ingestion.
+          {t(lastResult)}
+          {onFeeling?<div className="actions"><button onClick={onFeeling}>{t('Record how I feel')}</button><button onClick={()=>setLastResult(null)}>{t('Skip for now')}</button></div>:null}
         </div>
+      ) : null}
+
+      {confirmation ? (
+        <BottomSheet title={t('Confirm your dose report')} busy={busy} onCancel={()=>setConfirmation(null)}>
+
+          <p>{confirmation.challenge.summary.medication_display_name}: {' '}
+            {confirmation.challenge.summary.dose_amount} {confirmation.challenge.summary.dose_unit}</p>
+          <p>{confirmation.challenge.summary.local_due_time ?? 'As-needed self-report'} ({confirmation.challenge.summary.local_timezone})</p>
+          <p>{language === "zh" ? t(confirmation.challenge.summary.intake_status === "reported_taken" ? "Patient reported taken" : confirmation.challenge.summary.intake_status === "reported_not_taken" ? "Patient reported not taken" : "Patient is unsure") : confirmation.challenge.summary.intake_status_label}</p>
+          <p>{language === "zh" ? t("A self-report does not prove ingestion.") : confirmation.challenge.summary.safety_notice}</p>
+          <div className="actions">
+            <button className="primary" onClick={() => void confirmReport()} disabled={busy}>{t('Confirm record')}</button>
+            <button onClick={() => setConfirmation(null)} disabled={busy}>{t('Cancel')}</button>
+          </div>
+        </BottomSheet>
       ) : null}
 
       {error ? <ErrorNotice error={error} /> : null}
 
-      {history ? (
+      {history && !compact ? (
         <details>
           <summary>Recent history ({history.item_count} entries)</summary>
           <p className="notice">{history.note}</p>
@@ -276,7 +376,7 @@ export function TodayScreen({
                     entry.intake_status
                   ) : (
                     <>
-                      not reported <Tag muted>not a missed dose</Tag>
+                      {language === "zh" ? "尚无自述记录" : "not reported"} <Tag muted>{t("not a missed dose")}</Tag>
                     </>
                   )}
                 </span>

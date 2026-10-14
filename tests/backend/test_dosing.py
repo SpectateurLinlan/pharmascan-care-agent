@@ -12,6 +12,7 @@ from uuid import UUID
 
 import pytest
 from app.contracts.dto import (
+    AgentSessionDTO,
     DoseEventInput,
     DoseRuleDTO,
     FrequencyRuleDTO,
@@ -27,6 +28,68 @@ from app.domain.errors import (
 
 PATIENT = UUID(int=100)
 OTHER_PATIENT = UUID(int=200)
+
+
+def _report(
+    wired,
+    *,
+    regimen_id,
+    occurrence_id,
+    intake_status: IntakeStatus,
+    idempotency_key: str,
+    event_time=None,
+    patient_id: UUID = PATIENT,
+):
+    """Record a self report through the real confirmation lifecycle.
+
+    The database requires every ``dose_events`` row to cite a confirmed,
+    unconsumed ``record_self_report`` challenge, so these service-level tests
+    complete the same lifecycle the transport does — replay check, issue the
+    challenge, confirm it, then record citing it. Nothing here fabricates a
+    challenge or bypasses the policy: a report the policy would reject is still
+    rejected, at the point where the patient would have been asked to confirm.
+    """
+    payload = DoseEventInput(
+        regimen_id=regimen_id,
+        occurrence_id=occurrence_id,
+        intake_status=intake_status,
+        event_time=event_time or wired.clock.now(),
+        idempotency_key=idempotency_key,
+    )
+    # An idempotent replay returns the stored event without a new confirmation.
+    existing = wired.self_report.find_existing_report(
+        patient_id=patient_id, idempotency_key=idempotency_key
+    )
+    if existing is not None:
+        return wired.self_report.report(patient_id=patient_id, payload=payload)
+
+    session_id = UUID(int=800)
+    wired.sessions.add(
+        AgentSessionDTO(
+            id=session_id,
+            patient_id=patient_id,
+            intent="record_self_report",
+            state="awaiting_confirmation",
+            state_version=1,
+            updated_at=wired.clock.now(),
+            expires_at=wired.clock.now() + timedelta(hours=1),
+        )
+    )
+    challenge = wired.self_report.request_confirmation(
+        patient_id=patient_id,
+        regimen_id=regimen_id,
+        occurrence_id=occurrence_id,
+        intake_status=intake_status,
+        idempotency_key=idempotency_key,
+        session_id=session_id,
+        session_state_version=1,
+    )
+    wired.self_report.confirm_challenge(
+        patient_id=patient_id, challenge_id=challenge.challenge.id
+    )
+    return wired.self_report.report(
+        patient_id=patient_id, payload=payload, challenge_id=challenge.challenge.id
+    )
 
 
 def _activate_scheduled(wired, *, times=("08:00",), amount: float = 1):
@@ -167,15 +230,12 @@ def test_self_report_taken_is_recorded_but_never_proves_ingestion(wired):
     )
     occurrence = occurrences[0]
 
-    outcome = wired.self_report.report(
-        patient_id=PATIENT,
-        payload=DoseEventInput(
-            regimen_id=activated.regimen.id,
-            occurrence_id=occurrence.id,
-            intake_status=IntakeStatus.REPORTED_TAKEN,
-            event_time=wired.clock.now(),
-            idempotency_key="report-1",
-        ),
+    outcome = _report(
+        wired,
+        regimen_id=activated.regimen.id,
+        occurrence_id=occurrence.id,
+        intake_status=IntakeStatus.REPORTED_TAKEN,
+        idempotency_key="report-1",
     )
     event = outcome.event
     assert event is not None
@@ -193,15 +253,12 @@ def test_unsure_and_not_reported_are_distinct_from_missed(wired):
     assert len(occurrences) >= 2
 
     # Report "unsure" for the first occurrence only.
-    wired.self_report.report(
-        patient_id=PATIENT,
-        payload=DoseEventInput(
-            regimen_id=activated.regimen.id,
-            occurrence_id=occurrences[0].id,
-            intake_status=IntakeStatus.UNSURE,
-            event_time=wired.clock.now(),
-            idempotency_key="unsure-1",
-        ),
+    _report(
+        wired,
+        regimen_id=activated.regimen.id,
+        occurrence_id=occurrences[0].id,
+        intake_status=IntakeStatus.UNSURE,
+        idempotency_key="unsure-1",
     )
 
     history = wired.self_report.history(
@@ -227,29 +284,25 @@ def test_duplicate_report_for_same_occurrence_is_rejected(wired):
         patient_id=PATIENT, regimen_id=activated.regimen.id, days=1
     )[0]
 
-    wired.self_report.report(
-        patient_id=PATIENT,
-        payload=DoseEventInput(
-            regimen_id=activated.regimen.id,
-            occurrence_id=occurrence.id,
-            intake_status=IntakeStatus.REPORTED_TAKEN,
-            event_time=wired.clock.now(),
-            idempotency_key="dup-a",
-        ),
+    _report(
+        wired,
+        regimen_id=activated.regimen.id,
+        occurrence_id=occurrence.id,
+        intake_status=IntakeStatus.REPORTED_TAKEN,
+        idempotency_key="dup-a",
     )
 
     # A different idempotency key for the same occurrence must still be blocked,
-    # because one occurrence can carry at most one self report.
+    # because one occurrence can carry at most one self report. The refusal
+    # happens when the confirmation is requested, so the patient is never asked
+    # to confirm a report that cannot be saved.
     with pytest.raises(DuplicateEventError):
-        wired.self_report.report(
-            patient_id=PATIENT,
-            payload=DoseEventInput(
-                regimen_id=activated.regimen.id,
-                occurrence_id=occurrence.id,
-                intake_status=IntakeStatus.REPORTED_NOT_TAKEN,
-                event_time=wired.clock.now(),
-                idempotency_key="dup-b",
-            ),
+        _report(
+            wired,
+            regimen_id=activated.regimen.id,
+            occurrence_id=occurrence.id,
+            intake_status=IntakeStatus.REPORTED_NOT_TAKEN,
+            idempotency_key="dup-b",
         )
 
 
@@ -260,15 +313,20 @@ def test_replayed_idempotency_key_returns_existing_event(wired):
         patient_id=PATIENT, regimen_id=activated.regimen.id, days=1
     )[0]
 
-    payload = DoseEventInput(
+    first = _report(
+        wired,
         regimen_id=activated.regimen.id,
         occurrence_id=occurrence.id,
         intake_status=IntakeStatus.REPORTED_TAKEN,
-        event_time=wired.clock.now(),
         idempotency_key="retry-1",
     )
-    first = wired.self_report.report(patient_id=PATIENT, payload=payload)
-    second = wired.self_report.report(patient_id=PATIENT, payload=payload)
+    second = _report(
+        wired,
+        regimen_id=activated.regimen.id,
+        occurrence_id=occurrence.id,
+        intake_status=IntakeStatus.REPORTED_TAKEN,
+        idempotency_key="retry-1",
+    )
 
     assert first.already_recorded is False
     assert second.already_recorded is True
@@ -302,15 +360,12 @@ def test_prn_report_must_not_reference_a_scheduled_occurrence(wired):
     )
 
     # A PRN self report without an occurrence is valid.
-    ok = wired.self_report.report(
-        patient_id=PATIENT,
-        payload=DoseEventInput(
-            regimen_id=result.regimen.id,
-            occurrence_id=None,
-            intake_status=IntakeStatus.REPORTED_TAKEN,
-            event_time=wired.clock.now(),
-            idempotency_key="prn-1",
-        ),
+    ok = _report(
+        wired,
+        regimen_id=result.regimen.id,
+        occurrence_id=None,
+        intake_status=IntakeStatus.REPORTED_TAKEN,
+        idempotency_key="prn-1",
     )
     assert ok.event is not None and ok.event.occurrence_id is None
 
@@ -318,15 +373,12 @@ def test_prn_report_must_not_reference_a_scheduled_occurrence(wired):
 def test_scheduled_report_without_occurrence_is_rejected(wired):
     _result, activated, _ = _activate_scheduled(wired)
     with pytest.raises(ValidationError):
-        wired.self_report.report(
-            patient_id=PATIENT,
-            payload=DoseEventInput(
-                regimen_id=activated.regimen.id,
-                occurrence_id=None,
-                intake_status=IntakeStatus.REPORTED_TAKEN,
-                event_time=wired.clock.now(),
-                idempotency_key="no-occ",
-            ),
+        _report(
+            wired,
+            regimen_id=activated.regimen.id,
+            occurrence_id=None,
+            intake_status=IntakeStatus.REPORTED_TAKEN,
+            idempotency_key="no-occ",
         )
 
 
@@ -344,15 +396,12 @@ def test_report_on_inactive_regimen_is_blocked(wired):
         )
     )
     with pytest.raises(StaleVersionError):
-        wired.self_report.report(
-            patient_id=PATIENT,
-            payload=DoseEventInput(
-                regimen_id=activated.regimen.id,
-                occurrence_id=occurrence.id,
-                intake_status=IntakeStatus.REPORTED_TAKEN,
-                event_time=wired.clock.now(),
-                idempotency_key="ended-1",
-            ),
+        _report(
+            wired,
+            regimen_id=activated.regimen.id,
+            occurrence_id=occurrence.id,
+            intake_status=IntakeStatus.REPORTED_TAKEN,
+            idempotency_key="ended-1",
         )
 
 
@@ -364,15 +413,13 @@ def test_cross_patient_dose_report_is_denied(wired):
     )[0]
 
     with pytest.raises(NotFoundError):
-        wired.self_report.report(
+        _report(
+            wired,
+            regimen_id=activated.regimen.id,
+            occurrence_id=occurrence.id,
+            intake_status=IntakeStatus.REPORTED_TAKEN,
+            idempotency_key="cross-1",
             patient_id=OTHER_PATIENT,
-            payload=DoseEventInput(
-                regimen_id=activated.regimen.id,
-                occurrence_id=occurrence.id,
-                intake_status=IntakeStatus.REPORTED_TAKEN,
-                event_time=wired.clock.now(),
-                idempotency_key="cross-1",
-            ),
         )
 
     assert wired.events.find_by_idempotency_key(OTHER_PATIENT, "cross-1") is None
@@ -386,13 +433,11 @@ def test_report_before_regimen_effective_window_is_rejected(wired):
     )[0]
 
     with pytest.raises(ValidationError):
-        wired.self_report.report(
-            patient_id=PATIENT,
-            payload=DoseEventInput(
-                regimen_id=activated.regimen.id,
-                occurrence_id=occurrence.id,
-                intake_status=IntakeStatus.REPORTED_TAKEN,
-                event_time=wired.clock.now() - timedelta(days=5),
-                idempotency_key="early-1",
-            ),
+        _report(
+            wired,
+            regimen_id=activated.regimen.id,
+            occurrence_id=occurrence.id,
+            intake_status=IntakeStatus.REPORTED_TAKEN,
+            event_time=wired.clock.now() - timedelta(days=5),
+            idempotency_key="early-1",
         )

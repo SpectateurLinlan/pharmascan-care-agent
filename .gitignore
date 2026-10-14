@@ -18,6 +18,7 @@ secrets/
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
 .venv/
 venv/
 .pytest_cache/
@@ -28,6 +29,7 @@ venv/
 node_modules/
 dist/
 build/
+*.tsbuildinfo
 .next/
 coverage/
 
@@ -60,3 +62,7 @@ desktop.ini
 
 # Windows accidental reserved file
 nul
+
+# Generated browser QA output (no Auth storage state is recorded).
+frontend/test-results/
+frontend/playwright-report/

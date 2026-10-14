@@ -134,7 +134,9 @@ class Evidence:
 
     def fail(self, step: str, kind: str, error: BaseException | str) -> None:
         message = str(error).strip().splitlines()[0] if str(error).strip() else repr(error)
-        self.record(step, kind, False, f"{type(error).__name__}: {message}" if isinstance(error, BaseException) else message)
+        self.record(
+            step, kind, False, f"{type(error).__name__}: {message}" if isinstance(error, BaseException) else message
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -192,9 +194,7 @@ def cleanup(database: PostgresDatabase, patient_ids: list[UUID], *, keep: bool) 
                             (patient_ids,),
                         )
                         result["deleted"][table] = cursor.rowcount
-                    cursor.execute(
-                        "DELETE FROM auth.users WHERE id = ANY(%s)", (patient_ids,)
-                    )
+                    cursor.execute("DELETE FROM auth.users WHERE id = ANY(%s)", (patient_ids,))
                     result["deleted"]["auth.users"] = cursor.rowcount
                     for table in PATIENT_TABLES:
                         cursor.execute(f"ALTER TABLE public.{table} ENABLE TRIGGER USER")
@@ -220,9 +220,7 @@ def cleanup(database: PostgresDatabase, patient_ids: list[UUID], *, keep: bool) 
 # --------------------------------------------------------------------------- #
 
 
-def run_adapter_end_to_end(
-    database: PostgresDatabase, patient_id: UUID, evidence: Evidence
-) -> dict[str, Any]:
+def run_adapter_end_to_end(database: PostgresDatabase, patient_id: UUID, evidence: Evidence) -> dict[str, Any]:
     """Drive the real application services over the real database."""
     ids = SequentialIdGenerator()
     # The confirmation challenge is validated by the *database's* clock
@@ -275,13 +273,14 @@ def run_adapter_end_to_end(
         "adapter.enroll_draft",
         "VERIFIED_REAL_SUPABASE",
         True,
-        {"state": str(result.regimen.state), "version_no": result.regimen.version_no,
-         "missing": [m.field for m in result.missing_instructions]},
+        {
+            "state": str(result.regimen.state),
+            "version_no": result.regimen.version_no,
+            "missing": [m.field for m in result.missing_instructions],
+        },
     )
 
-    reviewed = enrollment.review_source_fields(
-        patient_id=patient_id, source_id=result.medication.source_id
-    )
+    reviewed = enrollment.review_source_fields(patient_id=patient_id, source_id=result.medication.source_id)
     medication = repos.medications.get(patient_id, result.medication.id)
     evidence.record(
         "adapter.review_source_fields",
@@ -302,7 +301,9 @@ def run_adapter_end_to_end(
     )
     repos.sessions.add(session)
     evidence.record(
-        "adapter.agent_session_add", "VERIFIED_REAL_SUPABASE", True,
+        "adapter.agent_session_add",
+        "VERIFIED_REAL_SUPABASE",
+        True,
         {"session_id": str(session.id)},
     )
 
@@ -313,14 +314,17 @@ def run_adapter_end_to_end(
         session_state_version=session.state_version,
     )
     evidence.record(
-        "adapter.request_activation_challenge", "VERIFIED_REAL_SUPABASE", True,
+        "adapter.request_activation_challenge",
+        "VERIFIED_REAL_SUPABASE",
+        True,
         {"challenge_id": str(challenge.id)},
     )
 
     enrollment.confirm_challenge(patient_id=patient_id, challenge_id=challenge.id)
     stored = repos.challenges.get(patient_id, challenge.id)
     evidence.record(
-        "adapter.confirm_challenge", "VERIFIED_REAL_SUPABASE",
+        "adapter.confirm_challenge",
+        "VERIFIED_REAL_SUPABASE",
         stored is not None and stored.confirmed_at is not None,
         {"confirmed_at_set": stored.confirmed_at is not None if stored else None},
     )
@@ -334,24 +338,37 @@ def run_adapter_end_to_end(
     )
     ids_map["regimen_id"] = str(activation.regimen.id)
     evidence.record(
-        "adapter.activate_regimen", "VERIFIED_REAL_SUPABASE",
+        "adapter.activate_regimen",
+        "VERIFIED_REAL_SUPABASE",
         str(activation.regimen.state) == "active",
-        {"state": str(activation.regimen.state),
-         "effective_from": str(activation.regimen.effective_from)},
+        {"state": str(activation.regimen.state), "effective_from": str(activation.regimen.effective_from)},
     )
 
     rules = repos.dose_rules.list_for_regimen(patient_id, result.regimen.id)
     evidence.record(
-        "adapter.dose_rules_persisted", "VERIFIED_REAL_SUPABASE", len(rules) == 1,
-        {"rules": [{"kind": str(r.rule_kind), "local_times": r.local_times,
-                    "days_of_week": r.days_of_week, "timezone": r.timezone} for r in rules]},
+        "adapter.dose_rules_persisted",
+        "VERIFIED_REAL_SUPABASE",
+        len(rules) == 1,
+        {
+            "rules": [
+                {
+                    "kind": str(r.rule_kind),
+                    "local_times": r.local_times,
+                    "days_of_week": r.days_of_week,
+                    "timezone": r.timezone,
+                }
+                for r in rules
+            ]
+        },
     )
 
     # Move the clock past the next 08:00 SGT dose so it becomes actionable.
     clock.set(clock.now() + timedelta(days=1, hours=1))
     occurrences = schedule.materialize(patient_id=patient_id, regimen_id=result.regimen.id, days=2)
     evidence.record(
-        "adapter.materialize", "VERIFIED_REAL_SUPABASE", len(occurrences) >= 1,
+        "adapter.materialize",
+        "VERIFIED_REAL_SUPABASE",
+        len(occurrences) >= 1,
         {"occurrence_count": len(occurrences)},
     )
 
@@ -359,7 +376,9 @@ def run_adapter_end_to_end(
     occurrence_id = due.occurrence.id if due.occurrence else None
     ids_map["occurrence_id"] = str(occurrence_id) if occurrence_id else None
     evidence.record(
-        "adapter.find_due", "VERIFIED_REAL_SUPABASE", occurrence_id is not None,
+        "adapter.find_due",
+        "VERIFIED_REAL_SUPABASE",
+        occurrence_id is not None,
         {"occurrence_id": str(occurrence_id) if occurrence_id else None},
     )
 
@@ -378,7 +397,9 @@ def run_adapter_end_to_end(
             event_id = outcome.event.id if outcome.event else outcome.existing_event_id
             ids_map["event_id"] = str(event_id) if event_id else None
             evidence.record(
-                "adapter.self_report_persisted", "VERIFIED_REAL_SUPABASE", True,
+                "adapter.self_report_persisted",
+                "VERIFIED_REAL_SUPABASE",
+                True,
                 {"event_id": str(event_id) if event_id else None},
             )
         except Exception as exc:  # noqa: BLE001 - the exact error is the evidence
@@ -389,14 +410,14 @@ def run_adapter_end_to_end(
                 False,
                 {
                     "constraint": "dose_events.confirmation_challenge_id NOT NULL "
-                                  "+ core_guard_dose_event -> core_consume_confirmation",
+                    "+ core_guard_dose_event -> core_consume_confirmation",
                     "why": "The application has no self-report confirmation step: "
-                           "RecordSelfReportRequest.confirmed_challenge_id is declared "
-                           "but never populated, no record_self_report challenge is "
-                           "ever issued, and the HTTP route passes none.",
+                    "RecordSelfReportRequest.confirmed_challenge_id is declared "
+                    "but never populated, no record_self_report challenge is "
+                    "ever issued, and the HTTP route passes none.",
                     "adapter_behaviour": "PostgresDoseEventRepository refuses with "
-                                         "ConfirmationRequiredError rather than "
-                                         "fabricating a challenge.",
+                    "ConfirmationRequiredError rather than "
+                    "fabricating a challenge.",
                 },
             )
 
@@ -467,23 +488,30 @@ def run_rls_isolation(
         claims(patient_a)
         visible_a = {
             table: scalar(f"SELECT count(*) AS n FROM public.{table}")
-            for table in ("patient_profiles", "source_documents", "source_fields",
-                          "patient_medications", "regimen_versions", "dose_rules",
-                          "dose_occurrences", "agent_sessions", "confirmation_challenges")
+            for table in (
+                "patient_profiles",
+                "source_documents",
+                "source_fields",
+                "patient_medications",
+                "regimen_versions",
+                "dose_rules",
+                "dose_occurrences",
+                "agent_sessions",
+                "confirmation_challenges",
+            )
         }
         evidence.record(
-            "rls.A_reads_own_rows", "VERIFIED_REAL_SUPABASE",
+            "rls.A_reads_own_rows",
+            "VERIFIED_REAL_SUPABASE",
             all(n > 0 for n in visible_a.values()),
             visible_a,
         )
 
         claims(patient_b)
-        visible_b = {
-            table: scalar(f"SELECT count(*) AS n FROM public.{table}")
-            for table in visible_a
-        }
+        visible_b = {table: scalar(f"SELECT count(*) AS n FROM public.{table}") for table in visible_a}
         evidence.record(
-            "rls.B_sees_zero_of_A_rows", "VERIFIED_REAL_SUPABASE",
+            "rls.B_sees_zero_of_A_rows",
+            "VERIFIED_REAL_SUPABASE",
             all(n == 0 for n in visible_b.values()),
             visible_b,
         )
@@ -499,7 +527,9 @@ def run_rls_isolation(
             target_id = rows.get(fixture_key)
             if target_id is None:
                 evidence.record(
-                    f"rls.B_cannot_write_A_{table}", "NOT_APPLICABLE", True,
+                    f"rls.B_cannot_write_A_{table}",
+                    "NOT_APPLICABLE",
+                    True,
                     "no A row of this type exists (upstream branch blocked), "
                     "so write isolation for this table is untested in this run",
                 )
@@ -509,12 +539,16 @@ def run_rls_isolation(
                 (value, target_id),
             )
             evidence.record(
-                f"rls.B_cannot_update_A_{table}", "VERIFIED_REAL_SUPABASE", changed == 0,
+                f"rls.B_cannot_update_A_{table}",
+                "VERIFIED_REAL_SUPABASE",
+                changed == 0,
                 {"rows_changed": changed},
             )
             removed = run(f"DELETE FROM public.{table} WHERE id = %s", (target_id,))
             evidence.record(
-                f"rls.B_cannot_delete_A_{table}", "VERIFIED_REAL_SUPABASE", removed == 0,
+                f"rls.B_cannot_delete_A_{table}",
+                "VERIFIED_REAL_SUPABASE",
+                removed == 0,
                 {"rows_deleted": removed},
             )
 
@@ -528,7 +562,9 @@ def run_rls_isolation(
             (patient_a,),
         )
         evidence.record(
-            "rls.B_cannot_create_row_owned_by_A", "VERIFIED_REAL_SUPABASE", error is not None,
+            "rls.B_cannot_create_row_owned_by_A",
+            "VERIFIED_REAL_SUPABASE",
+            error is not None,
             error or "INSERT unexpectedly succeeded",
         )
 
@@ -547,7 +583,8 @@ def run_rls_isolation(
             (patient_a,),
         )
         evidence.record(
-            "rls.A_can_create_and_read_own_row", "VERIFIED_REAL_SUPABASE",
+            "rls.A_can_create_and_read_own_row",
+            "VERIFIED_REAL_SUPABASE",
             error is None and own > 0,
             {"error": error, "own_rows_visible": own},
         )
@@ -566,7 +603,8 @@ def run_rls_isolation(
             (patient_b, rows["source_id"]),
         )
         evidence.record(
-            "rls.cross_patient_foreign_key_refused", "VERIFIED_REAL_SUPABASE",
+            "rls.cross_patient_foreign_key_refused",
+            "VERIFIED_REAL_SUPABASE",
             error is not None,
             {
                 "attempted_as": "authenticated (RLS) — refused before the FK was evaluated",
@@ -576,7 +614,9 @@ def run_rls_isolation(
 
         conn.rollback()
         evidence.record(
-            "rls.temporary_grants_rolled_back", "VERIFIED_REAL_SUPABASE", True,
+            "rls.temporary_grants_rolled_back",
+            "VERIFIED_REAL_SUPABASE",
+            True,
             "INSERT/UPDATE/DELETE grants to authenticated were transaction-local",
         )
 
@@ -604,7 +644,9 @@ def run_rls_isolation(
 
     if setup_error is not None:
         evidence.record(
-            "rls.composite_fk_refuses_cross_patient_reference", "BLOCKED", False,
+            "rls.composite_fk_refuses_cross_patient_reference",
+            "BLOCKED",
+            False,
             f"could not create the unreviewed source fixture: {setup_error}",
         )
     else:
@@ -661,9 +703,7 @@ def run_rls_isolation(
         )
 
 
-def run_app_scoping_control(
-    database: PostgresDatabase, patient_a: UUID, patient_b: UUID, evidence: Evidence
-) -> None:
+def run_app_scoping_control(database: PostgresDatabase, patient_a: UUID, patient_b: UUID, evidence: Evidence) -> None:
     """Prove the adapter scopes by patient_id even though the app role bypasses RLS.
 
     The backend connects as `postgres`, whose `rolbypassrls` is true, so RLS is
@@ -679,19 +719,22 @@ def run_app_scoping_control(
         "B_list_medications": [str(m.id) for m in repos.medications.list_for_patient(patient_b)],
         "B_list_regimens_for_A_medication": [
             str(r.id) for r in repos.regimens.list_for_medication(patient_b, UUID(medication_id))
-        ] if medication_id else [],
+        ]
+        if medication_id
+        else [],
         "B_get_A_medication_by_id": (
             str(repos.medications.get(patient_b, UUID(medication_id)).id)
-            if medication_id and repos.medications.get(patient_b, UUID(medication_id)) else None
+            if medication_id and repos.medications.get(patient_b, UUID(medication_id))
+            else None
         ),
         "B_get_A_regimen_by_id": (
             str(repos.regimens.get(patient_b, UUID(regimen_id)).id)
-            if regimen_id and repos.regimens.get(patient_b, UUID(regimen_id)) else None
+            if regimen_id and repos.regimens.get(patient_b, UUID(regimen_id))
+            else None
         ),
         "B_find_active_for_A_medication": (
             str(repos.regimens.find_active_for_medication(patient_b, UUID(medication_id)).id)
-            if medication_id
-            and repos.regimens.find_active_for_medication(patient_b, UUID(medication_id))
+            if medication_id and repos.regimens.find_active_for_medication(patient_b, UUID(medication_id))
             else None
         ),
     }
@@ -702,7 +745,7 @@ def run_app_scoping_control(
         {
             "rows_visible_to_B_through_adapter": leaked,
             "note": "the app role postgres has rolbypassrls=true, so this adapter-side "
-                    "scoping is the only control protecting the backend write path",
+            "scoping is the only control protecting the backend write path",
         },
     )
 
@@ -726,9 +769,7 @@ def sweep_all(database: PostgresDatabase) -> dict[str, Any]:
     # Safety check on its own connection, so the deleting connection's first
     # statement is the transaction itself.
     with database.connect() as conn, conn.cursor() as cursor:
-        cursor.execute(
-            "SELECT count(*) AS n FROM public.patient_profiles WHERE demo_only IS NOT TRUE"
-        )
+        cursor.execute("SELECT count(*) AS n FROM public.patient_profiles WHERE demo_only IS NOT TRUE")
         if cursor.fetchone()["n"]:
             return {"refused": True, "reason": "non-synthetic patient_profiles rows exist"}
 
@@ -793,8 +834,7 @@ def main() -> int:
         with conn.cursor() as cursor:
             cursor.execute("SELECT current_database() AS d, current_user AS u, version() AS v")
             row = cursor.fetchone()
-            evidence.server = {"database": row["d"], "role": row["u"],
-                               "version": row["v"].split(" on ")[0]}
+            evidence.server = {"database": row["d"], "role": row["u"], "version": row["v"].split(" on ")[0]}
     print("server:", json.dumps(evidence.server, sort_keys=True))
 
     ids_map: dict[str, Any] = {}
@@ -802,9 +842,14 @@ def main() -> int:
         create_synthetic_user(database, patient_a)
         create_synthetic_user(database, patient_b)
         evidence.record(
-            "seed.synthetic_auth_users", "VERIFIED_REAL_SUPABASE", True,
-            {"patient_a": str(patient_a), "patient_b": str(patient_b),
-             "note": "created via SQL because no service-role key exists for the Admin API"},
+            "seed.synthetic_auth_users",
+            "VERIFIED_REAL_SUPABASE",
+            True,
+            {
+                "patient_a": str(patient_a),
+                "patient_b": str(patient_b),
+                "note": "created via SQL because no service-role key exists for the Admin API",
+            },
         )
 
         ids_map = run_adapter_end_to_end(database, patient_a, evidence)
@@ -820,10 +865,7 @@ def main() -> int:
 
     blocked = [s for s in evidence.steps if s["evidence"] == "BLOCKED"]
     failed = [s for s in evidence.steps if not s["ok"]]
-    evidence.outcome = (
-        "verified_with_blocked_branches" if blocked
-        else ("verified" if not failed else "failed")
-    )
+    evidence.outcome = "verified_with_blocked_branches" if blocked else ("verified" if not failed else "failed")
 
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text(

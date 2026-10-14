@@ -24,6 +24,7 @@ unrelated question never inherits the previous turn's intent.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from uuid import UUID
 
 import pytest
@@ -34,7 +35,12 @@ from app.agent.orchestrator import (
 )
 from app.agent.registry import ToolRegistry
 from app.agent.tools import GetDoseStatusRequest
-from app.contracts.dto import DoseEventInput, FrequencyRuleDTO, RegimenDraftInput
+from app.contracts.dto import (
+    AgentSessionDTO,
+    DoseEventInput,
+    FrequencyRuleDTO,
+    RegimenDraftInput,
+)
 from app.contracts.enums import AgentIntent, IntakeStatus, RegimenState, ToolName, ToolStatus
 
 PATIENT = UUID(int=100)
@@ -102,10 +108,39 @@ def _activate(wired, *, name="Amlodipine 5mg", times=("08:00",), patient_id=PATI
 
 
 def _report(wired, regimen_id, status: IntakeStatus, *, key: str, patient_id=PATIENT):
-    """Report against the current due occurrence, materialising it first."""
+    """Report against the current due occurrence through the real lifecycle.
+
+    The database requires a confirmed, unconsumed ``record_self_report``
+    challenge for every dose event, so the test issues and confirms one exactly
+    as the transport does before recording.
+    """
     wired.schedule.materialize(patient_id=patient_id, regimen_id=regimen_id, days=2)
     due = wired.schedule.find_due(patient_id=patient_id, regimen_id=regimen_id)
     assert due.occurrence is not None, "test setup: a dose must be due to report on"
+    session_id = UUID(int=800)
+    wired.sessions.add(
+        AgentSessionDTO(
+            id=session_id,
+            patient_id=patient_id,
+            intent="record_self_report",
+            state="awaiting_confirmation",
+            state_version=1,
+            updated_at=wired.clock.now(),
+            expires_at=wired.clock.now() + timedelta(hours=1),
+        )
+    )
+    challenge = wired.self_report.request_confirmation(
+        patient_id=patient_id,
+        regimen_id=regimen_id,
+        occurrence_id=due.occurrence.id,
+        intake_status=status,
+        idempotency_key=key,
+        session_id=session_id,
+        session_state_version=1,
+    )
+    wired.self_report.confirm_challenge(
+        patient_id=patient_id, challenge_id=challenge.challenge.id
+    )
     return wired.self_report.report(
         patient_id=patient_id,
         payload=DoseEventInput(
@@ -115,6 +150,7 @@ def _report(wired, regimen_id, status: IntakeStatus, *, key: str, patient_id=PAT
             event_time=wired.clock.now(),
             idempotency_key=key,
         ),
+        challenge_id=challenge.challenge.id,
     )
 
 

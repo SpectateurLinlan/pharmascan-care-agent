@@ -18,10 +18,116 @@ from app.agent.registry import ToolRegistry, UnknownToolError
 from app.agent.tools import (
     ListActiveMedicationsRequest,
 )
-from app.contracts.enums import AgentIntent, ToolName, ToolStatus
+from app.contracts.enums import AgentIntent, IntakeStatus, ToolName, ToolStatus
 
 PATIENT = UUID(int=100)
 OTHER_PATIENT = UUID(int=200)
+
+
+def test_expired_session_read_is_derived_without_mutating_history(agent, wired):
+    orchestrator, _ = agent
+    session = orchestrator.start_session(patient_id=PATIENT)
+    wired.clock.advance(hours=3)
+    expired = orchestrator.get_session(patient_id=PATIENT, session_id=session.id)
+    assert expired.state == "expired"
+    assert expired.updated_at == session.updated_at
+    assert wired.sessions.get(PATIENT, session.id) == session
+    assert orchestrator.get_session(patient_id=OTHER_PATIENT, session_id=session.id) is None
+
+
+def test_expired_session_cannot_execute_tools_or_create_confirmation(agent, wired):
+    orchestrator, _ = agent
+    session = orchestrator.start_session(patient_id=PATIENT)
+    wired.clock.advance(hours=3)
+    reply = orchestrator.handle_turn(patient_id=PATIENT, session_id=session.id, turn=AgentTurn(text="I took it."))
+    assert reply.session_state == "expired" and "Reload" in reply.message
+    assert not reply.tool_results and not reply.requires_confirmation and reply.pending_report is None
+    assert wired.sessions.get(PATIENT, session.id) == session
+    assert not wired.store.events and not wired.store.challenges
+
+
+def test_tonight_followup_it_resolves_verified_occurrence_and_bounded_memory(agent, wired):
+    orchestrator, _ = agent
+    result, _ = _activate_via_services(wired, times=("20:00",), add_extra_rule=False)
+    session = orchestrator.start_session(patient_id=PATIENT)
+    orchestrator.handle_turn(
+        patient_id=PATIENT, session_id=session.id, turn=AgentTurn(text="What medicine should I take tonight?")
+    )
+    saved = orchestrator.get_session(patient_id=PATIENT, session_id=session.id)
+    assert saved.context.referenced_medication_id == result.medication.id
+    assert saved.context.referenced_occurrence_id is not None
+    reply = orchestrator.handle_turn(
+        patient_id=PATIENT, session_id=session.id, turn=AgentTurn(text="Did I already take it?")
+    )
+    assert reply.tool_results[-1].tool_name == ToolName.GET_DOSE_STATUS
+    assert result.medication.display_name in reply.message and not wired.store.events
+    for _ in range(8):
+        orchestrator.handle_turn(patient_id=PATIENT, session_id=session.id, turn=AgentTurn(text="What is due?"))
+    assert len(orchestrator.get_session(patient_id=PATIENT, session_id=session.id).context.recent_turns) == 6
+
+
+def test_multiple_medicines_clarify_then_prepare_only_selected_report(agent, wired):
+    orchestrator, _ = agent
+    _activate_via_services(wired, add_extra_rule=False)
+    metformin, _ = _activate_via_services(wired, name="Metformin", add_extra_rule=False)
+    wired.clock.advance(hours=2)
+    session = orchestrator.start_session(patient_id=PATIENT)
+    reply = orchestrator.handle_turn(
+        patient_id=PATIENT, session_id=session.id, turn=AgentTurn(text="I took my medicine.")
+    )
+    assert "Which medicine did you mean" in reply.message and not reply.pending_report
+    assert (
+        len(
+            orchestrator.get_session(
+                patient_id=PATIENT, session_id=session.id
+            ).context.awaiting_clarification.candidates
+        )
+        == 2
+    )
+    reply = orchestrator.handle_turn(patient_id=PATIENT, session_id=session.id, turn=AgentTurn(text="The Metformin."))
+    assert reply.requires_confirmation and reply.pending_report.regimen_id == metformin.regimen.id
+    assert not wired.store.events
+
+
+def test_resuming_draft_is_owned_and_does_not_activate_it(wired):
+    from app.contracts.dto import RegimenDraftInput
+    from app.domain.errors import NotFoundError
+
+    draft = wired.enrollment.enroll_draft(
+        patient_id=PATIENT, draft=RegimenDraftInput(medication_name="DEMO unfinished")
+    )
+    resumed = wired.enrollment.resume_draft(PATIENT, draft.regimen.id)
+    assert resumed.regimen == draft.regimen and resumed.missing_instructions
+    with pytest.raises(NotFoundError):
+        wired.enrollment.resume_draft(OTHER_PATIENT, draft.regimen.id)
+    assert wired.enrollment.find_active_regimen(PATIENT, draft.medication.id) is None
+
+
+@pytest.mark.parametrize("language,text", [("en", "What medicine should I take tonight?"), ("zh", "今晚吃什么药？")])
+def test_tonight_queries_future_reviewed_occurrence_not_generic_count(agent, wired, language, text):
+    orchestrator, _ = agent
+    result, _activated = _activate_via_services(wired, times=("08:00", "20:00"), add_extra_rule=False)
+    session = orchestrator.start_session(patient_id=PATIENT)
+    reply = orchestrator.handle_turn(
+        patient_id=PATIENT, session_id=session.id, turn=AgentTurn(text=text, language=language)
+    )
+    schedule = reply.tool_results[-1].payload["schedule"]
+    assert len(schedule) == 1 and schedule[0]["local_time"] == "20:00"
+    assert result.medication.display_name in reply.message and "20:00" in reply.message
+    assert "active medication(s)" not in reply.message
+    assert not wired.store.events
+
+
+@pytest.mark.parametrize("text", ["I'm not sure whether I took it.", "我不确定是否吃过药。"])
+def test_uncertainty_is_read_only_no_challenge_or_dose_event(agent, wired, text):
+    orchestrator, _ = agent
+    _activate_via_services(wired)
+    session = orchestrator.start_session(patient_id=PATIENT)
+    before = len(wired.store.challenges)
+    reply = orchestrator.handle_turn(patient_id=PATIENT, session_id=session.id, turn=AgentTurn(text=text))
+    assert "No dose will be marked as taken" in reply.message
+    assert not reply.requires_confirmation and reply.pending_report is None
+    assert len(wired.store.challenges) == before and not wired.store.events
 
 
 @pytest.fixture()
@@ -59,6 +165,7 @@ def _base(patient_id: UUID, session_id: UUID, turn: int = 1) -> dict:
 def test_tool_registry_exposes_only_the_documented_allowlist(agent):
     _orchestrator, registry = agent
     assert registry.allowlist == {
+        ToolName.CREATE_REMINDER,
         ToolName.LIST_ACTIVE_MEDICATIONS,
         ToolName.GET_MEDICATION_HISTORY,
         ToolName.GET_DOSE_STATUS,
@@ -151,7 +258,7 @@ def test_agent_does_not_activate_without_explicit_confirmation(agent):
 # --- self report end-to-end -------------------------------------------------
 
 
-def _activate_via_services(wired, *, times=("08:00",)):
+def _activate_via_services(wired, *, times=("08:00",), add_extra_rule=True, name="Amlodipine 5mg"):
     """Helper: activate a scheduled regimen and register its daily rule."""
     from app.contracts.dto import DoseRuleDTO, FrequencyRuleDTO, RegimenDraftInput
     from app.contracts.enums import RuleKind
@@ -159,7 +266,7 @@ def _activate_via_services(wired, *, times=("08:00",)):
     result = wired.enrollment.enroll_draft(
         patient_id=PATIENT,
         draft=RegimenDraftInput(
-            medication_name="Amlodipine 5mg",
+            medication_name=name,
             dose_amount=1,
             dose_unit="tablet",
             frequency_rule=FrequencyRuleDTO(kind="daily", local_times=list(times)),
@@ -180,6 +287,8 @@ def _activate_via_services(wired, *, times=("08:00",)):
         session_state="awaiting_confirmation",
         session_state_version=1,
     )
+    if not add_extra_rule:
+        return result, activated
     wired.schedule.add_rule(
         patient_id=PATIENT,
         regimen_id=activated.regimen.id,
@@ -196,33 +305,106 @@ def _activate_via_services(wired, *, times=("08:00",)):
     return result, activated
 
 
+def _due_occurrence_id(reply) -> UUID:
+    """The occurrence the agent resolved as due during this turn."""
+    for result in reply.tool_results:
+        if result.tool_name != ToolName.CHECK_DUE_DOSE:
+            continue
+        doses = result.payload.get("due_doses") or []
+        assert doses, "test setup: the agent must have found a due dose"
+        return UUID(str(doses[0]["occurrence_id"]))
+    raise AssertionError("the agent never checked for a due dose")
+
+
+def _arm_confirmation(
+    wired,
+    *,
+    session_id,
+    session_state_version,
+    regimen_id,
+    occurrence_id,
+    intake_status,
+    idempotency_key,
+):
+    """Issue and confirm a ``record_self_report`` challenge, as the UI would.
+
+    The database requires every dose event to cite a confirmed, unconsumed
+    challenge, and the agent's recording turn advances the session version once
+    before it records — so the challenge is armed for the version that turn will
+    observe. Nothing here weakens the check; it completes the real lifecycle.
+    """
+    result = wired.self_report.request_confirmation(
+        patient_id=PATIENT,
+        regimen_id=regimen_id,
+        occurrence_id=occurrence_id,
+        intake_status=intake_status,
+        idempotency_key=idempotency_key,
+        session_id=session_id,
+        session_state_version=session_state_version,
+    )
+    wired.self_report.confirm_challenge(patient_id=PATIENT, challenge_id=result.challenge.id)
+    return result.challenge.id
+
+
 def test_agent_self_report_flow_lists_then_records_and_never_claims_ingestion(agent, wired):
     orchestrator, _registry = agent
     _result, activated = _activate_via_services(wired)
     # Advance past today's 08:00 SG dose so it is genuinely due.
     wired.clock.advance(hours=10)
     session_id = UUID(int=3)
+    slots = {
+        "regimen_id": activated.regimen.id,
+        "intake_status": "taken",
+        "idempotency_key": "e2e-1",
+    }
 
-    reply = orchestrator.handle_turn(
+    # Turn 1: the agent resolves the due dose but must NOT write without an
+    # explicit, confirmed challenge — the database would reject the write, so
+    # the agent asks for confirmation instead of fabricating one.
+    asked = orchestrator.handle_turn(
         patient_id=PATIENT,
         session_id=session_id,
-        turn=AgentTurn(
-            text="I took my morning dose",
-            slots={
-                "regimen_id": activated.regimen.id,
-                "intake_status": "taken",
-                "idempotency_key": "e2e-1",
-            },
-        ),
+        turn=AgentTurn(text="I took my morning dose", slots=dict(slots)),
     )
-    assert reply.intent == AgentIntent.DOSE_SELF_REPORT
-    names = [r.tool_name for r in reply.tool_results]
+    assert asked.intent == AgentIntent.DOSE_SELF_REPORT
+    names = [r.tool_name for r in asked.tool_results]
     assert ToolName.LIST_ACTIVE_MEDICATIONS in names
-    last = reply.tool_results[-1]
+    assert ToolName.CHECK_DUE_DOSE in names
+    gate = asked.tool_results[-1]
+    assert gate.tool_name == ToolName.RECORD_SELF_REPORT
+    assert gate.status == ToolStatus.BLOCKED
+    assert gate.error_code == "CONFIRMATION_REQUIRED"
+    assert asked.requires_confirmation is True
+    assert asked.session_state == "awaiting_confirmation"
+
+    # The UI completes the confirmation lifecycle against the live session.
+    occurrence_id = _due_occurrence_id(asked)
+    session = wired.sessions.get(PATIENT, session_id)
+    assert session is not None
+    challenge_id = _arm_confirmation(
+        wired,
+        session_id=session_id,
+        session_state_version=session.state_version + 1,
+        regimen_id=activated.regimen.id,
+        occurrence_id=occurrence_id,
+        intake_status=IntakeStatus.REPORTED_TAKEN,
+        idempotency_key="e2e-1",
+    )
+
+    # Turn 2: with a confirmed challenge the report is recorded, and it still
+    # never claims ingestion.
+    recorded = orchestrator.handle_turn(
+        patient_id=PATIENT,
+        session_id=session_id,
+        turn=AgentTurn(text="I confirm", slots={**slots, "confirm_challenge_id": challenge_id}),
+    )
+    last = recorded.tool_results[-1]
     assert last.tool_name == ToolName.RECORD_SELF_REPORT
+    assert last.status == ToolStatus.SUCCESS
+    assert last.payload["already_recorded"] is False
     assert last.payload["ingestion_proven"] is False
     assert last.payload["visual_status"] == "not_checked"
-    assert "does not prove" in reply.message
+    assert "does not prove" in recorded.message
 
 
 def test_agent_replayed_turn_is_idempotent(agent, wired):
@@ -230,14 +412,37 @@ def test_agent_replayed_turn_is_idempotent(agent, wired):
     _result, activated = _activate_via_services(wired)
     wired.clock.advance(hours=10)
     session_id = UUID(int=4)
-    turn = AgentTurn(
-        text="took it",
-        slots={"regimen_id": activated.regimen.id, "intake_status": "taken", "idempotency_key": "same-key"},
+    slots = {
+        "regimen_id": activated.regimen.id,
+        "intake_status": "taken",
+        "idempotency_key": "same-key",
+    }
+
+    # The agent asks for confirmation; the UI arms the confirmed challenge.
+    asked = orchestrator.handle_turn(
+        patient_id=PATIENT,
+        session_id=session_id,
+        turn=AgentTurn(text="took it", slots=dict(slots)),
     )
+    occurrence_id = _due_occurrence_id(asked)
+    session = wired.sessions.get(PATIENT, session_id)
+    assert session is not None
+    challenge_id = _arm_confirmation(
+        wired,
+        session_id=session_id,
+        session_state_version=session.state_version + 1,
+        regimen_id=activated.regimen.id,
+        occurrence_id=occurrence_id,
+        intake_status=IntakeStatus.REPORTED_TAKEN,
+        idempotency_key="same-key",
+    )
+    turn = AgentTurn(text="took it", slots={**slots, "confirm_challenge_id": challenge_id})
+
     first = orchestrator.handle_turn(patient_id=PATIENT, session_id=session_id, turn=turn)
     second = orchestrator.handle_turn(patient_id=PATIENT, session_id=session_id, turn=turn)
 
     assert first.tool_results[-1].payload["already_recorded"] is False
+    assert second.tool_results[-1].ok, second.tool_results[-1]
     assert second.tool_results[-1].payload["already_recorded"] is True
 
 
@@ -365,9 +570,7 @@ def test_agent_blocks_report_on_archived_medication(agent, wired):
 
     medication = wired.medications.get(PATIENT, activated.regimen.patient_medication_id)
     assert medication is not None
-    wired.medications.update(
-        medication.model_copy(update={"archived_at": datetime(2026, 10, 13, tzinfo=UTC)})
-    )
+    wired.medications.update(medication.model_copy(update={"archived_at": datetime(2026, 10, 13, tzinfo=UTC)}))
 
     reply = orchestrator.handle_turn(
         patient_id=PATIENT,
@@ -507,3 +710,20 @@ def test_vision_provider_timeout_never_becomes_a_successful_match():
                 )
             ],
         )
+
+
+def test_explicit_due_question_uses_typed_read_tool_without_intake_write():
+    from uuid import uuid4
+
+    from app.agent.orchestrator import AgentTurn
+    from app.transport.container import build_container
+
+    container = build_container()
+    patient = uuid4()
+    session = container.orchestrator.start_session(patient_id=patient)
+    reply = container.orchestrator.handle_turn(
+        patient_id=patient, session_id=session.id, turn=AgentTurn(text="What medicine should I take tonight?")
+    )
+    assert not container.store.events and not container.store.regimens
+    assert reply.tool_results[0].tool_name.value == "check_due_dose"
+    assert reply.tool_results[0].payload["item_count"] == 0

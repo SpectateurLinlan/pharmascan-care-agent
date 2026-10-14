@@ -5,6 +5,12 @@
  * dependency is not justified — a minimal stub keeps the test run fast.
  */
 
+import { vi } from 'vitest';
+
+// Local tests must never initiate real signup from a developer's dotenv.
+vi.stubEnv('VITE_SUPABASE_URL', '');
+vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', '');
+
 const store = new Map<string, string>();
 
 const localStorageStub = {
@@ -20,7 +26,7 @@ const localStorageStub = {
   },
 };
 
-Object.defineProperty(globalThis, 'window', {
+if (typeof window === 'undefined') Object.defineProperty(globalThis, 'window', {
   value: { localStorage: localStorageStub },
   writable: true,
   configurable: true,

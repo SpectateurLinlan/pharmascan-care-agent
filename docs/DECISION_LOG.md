@@ -35,3 +35,72 @@ Stage2 integration baseline updated from the previously reviewed v0.4.0 contract
 - No server edits, cloud mutations, deployment, remote Git changes or push.
 - Final request-body audit correction: identify uses required `images` array, unlike embed/detect/scan/read-label `image`; single-photo public Port submits one list part and transport rejects wrong endpoint fields. Response-only fixtures were insufficient, so a real multipart-construction test was added. Identify app top_k maximum 10 is intentionally narrower than provider schema 20.
 - Frontend regression runner must execute in frontend process cwd; repo-root --root collected no suites in this environment. No frontend product code change was needed; final 20 tests passed. Final backend counts after upload-security regressions: 176 contract tests / 372 full tests, not earlier 170/366.
+
+## 2026-10-14 ? Session 3D user JWT RLS and atomic dose confirmation
+
+Replaced the default persistent role-switch PostgreSQL patient graph with request-scoped Supabase Data API repositories using the verified caller's JWT. Administrative DATABASE_URL connections are excluded from the HTTP factory. Existing ports and InMemory tests are preserved. No service-role credential is used for patient requests.
+
+Migration 005 moves the confirmation helper out of public rather than exposing a direct consume RPC. A narrow SECURITY INVOKER self-report RPC preserves original trigger checks and combines event insert, challenge consumption and occurrence close. Stable idempotency keys are serialized in PostgreSQL, and replay bindings must match. The adapter treats already-closed identical state as a no-op after the RPC; it does not weaken the closed-history trigger.
+
+Challenge retries reuse original session/version. Confirmed agent retries resolve the occurrence from their original challenge rather than the next due occurrence. Transport/agent reads now use public application methods.
+
+Windows checkout CRLF changed exact fixture bytes and caused existing provenance-hash tests to fail. Restored the manifest's canonical LF bytes and added scoped .gitattributes; no Stage2 contract or fixture payload was changed. Existing Vite/Vitest development dependencies had six npm audit findings, including high/critical; upgraded the same toolchain to Node-20-compatible patched versions and kept auth identity-only through @supabase/auth-js.
+
+## 2026-10-14 ? Voice is a P0 gate; partial external integration is not readiness
+
+Preserve the Session 3D Auth/RLS/confirmation boundary for both typed and spoken input. Use short SentenceRecognition and TextToVoice rather than TRTC; no auto-submit from ASR and no medication write without independent visible confirmation. Add bounded consented adapters and editable transcript/playback UI. Real account probing found UnsupportedRegion on the initial TTS domestic endpoint; official international Common Params lists ap-singapore, and international TTS succeeded using voice 1050. ASR still returns FailedOperation.UserNotRegistered on both sites. Stop the overnight sequence at Session 03 NOT READY pending human account/activation reconciliation. No provisioning, rotation or paid action was attempted. Session 04 is gated, not executed.
+
+Reference eligibility is deterministic and independent of raw similarity. Catalogue candidates remain candidates, historical/package/incompatible samples cannot become current patient references. PRN reports preserve real schema nullability and reuse atomic self-report RPC; history includes events without scheduled occurrences.
+
+Provider references: https://cloud.tencent.com/document/api/1093/35646 ; https://intl.cloud.tencent.com/document/product/1154/48916?lang=en ; https://www.tencentcloud.com/document/api/1154/48910 (international region list).
+
+## Continuation 2026-10-14: active browser recognition and immutable source evidence
+
+This supersedes the standalone-ASR blocking decision above. Active demo STT uses native SpeechRecognition/webkitSpeechRecognition with feature detection, en-US short utterances, explicit consent, bounded lifecycle and editable review. Browsers may send audio to remote recognition services; this is not guaranteed offline/local-only or clinically reliable. Unsupported/error/denial/no-speech/abort/timeout states preserve typing. No final transcript auto-submits. Tencent SentenceRecognition remains an inactive alternative; its activation mismatch no longer blocks this demo provider choice. Tencent TextToVoice remains server-side.
+
+Home now uses one primary medication card and a compact photo/text/microphone composer. Send is independent of recognition; pending self-report still requires separate Confirm. Audio failure preserves text. Backend source_documents.extraction_evidence (migration006) retains a bounded immutable typed extraction payload, including Printed.value/line and separate product/regimen evidence. The payload is patient-submitted untrusted evidence, not a provider-authenticated prescription. Manual dose/schedule fields remain separately reviewed; source review and activation confirmation remain mandatory. No extraction implies missing dosing fields, safety or ingestion.
+
+PWA manifest provides install metadata only; no offline clinical workflow or reliable closed-browser push claim follows. Physical microphone acceptance remains manual pending until exercised on Chrome/Edge.
+
+### 2026-10-14 ? additive P1 reminders and final local QA
+
+After voice/UI integration, add minimal reminder preference lifecycle rather than background delivery infrastructure. Migration007 creates ownership-RLS/composite-FK/unique occurrence preferences and active/open/future-time guards; adds the explicit reminder intent/tool to existing enum constraints without removing existing values. Application tool sets a bounded patient-requested delay, not clinical timing. SQL guards remain SECURITY INVOKER. Reminder traces retain existing redaction allowlists. No SMS, paid activation, push or deployment.
+
+Release QA also fixed APP_ORIGIN wiring: explicitly configured origin is used by CORS, with authenticated patient checks unchanged. Shared database rollback was not run. Vercel deployment adapter/routing remains an explicit deployment preparation item rather than an unverified production claim.
+
+### 2026-10-14: manual acceptance defects supersede prior release verdict
+
+Observed missing medication/generic Agent/check routing/reminder/Mandarin issues require reacceptance. Correct concrete stale8000 runtime default, expose resumable unfinished drafts and unavailable-record failures, add tonight/read-only-uncertainty routing, real read-only photo evidence and open-app due refresh. Preserve existing Auth/RLS/B14 and no hardcoded medication. Do not claim the user's original anonymous session changed without evidence.
+
+Remote Stage2 moved to0.9.0. Verify actual OpenAPI before adapting: restrict explicit compatibility to read-only detect/identify and old-schema projections; leave frozenv0.8 and default embedding/gallery checks unchanged. Tencent ASR stays inactive. Avoid new billable TTS regression calls: use synthetic WAV tests, retain earlier real English evidence, leave Chinese provider acceptance to the user. Shared language preference is explicit, not auto detection. Session03 remains NOT READY until manual defects are reverified.
+
+
+## 2026-10-14 personalised Agent repair
+
+Reuse patient_profiles/agent_sessions rather than parallel preference or memory tables. Correct persistent Gemini composition before adding demo data; prove real application/tool/B14 execution. Use official Interactions/store=false/low with4-round bound and existing typed tool implementations. Keep deterministic patient facts and confirmation veto. Reserve user turns atomically, account model attempts separately and release failed reservations; cap20 per Singapore day, not provider-project quotas.
+
+Course dates represent reviewed calendar bounds, not version-effective timestamps; last day is inclusive. Selected weekdays reuse existing schedule rules. Supabase006/007 actual schema existed without runner ledger entries; verify actual functions/constraints/policies before restoring bookkeeping, never replay duplicate DDL.012 adds FORCE RLS to existing reminder table. Shared rollback/deployment remain human-gated.
+
+
+2026-10-14 patient app acceptance repairs: expose reviewed metadata independently of due state; derive scheduled/snoozed reminders on the server and show an active/reopened-app modal, not an invented background timer. Keep language/accessibility/voice/reminder settings off the home header. Separate anonymous linking from existing-account login, require explicit switching acknowledgement and reload state on identity changes; no patient record merge. Do not activate Singpass or change cloud Auth settings. Store feedback privately instead of pretending email/doctor delivery. Structured Stage2 duration/frequency/food extraction remains an owner-side gap; preserve raw evidence and manual review slots.
+
+2026-10-14 second patient experience revision: replace stacked workflow cards with task navigation and a five-tab root. Reuse display_name and bounded agent_sessions; add only the missing health-note table. Deterministic periodic summaries count actual stored records rather than reconstruct ungenerated past schedules. Health Agent tool is prepare-only and offers original text for explicit review. Personal gallery and caregiver management remain visible PARTIAL, with no pretend photos/notification delivery. Scoped migration --only validates all older ledger hashes and never seeds/reconciles/replays older DDL. No paid-provider calls, Auth configuration changes, push or deployment in this revision.
+
+QA found StrictMode premature loaded-session marking, excessive card spacing, hidden daily actions, an unchecked Data API page cap and a read-before-insert generation race. Delay chat completion until a live effect receives its response; keep the composer above navigation; separate compact daily presentation from legacy detailed view; check exact counts with bounded full paging; atomically ignore existing generation keys and return the actual stored ID. Serious descriptions stop for conditional help before AI/intake, without diagnosing. Existing database safeguards are retained.
+
+## 2026-10-14 - Browser TTS default, explicit cloud cost gate
+The previous Play/autoplay path always used server Tencent TTS. Replace it with a frontend device adapter, retain the existing cloud provider but deny synthesis by default even when legacy ENABLE_SPEECH/TENCENT_SPEECH_APPROVED are present. Optional cloud requires both server TTS_PROVIDER=tencent and explicit patient selection. No failure-driven paid fallback, no new service, migration or account setting. Device provider choice resets on reload to avoid implicit paid usage; existing patient language/autoplay preferences remain authoritative. API compatibility intentionally rejects legacy synthesis requests without explicit provider.
+
+## 2026-10-14 - Derive expired conversation state without writing history
+A real reload defect mapped Supabase check rejection to HTTP422: get_session advanced updated_at beyond fixed expires_at. Keep expires_at > updated_at intact; read-only expiry determination lets bootstrap create a fresh owned session. Expired direct turns return clarification with no tool side effects. Real before/after regression establishes422 ->200 and unchanged old row/identity. No migration or auth/persistence change.
+
+
+## 2026-10-15 -> Durable evidence tasks and true personal reference matching
+
+Root causes: old Gallery presented regimen rows without persistent personal-photo runtime; Check used catalogue identification only; each label extraction had no durable multi-source enrollment state. Reused existing patient identity/regimen/source/Agent systems, added bounded owned evidence artifacts and ports, and exposed read-only reconciliation to Gemini. Explicit existing-product association prevents blind name-based merges; historical regimens remain versioned. No preexisting duplicate patient identities were deleted or combined.
+
+The real Stage2 metadata endpoint now declares0.9.0; embedding/match required contracts are compatible with the frozen0.8.0 contract and additive optional fields. Kept the frozen snapshot and strict adapter; opted into the existing read-only metadata gate solely in the personal vision adapter. Model/space/preprocess/dimension are checked for every query/reference. Provider thresholds are not changed for the demo.
+
+Reference commit is one user-RLS transaction, after immutable private object upload. Logical retirement excludes a reference without deleting evidence. Unresolved source conflicts remain blocked rather than letting the model choose an authoritative source. General PDF extraction and whole-blister automatic matching are deferred with explicit patient guidance. No new speech provider calls, account settings, paid provisioning, commits, push or deployment.
+
+Read-only synthetic duplicate audit found one anonymous owner group with two Amlodipine identities and two active plans, zero historical plans. The original screenshot owner was not identified. These are distinct persisted identities, not a proven same-product historical duplicate; no records were merged/deleted. Gallery flags similar names and displays each identity's separate course/reference details. Resolving legacy duplicate identity records requires explicit patient product/source review.

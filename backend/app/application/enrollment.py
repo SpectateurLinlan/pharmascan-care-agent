@@ -8,6 +8,7 @@ instructions stay pending; nothing is ever inferred (BUILD_PLAN Gate 1).
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import timedelta
 from typing import Any
 from uuid import UUID
@@ -42,6 +43,7 @@ from ..contracts.ports import (
     SourceDocumentRepository,
     SourceFieldRepository,
 )
+from ..contracts.source_extraction import MedicationSourceExtractionDTO
 from ..domain import policy
 from ..domain.errors import NotFoundError, ValidationError
 from .timezone import LOCAL_TZ_PROVIDER, LocalTzProvider
@@ -93,12 +95,52 @@ class MedicationEnrollmentService:
 
     # -- enrollment ----------------------------------------------------------
 
+    def list_medications(self, patient_id: UUID) -> list[PatientMedicationDTO]:
+        return self._medications.list_for_patient(patient_id)
+
+    def get_source(self, patient_id: UUID, source_id: UUID) -> SourceDocumentDTO | None:
+        return self._sources.get(patient_id, source_id)
+
+    def get_medication(self, patient_id: UUID, medication_id: UUID) -> PatientMedicationDTO | None:
+        return self._medications.get(patient_id, medication_id)
+
+    def get_regimen(self, patient_id: UUID, regimen_id: UUID) -> RegimenVersionDTO | None:
+        return self._regimens.get(patient_id, regimen_id)
+
+    def find_active_regimen(self, patient_id: UUID, medication_id: UUID) -> RegimenVersionDTO | None:
+        return self._regimens.find_active_for_medication(patient_id, medication_id)
+
+    def list_regimens(self, patient_id: UUID, medication_id: UUID) -> list[RegimenVersionDTO]:
+        return self._regimens.list_for_medication(patient_id, medication_id)
+
+    def resume_draft(self, patient_id: UUID, regimen_id: UUID) -> EnrollmentResultDTO:
+        regimen = self._regimens.get(patient_id, regimen_id)
+        if regimen is None:
+            raise NotFoundError("Draft not found")
+        if regimen.state not in {RegimenState.DRAFT, RegimenState.PENDING_CLARIFICATION}:
+            raise ValidationError("Only an unfinished regimen can be resumed")
+        medication = self._medications.get(patient_id, regimen.patient_medication_id)
+        if medication is None or regimen.source_id is None:
+            raise NotFoundError("Draft source not found")
+        fields = self._source_fields.list_for_source(patient_id, regimen.source_id)
+        provided = {field.field_name.value: field.field_value for field in fields}
+        missing = policy.missing_required_instructions(provided, is_prn=regimen.is_prn)
+        return EnrollmentResultDTO(
+            medication=medication,
+            regimen=regimen,
+            source_fields=fields,
+            missing_instructions=[MissingInstruction(field=field) for field in missing],
+        )
+
     def enroll_draft(
         self,
         *,
         patient_id: UUID,
         draft: RegimenDraftInput,
         source_kind: SourceKind = SourceKind.USER_MANUAL,
+        extraction_evidence: MedicationSourceExtractionDTO | None = None,
+        existing_medication_id: UUID | None = None,
+        evidence_task_id: UUID | None = None,
     ) -> EnrollmentResultDTO:
         """Create medication + draft regimen + provenance fields.
 
@@ -107,10 +149,49 @@ class MedicationEnrollmentService:
         """
         if not draft.medication_name.strip():
             raise ValidationError("medication_name is required")
+        if evidence_task_id and existing_medication_id:
+            prior = next(
+                (
+                    row
+                    for row in self._regimens.list_for_medication(patient_id, existing_medication_id)
+                    if row.evidence_task_id == evidence_task_id
+                ),
+                None,
+            )
+            if prior:
+                expected = (
+                    draft.dose_amount,
+                    draft.dose_unit,
+                    draft.frequency_rule.model_dump() if draft.frequency_rule else None,
+                    draft.is_prn,
+                    draft.route,
+                    draft.food_instruction,
+                    draft.course_start_date,
+                    draft.course_end_date,
+                )
+                actual = (
+                    prior.dose_amount,
+                    prior.dose_unit,
+                    prior.frequency_rule,
+                    prior.is_prn,
+                    prior.route,
+                    prior.food_instruction,
+                    prior.course_start_date,
+                    prior.course_end_date,
+                )
+                if actual != expected:
+                    raise ValidationError("A draft already exists for this task. Resume its reviewed details.")
+                return self.resume_draft(patient_id, prior.id)
 
+        if (
+            extraction_evidence is not None
+            and len(json.dumps(extraction_evidence.model_dump(mode="json")).encode()) > 65536
+        ):
+            raise ValidationError("Extraction evidence is too large")
         now = self._clock.now()
         source_id = self._ids.new_id()
         source = SourceDocumentDTO(
+            extraction_evidence=extraction_evidence,
             id=source_id,
             patient_id=patient_id,
             source_kind=source_kind,
@@ -135,6 +216,10 @@ class MedicationEnrollmentService:
             provided[FieldName.ROUTE.value] = draft.route
         if draft.food_instruction is not None:
             provided[policy.PRN_GUIDANCE_KEY] = draft.food_instruction
+        if draft.course_start_date is not None:
+            provided[FieldName.COURSE_START_DATE.value] = draft.course_start_date.isoformat()
+        if draft.course_end_date is not None:
+            provided[FieldName.COURSE_END_DATE.value] = draft.course_end_date.isoformat()
 
         field_dtos: list[SourceFieldDTO] = []
         # Source was just created as EXTRACTED; appending is allowed.
@@ -151,7 +236,12 @@ class MedicationEnrollmentService:
             self._source_fields.add(field_dto)
             field_dtos.append(field_dto)
 
-        medication = PatientMedicationDTO(
+        medication = self._medications.get(patient_id, existing_medication_id) if existing_medication_id else None
+        if existing_medication_id and medication is None:
+            raise NotFoundError("Owned medication not found")
+        if medication and medication.display_name.casefold() != draft.medication_name.casefold():
+            raise ValidationError("Product name conflict requires review")
+        medication = medication or PatientMedicationDTO(
             id=self._ids.new_id(),
             patient_id=patient_id,
             display_name=draft.medication_name,
@@ -159,12 +249,14 @@ class MedicationEnrollmentService:
             source_id=source_id,
             identity_status=IdentityStatus.UNVERIFIED,
         )
-        self._medications.add(medication)
+        if not existing_medication_id:
+            self._medications.add(medication)
 
         missing = policy.missing_required_instructions(provided, is_prn=draft.is_prn)
         state = RegimenState.PENDING_CLARIFICATION if missing else RegimenState.DRAFT
 
         regimen = RegimenVersionDTO(
+            evidence_task_id=evidence_task_id,
             id=self._ids.new_id(),
             patient_id=patient_id,
             patient_medication_id=medication.id,
@@ -173,14 +265,14 @@ class MedicationEnrollmentService:
             state=state,
             dose_amount=draft.dose_amount,
             dose_unit=draft.dose_unit,
-            frequency_rule=(
-                draft.frequency_rule.model_dump() if draft.frequency_rule else None
-            ),
+            frequency_rule=(draft.frequency_rule.model_dump() if draft.frequency_rule else None),
             is_prn=draft.is_prn,
             route=draft.route,
             food_instruction=draft.food_instruction,
             effective_from=None,
             effective_to=None,
+            course_start_date=draft.course_start_date,
+            course_end_date=draft.course_end_date,
             supersedes_id=None,
             confirmation_challenge_id=None,
             created_at=now,
@@ -196,9 +288,7 @@ class MedicationEnrollmentService:
 
     # -- review --------------------------------------------------------------
 
-    def review_source_fields(
-        self, *, patient_id: UUID, source_id: UUID, field_ids: list[UUID] | None = None
-    ) -> int:
+    def review_source_fields(self, *, patient_id: UUID, source_id: UUID, field_ids: list[UUID] | None = None) -> int:
         """Patient confirms extracted fields; marks them user_reviewed.
 
         Reviewing the medication-identity evidence is what promotes the
@@ -218,9 +308,7 @@ class MedicationEnrollmentService:
             if field_ids is not None and field_dto.id not in field_ids:
                 continue
             self._source_fields.update(
-                field_dto.model_copy(
-                    update={"review_status": SourceReviewStatus.USER_REVIEWED, "reviewed_at": now}
-                )
+                field_dto.model_copy(update={"review_status": SourceReviewStatus.USER_REVIEWED, "reviewed_at": now})
             )
             reviewed_names.add(field_dto.field_name)
             reviewed += 1
@@ -233,9 +321,7 @@ class MedicationEnrollmentService:
             for medication in self._medications.list_for_patient(patient_id):
                 if medication.source_id == source_id and medication.identity_status == IdentityStatus.UNVERIFIED:
                     self._medications.update(
-                        medication.model_copy(
-                            update={"identity_status": IdentityStatus.USER_REVIEWED_DOCUMENT}
-                        )
+                        medication.model_copy(update={"identity_status": IdentityStatus.USER_REVIEWED_DOCUMENT})
                     )
         return reviewed
 
@@ -252,9 +338,7 @@ class MedicationEnrollmentService:
         """Issue an unconfirmed challenge; returns (challenge, token-once)."""
         regimen = self._require_regimen(patient_id, regimen_id)
         if regimen.state not in (RegimenState.DRAFT, RegimenState.PENDING_CLARIFICATION):
-            raise ValidationError(
-                f"Regimen is {regimen.state.value}; only a draft can be activated"
-            )
+            raise ValidationError(f"Regimen is {regimen.state.value}; only a draft can be activated")
         now = self._clock.now()
         token = self._ids.new_id().hex + self._ids.new_id().hex  # demo token
         token_hash = hashlib.sha256(token.encode()).hexdigest()
@@ -267,7 +351,13 @@ class MedicationEnrollmentService:
             regimen_id=regimen_id,
             occurrence_id=None,
             intended_intake_status=None,
-            idempotency_key=f"activate:{regimen_id}",
+            # The database enforces UNIQUE (patient_id, idempotency_key), so the
+            # key must fingerprint this specific confirmation request — the
+            # regimen, the session and the version of the summary the patient is
+            # being asked to approve. A fixed per-regimen key would make a second
+            # request (a refresh, or a retry after an expired challenge) collide
+            # with the first and be rejected by the real insert.
+            idempotency_key=(f"activate:{regimen_id}:{session_id}:{session_state_version}"),
             token_hash=token_hash,
             issued_at=now,
             expires_at=now + CONFIRMATION_TTL,
@@ -335,11 +425,7 @@ class MedicationEnrollmentService:
             decision = policy.check_regimen_state_transition(active.state, RegimenState.SUPERSEDED)
             if not decision.allowed:
                 raise ValidationError(decision.reason)
-            self._regimens.update(
-                active.model_copy(
-                    update={"state": RegimenState.SUPERSEDED, "effective_to": now}
-                )
-            )
+            self._regimens.update(active.model_copy(update={"state": RegimenState.SUPERSEDED, "effective_to": now}))
             superseded.append(active.id)
 
         self._regimens.update(
@@ -352,9 +438,7 @@ class MedicationEnrollmentService:
             )
         )
         assert challenge is not None
-        self._challenges.update(
-            challenge.model_copy(update={"consumed_at": now})
-        )
+        self._challenges.update(challenge.model_copy(update={"consumed_at": now}))
         self._medications.update(
             medication.model_copy(update={"identity_status": IdentityStatus.USER_REVIEWED_DOCUMENT})
         )

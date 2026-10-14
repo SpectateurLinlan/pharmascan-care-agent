@@ -1,6 +1,6 @@
 # PostgreSQL Data Model — source, medication, regimen, visual evidence, adherence and Agent state
 
-**System of record:** Supabase PostgreSQL + `pgvector` (for 256-d verified encoder embeddings only), Supabase Auth, private object storage. **Do not put relational/PHI records into Hugging Face model Space**. These are target schemas, **not migrations already run**. See `AGENTS.md` for mandatory RLS, trace and testing rules.
+**System of record:** Supabase PostgreSQL, Supabase Auth and private object storage. The current personal embeddings are bounded typed JSON; the earlier `pgvector` target below is not the implemented gallery storage. **Do not put relational/PHI records into Hugging Face model Space**. These are target schemas, **not migrations already run**. See `AGENTS.md` for mandatory RLS, trace and testing rules.
 
 ## A. ER design and key ownership
 
@@ -76,3 +76,53 @@ Do **not** combine `MedicationProduct`, `PatientMedication`, `RegimenVersion`, `
 **Test migrations in temporary/local PostgreSQL before Supabase production**. Keep down/migration rollback strategy, never destructive changes without backup/approval.
 
 **Optional conditions:** if the later personalisation roadmap needs known diagnoses, add `patient_conditions` with patient-reported or documented provenance; not required for pill Gallery or regimen check, and should never be populated by predicting diagnoses from medication names.
+
+## Implemented additions (2026-10-14)
+
+Migration006 adds bounded nullable immutable source_documents.extraction_evidence JSON, separate from reviewed dose/frequency source_fields. This is patient-submitted untrusted provenance; no cryptographic provider-origin claim. Printed.value/line, source kind, product fields and null regimen fields are retained.
+
+Migration007 dose_reminders: patient_id + occurrence_id primary key/composite FK, remind_at UTC, demo_only=true, owner RLS and future/open-active occurrence guard. Updating snooze preference does not update regimen rules or write dose events. No delivery receipt, closed-browser scheduler, SMS or caregiver consent capability is implied.
+
+
+## Current additions008-012
+
+008 extends existing patient_profiles with generated speech_locale derived from language, text_size,voice_enabled,tts_autoplay,reminder_lead_minutes,updated_at. Existing language/timezone remain authoritative; existing owner RLS is retained. No duplicate patient_preferences table.
+
+009 extends existing agent_sessions with bounded version1 JSON context and generated medication/regimen/occurrence reference columns constrained by same-owner composite FKs. Recent turns<=6; summary<=600 characters; JSON<=20KB. No vector memory or audio storage.
+
+010 demo_ai_usage(patient_id,usage_date,llm_user_turns,model_requests,updated_at,demo_only) and nonce-hash-backed demo_ai_turns reservations are owner-readable/FORCE RLS, without direct authenticated DML. Narrow accounting RPCs serialize per-owner/day reservations; successful+pending reservations cannot exceed20. Pending leases expire after10 minutes. A failed request never refunds an already successful turn. In-flight completion belongs to its original Singapore date. Admin-only private.demo_ai_config defines the server cap.
+
+011 course_start_date/course_end_date are calendar dates separate from effective_from/effective_to. Reviewed source_fields evidence binds activation; active/historical course dates are immutable. Occurrence/event guards reject calendar dates outside the inclusive bounds. Late scheduled reports are evaluated using occurrence date; PRN uses report date. Expired courses retain history and version records.012 forces RLS on existing dose_reminders; schedule/intake authority remains absent.
+
+All new up migrations are applied in development. Rollbacks are not executed against the shared database; disposable database acknowledgement is required.006/007 ledger entries were restored only after actual schema/function/trigger/owner-policy verification.
+
+
+Migration013 patient_feedback: composite(patient_id,id) primary key, profile owner FK, bounded category/text, demo_only=true, ENABLE/FORCE RLS and owner policy, authenticated SELECT/INSERT only. Feedback content is excluded from Agent context/logging and is not a clinical notification. No reminder timer/schedule table duplication was introduced; new alerts reuse dose occurrences/events and existing snooze records. Food instructions and course dates reuse reviewed regimen/source fields.
+
+## Actual patient-experience persistence revision
+
+Read-only runtime inspection found no health_observations, caregiver_contacts or personal gallery table despite target diagrams above. Migration014 creates health_observations: composite owner/id PK, owned optional medication FK, patient_reported source, bounded descriptions/notes/severity, occurred/created/updated UTC timestamps, demo_only=true, indexed owner/time, ENABLE+FORCE RLS owner USING/WITH CHECK, authenticated DML only. Existing patient_profiles.display_name is reused, with no new profile table. Notes are not linked to an individual dose event yet (PARTIAL); optional medication association does not establish drug causality.
+
+Summaries are generated on demand, not separately stored or scheduled. They read actual regimen versions/occurrences/reports and bounded notes; no invented historic denominator. Shared rollback SQL is static/disposable-only and has not been executed. Existing clinical table/confirmation guards unchanged.
+
+
+## Actual evidence/gallery schema -> migrations015-018
+
+This section describes applied implementation; the earlier broad target-table catalogue remains design guidance. No medication_products/product_ingredients/knowledge-vector table was added.
+
+| Actual table / existing record | Implemented role |
+|---|---|
+| patient_medications | Owned identity anchor; display name and user-review status. |
+| medication_evidence_tasks | Versioned bounded product evidence, separate product_missing fields, explicit printed_course_days, source IDs, missing regimen instructions, conflicts, duplicate candidates and draft regimen pointer. CAS task updates. |
+| source_documents / source_fields | Original Printed.value/line extraction and separately reviewed regimen fields. Source kinds extended to package/pharmacy_label/prescription. |
+| medication_source_links | Multiple owned source documents linked to one identity, with recorded timestamp. |
+| regimen_versions | Separate historical/current courses; optional evidence_task_id owner FK and unique patient/task draft. Existing dates, PRN, food and schedule fields retained. |
+| medication_images | Owned private object path/checksum/type/source association/review/eligibility. Loose pill, package, blister and source types kept separate. |
+| visual_reference_sets / image_embeddings | Identity-linked model metadata and finite256-dimensional compatible embedding results. Stored bounded JSON; no new vector ANN index. |
+| recognition_runs | Query task, selected regimen, actual references/outcome, independent decision/reason; safe_to_take=false and ingestion_proven=false. |
+
+015 creates six new tables with PK/owned compositeFK/checks/indexes/FORCE RLS;016 adds typed tool allowlist and atomic SECURITY INVOKER reference commit;017 adds owner evidence-task activation guard and unique retry-safe draft link;018 adds tightly constrained logical reference retirement. Existing RLS/B14/storage safeguards remain. Rollback definitions exist but were not run on the shared development database.
+
+Identity can exist without a regimen or gallery. Task conflict status prevents activation, and unresolved product-source conflict prevents interpreting a visual match as current-plan support. Packaging/blister references remain associated only. User review means patient-reviewed against supplied source, not clinician verification. Category is unknown or explicitly patient-entered POM/P/GSL/supplement; no HSA inference.
+
+SourceEvidenceView extends the existing public SourceDocumentDTO with SourceLink.recorded_at and patient-provided origin. Review status/time stays the original persisted document metadata. Gallery exposes an owned evidence_task_id for source inspection and same-name warning counts; no automatic identity merge.

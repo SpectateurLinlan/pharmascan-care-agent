@@ -106,3 +106,91 @@ User / Timer / Imported reviewed record
 **Slide 1: User Journey + Runtime Architecture** top: 4 phases (Source/Enroll → Daily Support → Long-term → Review). middle: single Agent Orchestrator and deterministically enforced Safety Gate. bottom: Tools split Vision (HF), OCR, Clinical Knowledge/Advisory DDI, Regimen + Dose DB, Health & Care Tasks; right: Patient and optional linked caregiver. Display arrows showing data/provenance and branch backs.
 
 **Slide 2: Trust Boundary (recommended)** left Patient PWA and authenticated backend; central Agent/Typed Tools with **orange policy gate**; right external inference/knowledge; bottom private PostgreSQL/Storage/trace. Label what can leave backend (cropped image or vector), what cannot (auth secrets, NRIC, real health data), human confirmation and blocked paths; footnote: `Research prototype; no automated drug identity confirmation or dosage changes`.
+
+## Session 3D: enforced persistent patient boundary (2026-10-14)
+
+Normal persistent HTTP access uses `PERSISTENCE=supabase` (`postgres` is a compatibility alias) and requires `AUTH_MODE=supabase`. React uses the identity-only Supabase Auth SDK; business requests carry its current user access token to FastAPI. `SupabaseAuthApiVerifier` calls Auth `GET /auth/v1/user`, which verifies authenticity and expiration before deriving the UUID principal. The token is excluded from principal/config repr and diagnostic output, stays in transport/infrastructure, and is never an application/domain parameter.
+
+`get_container` creates and caches a request-scoped service graph over `SupabaseDataClient` and the existing repository ports. Each outbound Data API call uses the SAME verified user's JWT plus publishable key. PostgreSQL runs as `authenticated`; unchanged owner policies enforce `auth.uid()`. The frontend never performs business CRUD. There is no administrative connection or DATABASE_URL fallback in this graph. The factory refuses persistent demo auth; the HTTP app refuses administrative PostgreSQL containers.
+
+`DATABASE_URL` remains for migrations, schema verification, controlled maintenance and explicit administrative diagnostics. Migration 004's role-switch adapters remain diagnostic tools only. Migration 005 grants authenticated DML behind existing RLS/guards and moves the confirmation helper into `pharmascan_private`, outside the exposed public Data API schema. The helper remains SECURITY INVOKER; public trigger guards retain their original checks. Only the narrowly scoped `record_confirmed_self_report` operation is exposed. It derives owner identity from `auth.uid()`, serializes idempotency keys, validates replay bindings, and inserts/consumes/closes in one transaction.
+
+Public application read methods now replace agent/transport access to private enrollment repositories. InMemory implementations remain SIMULATED for deterministic tests.
+
+## Session 03 integration and voice gate (2026-10-14)
+
+Speech uses authenticated FastAPI -> SpeechService -> SpeechPort -> TencentRpcTransport. The bounded server-side TC3 adapter uses SentenceRecognition (2019-06-14) and TextToVoice (2019-08-23); credentials never enter application DTOs or browser code. Browser MediaRecorder input is normalized to mono PCM16 16kHz WAV, limited to 30 seconds, and sent only after consent. The returned transcript remains editable and requires explicit Send. Agent self-report returns a typed pending challenge; only a separate Confirm writes through the existing atomic user-RLS path. Typed input remains available when speech fails. TTS audio is ephemeral, no-store, and played only on user request.
+
+The current account's international TextToVoice endpoint with ap-singapore and standard English voice 1050 succeeded REAL LIVE through anonymous Auth/FastAPI. SentenceRecognition returned FailedOperation.UserNotRegistered on both domestic and international endpoints. This contradicts the reported activation and blocks the P0 voice gate. No real browser microphone/playback or complete voice journey is claimed. TENCENT_SPEECH_SITE selects a fixed domestic/international endpoint allowlist; no arbitrary provider URL is accepted. TENCENT_APP_ID is not an input parameter of these signed API operations.
+
+Source preview calls the existing frozen Stage2 v0.8.0 read-label adapter through an authenticated consented endpoint. Preview is ephemeral and does not activate a regimen; manual review remains separate. Reference eligibility is a pure policy; gallery persistence, camera Smart Check and live LLM are not implemented by this slice. The Agent remains deterministic_degraded. PRN self-reports use the same challenge/consent/atomic event mechanism without manufacturing a scheduled occurrence.
+
+## Continuation 2026-10-14: active browser recognition and immutable source evidence
+
+This supersedes the standalone-ASR blocking decision above. Active demo STT uses native SpeechRecognition/webkitSpeechRecognition with feature detection, en-US short utterances, explicit consent, bounded lifecycle and editable review. Browsers may send audio to remote recognition services; this is not guaranteed offline/local-only or clinically reliable. Unsupported/error/denial/no-speech/abort/timeout states preserve typing. No final transcript auto-submits. Tencent SentenceRecognition remains an inactive alternative; its activation mismatch no longer blocks this demo provider choice. Tencent TextToVoice remains server-side.
+
+Home now uses one primary medication card and a compact photo/text/microphone composer. Send is independent of recognition; pending self-report still requires separate Confirm. Audio failure preserves text. Backend source_documents.extraction_evidence (migration006) retains a bounded immutable typed extraction payload, including Printed.value/line and separate product/regimen evidence. The payload is patient-submitted untrusted evidence, not a provider-authenticated prescription. Manual dose/schedule fields remain separately reviewed; source review and activation confirmation remain mandatory. No extraction implies missing dosing fields, safety or ingestion.
+
+PWA manifest provides install metadata only; no offline clinical workflow or reliable closed-browser push claim follows. Physical microphone acceptance remains manual pending until exercised on Chrome/Edge.
+
+### Occurrence-bound reminder preferences
+
+ReminderService depends on ReminderRepository/occurrence/regimen ports and injected Clock. InMemory retains deterministic tests; persistent requests inject same-user JWT SupabaseReminderRepository. Agent create_reminder is typed and allowlisted, resolves one current occurrence through check_due_dose, and never writes regimen/intake. The UI offers15/30-minute snooze; one patient/occurrence record is updated. In-app state works on active/reopened app. Reliable closed-browser delivery, SMS and caregiver push are FUTURE.
+
+## Manual acceptance repair (2026-10-14)
+
+Vite defaults to port8001; /api/health.runtime_contract lets the frontend refuse stale backend code before authenticated setup. An unavailable medication read is not rendered as an empty list. GET owned unfinished drafts supports reload/resume; normal active medication queries remain active-only. Both UI and Agent use the same verified request-scoped application graph.
+
+Tonight queries materialize the reviewed local18:00-24:00 schedule, including future occurrences. Uncertain free-text intake reads status without creating a challenge/event. Explicit intake actions retain B14. Home's primary Check uses VisualCheckService -> VisualEvidencePort -> existing Stage2 adapter, with bounded sanitized images and consent; selected regimen ownership is checked before inference. No stored eligible reviewed loose-pill reference is present in this slice: catalogue evidence cannot authorize a match or safety claim.
+
+The remote Stage2 now advertises0.9.0. Actual OpenAPI comparisons showed unchanged detect/identify request/response wrappers and Detection/IdentifyResponse schemas; ModelInfo adds error_rates/similarity, Candidate adds look_alike_strengths. Frozen externalv0.8.0 contract is unchanged. Only this read-only gateway explicitly accepts compatible0.9 metadata after old-schema validation; ordinary embedding/gallery model_info retains strict0.8 validation and256/model/space/preprocess checks. No0.9 feature is implemented.
+
+Reminder is_due is derived from injected server Clock, not a browser timer. Visible/reopened UI polls authoritative dose/reminder APIs every15seconds. No automatic intake or closed-browser delivery follows. A shared remembered en/zh preference controls en-US/zh-CN recognition, supported deterministic response/UI rendering and TextToVoice standard English1050/Chinese1001 selection. Credentials stay server-side. Automated synthetic audio does not prove Chinese provider or physical-device acceptance.
+
+
+## Current personalised reasoning boundary
+
+React -> Supabase Anonymous Auth -> bearer access token -> FastAPI verified AuthContext -> application/typed tools -> same-user JWT Supabase Data API -> authenticated role -> owner RLS/auth.uid. Privileged DATABASE_URL remains administrative schema/migration/diagnostic only, never a patient fallback.
+
+GeminiModel implements ConversationalModel through injected official SDK client factory. ConversationService composes existing ToolRegistry/AgentOrchestrator and allows at most4 model rounds and4 tool calls, each validated against immutable strict schemas. No patient_id/SQL/confirmation credential is exposed to the model. QuotaAgent reserves an authenticated daily turn before provider calls; model attempts and successful user turns are distinct. Private quota configuration and tightly scoped SECURITY DEFINER accounting RPCs derive auth.uid and require a per-reservation nonce; these RPCs have no medication/intake authority. Patient table DML remains RLS enforced; normal clinical RPCs preserve existing B14.
+
+Model context contains only current input, language/timezone, bounded session/task references and recent turns. It contains no bearer token or full medication database. Medication truth is read through tools. Existing agent_sessions stores version1 bounded application context; only verified tool results establish references. Follow-up it and medication-choice clarification reuse this state. Model text cannot replace authoritative regimen or status wording.
+
+Patient preferences reuse patient_profiles rather than a parallel profile system. Course calendar bounds are separately reviewed fields on immutable regimen versions. Source extraction remains untrusted evidence and cannot activate a regimen. Native browser STT review/Send uses the same Agent path; Tencent TTS uses the persisted language server-side.
+
+
+### Current patient reminder/account repair
+
+ReminderAlertService is an application read use case over existing enrollment/schedule/occurrence/event/reminder ports and injected Clock. FastAPI derives language/timezone/lead from the owned preference, never a client patient_id. Browser ReminderMonitor polls that public API and presents a deduplicated dialog/optional Notification; it cannot create intake or alter regimen. No provider timer or background delivery claim.
+
+The browser Auth gateway owns one injected GoTrue client for token forwarding, email linking/OTP/Magic Link/password and identity-change observation. Auth is identity-only; business APIs remain FastAPI -> same-user JWT/RLS. Account switching reloads patient presentation/context and never merges clinical records. Anonymous email linking preserves identity only when Supabase verifies the email; manual linking configuration is human-owned.
+
+FeedbackService -> FeedbackRepository -> InMemory/SupabaseFeedback; owned bounded text, retry ID, INSERT/SELECT only and FORCE RLS. No LLM, email/doctor dispatch or emergency-service authority. MedicationSummary now exposes reviewed dose/frequency/food/course metadata; no Supabase response objects cross the application boundary.
+
+## Patient records and task-page revision
+
+ObservationService depends only on ObservationRepository, PatientMedicationRepository and injected Clock; it has no dose-event/regimen write port. SupabaseObservations uses the request's same-user JWT and database owner RLS, deliberately without owner filters for reads/updates/deletes; InMemory retains local deterministic tests. Explicit confirmed=true is required by the patient save use case. Health notes are patient descriptions, not model diagnoses. prepare_health_observation only proposes the original patient text for review; it cannot save.
+
+ReviewSummaryService reads enrollment, occurrence/event repository ports and ObservationService. Calendar windows use the patient's timezone, are bounded to one year, end at now/course end, and never regenerate historical occurrences. Reports are counted by report timestamp; unreported stored occurrences are not missed doses. Existing bounded agent_sessions powers GET recent-turns and UI restoration, not a duplicate chat store. Task pages preserve React form state while navigating; account switches still reload identity context. Gallery/caregiver entry pages disclose missing persistence/verification rather than claim working notifications.
+
+PostgREST complete record reads remain entirely in the infrastructure adapter: count=exact/Content-Range, stable ordered offsets, actual provider page length, maximum2000rows/20pages, rejection of missing counts/changed totals/incomplete pages. Provider metadata never crosses repository ports. Normal authenticated access uses the same JWT; no SQL/admin fallback. Occurrence creation ignores only (patient_id,generation_key) duplicate conflicts; DoseScheduleService rereads and validates the stored winner binding. B14/event writes are unchanged. Pure health_safety policy runs before quota/model/intake tools for a small explicit serious-symptom keyword set; it offers conditional help, not diagnosis or record creation.
+
+## Current voice cost boundary (2026-10-14; supersedes earlier TTS defaults)
+Browser STT review/Send and the existing Agent/B14/RLS path are unchanged. Default playback is frontend Browser SpeechSynthesis, not a backend request. Actual language-qualified voices load via getVoices/voiceschanged; localService preference, en-SG/English fallback and zh-SG/zh-CN Mandarin only. Missing/failed voices preserve text and never invoke Tencent. Rate defaults to 0.9x; generation guards cancel old playback on Stop/new turn/navigation/language/provider/autoplay changes.
+
+Optional cloud requires server TTS_PROVIDER=tencent plus existing ENABLE_SPEECH/TENCENT_SPEECH_APPROVED credentials configuration AND explicit session-only patient selection. Request provider=tencent and consent are mandatory; reload restores browser. Default .env.example/.env use TTS_PROVIDER=browser. Browser STT/TTS may use online services, not guaranteed offline. No new billing activation, provider calls or migration. See README Voice cost policy for enablement details.
+
+Chrome/Edge native API presence and injected en/zh playback lifecycle are AUTOMATED/SYNTHETIC. Headless native voice lists were empty. Physical microphone/speaker, actual installed voices, medicine/dose pronunciation, autoplay/Stop/replay and missing-language typed fallback remain MANUAL PENDING before deployment. Historical real Tencent WAV evidence does not verify browser audio.
+
+
+## Progressive evidence and personal gallery (implemented 2026-10-15)
+
+`EvidenceEnrollmentService` owns source reconciliation and draft review; `PersonalGalleryService` owns reference eligibility and visual/course reconciliation. They consume typed `EvidenceRepository`, `PrivateImageStore`, `PersonalVisionPort` and existing enrollment/source ports. HTTP `routes/evidence.py` derives ownership from verified AuthContext. `SupabaseEvidenceRepository` has deliberately unfiltered owned SELECTs protected by same-user JWT RLS; no privileged database fallback. Private bytes are served through authenticated FastAPI, converted to short-lived browser Blob URLs, never public URLs.
+
+The existing medication_products catalogue requires ingredient/form/market identity and does not provide patient-owned partial-product writes. It remains available for explicit verified catalogue mapping; this workflow does not insert guessed global products. Existing patient_medications represents patient identity; structured product evidence is retained in durable owned evidence tasks rather than adding a duplicate global product catalogue. Regimen versions, original source documents/fields, source associations, photos, reference sets, embeddings and recognition runs remain separate. Reconciliation does not infer a plan from appearance or supply quantity. A reviewed plan is created for an existing identity only after explicit review; activation keeps the existing confirmation path and supersedes the previous course without deleting history.
+
+Gemini selects the read-only `reconcile_medication_sources` tool. Its bounded context contains verified task references and bounded untrusted source excerpts; printed text is data, never instructions. Durable task state survives the temporary Agent session. The model does not create IDs, activate regimens, clear conflicting evidence or access tables.
+
+Loose-pill reference upload -> sanitized image -> private immutable object -> real embedding with metadata -> atomic user-RLS reference-set/image/embedding RPC. Comparison -> compatible eligible owned gallery -> real Stage2 match -> independent current/course/source-conflict check -> stored recognition run. No dose-event port is present. Retire RPC only permits ineligibility; its trigger blocks ownership, content and eligibility-upgrade forgery. Storage and DB cannot share one transaction: failed DB commits may leave an unreferenced private object; they cannot create an eligible partial reference.
+
+External Stage2 declares v0.9.0; the frozen v0.8.0 schema remains unchanged. PersonalVisionGateway explicitly opts into the existing read-only metadata compatibility path, checks actual embedding metadata and uses the existing strict embed/match adapter. Packaging/blister input never enters loose-pill embeddings.
