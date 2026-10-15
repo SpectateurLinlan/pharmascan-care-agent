@@ -1,4 +1,4 @@
-"""Private-to-infrastructure projections of frozen v0.8.0 schemas.
+"""Private infrastructure projections of retained v0.8/v0.10 schemas.
 
 Full OpenAPI validation precedes projection. Extra fields are ignored here and
 never cross into application DTOs. This is not a second OCR/model implementation.
@@ -51,6 +51,8 @@ class MatchItemWire(Wire):
     similarity: float
     closest: RefWire
     runner_up: RefWire | None
+    imprint_check: str | None = None
+    imprint_read_for: list[str] = Field(default_factory=list)
 
 
 class MatchWire(Wire):
@@ -111,12 +113,43 @@ class PrintedWire(Wire):
     line: str
 
 
+class QuantityWire(PrintedWire):
+    amount: float | None = None
+    unit: str | None = None
+
+
+class CautionWire(PrintedWire):
+    kind: Literal["storage", "side_effect", "how_to_take", "warning"] = "warning"
+
+
+class DoseWire(Wire):
+    amount: float
+    amount_max: float | None = None
+    unit: str | None = None
+
+
+class InstructionsWire(Wire):
+    text: str
+    line: str
+    dose: DoseWire | None = None
+    times_per_day: int | None = None
+    every_hours: float | None = None
+    as_needed: bool = False
+    times_of_day: list[Literal["morning", "afternoon", "evening", "night", "bedtime"]] = Field(default_factory=list)
+    food: Literal["before_food", "after_food", "with_food", "with_or_without_food", "empty_stomach"] | None = None
+    duration: str | None = None
+    max_per_day: str | None = None
+
+
 class DocumentWire(Wire):
     directions: PrintedWire | None = None
-    quantity: PrintedWire | None = None
+    quantity: QuantityWire | None = None
     dose_form: PrintedWire | None = None
     date: PrintedWire | None = None
     expiry_date: PrintedWire | None = None
+    instructions: InstructionsWire | None = None
+    indication: PrintedWire | None = None
+    cautions: list[CautionWire] = Field(default_factory=list)
 
 
 class IngredientWire(Wire):
@@ -141,6 +174,8 @@ class LabelCandidateWire(Wire):
     first_line: int | None = None
     fields: DocumentWire | None = None
     list_check: ListCheckWire | None = None
+    release: Literal["ER", "DR"] | None = None
+    release_printed: str | None = None
 
 
 class LabelWire(Wire):
@@ -148,3 +183,6 @@ class LabelWire(Wire):
     note: str
     ocr_model: str
     source: Literal["photo", "pdf_text", "pdf_scan"] = "photo"
+    label_kind: Literal["dispensing", "package", "none"] | None = None
+    dispensed_by: PrintedWire | None = None
+    message: str | None = None

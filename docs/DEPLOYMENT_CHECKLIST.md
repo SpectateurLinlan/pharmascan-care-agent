@@ -60,3 +60,10 @@ Apply migration019 only after001-018 hashes match (development application is al
 ## Private caregiver contact management (2026-10-15)
 
 Migration020 development applied only after001-019 hashes matched; rollback not run. Before demo, restart backend and open Me -> Caregiver contacts. Add synthetic name/email, explicitly check storage permission, save and reload, edit and confirm/cancel delete. Check unverified/notifications-off/no-record-access labels. No email/SMS/invitation should occur, and no provider credential is needed. Verify25 required tables retain FORCE RLS and normal contact CRUD uses same-user JWT, not DATABASE_URL. Verified recipient status, account linking, caregiver notifications and medical-record access remain future capabilities.
+
+## Stage2 0.10.0 upgrade gate
+
+- Keep the existing VISION_API_BASE_URL; include the0.10.0 contract in the backend package and restart current gateways. No migration is required.
+- Read health/model-info/tools as JSON; distinguish API/model/space/preprocess/dimension/normalization and retain calibration provenance. Reject incompatible vectors; GET wakeup retries are bounded, uploads are never retried implicitly.
+- Repeat upgraded Demo A/B/C from STAGE2_V010_UPGRADE.md. Prior0.8/0.9 evidence is not a substitute. Verify explicit patient review, source conflict retention, owned gallery and B14.
+- PDF, whole-blister matching and automatic catalogue fallback remain partial/inactive; no closed coverage or medical-safety claim. Do not enable DDInter screening commercially without permission/validation. Never enable feedback/training from ordinary gallery consent.

@@ -162,6 +162,15 @@ class ModelTools:
                         for candidate in candidates
                         if candidate.regimen_evidence.directions
                     ],
+                    "untrusted_instruction_parts": [
+                        {
+                            key: value[:400] if isinstance(value, str) else value
+                            for key, value in candidate.regimen_evidence.instructions.model_dump(mode="json").items()
+                        }
+                        for candidate in candidates
+                        if candidate.regimen_evidence.instructions
+                    ],
+                    "label_kind": evidence.label_kind if evidence else None,
                 }
             )
         return {
@@ -174,6 +183,7 @@ class ModelTools:
             "missing": task.missing,
             "product_information_missing": task.product_missing,
             "conflicts": task.conflicts,
+            "reviewable_proposal": task.suggested_regimen.model_dump(mode="json") if task.suggested_regimen else None,
             "existing_product_candidates": [str(key) for key in task.possible_duplicate_ids],
         }
 

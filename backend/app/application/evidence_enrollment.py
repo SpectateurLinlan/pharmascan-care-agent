@@ -26,8 +26,10 @@ from ..contracts.ports import (
     SourceDocumentRepository,
     SourceFieldRepository,
 )
+from ..contracts.source_extraction import ListedMedication
 from ..domain.errors import NotFoundError, ProviderUnavailableError, ValidationError
 from .enrollment import MedicationEnrollmentService
+from .printed_instructions import apply_printed_parts, validate_printed_review
 from .source_preview import SourcePreviewService
 
 
@@ -37,6 +39,14 @@ def evidence_name(name: str, strength: str | None) -> str:
         suffix = r"\s*".join(re.escape(char) for char in re.sub(r"\s+", "", strength))
         name = re.sub(r"\s*" + suffix + r"\s*$", "", name, flags=re.I)
     return " ".join(name.casefold().split())
+
+
+def product_name(product: ProductEvidence) -> str:
+    name = product.name
+    if product.formulation:
+        # Only remove a documented release marker; formulation is compared separately.
+        name = re.sub(r"\b(extended release|delayed release|ER|XR|SR|MR|DR)\b", "", name, flags=re.I)
+    return evidence_name(name, product.strength)
 
 
 def printed_regimen(name: str, directions: str | None) -> RegimenDraftInput:
@@ -139,17 +149,31 @@ class EvidenceEnrollmentService:
                     return task
         if self._preview is None:
             raise ProviderUnavailableError("Source extraction unavailable")
-        extraction = self._preview.preview(content=clean, source_kind=source_kind, consent=True, demo_only=True)
-        if len(extraction.candidates) != 1:
+        own_tasks = self.list(patient_id)
+        listed = tuple(
+            ListedMedication(
+                id=str(medication.id),
+                name=medication.display_name,
+                strength=next((row.product.strength for row in own_tasks if row.medication_id == medication.id), None),
+            )
+            for medication in self._repo.medications(patient_id)[:20]
+        )
+        extraction = self._preview.preview(
+            content=clean, source_kind=source_kind, consent=True, demo_only=True, medications=listed
+        )
+        if extraction.label_kind == "none" or len(extraction.candidates) != 1:
             raise ValidationError("Choose a source with one clearly named medication, or use manual entry")
         candidate = extraction.candidates[0]
         product = ProductEvidence(
             name=candidate.product.name[:160],
             strength=candidate.product.strength,
             dose_form=candidate.product.dose_form.value if candidate.product.dose_form else None,
-            formulation="extended release"
-            if any("extended release" in line.lower() for line in candidate.product.source_lines)
-            else None,
+            formulation={"ER": "extended release", "DR": "delayed release"}.get(candidate.product.release)
+            or (
+                "extended release"
+                if any("extended release" in line.lower() for line in candidate.product.source_lines)
+                else None
+            ),
             brand=candidate.product.brand,
             ingredients=[row.name for row in candidate.product.ingredients],
             external_identifiers={"rxcui": candidate.product.rxcui} if candidate.product.rxcui else {},
@@ -222,7 +246,7 @@ class EvidenceEnrollmentService:
         for field in ("name", "strength", "dose_form", "formulation", "brand"):
             old, new = getattr(task.product, field), getattr(product, field)
             differs = (
-                evidence_name(old, task.product.strength) != evidence_name(new, product.strength)
+                product_name(task.product) != product_name(product)
                 if field == "name" and old and new
                 else bool(old and new and old.casefold().strip() != new.casefold().strip())
             )
@@ -230,14 +254,49 @@ class EvidenceEnrollmentService:
                 conflicts.append(f"{field}: {old} / {new} (source {source_id})")
             elif not old and new:
                 values[field] = new
+        if (
+            values["ingredients"]
+            and product.ingredients
+            and {value.casefold().strip() for value in values["ingredients"]}
+            != {value.casefold().strip() for value in product.ingredients}
+        ):
+            conflicts.append(f"ingredients: conflicting product ingredients (source {source_id})")
+        old_code, new_code = values["external_identifiers"].get("rxcui"), product.external_identifiers.get("rxcui")
+        if old_code and new_code and old_code != new_code:
+            conflicts.append(f"product_code: conflicting source product identifiers (source {source_id})")
+        elif not old_code and new_code:
+            values["external_identifiers"] = product.external_identifiers
         if not values["ingredients"]:
             values["ingredients"] = product.ingredients
+        patient_instructions = source_kind in {"pharmacy_label", "prescription"} and extraction.label_kind not in {
+            "package",
+            "none",
+        }
         proposal = printed_regimen(
             task.product.name,
             candidate.regimen_evidence.directions.value
-            if source_kind in {"pharmacy_label", "prescription"} and candidate.regimen_evidence.directions
+            if patient_instructions and candidate.regimen_evidence.directions
             else None,
         )
+        parts = candidate.regimen_evidence.instructions if patient_instructions else None
+        if parts:
+            proposal = apply_printed_parts(proposal, parts)
+            for prior in self.sources(patient_id, task.id):
+                evidence = prior.extraction_evidence
+                if not evidence or evidence.label_kind != "dispensing" or prior.source_kind == SourceKind.PACKAGE:
+                    continue
+                for previous in evidence.candidates:
+                    before = previous.regimen_evidence.instructions
+                    if not before:
+                        continue
+                    for field in ("dose", "times_per_day", "every_hours", "food", "duration", "max_per_day"):
+                        first, second = getattr(before, field), getattr(parts, field)
+                        if first is not None and second is not None and first != second:
+                            conflicts.append(f"regimen.{field}: conflicting printed instructions (source {source_id})")
+                    if (before.as_needed and (parts.times_per_day or parts.every_hours)) or (
+                        parts.as_needed and (before.times_per_day or before.every_hours)
+                    ):
+                        conflicts.append(f"regimen.schedule: conflicting PRN instructions (source {source_id})")
         merged = task.suggested_regimen.model_dump() if task.suggested_regimen else proposal.model_dump()
         for field in (
             "dose_amount",
@@ -246,6 +305,7 @@ class EvidenceEnrollmentService:
             "food_instruction",
             "course_start_date",
             "course_end_date",
+            "is_prn",
         ):
             old, new = merged.get(field), proposal.model_dump().get(field)
             if old and new and old != new:
@@ -254,8 +314,11 @@ class EvidenceEnrollmentService:
                 merged[field] = new
         printed_days = task.printed_course_days
         directions = candidate.regimen_evidence.directions
-        if source_kind in {"pharmacy_label", "prescription"} and directions:
-            explicit_days = [int(value) for value in re.findall(r"\bfor\s+(\d{1,3})\s+days?\b", directions.value, re.I)]
+        if patient_instructions and (directions or parts):
+            duration_text = " ".join(
+                [directions.value if directions else "", "for " + (parts.duration or "") if parts else ""]
+            )
+            explicit_days = [int(value) for value in re.findall(r"\bfor\s+(\d{1,3})\s+days?\b", duration_text, re.I)]
             for days in explicit_days:
                 if 1 <= days <= 365:
                     if printed_days and days != printed_days:
@@ -272,7 +335,7 @@ class EvidenceEnrollmentService:
                 for key, value in [
                     ("dose_amount", suggested.dose_amount),
                     ("dose_unit", suggested.dose_unit),
-                    ("schedule", suggested.frequency_rule),
+                    ("schedule", suggested.frequency_rule or suggested.is_prn),
                 ]
                 if not value
             ]
@@ -338,6 +401,12 @@ class EvidenceEnrollmentService:
             raise ValidationError("Unsupported product category")
         if not patient_reviewed or task.conflicts:
             raise ValidationError("Review conflicting sources before creating a medication plan")
+        for source in self.sources(patient_id, task_id):
+            extraction = source.extraction_evidence
+            if extraction and extraction.label_kind == "dispensing" and source.source_kind != SourceKind.PACKAGE:
+                for candidate in extraction.candidates:
+                    if candidate.regimen_evidence.instructions:
+                        validate_printed_review(draft, candidate.regimen_evidence.instructions)
         if task.printed_course_days and (
             not draft.course_start_date
             or not draft.course_end_date
@@ -416,6 +485,16 @@ class EvidenceEnrollmentService:
                 )
             )
         if task.missing:
+            if task.suggested_regimen and task.suggested_regimen.dose_amount and task.suggested_regimen.dose_unit:
+                return (
+                    f"已保存 {task.product.name} 的标签用量证据。请对照原始服用指示核对具体时间，"
+                    "并补充缺失的疗程起止日期；我不会从每天几次或标签日期猜测这些信息。"
+                    if language == "zh"
+                    else f"I saved the printed dose evidence for {task.product.name}. "
+                    "Please review the actual clock times and any missing course start/end dates "
+                    "against your instructions. "
+                    "I will not invent times from a daily count or course dates from a label date."
+                )
             return (
                 f"已保存 {task.product.name} 的药物资料。还缺少服用说明，"
                 "请补充药房标签或处方资料，并核对每次用量和时间。"

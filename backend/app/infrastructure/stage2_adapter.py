@@ -26,7 +26,7 @@ from app.contracts.vision import (
     VisionUnavailable,
 )
 from app.infrastructure.stage2_http import HttpTransport
-from app.infrastructure.stage2_schema import Stage2Contract
+from app.infrastructure.stage2_schema import JSONObject, Stage2Contract
 from app.infrastructure.stage2_wire import (
     DetectionWire,
     EmbeddingWire,
@@ -129,6 +129,8 @@ class HttpStage2VisionProvider:
         # Only the read-only visual gateway opts in. Embedding/gallery callers
         # retain the original strict v0.8 gate; no new contract fields inferred.
         supported = {"0.8.0", "0.9.0"} if read_only_v09_compatibility else {"0.8.0"}
+        if self._contract.version == "0.10.0":
+            supported = {"0.10.0"}
         if wire.api_version not in supported or wire.embedding_dim != 256:
             raise ModelVersionMismatch("provider API version/dimension changed")
         return ModelMetadata(
@@ -150,7 +152,8 @@ class HttpStage2VisionProvider:
         if modality != "loose_pill":
             raise UnsupportedModality("package/blister cannot use the loose-pill embedding space")
         try:
-            payload = self._transport.post_multipart("/v1/embed", {"image": image_bytes}, {})
+            data = {"read_imprint": "true"} if self._contract.version == "0.10.0" else {}
+            payload = self._transport.post_multipart("/v1/embed", {"image": image_bytes}, data)
         except TimeoutError as exc:
             raise VisionUnavailable("Stage2 embed timeout") from exc
         wire = project(self._contract, "Embedding", payload, EmbeddingWire)
@@ -199,6 +202,8 @@ class HttpStage2VisionProvider:
             "model_version": self._model_version,
             "embedding_space_id": self._space_id,
         }
+        if self._contract.version == "0.10.0" and queries[0].text_reading == "used" and queries[0].imprint_reads:
+            request["query_reads"] = [queries[0].imprint_reads or []]
         self._contract.validate("MatchRequest", request)
         try:
             payload = self._transport.post_json("/v1/match", request)
@@ -209,6 +214,8 @@ class HttpStage2VisionProvider:
         if len(wire.results) != 1:
             raise VisionSchemaError("match result/query cardinality mismatch")
         item = wire.results[0]
+        if item.imprint_check == "conflict" and item.decision == "match":
+            raise VisionSchemaError("Conflicting imprint evidence cannot support a match")
         ids = {r.medication_id for r in gallery}
         if item.closest.medication_id not in ids or (item.runner_up and item.runner_up.medication_id not in ids):
             raise VisionSchemaError("provider referred to a medication outside the supplied gallery")
@@ -237,7 +244,9 @@ class HttpStage2VisionProvider:
             model_version=wire.model_version,
             embedding_space_id=wire.embedding_space_id,
             limits=wire.limits,
-            provenance=["stage2:v0.8.0:/v1/match"],
+            provenance=[f"stage2:v{self._contract.version}:/v1/match"],
+            imprint_check=item.imprint_check,
+            imprint_read_for=item.imprint_read_for,
         )
 
     def detect(self, *, image_bytes: bytes) -> ScanDiagnostics:
@@ -264,6 +273,25 @@ class HttpStage2VisionProvider:
             limits=wire.limits,
         )
 
+    def search_by_embedding(self, *, query: EmbeddingResult, top_k: int = 5) -> list[PillCandidate]:
+        """Optional explicit catalogue lookup; not an automatic personal-match fallback."""
+        if self._contract.version != "0.10.0" or type(top_k) is not int or not 1 <= top_k <= 10:
+            raise VisionSchemaError("Embedding search requires v0.10 and bounded top_k")
+        self._check_versions(query.embedding_space_id, query.model_version, query.preprocessing_version)
+        _validate_vector(query.embedding)
+        if query.dimension != len(query.embedding):
+            raise ModelVersionMismatch("Search dimension mismatch")
+        request = {
+            "embeddings": [query.embedding],
+            "model_version": query.model_version,
+            "embedding_space_id": query.embedding_space_id,
+            "top_k": top_k,
+        }
+        if query.text_reading == "used" and query.imprint_reads:
+            request["imprint_reads"] = query.imprint_reads
+        self._contract.validate("EmbeddingSearchRequest", request)
+        return self._candidate_result(self._transport.post_json("/v1/search-by-embedding", request), top_k)
+
     def identify_candidates(self, *, image_bytes: bytes, top_k: int = 5) -> list[PillCandidate]:
         if type(top_k) is not int or not 1 <= top_k <= 10:
             raise VisionSchemaError("top_k must be between 1 and 10")
@@ -271,6 +299,9 @@ class HttpStage2VisionProvider:
             payload = self._transport.post_multipart("/v1/identify", {"images": image_bytes}, {"top_k": str(top_k)})
         except TimeoutError as exc:
             raise VisionUnavailable("Stage2 identify timeout") from exc
+        return self._candidate_result(payload, top_k)
+
+    def _candidate_result(self, payload: JSONObject, top_k: int) -> list[PillCandidate]:
         wire = project(self._contract, "IdentifyResponse", payload, IdentifyWire)
         if wire.model_version != self._model_version:
             raise ModelVersionMismatch("identify model version drift")

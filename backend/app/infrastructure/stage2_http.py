@@ -108,6 +108,9 @@ class HttpxStage2Transport(HttpTransport):
                     if 300 <= response.status_code < 400:
                         raise VisionSchemaError("Stage2 redirect refused")
                     if "application/json" not in response.headers.get("content-type", "").lower():
+                        if method == "GET" and attempt + 1 < attempts:
+                            self._sleep(0.2 * (2**attempt))
+                            continue
                         raise VisionSchemaError("Stage2 returned non-JSON content")
                     body = bytearray()
                     for chunk in response.iter_bytes():
@@ -141,7 +144,7 @@ class HttpxStage2Transport(HttpTransport):
         # public Port sends one list part. Other supported endpoints use image.
         if path == "/v1/identify":
             field = "images"
-        elif path in ("/v1/embed", "/v1/detect", "/v1/scan", "/v1/read-label"):
+        elif path in ("/v1/embed", "/v1/detect", "/v1/scan", "/v1/read-label", "/v1/check-input"):
             field = "image"
         else:
             raise VisionSchemaError("unsupported Stage2 image upload endpoint")

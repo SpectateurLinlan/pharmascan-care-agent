@@ -90,9 +90,14 @@ export interface TranscriptResponse { text: string; provider: string; request_id
 export interface RegimenHistoryItem { regimen_id: string; display_name: string; version_no: number; state: string;
   effective_from: string | null; effective_to: string | null; medication_id:string;course_start_date:string|null;course_end_date:string|null;
   dose_amount:number|null;dose_unit:string|null;food_instruction:string|null;is_prn:boolean;local_times:string[] }
+export interface PrintedEvidence {value:string;line:string}
+export interface ImageRoute {image_type:'loose_pills'|'blister'|'package'|'printed'|'document'|'unchecked';checked:boolean;abstained:boolean;suggested_workflow:'pill_evidence'|'source_review'|'ask_patient';message:string}
+export interface PrintedInstructions {text:string;line:string;dose:{amount:number;amount_max:number|null;unit:string|null}|null;times_per_day:number|null;every_hours:number|null;as_needed:boolean;times_of_day:string[];food:string|null;duration:string|null;max_per_day:string|null}
 export interface SourcePreview { source_document_id: string; source_kind: string; provider: string; extraction_model: string;
+  label_kind?:'dispensing'|'package'|'none'|null;dispensed_by?:PrintedEvidence|null;
   review_required: true; note: string; candidates: Array<{ product: { name: string; strength: string | null; source_lines: string[] };
-    regimen_evidence: { directions: { value: string; line: string } | null; dose_amount: null; frequency: null; administration_times: null; duration: null };
+    regimen_evidence: { directions: PrintedEvidence | null; instructions?:PrintedInstructions|null; indication?:PrintedEvidence|null;cautions?:Array<PrintedEvidence&{kind:string}>;supplied_quantity?:PrintedEvidence&{amount:number|null;unit:string|null}|null;date?:PrintedEvidence|null;expiry_date?:PrintedEvidence|null; dose_amount: null; frequency: null; administration_times: null; duration: null };
+    list_comparison?:{status:'same_medicine'|'different_strength'|'contains_listed'|'not_on_list';message:string;medication_id:string|null}|null;
     review_status: 'extracted'; can_activate_regimen: false }> }
 
 function withClient(path: string, extra?: Record<string, string>): string {
@@ -315,6 +320,7 @@ export interface RecognitionEvidence {id:string;decision:'match'|'unknown'|'ambi
 
 export const api = {
   evidenceTasks:()=>request<EvidenceTask[]>(withClient('/api/evidence/tasks')),
+  checkInput:(file:File)=>request<ImageRoute>(withClient('/api/sources/check-input'),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'true'},body:file}),
   evidenceTask:(id:string)=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${id}`)),
   evidenceSources:(id:string)=>request<Array<{id:string;source_kind:string;review_status:string;reviewed_at?:string|null;recorded_at?:string|null;provided_by?:'patient';extraction_evidence:SourcePreview|null}>>(withClient(`/api/evidence/tasks/${id}/sources`)),
   attachEvidence:(id:string,file:File,kind:'package'|'pharmacy_label'|'prescription',medicationId?:string)=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${id}/sources`,{source_kind:kind,...(medicationId?{medication_id:medicationId}:{})}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'true'},body:file}),

@@ -5,12 +5,31 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Query, Request
 from starlette.concurrency import run_in_threadpool
 
-from ...contracts.source_extraction import MedicationSourceExtractionDTO
+from ...contracts.source_extraction import ImageRoute, MedicationSourceExtractionDTO
 from ...domain.errors import ProviderUnavailableError, ValidationError
 from ..auth import AuthenticatedPrincipal
 from ..deps import ApplicationContainer, get_container, get_principal
 
 router = APIRouter(prefix="/api/sources", tags=["source-preview"])
+
+
+@router.post("/check-input", response_model=ImageRoute)
+async def check_input(
+    request: Request,
+    principal: AuthenticatedPrincipal = Depends(get_principal),
+    container: ApplicationContainer = Depends(get_container),
+) -> ImageRoute:
+    from .evidence import image_content
+
+    content = await image_content(request)
+    if not container.source_preview:
+        raise ProviderUnavailableError("Image routing unavailable")
+    return await run_in_threadpool(
+        container.source_preview.route,
+        content=content,
+        consent=request.headers.get("x-stage2-consent") == "true",
+        demo_only=request.headers.get("x-demo-only") == "true",
+    )
 
 
 @router.post("/preview", response_model=MedicationSourceExtractionDTO)

@@ -1,0 +1,1038 @@
+{
+  "from": "0.8.0",
+  "to": "0.10.0",
+  "added_paths": [
+    "/v1/check-input",
+    "/v1/search-by-embedding"
+  ],
+  "changes": [
+    {
+      "path": "/components/schemas/Body_check_input_photo_v1_check_input_post",
+      "added": {
+        "properties": {
+          "image": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "Image",
+            "description": "The photo the user sent"
+          },
+          "input_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "loose_pills",
+                  "blister",
+                  "package",
+                  "document"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Type",
+            "description": "What the user says it shows; taken as given"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image"
+        ],
+        "title": "Body_check_input_photo_v1_check_input_post"
+      }
+    },
+    {
+      "path": "/components/schemas/Candidate/properties/look_alike_strengths",
+      "added": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "type": "array",
+        "title": "Look Alike Strengths",
+        "description": "Catalogue products with the same ingredients in another strength or release and the same recorded shape and colour: {pill_id, strength, release}. A photo can't tell these apart; the strength needs the label",
+        "default": []
+      }
+    },
+    {
+      "path": "/components/schemas/Caution",
+      "added": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "line": {
+            "type": "string",
+            "title": "Line",
+            "description": "The line(s) it was read from"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "storage",
+              "side_effect",
+              "how_to_take",
+              "warning"
+            ],
+            "title": "Kind",
+            "description": "As MOH's 'Know about medication label' groups them: store your medication, manage common side-effects, how to take it; anything else is a warning",
+            "default": "warning"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "value",
+          "line"
+        ],
+        "title": "Caution"
+      }
+    },
+    {
+      "path": "/components/schemas/CheckInputResponse",
+      "added": {
+        "properties": {
+          "input_check": {
+            "$ref": "#/components/schemas/InputCheck"
+          },
+          "next_tools": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Next Tools",
+            "description": "Agent tools (GET /v1/tools) that fit this photo; empty: ask the user for the box, label or prescription, or the pharmacist"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "input_check",
+          "next_tools",
+          "message"
+        ],
+        "title": "CheckInputResponse"
+      }
+    },
+    {
+      "path": "/components/schemas/DocumentFields/properties/cautions",
+      "added": {
+        "items": {
+          "$ref": "#/components/schemas/Caution"
+        },
+        "type": "array",
+        "title": "Cautions",
+        "description": "Cautionary notes as printed ('May cause drowsiness', 'Avoid alcohol', 'Swallow whole'), each with its kind",
+        "default": []
+      }
+    },
+    {
+      "path": "/components/schemas/DocumentFields/properties/indication",
+      "added": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Printed"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "What the medicine is for, as printed ('For high blood pressure' -> 'high blood pressure')"
+      }
+    },
+    {
+      "path": "/components/schemas/DocumentFields/properties/instructions",
+      "added": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Instructions"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "The directions, parsed into their parts; a part that isn't printed is null"
+      }
+    },
+    {
+      "path": "/components/schemas/DocumentFields/properties/quantity/anyOf",
+      "before": [
+        {
+          "$ref": "#/components/schemas/Printed"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "after": [
+        {
+          "$ref": "#/components/schemas/Quantity"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    {
+      "path": "/components/schemas/DocumentFields/properties/quantity/description",
+      "added": "Total supplied, e.g. 'Qty: 60 TAB' -> 60 tablet"
+    },
+    {
+      "path": "/components/schemas/Dose",
+      "added": {
+        "properties": {
+          "amount": {
+            "type": "number",
+            "title": "Amount",
+            "description": "Per dose, e.g. 1, 0.5"
+          },
+          "amount_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Max",
+            "description": "For a range: 'Take 1-2 tablets' -> 2"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit",
+            "description": "tablet, capsule, ml, puff, drop, sachet, ..."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "amount"
+        ],
+        "title": "Dose"
+      }
+    },
+    {
+      "path": "/components/schemas/EmbeddingSearchRequest",
+      "added": {
+        "properties": {
+          "embeddings": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "maxItems": 2,
+            "minItems": 1,
+            "title": "Embeddings",
+            "description": "One pill: 1 or 2 embeddings (front and back) from /v1/embed"
+          },
+          "model_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Version",
+            "description": "The model_version /v1/embed returned. This or embedding_space_id is required"
+          },
+          "embedding_space_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embedding Space Id"
+          },
+          "imprint_reads": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imprint Reads",
+            "description": "The `imprint_reads` /v1/embed returned (read_imprint=true), of both photos together"
+          },
+          "imprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imprint",
+            "description": "Letters or numbers on the pill, typed by the user"
+          },
+          "shape": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shape"
+          },
+          "colour": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Colour"
+          },
+          "top_k": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Top K",
+            "default": 5
+          }
+        },
+        "type": "object",
+        "required": [
+          "embeddings"
+        ],
+        "title": "EmbeddingSearchRequest"
+      }
+    },
+    {
+      "path": "/components/schemas/ErrorRate",
+      "added": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "what": {
+            "type": "string",
+            "title": "What",
+            "description": "The test: which endpoint, which photos"
+          },
+          "rates": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Rates",
+            "description": "Fractions (0.012 = 1.2%)"
+          },
+          "meaning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meaning"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "The evaluation output in the repository the rates are copied from"
+          },
+          "keys": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Keys",
+            "description": "Where each rate sits inside `source` ('/'-separated)"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "what",
+          "rates",
+          "source",
+          "keys"
+        ],
+        "title": "ErrorRate"
+      }
+    },
+    {
+      "path": "/components/schemas/FeedbackDeleted/properties/deleted/description",
+      "added": "True only once checked: nothing of this consent id is left here or in the repo"
+    },
+    {
+      "path": "/components/schemas/FeedbackDeleted/properties/history_squashed",
+      "added": {
+        "type": "boolean",
+        "title": "History Squashed",
+        "description": "The repo's history was rewritten, so old commits no longer hold the photos",
+        "default": false
+      }
+    },
+    {
+      "path": "/components/schemas/FeedbackDeleted/properties/verified",
+      "added": {
+        "type": "boolean",
+        "title": "Verified",
+        "default": false
+      }
+    },
+    {
+      "path": "/components/schemas/GalleryMedication/properties/medication_id/description",
+      "added": "The app's pseudonymous id for the patient's medication (e.g. its patient_medication_id); never an NRIC, name or phone number"
+    },
+    {
+      "path": "/components/schemas/GalleryMedication/properties/name/description",
+      "before": "Shown in the answer, e.g. 'Metformin 500 mg'",
+      "after": "Optional: shown in the answer, e.g. 'Metformin 500 mg'; without it answers use medication_id"
+    },
+    {
+      "path": "/components/schemas/GalleryMedication/properties/reference_set_id",
+      "added": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Reference Set Id",
+        "description": "The app's id for the set of reference photos these embeddings come from; returned with the result"
+      }
+    },
+    {
+      "path": "/components/schemas/Instructions",
+      "added": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "As printed, e.g. 'Take ONE tablet TWICE a day AFTER FOOD'"
+          },
+          "line": {
+            "type": "string",
+            "title": "Line",
+            "description": "The line(s) it was read from"
+          },
+          "dose": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Dose"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "times_per_day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Times Per Day",
+            "description": "Only when printed ('twice a day', 'BD', 'daily')"
+          },
+          "every_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Every Hours",
+            "description": "'every 6 hours'; never turned into times a day"
+          },
+          "as_needed": {
+            "type": "boolean",
+            "title": "As Needed",
+            "description": "'when necessary', 'as needed', 'PRN'",
+            "default": false
+          },
+          "times_of_day": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "morning",
+                "afternoon",
+                "evening",
+                "night",
+                "bedtime"
+              ]
+            },
+            "type": "array",
+            "title": "Times Of Day",
+            "default": []
+          },
+          "food": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "before_food",
+                  "after_food",
+                  "with_food",
+                  "with_or_without_food",
+                  "empty_stomach"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Food"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration",
+            "description": "'7 days'"
+          },
+          "max_per_day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Per Day",
+            "description": "'8 tablets in 24 hours'"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "text",
+          "line"
+        ],
+        "title": "Instructions"
+      }
+    },
+    {
+      "path": "/components/schemas/LabelCandidate/properties/release",
+      "added": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "ER",
+              "DR"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Release",
+        "description": "Extended or delayed release, when printed (LA, SR, XR, XL, CR, MR, EC, ...); the RxNorm product always has this release, or none is given"
+      }
+    },
+    {
+      "path": "/components/schemas/LabelCandidate/properties/release_printed",
+      "added": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Release Printed",
+        "description": "The release marker as printed, e.g. 'LA'"
+      }
+    },
+    {
+      "path": "/components/schemas/MatchResult/properties/reference_set_id",
+      "added": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Reference Set Id",
+        "description": "As sent in the gallery, for the matched medication"
+      }
+    },
+    {
+      "path": "/components/schemas/ModelInfo/properties/error_rates",
+      "added": {
+        "items": {
+          "$ref": "#/components/schemas/ErrorRate"
+        },
+        "type": "array",
+        "title": "Error Rates",
+        "description": "Measured error rates of the served model, each with its source; empty for a model they weren't measured on"
+      }
+    },
+    {
+      "path": "/components/schemas/ModelInfo/properties/similarity",
+      "added": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "type": "object",
+        "title": "Similarity",
+        "description": "How similarities are computed, and why they aren't probabilities"
+      }
+    },
+    {
+      "path": "/components/schemas/ModelInfo/required",
+      "before": [
+        "api_version",
+        "model_version",
+        "embedding_space_id",
+        "preprocess_version",
+        "embedding_dim",
+        "normalized",
+        "crop_window",
+        "threshold",
+        "margin",
+        "calibration",
+        "imprint",
+        "training_coverage",
+        "known_limits",
+        "evidence"
+      ],
+      "after": [
+        "api_version",
+        "model_version",
+        "embedding_space_id",
+        "preprocess_version",
+        "embedding_dim",
+        "normalized",
+        "crop_window",
+        "threshold",
+        "margin",
+        "calibration",
+        "imprint",
+        "training_coverage",
+        "known_limits",
+        "similarity",
+        "error_rates",
+        "evidence"
+      ]
+    },
+    {
+      "path": "/components/schemas/Product/properties/look_alike_strengths",
+      "added": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "type": "array",
+        "title": "Look Alike Strengths",
+        "description": "Catalogue products with the same ingredients in another strength or release and the same recorded shape and colour: {pill_id, strength, release}. A photo can't tell these apart; the strength needs the label",
+        "default": []
+      }
+    },
+    {
+      "path": "/components/schemas/Quantity",
+      "added": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "line": {
+            "type": "string",
+            "title": "Line",
+            "description": "The line(s) it was read from"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount",
+            "description": "e.g. 60"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit",
+            "description": "e.g. tablet, capsule, ml"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "value",
+          "line"
+        ],
+        "title": "Quantity"
+      }
+    },
+    {
+      "path": "/components/schemas/ReadLabelResponse/properties/dispensed_by",
+      "added": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Printed"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "description": "The dispensing pharmacy or clinic as printed"
+      }
+    },
+    {
+      "path": "/components/schemas/ReadLabelResponse/properties/label_kind",
+      "added": {
+        "type": "string",
+        "enum": [
+          "dispensing",
+          "package",
+          "none"
+        ],
+        "title": "Label Kind",
+        "description": "dispensing: a pharmacy sticker or prescription with instructions for the patient; package: a manufacturer's box or bottle (no instructions); none: no medicine found",
+        "default": "none"
+      }
+    },
+    {
+      "path": "/components/schemas/Ref/properties/reference_set_id",
+      "added": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Reference Set Id"
+      }
+    },
+    {
+      "path": "/components/schemas/SearchProduct/properties/look_alike_strengths",
+      "added": {
+        "items": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "type": "array",
+        "title": "Look Alike Strengths",
+        "description": "Catalogue products with the same ingredients in another strength or release and the same recorded shape and colour: {pill_id, strength, release}. A photo can't tell these apart; the strength needs the label",
+        "default": []
+      }
+    },
+    {
+      "path": "/components/schemas/TextPart/properties/gpu_imprint_adapter",
+      "added": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Gpu Imprint Adapter",
+        "description": "The adapter trained on pill imprints that the GPU reader uses for imprints only, or null"
+      }
+    },
+    {
+      "path": "/components/schemas/TextPart/properties/gpu_model",
+      "added": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Gpu Model",
+        "description": "The reader on the lent GPU (the Space only); answers say which ran"
+      }
+    },
+    {
+      "path": "/components/schemas/TextPart/properties/model/description",
+      "added": "The reader on the CPU"
+    },
+    {
+      "path": "/info/version",
+      "before": "0.8.0",
+      "after": "0.10.0"
+    },
+    {
+      "path": "/paths/~1v1~1check-input",
+      "added": {
+        "post": {
+          "summary": "Check Input Photo",
+          "description": "**What does this photo show?** (blueprint B19, tool `route_medication_image`): loose pills, a blister pack, a box or\nbottle, printed text or a document, and which tools fit it. The user's own word comes first; otherwise the photo's\ndescription is checked (a net, not a guarantee: ask the user when `type` is `unchecked`). PDFs are documents: send\nthem to `/v1/read-label` directly.",
+          "operationId": "check_input_photo_v1_check_input_post",
+          "requestBody": {
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "$ref": "#/components/schemas/Body_check_input_photo_v1_check_input_post"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/CheckInputResponse"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "unauthorised",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "not_found",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "version_mismatch",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "invalid_input",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "model_error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "502": {
+              "description": "upstream_failed",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "not_ready",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "path": "/paths/~1v1~1feedback~1{consent_id}/delete/description",
+      "before": "Withdrawal of consent: deletes every photo stored under this consent id.",
+      "after": "Withdrawal of consent: deletes every photo stored under this consent id, here and in the dataset repo, squashes\nthe repo's history, and checks before saying `deleted` (blueprint B15). Safe to repeat."
+    },
+    {
+      "path": "/paths/~1v1~1model-info/get/description",
+      "before": "The served model (blueprint B3): service version vs model version, the embedding space and preprocessing that\nstored embeddings must match, the calibrated decision rule, and what the model was trained on and where it is weak.",
+      "after": "The served model (blueprint B3, B25): service version vs model version, the embedding space and preprocessing that\nstored embeddings must match, the calibrated decision rule, what the model was trained on and where it is weak,\nhow similarity is computed, and the measured error rates with the evaluation file each comes from."
+    },
+    {
+      "path": "/paths/~1v1~1read-label/post/description",
+      "before": "**Which medicine is on this box, label or prescription?** Reads the printed text and finds the medicine names in\nit (RxNorm's ingredient and brand names, international names such as paracetamol too), with strength,\ningredients, RxNorm code, and what is printed about each (directions, quantity, dose form, dates), every value\nwith the line it was read from and `null` when not printed (blueprint B7). With `medications`, each medicine is\ncompared with the patient's list: same medicine, different strength, or not on the list (B9). Send a confirmed\ncandidate to `/v1/safety/medications` as `{\"id\", \"name\", \"rxcui\"}`. Always ask the user to confirm.\nNothing is stored; only the lines that name or describe a medicine are returned (labels show the patient's name).",
+      "after": "**What does the pharmacy sticker say?** Made for Singapore dispensing labels (the sticker on the medicine bag or\nbox), also reads prescriptions and manufacturer boxes. Per medicine: name, strength per unit, ingredients and\nRxNorm code; the quantity supplied (amount and unit); the instructions parsed into dose, times a day or every N\nhours, as needed, time of day, before/after food, duration and daily maximum; what it is for; cautions; dispensing\nand expiry dates. Every value comes with the line it was read from and is `null` when not printed, never inferred\n(blueprint B7). `label_kind` says whether it is a dispensing label (instructions for the patient) or a package.\nWith `medications`, each medicine is compared with the patient's list: same medicine, different strength, or not\non the list (B9). Send a confirmed\ncandidate to `/v1/safety/medications` as `{\"id\", \"name\", \"rxcui\"}`. Always ask the user to confirm.\nNothing is stored; only the lines that name or describe a medicine are returned (labels show the patient's name)."
+    },
+    {
+      "path": "/paths/~1v1~1search-by-embedding",
+      "added": {
+        "post": {
+          "summary": "Search By Embedding",
+          "description": "**What is this pill?**, from embeddings the app already has (blueprint B17): the same answer as `/v1/identify`\nfor the same photos, without running the model again (e.g. after `/v1/match` said `unknown`). Send the\n`imprint_reads` from `/v1/embed` (read_imprint=true) to re-rank by the imprint. The photo isn't checked here:\n`/v1/embed` takes loose-pill photos only.",
+          "operationId": "search_by_embedding_v1_search_by_embedding_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingSearchRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/IdentifyResponse"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "unauthorised",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "not_found",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "version_mismatch",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "invalid_input",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "model_error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "502": {
+              "description": "upstream_failed",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "not_ready",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Error"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,13 +1,18 @@
 """Preferred /v1/read-label provider. Not a generic OCR or regimen service."""
 
+import json
 from typing import Literal
 from uuid import UUID
 
 from app.contracts.source_extraction import (
+    DispensedQuantity,
     ExtractedMedication,
     IngredientIdentity,
+    ListedMedication,
     MedicationSourceExtractionDTO,
+    PrintedCaution,
     PrintedEvidence,
+    PrintedInstructions,
     ProductIdentity,
     RegimenEvidence,
     SourceListComparison,
@@ -33,11 +38,17 @@ class PharmaScanLabelProvider:
         source_document_id: UUID,
         source_kind: Literal["package", "pharmacy_label", "prescription"],
         image_bytes: bytes,
+        medications: tuple[ListedMedication, ...] = (),
     ) -> MedicationSourceExtractionDTO:
         if source_kind not in ("package", "pharmacy_label", "prescription"):
             raise UnsupportedModality("source extraction requires readable package/label/prescription")
         try:
-            payload = self._transport.post_multipart("/v1/read-label", {"image": image_bytes}, {})
+            data = (
+                {"medications": json.dumps([row.model_dump(exclude_none=True) for row in medications])}
+                if medications
+                else {}
+            )
+            payload = self._transport.post_multipart("/v1/read-label", {"image": image_bytes}, data)
         except TimeoutError as exc:
             raise VisionUnavailable("Stage2 read-label timeout; use manual enrollment") from exc
         wire = project(self._contract, "ReadLabelResponse", payload, LabelWire)
@@ -63,6 +74,8 @@ class PharmaScanLabelProvider:
                         dose_form=_printed(fields.dose_form) if fields else None,
                         source_lines=candidate.found_in,
                         first_line=candidate.first_line,
+                        release=candidate.release,
+                        release_printed=candidate.release_printed,
                     ),
                     regimen_evidence=RegimenEvidence(
                         directions=_printed(fields.directions) if fields else None,
@@ -71,6 +84,14 @@ class PharmaScanLabelProvider:
                         expiry_date=_printed(fields.expiry_date) if fields else None,
                         missing_fields=absent,
                         explicit_null_fields=nulls,
+                        instructions=PrintedInstructions(**fields.instructions.model_dump())
+                        if fields and fields.instructions
+                        else None,
+                        indication=_printed(fields.indication) if fields else None,
+                        cautions=[PrintedCaution(**row.model_dump()) for row in fields.cautions] if fields else [],
+                        supplied_quantity=DispensedQuantity(**fields.quantity.model_dump())
+                        if fields and fields.quantity
+                        else None,
                     ),
                     list_comparison=(
                         SourceListComparison(
@@ -90,4 +111,8 @@ class PharmaScanLabelProvider:
             extraction_model=wire.ocr_model,
             candidates=normalized,
             note=wire.note,
+            provider=f"pharmascan:v{self._contract.version}:/v1/read-label",
+            label_kind=wire.label_kind,
+            dispensed_by=_printed(wire.dispensed_by),
+            message=wire.message,
         )

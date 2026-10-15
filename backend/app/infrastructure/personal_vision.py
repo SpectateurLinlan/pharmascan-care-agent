@@ -1,4 +1,4 @@
-"""v0.8 wire contracts with verified additive v0.9 metadata compatibility."""
+"""Injected versioned contracts with independent embedding compatibility checks."""
 
 from collections import defaultdict
 

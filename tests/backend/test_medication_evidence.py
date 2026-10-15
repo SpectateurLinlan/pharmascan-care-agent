@@ -26,14 +26,18 @@ class Label:
     strength = "500 mg"
     name = "Metformin"
     directions = None
+    parts = None
+    label_kind = None
+    release = None
 
-    def extract_medication_source(self, *, source_document_id, source_kind, image_bytes):
+    def extract_medication_source(self, *, source_document_id, source_kind, image_bytes, medications=()):
         return MedicationSourceExtractionDTO(
             source_document_id=source_document_id,
             source_kind=source_kind,
             provider_source="photo",
             extraction_model="SIMULATED",
             note="DEMO",
+            label_kind=self.label_kind,
             candidates=[
                 ExtractedMedication(
                     product=ProductIdentity(
@@ -44,11 +48,13 @@ class Label:
                         rxcui=None,
                         rxnorm_name=None,
                         source_lines=["Metformin " + self.strength],
+                        release=self.release,
                     ),
                     regimen_evidence=RegimenEvidence(
+                        instructions=self.parts,
                         directions=PrintedEvidence(value=self.directions, line=self.directions)
                         if self.directions
-                        else None
+                        else None,
                     ),
                 )
             ],
@@ -152,6 +158,64 @@ def test_package_then_label_retains_sources_identity_and_clarifies(evidence, wir
     with pytest.raises(NotFoundError):
         service.get(OTHER, task_id)
     assert not wired.store.events
+
+
+def test_v010_structured_sticker_merges_identity_without_inventing_times(evidence, wired):
+    from app.contracts.source_extraction import PrintedInstructions
+
+    service, _, repo, label, _ = evidence
+    label.release = "ER"
+    first = attach(service, uuid4())
+    label.label_kind = "dispensing"
+    label.parts = PrintedInstructions(
+        text="Take ONE tablet twice daily after food for 7 days",
+        line="DEMO sticker",
+        dose={"amount": 1, "unit": "tablet"},
+        times_per_day=2,
+        food="after_food",
+        duration="7 days",
+    )
+    second = attach(service, first.id, b"DEMO sticker v010", "pharmacy_label")
+    assert second.medication_id == first.medication_id and len(repo.medications(PATIENT)) == 1
+    assert second.suggested_regimen.dose_amount == 1 and second.suggested_regimen.frequency_rule is None
+    assert second.printed_course_days == 7 and second.status == "pending_information"
+    assert {"schedule", "course_start_date", "course_end_date"}.issubset(second.missing)
+    assert service.get(PATIENT, second.id) == second and len(service.sources(PATIENT, second.id)) == 2
+    assert not wired.store.events and not wired.store.regimens
+    label.parts = label.parts.model_copy(update={"times_per_day": 3})
+    conflict = attach(service, second.id, b"DEMO third conflicting sticker", "pharmacy_label")
+    assert conflict.status == "conflict" and any("times_per_day" in value for value in conflict.conflicts)
+    assert service.get(PATIENT, second.id).conflicts == conflict.conflicts
+
+
+def test_package_classification_cannot_supply_patient_schedule(evidence):
+    from app.contracts.source_extraction import PrintedInstructions
+
+    service, _, _, label, _ = evidence
+    label.label_kind = "package"
+    label.parts = PrintedInstructions(text="DEMO", line="DEMO", dose={"amount": 1, "unit": "tablet"}, times_per_day=1)
+    label.directions = "Take 1 tablet at 20:00 daily"
+    saved = attach(service, uuid4(), kind="pharmacy_label")
+    assert saved.suggested_regimen.dose_amount is None and saved.suggested_regimen.frequency_rule is None
+
+
+def test_none_label_never_creates_medication_even_with_inconsistent_candidates(evidence, wired):
+    service, _, repo, label, _ = evidence
+    label.label_kind = "none"
+    with pytest.raises(ValidationError):
+        attach(service, uuid4())
+    assert repo.medications(PATIENT) == [] and not wired.store.sources and not wired.store.regimens
+
+
+def test_same_name_and_strength_but_different_release_preserves_conflict(evidence, wired):
+    service, _, _, label, _ = evidence
+    label.release = "ER"
+    first = attach(service, uuid4())
+    label.release = "DR"
+    second = attach(service, first.id, b"DEMO other release", "pharmacy_label")
+    assert second.status == "conflict" and second.product.formulation == "extended release"
+    assert any("formulation" in value for value in second.conflicts)
+    assert len(service.sources(PATIENT, first.id)) == 2 and not wired.store.regimens
 
 
 def test_strength_conflict_is_persisted_and_blocks_review(evidence, wired):

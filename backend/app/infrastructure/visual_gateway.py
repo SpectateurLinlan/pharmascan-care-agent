@@ -1,4 +1,4 @@
-"""Reuse v0.8 strict adapter, owned client and validated image processing."""
+"""Reuse the injected versioned strict adapter, owned client and validated image processing."""
 
 from collections.abc import Callable
 

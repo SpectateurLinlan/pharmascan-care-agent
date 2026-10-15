@@ -275,11 +275,11 @@ Cloud TTS requires **both** deliberate server enablement (`TTS_PROVIDER=tencent`
 
 ## Stage2 and source evidence
 
-Stage2 is an independently maintained, stateless image service. The app integrates its [v0.8.0 OpenAPI contract](docs/external/pharmascan-api-openapi-0.8.0.json) through a typed adapter. The adapter supports compatible upstream 0.9 read-only responses while preserving embedding/reference compatibility checks.
+Stage2 is an independently maintained, stateless image service. The runtime now injects the supplied [v0.10.0 OpenAPI contract](docs/external/pharmascan-api-openapi-0.10.0.json); older snapshots are retained. The [upgrade evidence and contract diff](docs/STAGE2_V010_UPGRADE.md) distinguish API version from model/embedding compatibility. Source, gallery and read-only visual gateways use the same explicit contract.
 
 **Compare a pill photo / 拍照核对药片** opens camera/upload, preview and consented evidence checking. The page explains what the photo is used for and the limits of its result. Results include visual similarity and candidate evidence. Detector counts are used when `count_reliable=true`; query/reference model, embedding space and preprocessing must agree. Inadequate evidence or ineligible references return unknown/ambiguous.
 
-Read-label retains `Printed.value`/`Printed.line` and field-level provenance. Product strength is separate from personal dose. Patients review extracted evidence, complete missing dose/schedule/course/food instructions, and explicitly activate the regimen. See [Stage2 API gaps/owner handoff](docs/STAGE2_API_GAPS.md).
+Read-label retains `Printed.value`/`Printed.line`, structured Singapore sticker instructions and field-level provenance. Parsed dose/unit, daily frequency, interval, PRN, food, duration and maximum remain unreviewed source evidence. Daily count does not invent clock times; dispensing/expiry dates and supply quantity never establish a course. Conflicting strength/release/product code or printed instructions blocks activation. The image-routing helper offers a workflow suggestion without executing provider tool names. Product strength is separate from personal dose. Patients review extracted evidence, complete missing dose/schedule/course/food instructions, and explicitly activate the regimen. See [Stage2 API gaps/owner handoff](docs/STAGE2_API_GAPS.md).
 
 ### Progressive registration and personal references
 
@@ -289,7 +289,9 @@ Review dose/unit, schedule, food and course dates, then explicitly activate. Exp
 
 Personal gallery stores packaging, blister and loose-pill photos privately. Only reviewed, compatible loose-pill references enter `/v1/embed` -> `/v1/match`; product association and current regimen are checked separately. Retiring a photo removes it from matching while retaining source/history. Packaging/blister photos are viewable references without automatic matching. PDF ingestion is not implemented; use a source image or manual entry.
 
-[Reproducible Demo A/B/C and screenshots](docs/WORKFLOWS.md#current-progressive-evidence-and-gallery-workflows) cover progressive evidence, actual personal matching and conflict follow-up. Identical synthetic query/reference images test integration, not medication-recognition accuracy. [Stage2 owner gaps](docs/STAGE2_API_GAPS.md) track extraction needs; [knowledge-source review](docs/MEDICATION_KNOWLEDGE_SOURCES.md) records future research.
+For this API upgrade, see [v0.10 Demo A/B/C acceptance](docs/STAGE2_V010_UPGRADE.md#reproducible-acceptance); older journey results below are historical and do not verify the upgraded runtime.
+
+[Reproducible earlier Demo A/B/C and screenshots](docs/WORKFLOWS.md#current-progressive-evidence-and-gallery-workflows) cover progressive evidence, actual personal matching and conflict follow-up. Identical synthetic query/reference images test integration, not medication-recognition accuracy. [Stage2 owner gaps](docs/STAGE2_API_GAPS.md) track extraction needs; [knowledge-source review](docs/MEDICATION_KNOWLEDGE_SOURCES.md) records future research.
 
 ## Verification
 
@@ -318,16 +320,18 @@ Latest recorded checks (15 October 2026):
 
 | Check | Recorded result / evidence |
 |---|---|
-| Full backend local suite | **586 passed, 20 skipped, 1 warning**; VERIFIED LOCAL (dependency deprecation; cache disabled). |
+| Full backend local suite | **608 passed, 20 skipped, 1 warning**; VERIFIED LOCAL (dependency deprecation; cache disabled). |
 | Ruff; frontend lint/typecheck/build | Passed; VERIFIED LOCAL. |
-| Frontend Vitest | **93 passed, 18 files**; VERIFIED LOCAL. |
+| Frontend Vitest | **95 passed, 19 files**; VERIFIED LOCAL. |
 | Expired-session reload | REAL LIVE Supabase: successful renewal, same patient identity, existing history preserved. |
 | Chrome `localhost:5173` initial/reload | Authenticated API, same patient identity, record endpoints 200, zero error banners; synthetic patient. |
 | Chrome/Edge TTS | **1 passed each**; AUTOMATED/SYNTHETIC service events, native API present but headless voice lists empty. |
-| Full suite with real Auth/RLS/B14/Storage/Stage2 enabled | **586 passed, 1 skipped, 1 warning** (before final source-display/course refinements). Final scoped gallery/source RLS rechecks and current local suite follow those refinements. |
-| Real gallery/source integration | **2 passed, 16 deselected**; owner JWT, private files, actual embed/match, logical retirement and A/B source isolation. |
+| Earlier pre-0.10 full suite with real Auth/RLS/B14/Storage/Stage2 enabled | **586 passed, 1 skipped, 1 warning** (before final source-display/course refinements). Final scoped gallery/source RLS rechecks and current local suite follow those refinements. |
+| Earlier pre-0.10 gallery/source integration | **2 passed, 16 deselected**; owner JWT, private files, actual embed/match, logical retirement and A/B source isolation. |
 | Private gallery thumbnails | Real browser/Auth/DB/Storage: **1 passed (1.2m)**, decoded pictures and reload at390/430px/desktop. |
-| Demo A/B/C | Real Chrome + Gemini + Supabase + Stage2, synthetic inputs; **1 combined scenario passed (4.4m)**. |
+| Earlier Demo A/B/C | Real Chrome + Gemini + Supabase + Stage2, synthetic inputs; **1 combined scenario passed (4.4m), before the 0.10 upgrade**. |
+
+Current0.10 verification: real Supabase regression **16 passed,3 skipped,1 warning** (extra Stage2 opt-ins off); additional real source/gallery A/B **2 passed,17 deselected,1 warning** with Stage2 opt-in; real Chrome/Gemini/Supabase/Stage2 Demo A/B/C plus Chinese preference/reload **1 passed (8.3m)**. The synthetic reference/query pair returned actual `/v1/match` evidence, with `imprint_check=not_checked`, `safe_to_take=false` and `ingestion_proven=false`. This tests integration, not recognition accuracy. Metadata probes, two initial label extractions, one explicit package routing probe and one limited safety coverage probe are separately recorded in [upgrade evidence](docs/STAGE2_V010_UPGRADE.md).
 
 Browser automation covers speech event handling and playback controls. Physical microphone, speaker and medication pronunciation checks are listed below.
 

@@ -73,6 +73,8 @@ class MatchOutcome(VisionDTO):
     limits: str | None = None
     quality_flags: list[str] = Field(default_factory=list)
     provenance: list[str] = Field(default_factory=list)
+    imprint_check: str | None = None
+    imprint_read_for: list[str] = Field(default_factory=list)
 
 
 class ScanBox(VisionDTO):

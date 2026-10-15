@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api, type SourcePreview } from '../api/client';
 import { Card, ErrorNotice } from './primitives';
 import {useLanguage} from '../language';
+import {PrintedLabelEvidence} from './PrintedLabelEvidence';
 
 export function SourcePreviewScreen({ onUse }: { onUse?: (preview: SourcePreview, name: string) => void }) {
   const {t}=useLanguage();
@@ -30,7 +31,7 @@ export function SourcePreviewScreen({ onUse }: { onUse?: (preview: SourcePreview
     {result ? <div><p>{t('Extraction needs your review. Use the manual form below to record the instructions you can verify.')}</p>
       {result.candidates.map((candidate, i) => <article key={i}><h3>{candidate.product.name}</h3>
         <p>{candidate.product.strength}</p><button onClick={() => onUse?.(result, candidate.product.name)}>{t('Use as source for a reviewed draft')}</button><p>{t('Printed directions')}: {candidate.regimen_evidence.directions?.value ?? t('No personal directions were returned.')}</p>
-        <dl className="source-instructions">{['Dose amount','doses per day','Number of days','Food instructions'].map(label=><div key={label}><dt>{t(label)}</dt><dd>{t('Not returned as structured instructions. Please review and enter manually.')}</dd></div>)}</dl>
+        <PrintedLabelEvidence candidate={candidate}/>
         <p className="notice">{t('Dose amount, schedule and duration have not been inferred.')}</p>
         <details><summary>{t('Printed evidence')}</summary><ul>{candidate.product.source_lines.map((line, index) => <li key={index}>{line}</li>)}</ul>
           <p>{t('Preview evidence is temporary; it is not a reviewed or saved prescription.')}</p></details>

@@ -506,7 +506,7 @@ def build_supabase_container(
         )
         vision = None
         if settings.vision_api_base_url:
-            snapshot = Path(__file__).resolve().parents[3] / "docs/external/pharmascan-api-openapi-0.8.0.json"
+            snapshot = Path(__file__).resolve().parents[3] / "docs/external/pharmascan-api-openapi-0.10.0.json"
             vision = PersonalVisionGateway(
                 base_url=settings.vision_api_base_url,
                 contract=Stage2Contract(json.loads(snapshot.read_text(encoding="utf-8"))),
@@ -644,11 +644,10 @@ def build_source_preview(*, settings: Settings, ids: IdGenerator) -> SourcePrevi
 
     if not settings.vision_api_base_url:
         return None
-    snapshot = Path(__file__).resolve().parents[3] / "docs/external/pharmascan-api-openapi-0.8.0.json"
+    snapshot = Path(__file__).resolve().parents[3] / "docs/external/pharmascan-api-openapi-0.10.0.json"
     contract = Stage2Contract(json.loads(snapshot.read_text(encoding="utf-8")))
-    return SourcePreviewService(
-        provider=SourceGateway(base_url=settings.vision_api_base_url, contract=contract), ids=ids
-    )
+    gateway = SourceGateway(base_url=settings.vision_api_base_url, contract=contract)
+    return SourcePreviewService(provider=gateway, routing=gateway, ids=ids)
 
 
 def demo_patient_id(client_id: str) -> UUID:
@@ -673,7 +672,7 @@ def build_visual_check(*, settings: Settings) -> VisualCheckService | None:
 
     if not settings.vision_api_base_url:
         return None
-    path = Path(__file__).resolve().parents[3] / "docs/external/pharmascan-api-openapi-0.8.0.json"
+    path = Path(__file__).resolve().parents[3] / "docs/external/pharmascan-api-openapi-0.10.0.json"
     return VisualCheckService(
         provider=VisualGateway(
             base_url=settings.vision_api_base_url, contract=Stage2Contract(json.loads(path.read_text(encoding="utf-8")))

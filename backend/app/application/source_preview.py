@@ -4,14 +4,32 @@ from threading import Lock
 from typing import Literal
 
 from ..contracts.ports import IdGenerator
-from ..contracts.source_extraction import MedicationSourceExtractionDTO, SourceExtractionPort
+from ..contracts.source_extraction import (
+    ImageRoute,
+    ImageRoutingPort,
+    ListedMedication,
+    MedicationSourceExtractionDTO,
+    SourceExtractionPort,
+)
 from ..domain.errors import ValidationError
 
 
 class SourcePreviewService:
-    def __init__(self, *, provider: SourceExtractionPort, ids: IdGenerator) -> None:
+    def __init__(
+        self, *, provider: SourceExtractionPort, ids: IdGenerator, routing: ImageRoutingPort | None = None
+    ) -> None:
         self._provider, self._ids = provider, ids
         self._inflight = Lock()
+        self._routing = routing
+
+    def route(self, *, content: bytes, consent: bool, demo_only: bool) -> ImageRoute:
+        if not consent or not demo_only:
+            raise ValidationError("Only consented synthetic images may be routed")
+        if self._routing is None:
+            from ..domain.errors import ProviderUnavailableError
+
+            raise ProviderUnavailableError("Choose the source type yourself")
+        return self._routing.route_image(content)
 
     def preview(
         self,
@@ -20,6 +38,7 @@ class SourcePreviewService:
         source_kind: Literal["package", "pharmacy_label", "prescription"],
         consent: bool,
         demo_only: bool,
+        medications: tuple[ListedMedication, ...] = (),
     ) -> MedicationSourceExtractionDTO:
         if not consent or not demo_only:
             raise ValidationError("Only consented synthetic demo images may be sent for extraction")
@@ -28,8 +47,17 @@ class SourcePreviewService:
 
             raise ProviderUnavailableError("A label preview is already in progress; please retry later")
         try:
+            if medications:
+                return self._provider.extract_medication_source(
+                    source_document_id=self._ids.new_id(),
+                    source_kind=source_kind,
+                    image_bytes=content,
+                    medications=medications,
+                )
             return self._provider.extract_medication_source(
-                source_document_id=self._ids.new_id(), source_kind=source_kind, image_bytes=content
+                source_document_id=self._ids.new_id(),
+                source_kind=source_kind,
+                image_bytes=content,
             )
         finally:
             self._inflight.release()
