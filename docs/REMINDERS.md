@@ -152,7 +152,7 @@ Configuration boundaries:
 | Runtime | Public configuration | Server-only secrets |
 | --- | --- | --- |
 | Frontend | VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY | None |
-| Patient FastAPI | AUTH_MODE=supabase, PERSISTENCE=supabase, APP_ORIGIN, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, ENABLE_DEMO_SEED=false; ENABLE_WEB_PUSH explicit | VAPID_PRIVATE_KEY, existing Gemini/provider secrets; NO DATABASE_URL or PUSH_DISPATCH_TOKEN |
+| Patient FastAPI | AUTH_MODE=supabase, PERSISTENCE=supabase, APP_ORIGIN, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, ENABLE_DEMO_SEED=false, ENABLE_WEB_PUSH=false, ENABLE_PUSH_SUBSCRIPTIONS=true, VAPID_PUBLIC_KEY | Existing Gemini/provider secrets only; NO VAPID_PRIVATE_KEY, DATABASE_URL or PUSH_DISPATCH_TOKEN |
 | Worker Dispatcher | ENABLE_WEB_PUSH=true, VAPID_PUBLIC_KEY, VAPID_SUBJECT | DATABASE_URL (IPv4 Session Pooler 5432), VAPID_PRIVATE_KEY, PUSH_DISPATCH_TOKEN |
 | Supabase Vault/Cron | fixed Dispatcher HTTPS URL, schedule, HMAC message format | same dedicated PUSH_DISPATCH_TOKEN, NOT VAPID/database/admin keys |
 
@@ -163,8 +163,13 @@ probe only; it returns no configuration and never connects to the database or
 push provider. An unsigned POST to the dispatch path must return401 without
 invoking the worker. Neither check verifies database readiness or device receipt.
 
-API and Worker need the same VAPID pair. The patient API also needs
-VAPID_PUBLIC_KEY/VAPID_SUBJECT for validation and optional `[push]` dependencies.
+The Dispatcher needs the VAPID pair and operator subject. The patient API needs
+only `VAPID_PUBLIC_KEY` with `ENABLE_PUSH_SUBSCRIPTIONS=true`; it must keep
+`ENABLE_WEB_PUSH=false` and must never receive the private key, worker database
+URL or dispatch token. The public key must match the Dispatcher's private key;
+that pairing is verified during a real-device delivery test. Since the old direct
+diagnostic test requires the private key, `test_available=false` on Render and
+the patient UI disables that button. Test scheduled delivery through the queue.
 No Gemini, Stage2 or speech credentials are needed by the Worker. Generate the
 real pair only after owner approval with `python scripts/create_vapid_keys.py`;
 it exclusively writes ignored `outputs/local-vapid.env` and prints no keys. Store
@@ -209,6 +214,58 @@ after manual one-shot acceptance. Check actual extension function schemas and
 access; never paste a long-lived key into cron.job.command. Cron/pg_net submission
 success is not HTTP success: inspect pg_net response code and safe Worker logs too.
 No SQL is automatically applied by app startup and no Cron Job is created here.
+
+#### Reviewed Cron command template (operator action only)
+
+Before using this template, confirm the actual `pgcrypto` function schema with
+`SELECT e.extnamespace::regnamespace FROM pg_extension e WHERE e.extname='pgcrypto'`.
+The template assumes `extensions`; change that qualifier if the read-only result
+differs. Confirm exactly one Vault secret with the name below using `count(*)`;
+never print its decrypted value. Substitute only the approved Dispatcher HTTPS
+host. Save the dedicated HMAC secret under the Vault name
+`medithread_push_dispatch_hmac`; store the same value as Vercel's
+`PUSH_DISPATCH_TOKEN`. The following SQL is documentation, **not** a migration:
+
+```sql
+SELECT cron.schedule(
+  'medithread-push-minute',
+  '* * * * *',
+  $job$
+  WITH stamp AS (
+    SELECT floor(extract(epoch FROM clock_timestamp()))::bigint AS seconds
+  ), signing AS (
+    SELECT stamp.seconds,
+      encode(extensions.hmac(
+        convert_to('POST' || chr(10) || '/internal/notifications/dispatch' || chr(10)
+                   || stamp.seconds::text, 'UTF8'),
+        convert_to(v.decrypted_secret, 'UTF8'), 'sha256'
+      ), 'hex') AS signature
+    FROM stamp CROSS JOIN vault.decrypted_secrets v
+    WHERE v.name = 'medithread_push_dispatch_hmac'
+  )
+  SELECT net.http_post(
+    url := 'https://YOUR-DISPATCHER-HOST/internal/notifications/dispatch',
+    body := '{}'::jsonb,
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'X-Dispatch-Timestamp', seconds::text,
+      'X-Dispatch-Signature', signature
+    ),
+    timeout_milliseconds := 45000
+  ) FROM signing;
+  $job$
+);
+```
+
+Run the `WITH ... SELECT net.http_post(...)` command **once**, without
+`cron.schedule`, for the first approved trigger. Check the returned pg_net
+request ID against `net._http_response` and the Dispatcher audit outcome;
+the request ID alone is not delivery. Only after a reviewed one-shot result
+and a real subscribed device should the operator create the named minute Job.
+If scheduling must stop, use `SELECT cron.unschedule('medithread-push-minute')`;
+do not reset the database or remove queue history. The long-lived token appears
+only in Vault and the isolated Dispatcher environment; queued pg_net headers
+contain a short-lived HMAC signature, which trusted DB LOGIN roles can read.
 
 Rollback: disable only the named Job, turn off runtime, revoke/rotate only the
 dedicated signing secret. Preserve clinical queues/history. Do NOT uninstall
@@ -289,13 +346,17 @@ python scripts/create_vapid_keys.py
 The generator writes only Git-ignored `outputs/local-vapid.env`, refuses to overwrite it, prints no keys and leaves delivery disabled. Transfer the generated pair into the server's private configuration; set `VAPID_SUBJECT` to an operator-controlled `mailto:` or HTTPS contact. Keep the same pair across restarts. Never place the private key or `DATABASE_URL` in `VITE_` variables. Apply migration021 using the normal migration workflow.
 
 ```dotenv
+ENABLE_PUSH_SUBSCRIPTIONS=false
 ENABLE_WEB_PUSH=false
 VAPID_PUBLIC_KEY=
 VAPID_PRIVATE_KEY=
 VAPID_SUBJECT=
 ```
 
-After deliberate configuration, set `ENABLE_WEB_PUSH=true` on both API and worker, restart API, and run:
+After deliberate configuration, set `ENABLE_PUSH_SUBSCRIPTIONS=true` on the
+patient API with only the public key. Set `ENABLE_WEB_PUSH=true` only on the
+isolated Dispatcher with the private key, subject and worker database URL. For
+local worker checks, run:
 
 ```powershell
 python scripts/run_reminders.py

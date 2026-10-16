@@ -490,18 +490,11 @@ def build_supabase_container(
     root.persistence = "supabase"
     root.patient_data_path = "supabase_user_jwt_rls"
     push_key = None
-    if settings.enable_web_push:
-        from ..infrastructure.web_push import WebPushProvider, validate_vapid
+    if settings.enable_push_subscriptions:
+        from ..infrastructure.web_push import validate_vapid_public
 
-        try:
-            validate_vapid(settings.vapid_public_key, settings.vapid_private_key, settings.vapid_subject)
-        except ValueError:
-            push_key = None  # Explicitly unavailable; malformed VAPID is never ready.
-        else:
-            push_key = settings.vapid_public_key
-            root.push_test = PushTestService(
-                WebPushProvider(private_key=settings.vapid_private_key, subject=settings.vapid_subject), root.clock
-            )
+        push_key = validate_vapid_public(settings.vapid_public_key)
+    root.push_public_key = push_key
     root.speech = build_speech_service(settings=settings, clock=root.clock, ids=root.ids)
     root.source_preview = build_source_preview(settings=settings, ids=root.ids)
     root.visual_check = build_visual_check(settings=settings)

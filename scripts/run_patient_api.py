@@ -18,6 +18,7 @@ sys.path.insert(0, str(REPO_ROOT / "backend"))
 
 from app.config import ConfigError, Settings  # noqa: E402
 from app.infrastructure.stage2_schema import Stage2Contract  # noqa: E402
+from app.infrastructure.web_push import validate_vapid_public  # noqa: E402
 
 
 def check_resources(root: Path) -> None:
@@ -52,7 +53,12 @@ def check_settings(settings: Settings) -> None:
         if value:
             raise ConfigError(f"{name} must not be configured on this patient API service")
     if settings.enable_web_push:
-        raise ConfigError("Initial Render deployment requires ENABLE_WEB_PUSH=false; push needs separate acceptance")
+        raise ConfigError("ENABLE_WEB_PUSH is worker-only; use ENABLE_PUSH_SUBSCRIPTIONS on patient API")
+    if settings.enable_push_subscriptions:
+        try:
+            validate_vapid_public(settings.vapid_public_key)
+        except ValueError:
+            raise ConfigError("ENABLE_PUSH_SUBSCRIPTIONS requires a valid VAPID_PUBLIC_KEY") from None
     if settings.enable_speech or settings.tts_provider != "browser" or settings.stt_provider != "browser":
         raise ConfigError("Initial Render deployment requires browser speech with ENABLE_SPEECH=false")
     for name, value in (

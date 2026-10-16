@@ -50,7 +50,9 @@ environment, validates it and passes Settings to the existing application factor
 | `GEMINI_THINKING_LEVEL` | `low` | Nonsecret |
 | `DEMO_AGENT_DAILY_TURN_LIMIT` | `20` | Nonsecret |
 | `VISION_API_BASE_URL` | `https://davidpansx-pharmascan-api.hf.space` (current endpoint) | Public provider URL |
-| `ENABLE_WEB_PUSH` | `false` for this first patient deployment | Nonsecret |
+| `ENABLE_WEB_PUSH` | `false`; sending belongs to the separate Dispatcher | Nonsecret |
+| `ENABLE_PUSH_SUBSCRIPTIONS` | `true` after the public VAPID key is configured; enables patient-owned subscription APIs | Nonsecret |
+| `VAPID_PUBLIC_KEY` | Public key from the same pair used by the Dispatcher; browser subscription key only | Public configuration |
 | `ENABLE_SPEECH` | `false` | Nonsecret |
 | `STT_PROVIDER`, `TTS_PROVIDER` | `browser` | Nonsecret |
 | `PORT` | Supplied by Render; launcher defaults to `10000` locally | Platform configuration |
@@ -58,9 +60,12 @@ environment, validates it and passes Settings to the existing application factor
 Never configure `DATABASE_URL`, `SUPABASE_SECRET_KEY`, service-role keys,
 `PUSH_DISPATCH_TOKEN`, `VAPID_PRIVATE_KEY` or Tencent cloud speech credentials on
 this initial patient service. The launcher rejects the first four applicable
-Settings credentials and refuses Web Push/cloud speech enablement for this phase.
-Future patient subscription/test functionality needs its own reviewed configuration
-step; toggling a flag here does not establish Push delivery readiness.
+Settings credentials and refuses worker sending/cloud speech on this service.
+`ENABLE_PUSH_SUBSCRIPTIONS=true` requires a valid public key and exposes only
+authenticated, same-user JWT subscription management. The direct diagnostic
+`/api/reminders/push/test` remains unavailable here because it needs the VAPID
+private key. Verify actual delivery through a scheduled reminder and the separate
+Dispatcher; a saved subscription alone does not establish device delivery.
 
 ## Process and resource isolation
 

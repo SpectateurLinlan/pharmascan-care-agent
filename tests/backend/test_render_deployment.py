@@ -1,5 +1,6 @@
 """Deployment boundary checks with synthetic configuration; no cloud calls."""
 
+import base64
 from dataclasses import replace
 from pathlib import Path
 
@@ -7,6 +8,9 @@ import httpx
 import pytest
 from app.config import ConfigError, Settings
 from app.transport.app_factory import create_app
+from app.transport.container import build_supabase_container
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi.testclient import TestClient
 
 from scripts.run_patient_api import REPO_ROOT, check_resources, check_settings, main
@@ -26,6 +30,40 @@ def deployment_settings() -> Settings:
         auth_mode="supabase",
         source="synthetic_process_environment",
     )
+
+
+def synthetic_public_key() -> str:
+    key = ec.derive_private_key(1, ec.SECP256R1()).public_key()
+    raw = key.public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+
+def test_patient_subscription_mode_uses_public_key_without_sender_or_worker_credentials() -> None:
+    public_key = synthetic_public_key()
+    settings = replace(deployment_settings(), enable_push_subscriptions=True, vapid_public_key=public_key)
+    check_settings(settings)
+    container = build_supabase_container(settings=settings)
+    assert container.push_public_key == public_key
+    assert container.push_test is None
+    assert container.patient_factory is not None
+    assert settings.vapid_private_key is None
+    assert settings.database_url is None
+    assert settings.push_dispatch_token is None
+
+
+def test_subscription_flag_is_loaded_independently_from_worker_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENABLE_PUSH_SUBSCRIPTIONS", "true")
+    monkeypatch.setenv("ENABLE_WEB_PUSH", "false")
+    settings = Settings.from_env(env_file=Path("missing-synthetic-env-file"))
+    assert settings.enable_push_subscriptions is True
+    assert settings.enable_web_push is False
+
+
+@pytest.mark.parametrize("public_key", [None, "DEMO", "a" * 87])
+def test_patient_subscription_mode_rejects_missing_or_malformed_key(public_key: str | None) -> None:
+    settings = replace(deployment_settings(), enable_push_subscriptions=True, vapid_public_key=public_key)
+    with pytest.raises(ConfigError, match="VAPID_PUBLIC_KEY"):
+        check_settings(settings)
 
 
 def test_resources_present_and_missing(tmp_path: Path) -> None:

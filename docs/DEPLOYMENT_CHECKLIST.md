@@ -29,7 +29,8 @@ startup, health, environment isolation and first-test-deployment checks.
    `SUPABASE_PUBLISHABLE_KEY`, `MODEL_PROVIDER=gemini`, `GEMINI_API_KEY`,
    `GEMINI_MODEL=gemini-3.5-flash-lite`, and `VISION_API_BASE_URL`.
    Current voice defaults are `STT_PROVIDER=browser`, `TTS_PROVIDER=browser`.
-   Keep `ENABLE_WEB_PUSH=false` until its separate acceptance below.
+   Keep `ENABLE_WEB_PUSH=false` on the patient API. For device subscriptions,
+   configure `ENABLE_PUSH_SUBSCRIPTIONS=true` and the matching public VAPID key.
    Do not give the patient API privileged `DATABASE_URL`/service-role keys.
    From the checkout, with the virtual environment active:
 
@@ -78,9 +79,10 @@ startup, health, environment isolation and first-test-deployment checks.
    automatically recover the old guest identity. Existing-account login is an
    explicit identity switch, not a record merge. Do not clear Auth storage.
 
-6. Only after approved VAPID configuration, give a separate supervised worker
-   `DATABASE_URL`, VAPID public/private/subject, `ENABLE_WEB_PUSH=true` and the
-   same application/provider configuration. From the checkout/virtualenv run
+6. Only after approved VAPID configuration, give the isolated worker
+   `DATABASE_URL`, VAPID public/private/subject, `ENABLE_WEB_PUSH=true` and its
+   dedicated HMAC token. Do not copy Gemini or patient API secrets. For a
+   supervised local worker check, from the checkout/virtualenv run
    `python scripts/run_reminders.py --loop`. It polls every30seconds, uses the
    existing durable queue, bounded delivery/retries and clinical eligibility
    checks. Keep it independent of browser lifetime; monitor/restart failures.
@@ -110,7 +112,7 @@ approving hosting. No free plan is assumed to provide continuous operation.
 
 - Recorded database baseline is001–025 after owner-authorized025 application on2026-10-16; prior001–024 checksums matched and were not replayed. Do not reinitialize or edit earlier checksums. Keep FORCE RLS and prior source/B14 guards intact. The025 overlap guard is an explicit conservative MVP limitation, not clinical duplicate-therapy advice; existing records are retained. Future environment deployments still need their own ledger/hash check and approval.
 - Patient HTTP needs only the existing verified user JWT/publishable configuration. No new provider, key or billed service is required by inventory/trends/review. Never expose DATABASE_URL to the frontend or select it as patient fallback.
-- Upgrade the independent reminder worker with the schema: it now projects care tasks into the same delivery queue. Keep Web Push disabled until existing VAPID/HTTPS/operator/supervision requirements and real device permission/subscription/delivery/click have passed. Queue test acknowledgement is not external delivery.
+- Upgrade the independent reminder worker with the schema: it now projects care tasks into the same delivery queue. Enable only the isolated worker for an approved real-device test after VAPID/HTTPS/operator checks; require permission, subscription, delivery and click before release acceptance. Queue acknowledgement is not device receipt.
 - Re-run the synthetic E/F checklist in [LONG_TERM_CARE](LONG_TERM_CARE.md), plus existing A/B/C and B14 acceptance. Check a new account cannot read prior patient's tasks/ledger/source/observations.
 - Deploy matching Agent/context-reader versions: the optional bounded `care_clarification` marker is backward-compatible with older stored contexts, but an older application reader may reject newly written fields. Verify visit preparation includes saved symptoms and follow-ups, and never allows a narrow task-only read to stand in for a full review. Development Chrome/Gemini verification now covers Agent proposal → human save → new-session symptom/task review → human-confirmed completion; it does not prove deployed or device Push delivery.
 - Physical speech, calendar-client import, account linking and deployment require independent acceptance. No deployment is implied by automated test results.
@@ -205,7 +207,10 @@ credentials, Cron and device receipt are still human gates. Prefer a separate
 Vercel Python project for Worker secrets, subject to packaged child-process/DB
 smoke acceptance; Render Free is a standard-process fallback with idle/hour limits.
 Do not share DATABASE_URL or PUSH_DISPATCH_TOKEN with the patient API project.
-Keep ENABLE_WEB_PUSH=false until explicit configuration/acceptance. Follow
+Keep ENABLE_WEB_PUSH=false on the patient API. Configure
+ENABLE_PUSH_SUBSCRIPTIONS=true and the matching VAPID_PUBLIC_KEY there; keep
+ENABLE_WEB_PUSH=true plus the private key only in the isolated Dispatcher after
+owner approval. Web Push receipt is now a required release gate. Follow
 [the current Worker/operator procedure](REMINDERS.md#deployment-decision-and-human-configuration-gate),
 including pg_net queued-header visibility and both migration ledgers. No job,
 extension, schema, role, policy or cloud resource was changed by this implementation.

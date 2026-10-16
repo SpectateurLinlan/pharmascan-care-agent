@@ -102,5 +102,5 @@ still requires an explicit hostname when adapting the project for another host.
 
 Use project name `medithread` for the frontend and a distinct worker project
 name, such as `medithread-push-dispatcher`. These display names do not rename
-the repository, Python packages or existing database. Keep Web Push disabled
-for the initial core demonstration until its separate delivery acceptance.
+the repository, Python packages or existing database. Web Push requires separate
+Dispatcher hosting, Cron and real-device receipt before release acceptance.

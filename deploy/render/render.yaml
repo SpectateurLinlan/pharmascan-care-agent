@@ -39,6 +39,10 @@ services:
         value: https://davidpansx-pharmascan-api.hf.space
       - key: ENABLE_WEB_PUSH
         value: "false"
+      - key: ENABLE_PUSH_SUBSCRIPTIONS
+        value: "false"
+      - key: VAPID_PUBLIC_KEY
+        sync: false
       - key: ENABLE_SPEECH
         value: "false"
       - key: STT_PROVIDER

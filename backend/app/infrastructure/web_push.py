@@ -12,6 +12,22 @@ from pywebpush import WebPushException, webpush
 from ..contracts.notifications import Delivery, DeliveryResult
 
 
+def validate_vapid_public(public: str | None) -> str:
+    """Validate the browser application-server key without a private key."""
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    try:
+        if not public:
+            raise ValueError
+        raw = base64.b64decode(public + "=" * (-len(public) % 4), altchars=b"-_", validate=True)
+        if len(raw) != 65 or raw[0] != 4:
+            raise ValueError
+        ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), raw)
+    except (ValueError, TypeError):
+        raise ValueError("Invalid VAPID public key") from None
+    return public
+
+
 def validate_vapid(public: str | None, private: str | None, subject: str | None) -> None:
     """Fail closed on malformed/mismatched identity, without exposing key values."""
     from cryptography.hazmat.primitives import serialization

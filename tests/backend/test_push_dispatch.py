@@ -14,7 +14,7 @@ from app.application.notification_worker import NotificationWorker
 from app.application.push_test import PushTestLimited, PushTestService
 from app.contracts.notifications import Delivery, DeliveryResult, DispatchResult
 from app.contracts.push import PushSubscriptionInput, PushSubscriptionRecord
-from app.domain.errors import NotFoundError
+from app.domain.errors import AuthenticationRequiredError, NotFoundError
 from app.infrastructure.dispatch_process import DispatchTimeout, DispatchUnavailable, ProcessDispatchRunner
 from app.infrastructure.web_push import validate_vapid
 from app.transport.app_factory import create_app
@@ -234,6 +234,78 @@ def test_patient_api_cannot_choose_owner_or_return_credentials():
     assert client.post("/api/reminders/push/test", json={**payload, "subscription_id": str(uuid4())}).status_code == 404
     assert client.post("/api/reminders/push/test", json=payload).json()["status"] == "sent"
     assert len(sender.calls) == 1
+
+
+def test_patient_subscription_routes_require_owner_but_no_sender_credentials():
+    class OwnedSubscriptions:
+        def __init__(self):
+            self.rows = {}
+
+        def save(self, owner, value):
+            row = PushSubscriptionRecord(id=uuid4(), enabled=True)
+            self.rows[(owner, value.endpoint)] = row
+            return row
+
+        def list_for_patient(self, owner):
+            return [row for (patient, _), row in self.rows.items() if patient == owner]
+
+        def revoke(self, owner, sid):
+            for key, row in list(self.rows.items()):
+                if key[0] == owner and row.id == sid:
+                    self.rows[key] = row.model_copy(update={"enabled": False})
+
+    subscriptions = OwnedSubscriptions()
+    container = build_container()
+    container.push_subscriptions = subscriptions
+    container.push_public_key = "synthetic-public-key"
+    container.push_test = None
+
+    def resolve(**kwargs):
+        token = kwargs.get("authorization")
+        if token not in {"Bearer owner", "Bearer other"}:
+            raise AuthenticationRequiredError()
+        owner = OWNER if token == "Bearer owner" else OTHER
+        return AuthenticatedPrincipal(
+            patient_id=owner,
+            subject=str(owner),
+            email=None,
+            authenticated=True,
+            mode="supabase",
+        )
+
+    container.auth = SimpleNamespace(resolve=resolve)
+    client = TestClient(create_app(container=container))
+    headers = {"Authorization": "Bearer owner"}
+    assert client.get("/api/reminders/push/config").status_code == 401
+    assert client.post("/api/reminders/push/subscriptions", json=subscription()).status_code == 401
+    assert client.get("/api/reminders/push/config", headers=headers).json() == {
+        "available": True,
+        "public_key": "synthetic-public-key",
+        "test_available": False,
+    }
+    saved = client.post("/api/reminders/push/subscriptions", json=subscription(), headers=headers)
+    assert saved.status_code == 200
+    assert set(saved.json()) == {"id", "enabled"}
+    assert len(client.get("/api/reminders/push/subscriptions", headers=headers).json()) == 1
+    assert client.get("/api/reminders/push/subscriptions", headers={"Authorization": "Bearer other"}).json() == []
+    assert (
+        client.post(
+            "/api/reminders/push/test",
+            json={"subscription_id": saved.json()["id"], "request_id": str(uuid4())},
+            headers=headers,
+        ).status_code
+        == 503
+    )
+    assert (
+        client.delete(
+            f"/api/reminders/push/subscriptions/{saved.json()['id']}",
+            headers={"Authorization": "Bearer other"},
+        ).status_code
+        == 204
+    )
+    assert client.get("/api/reminders/push/subscriptions", headers=headers).json()[0]["enabled"] is True
+    assert client.delete(f"/api/reminders/push/subscriptions/{saved.json()['id']}", headers=headers).status_code == 204
+    assert client.get("/api/reminders/push/subscriptions", headers=headers).json()[0]["enabled"] is False
 
 
 def test_invalid_vapid_and_dispatch_secret_fail_closed():
