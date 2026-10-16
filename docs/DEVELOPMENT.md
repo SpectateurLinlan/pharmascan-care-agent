@@ -78,3 +78,17 @@ both Supabase browser Auth variables explicitly empty, and start Vite on 5178.
 Do not let a developer `.env.local` silently connect the isolated demo to real
 Auth. The existing `release-review.spec.ts` also runs against this frontend with
 `RUN_RELEASE_BROWSER=1` and `QA_BASE_URL=http://127.0.0.1:5178`.
+
+
+## Product Behaviour & Data Notes
+
+| Area | Operating conditions |
+| --- | --- |
+| **Personal dosing** | Reviewed instructions only. Strength alone never determines pill count; unsupported conversions abstain. |
+| **Overlapping plans** | Same normalised medicine name or known product ID is conservatively blocked, including different doses and PRN/scheduled combinations. This is an MVP restriction, not a judgment that a prescription is medically wrong. |
+| **Stock & trends** | Patient-confirmed counts and report-based estimates. Sampled trends do not establish medication causality. |
+| **Enrollment** | Supported images or reviewed manual entry. PDF ingestion and transparent-blister identification remain unverified patient workflows. |
+| **Calendar** | Manual, one-time import; no automatic synchronisation. |
+| **Notifications** | Caregiver contacts/consent do not prove delivery. Hosted Web Push and real-device delivery remain unverified; it is not a native system alarm. |
+| **Saved chats** | Opt-in viewing: up to 200 exchanges / last 30 days. Older/excess rows are purged on a later append, not a timer. Explicit Clear leaves clinical records separate. |
+| **Product scope** | Medication management and treatment-related follow-up. General screening, vaccines, prescribing and automatic pharmacy ordering are outside this release. Native apps and broader authorised caregiver delivery remain future work. |

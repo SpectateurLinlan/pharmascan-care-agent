@@ -9,9 +9,6 @@
 
 ## 1. Repository Root
 
-<details open>
-<summary>Root configuration and entrypoints</summary>
-
 ```text
 pharmascan-care-agent/
 ├── README.md          # Product overview, capabilities, screenshots and limits
@@ -26,14 +23,9 @@ pharmascan-care-agent/
 └── .vercelignore      # Worker deployment upload exclusions
 ```
 
-</details>
-
 ---
 
 ## 2. Backend
-
-<details>
-<summary>backend/ — FastAPI, medication care services and Agent tools</summary>
 
 ```text
 backend/
@@ -56,14 +48,9 @@ backend/
 Business services enforce ownership, reviewed evidence and confirmation. The Agent
 does not access database tables or bypass deterministic safety checks.
 
-</details>
-
 ---
 
 ## 3. Frontend
-
-<details>
-<summary>frontend/ — React / TypeScript patient application</summary>
 
 ```text
 frontend/
@@ -90,14 +77,9 @@ frontend/
 The four primary destinations remain **Today / Medicines / Records / Me**.
 Patient business data goes through FastAPI, not direct frontend table access.
 
-</details>
-
 ---
 
 ## 4. Persistence & Tests
-
-<details>
-<summary>supabase/ and tests/ — schema history and reproducible checks</summary>
 
 ```text
 supabase/
@@ -113,14 +95,9 @@ tests/
 An already-applied migration must not be edited or replayed merely for deployment.
 Synthetic fixtures are not visual accuracy or clinical-validation evidence.
 
-</details>
-
 ---
 
 ## 5. Deployment & Operator Scripts
-
-<details>
-<summary>deploy/ and scripts/ — separate service entrypoints</summary>
 
 ```text
 deploy/
@@ -144,8 +121,6 @@ scripts/
 The Vercel frontend root is `frontend`. Render and the separate Vercel Dispatcher
 use the repository root with different entrypoints and environment variables.
 Worker privileges must not be shared with the patient API or browser bundle.
-
-</details>
 
 ---
 

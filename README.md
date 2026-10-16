@@ -1,48 +1,59 @@
 # MediThread
 
-**Your medication and self-care companion**
+## Your medication and self-care companion
 
-*A Personalised Medication & Long-Term Self-Care Agent*
+**Understand your medicines. Follow reviewed plans. Prepare for your next care review.**
 
-MediThread helps adult patients keep track of their medicines, understand reviewed instructions, record daily experiences and prepare for a pharmacist or doctor visit. Its voice-first, AI-assisted experience supports English and Chinese, adjustable text size and four simple destinations: **Today / Medicines / Records / Me**.
 
-**Project status:** release candidate with local integration checks passed; hosted acceptance is pending. No public demo URL is published yet. Web Push is implemented locally; hosted scheduling and real-device delivery remain unverified. This is a synthetic-data research/demo prototype, not a clinically validated medical device.
+- **Team Name:** PharmaScan
+- **Developers:** DING ZIXIN · Pan Shengxin
+- **Technical Subtitle:** A Personalised Medication & Long-Term Self-Care Agent
+- **Designed for:** adult patients, with larger text and voice-first interaction
+- **Languages:** English / 中文
+
+---
 
 ## Contents
 
-[Overview](#1-project-overview) · [Capabilities](#2-challenge-2-capabilities) · [Screenshots](#3-product-screenshots) · [Architecture](#4-agentic-workflow--architecture) · [Tech Stack](#5-tech-stack) · [Development](#6-development--deployment) · [Project Structure](#7-project-structure) · [Limitations](#8-scope--limitations) · [License](#9-license--brand-history)
+[Overview](#1-project-overview) · [Capabilities](#2-challenge-2-capabilities) · [Pages &amp; Features](#3-app-pages--features) · [Architecture](#4-agentic-workflow--architecture) · [Tech Stack](#5-tech-stack) · [Development](#6-development--deployment) · [Project Structure](#7-project-structure) · [Patient Control](#8-patient-control) · [Future Directions](#9-future-directions) · [License](#10-license--brand-history)
 
 ---
 
 ## 1. Project Overview
 
-- **Understand and organise medicines.** Review label/package evidence, resolve missing information, then explicitly confirm a treatment plan. Keep current and historical plans separate.
-- **Follow the day with confidence.** See applicable schedules, record taken/not taken/unsure, and tell the assistant about practical difficulties. A missing report is never treated as a confirmed missed dose.
-- **Keep care connected over time.** Confirm stock counts and refills, record relevant measurements or symptoms, follow up on medication-related tasks and prepare an editable review summary.
-- **Ask naturally.** Open the assistant over the current page; speak or type, review proposed actions and choose whether to save new conversations. Long-term facts come from authorised patient records rather than raw chat.
+- **Understand medicines:** review source evidence and clarify missing information.
+- **Manage daily care:** follow confirmed plans; report **taken / not taken / unsure**.
+- **Track long-term needs:** record supply, refills, symptoms, measurements and follow-ups.
+- **Prepare for appointments:** review your records and export questions for a pharmacist or doctor.
+- **Speak or type:** open the Assistant over the current page; review actions before confirming.
+- **Control conversation privacy:** choose whether to save new chats. Clinical facts remain separate from chat history.
 
 ---
 
 ## 2. Challenge 2 Capabilities
 
-| Capability | What MediThread helps patients do |
-|---|---|
-| Medication Understanding | Learn a medicine’s general uses from a matched, sourced drug-label excerpt, and separately review personal instructions from their confirmed medication plan. If the product or its instructions are unclear, the app asks for clarification instead of guessing. |
-| Medication Management | Keep medication identity, source evidence and reviewed treatment plans organized over time; review changes, see current and past plans, and report dose status through the app’s confirmation flow. |
-| Adherence Support | Record whether a planned dose was reported taken, not taken or unsure, and tell the app about barriers such as forgetting, unclear directions or low supply. The app can help arrange a patient-confirmed follow-up; an unreported dose is not treated as missed. |
-| Health Tracking | Record medication-related measurements and symptoms, then review descriptive trends with their date range, units and number of observations. Trends do not diagnose a condition or prove that a medicine caused a change. |
-| Preventive Health (medication-related) | Keep track of medication reviews, refill needs, adherence or symptom follow-ups, and treatment-related monitoring tasks. The app does not provide general screening or vaccination recommendations. |
-| Healthcare Preparation | Prepare a review summary from the patient’s current and past medication plans, reported dose history, observations, barriers, supply concerns and open follow-ups, so the patient can check what to discuss with a doctor or pharmacist. The app does not send the summary automatically. |
+| Capability                                        | What MediThread helps patients do                                                                                                                                                                          |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Medication Understanding**                | **General uses:** matched drug-label excerpts with sources.**Personal instructions:** the patient's confirmed plan.Unclear products or instructions prompt clarification.                      |
+| **Medication Management**                   | **Current and past plans**, medication identity and source evidence.Review changes and confirm actions before saving.                                                                                |
+| **Adherence Support**                       | Report **taken / not taken / unsure**.Record barriers such as forgetting, unclear directions or low supply.Arrange confirmed follow-ups; missing reports stay **unrecorded**, not missed.      |
+| **Health Tracking**                         | Record medication-related **measurements and symptoms**.Review descriptive trends with dates, units and sample counts.No diagnosis or medication-causality claim.                                    |
+| **Preventive Health — medication-related** | Track **refills, medication reviews and treatment-related monitoring**.Follow up on reported symptoms or adherence difficulties.General screening and vaccination recommendations are outside scope. |
+| **Healthcare Preparation**                  | Review **medication history, dose reports, observations, barriers and supply concerns**.Add questions and export a summary.Nothing is automatically sent to a clinician.                             |
 
 ---
 
-## 3. Product Screenshots
+## 3. App Pages & Features
 
-Screenshots below show the actual React app running against an isolated local Application API with explicitly synthetic medication data. They do not establish hosted deployment or clinical validation.
+Four pages bring daily medication care, long-term records and personal preferences together.
 
-| Today | Medicines |
-| --- | --- |
-| ![MediThread Today with a synthetic medication plan](docs/images/medithread-today.png) | ![MediThread Medicines with a synthetic reviewed plan](docs/images/medithread-medicines.png) |
+| Today                                                                                  | Medicines                                                                                          | Records                                                                                                      | Me                                                                                          |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| **Follow your day**                                                              | **Organise your medicines**                                                                  | **Understand your progress**                                                                           | **Make it yours**                                                                     |
+| ![MediThread Today with a synthetic medication plan](docs/images/medithread-today.png) | ![MediThread Medicines with a synthetic reviewed plan](docs/images/medithread-medicines.png)       | ![MediThread Records with medication and health review entries](docs/images/medithread-records.png)          | ![MediThread Me with a synthetic guest profile and settings](docs/images/medithread-me.png) |
+| Daily medication plansDose reportsIntegrated AI AssistantUpcoming follow-ups           | Current and past plansIdentity and source evidencePrivate photo referencesStock and refill history | Dose history and difficultiesHealth notes and trendsMedication-related follow-upsReview summaries and export | Profile and accountCaregiver contactsReminder preferencesLanguage, voice and accessibility  |
+
+*Screenshots use synthetic demonstration data.*
 
 ---
 
@@ -60,13 +71,25 @@ flowchart LR
     Services --> Confirmation[Explicit patient confirmation]
 ```
 
-Gemini interprets intent and chooses tools. Services enforce patient isolation, source review, validation and retry-safe writes; sensitive actions require independent confirmation. General US drug-label information cannot replace personal reviewed instructions. Visual similarity never proves medication contents, safe dosage or ingestion.
+- **Gemini:** interprets intent and chooses allowlisted tools.
+- **Application services:** enforce patient isolation, source review and retry-safe writes.
+- **Sensitive actions:** require independent patient confirmation.
+- **Medication knowledge:** general US labels never replace personal reviewed instructions.
+- **Visual evidence:** similarity does not prove contents, safe dosage or ingestion.
 
 ---
 
 ## 5. Tech Stack
 
-React 18, TypeScript, Vite, FastAPI, Pydantic v2 and Supabase Auth/PostgreSQL/private Storage. Gemini provides bounded orchestration with a clearly identified deterministic fallback. Stage2 is an external visual provider with frozen **API v0.10.0**; its API version is separate from encoder/embedding versions. General medication knowledge uses conservatively matched openFDA label excerpts with citations. Browser speech recognition and synthesis are the current defaults; optional Tencent speech is explicitly configured and server-gated.
+| Layer                            | Technology / responsibility                                                                         |
+| -------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **Patient app**            | React 18 · TypeScript · Vite                                                                      |
+| **Backend**                | FastAPI · Pydantic v2 · typed application services                                                |
+| **Identity & persistence** | Supabase Auth · PostgreSQL / RLS · private Storage                                                |
+| **Agent**                  | Gemini bounded orchestration; identified deterministic fallback                                     |
+| **Visual provider**        | External Stage2 **API v0.10.0**; encoder / embedding versions tracked separately              |
+| **Medication knowledge**   | Conservatively matched openFDA label excerpts with citations                                        |
+| **Voice**                  | Browser recognition / synthesis by default; optional Tencent speech requires explicit configuration |
 
 ---
 
@@ -79,16 +102,20 @@ React 18, TypeScript, Vite, FastAPI, Pydantic v2 and Supabase Auth/PostgreSQL/pr
 - [Deployment checklist](docs/DEPLOYMENT_CHECKLIST.md) / [Render patient API](docs/RENDER_DEPLOYMENT.md) / [service entrypoints](deploy/README.md)
 - [Reminders and Web Push](docs/REMINDERS.md) / [safety and evaluation](docs/SAFETY_AND_EVALUATION.md)
 
-The selected MVP topology is **Vercel frontend + Render Free patient API + existing Supabase**. An optional, isolated Vercel Python Dispatcher handles scheduled Web Push. Never share its privileged credentials with the frontend or patient API. Hosting, HTTPS routing, Auth redirects and production smoke tests require owner configuration; a successful local build is not a deployed service.
+**Selected MVP deployment:**
+
+- **Frontend:** Vercel.
+- **Patient API:** Render Free.
+- **Identity, database and private files:** existing Supabase project.
+- **Optional Web Push:** isolated Vercel Python Dispatcher.
+
+**Before public use:** configure hosting, HTTPS routing and Auth redirects; complete hosted smoke tests. Keep Dispatcher credentials separate from the patient API and frontend.
 
 ---
 
 ## 7. Project Structure
 
 > Organised by patient application, backend services, persistence, deployment and documentation.
-
-<details>
-<summary>Repository overview</summary>
 
 ```text
 pharmascan-care-agent/
@@ -103,28 +130,44 @@ pharmascan-care-agent/
 └── pyproject.toml  # Python package, dependencies and tooling configuration
 ```
 
-</details>
-
-See the [detailed Project Structure](docs/PROJECT_STRUCTURE.md) for expandable,
+See the [detailed Project Structure](docs/PROJECT_STRUCTURE.md) for
 annotated directory trees and component responsibilities. The repository retains
 its original engineering name; the product is MediThread.
 
 ---
 
-## 8. Scope & Limitations
+## 8. Patient Control
 
-- Personal dosing comes from reviewed patient instructions. The app never derives a prescribed pill count from strength alone; unsupported conversions abstain.
-- Overlapping plans for the same normalised medicine name or known product ID are conservatively blocked, including different doses and PRN/scheduled combinations. This is an MVP limitation, not a judgment that a prescription is medically wrong.
-- Inventory is a patient-confirmed count plus transparent report-based estimates; trends describe recorded samples and do not establish medication causality.
-- Enrollment accepts supported images or reviewed manual entry. PDF ingestion and transparent-blister identification are not verified patient workflows.
-- Calendar export is a manual, one-time import. Caregiver contact/consent management does not establish verified notification delivery. Web Push is not a native system alarm.
-- Saved conversation viewing is opt-in: up to 200 exchanges from the last 30 days. Older/excess archive rows are purged on a later append, not by a timed deletion job; explicit Clear is separate from clinical records.
-- General screening, vaccines, prescribing and automatic pharmacy ordering are outside this release. Native apps and broader authorised caregiver delivery remain future work.
+- **Reviewed instructions:** personal plans stay connected to their source evidence.
+- **Explicit confirmation:** patients review sensitive changes before they are saved.
+- **Clear records:** reported outcomes and uncertainty remain distinguishable.
+- **Privacy choices:** patients choose whether to save conversations and when to export or share a summary.
+
+See [product behaviour and data notes](docs/DEVELOPMENT.md#product-behaviour--data-notes)
+for detailed operating conditions, and [safety and evaluation](docs/SAFETY_AND_EVALUATION.md)
+for evidence requirements.
 
 ---
 
-## 9. License & Brand History
+## 9. Future Directions
 
-Source code is licensed under [Apache-2.0](LICENSE). See [NOTICE](NOTICE) and [third-party notices](docs/legal/THIRD_PARTY_NOTICES.md). External models, services, content and datasets retain their own terms. Stage2-declared DDInter resources include noncommercial/share-alike restrictions; the project license does not grant rights to third-party data or establish commercial clinical suitability.
+Planned improvements focus on making everyday medication care easier and more personal.
+
+| Direction                                | Patient benefit                                                                                                   |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **More languages**                 | Read instructions, ask questions and use voice features in a preferred language.                                  |
+| **Caregiver collaboration**        | Choose which medication-related updates to share with an authorised caregiver, with clear, revocable permissions. |
+| **More convenient reminders**      | Receive more dependable phone reminders and complete daily check-ins with fewer steps.                            |
+| **More personalised follow-up**    | Tailor check-ins to preferred routines, reported difficulties and unresolved medication-care needs.               |
+| **Broader medication education**   | Understand more medicines through clear explanations and traceable sources relevant to local products.            |
+| **Better appointment preparation** | Choose what to include in a visit summary and organise questions around changes since the previous review.        |
+
+---
+
+## 10. License & Brand History
+
+- **Project source:** [Apache-2.0](LICENSE). See [NOTICE](NOTICE).
+- **External services and data:** retain their own terms; see [third-party notices](docs/legal/THIRD_PARTY_NOTICES.md).
+- **DDInter:** Stage2-declared resources include noncommercial/share-alike restrictions. The project licence grants no third-party data rights or commercial clinical suitability.
 
 MediThread was developed under the working title PharmaScan Care. Earlier development records and repository names retain this title.

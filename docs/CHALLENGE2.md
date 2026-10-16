@@ -49,4 +49,4 @@ These are project acceptance scenarios, not six mandatory official competition d
 Mock/local tests establish deterministic behaviour, not external model quality or
 production availability. External tests remain opt-in. No new migration, production
 deployment or Web Push delivery was performed for this RC. See the
-[deployment checklist](DEPLOYMENT_CHECKLIST.md) and [limitations](../README.md#8-scope--limitations).
+[deployment checklist](DEPLOYMENT_CHECKLIST.md) and [limitations](DEVELOPMENT.md#product-behaviour--data-notes).

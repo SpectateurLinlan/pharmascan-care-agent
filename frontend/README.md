@@ -67,7 +67,7 @@ Start the frontend/backend, set `QA_BASE_URL` to the frontend origin and `PLAYWR
 
 Personal gallery private persistence and eligible loose-pill matching are implemented and real-browser verified with synthetic inputs. Me → Caregiver contacts supports private add/edit/delete/reload through FastAPI and same-user RLS. Explicit storage permission is required; all contacts remain unverified with notifications and sharing disabled. Contact verification, caregiver account linking/delivery, packaging/blister automatic matching and PDF extraction remain unavailable/partial. See the root README and current workflows for Demo A/B/C. Device voice/audio, medicine pronunciation, mobile keyboard and email-account flows need manual acceptance. Reminders operate while the app is active or reopened; patient data uses online APIs. Singpass is a future integration.
 
-See [testing](../docs/DEVELOPMENT.md#running-and-testing) and [current limitations](../README.md#8-scope--limitations) for verification scope and remaining work.
+See [testing](../docs/DEVELOPMENT.md#running-and-testing) and [current limitations](../docs/DEVELOPMENT.md#product-behaviour--data-notes) for verification scope and remaining work.
 
 ## Navigation and reminder QA
 
