@@ -1,6 +1,7 @@
 import type {CSSProperties,ReactNode} from 'react';
-export type IconName='house'|'pill'|'clipboard'|'user'|'settings'|'bell'|'languages'|'chevron-left'|'chevron-right'|'chevron-down'|'plus'|'message'|'camera'|'image'|'shield'|'alert'|'info'|'check'|'clock'|'calendar'|'file'|'heart';
+export type IconName='speaker'|'house'|'pill'|'clipboard'|'user'|'settings'|'bell'|'languages'|'chevron-left'|'chevron-right'|'chevron-down'|'plus'|'message'|'camera'|'image'|'shield'|'alert'|'info'|'check'|'clock'|'calendar'|'file'|'heart'|'close';
 const paths:Record<IconName,ReactNode>={
+ speaker:<><path d="m11 5-6 4H2v6h3l6 4Z"/><path d="M15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></>,
  house:<><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/></>,
  pill:<><path d="m10 4-6 6a5.65 5.65 0 0 0 8 8l6-6a5.65 5.65 0 0 0-8-8Z"/><path d="m7 7 8 8"/></>,
  clipboard:<><rect x="5" y="5" width="14" height="16" rx="2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M10 12h5m-5 5h5M8 12h.01M8 17h.01"/></>,
@@ -21,6 +22,7 @@ const paths:Record<IconName,ReactNode>={
  calendar:<><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></>,
  file:<><path d="M6 3h8l4 4v14H6Z"/><path d="M14 3v4h4"/></>,
  heart:<path d="M12 20s-7-4.5-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.5-7 9-7 9Z"/>,
+ close:<path d="m6 6 12 12M18 6 6 18"/>,
 };
 /** Authored geometry with consistent stroke; no font glyph/network dependency. */
 export function Icon({name,style}:{name:IconName;style?:CSSProperties}){return <svg className="app-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" style={style}>{paths[name]}</svg>;}

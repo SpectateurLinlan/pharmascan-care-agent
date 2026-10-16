@@ -1,7 +1,8 @@
 /** Small presentational primitives shared by the screens. */
 
 import { useLanguage } from '../language';
-import type { ReactNode } from 'react';
+import {useEffect,useState,type ReactNode} from 'react';
+import {createPortal} from 'react-dom';
 import { ApiError } from '../api/client';
 
 export function Card({
@@ -28,9 +29,13 @@ export function Card({
  * the failure cannot be mistaken for a success.
  */
 export function ErrorNotice({ error }: { error: unknown }) {
-  const {t}=useLanguage();
+  const {t}=useLanguage();const [dismissed,setDismissed]=useState(false);
+  useEffect(()=>setDismissed(false),[error]);
+  if(dismissed)return null;
+  const close=<button aria-label={t('Dismiss')} onClick={()=>setDismissed(true)}>{t('Close')}</button>;
   if (error instanceof ApiError) {
     const safeReasons=[
+      'A similar medicine is already saved. Choose the existing product or add clearer product evidence.',
       'Choose a clear, nonblank photo of one pill.',
       'Choose a valid PNG or JPEG medication source photo.',
       'The record window is too large; choose a shorter period.',
@@ -40,20 +45,19 @@ export function ErrorNotice({ error }: { error: unknown }) {
       'This service is temporarily unavailable. Please try again.',
     ];
     const reason=error.code==='REGIMEN_OVERLAP'
-      ?'This version cannot save overlapping plans for the same medicine, including different doses or as-needed and scheduled combinations. This does not mean your prescription is wrong. Review the existing records; do not change your medication because of this message.'
+      ?'There is already a plan for this medicine during these dates. Open your existing medicine to review it before adding another plan.'
       :safeReasons.includes(error.message)?error.message:'Please check your input or try again. Your records have not been confirmed by this error.';
-    return (
-      <div className="status status--error" role="alert">
-        <strong>{t("Could not complete this request.")}</strong> {t(reason)}
-        <details><summary>{t('Request details')}</summary><p>{error.code} · HTTP {error.status}</p></details>
-      </div>
+    return createPortal(
+      <div className="patient-toast patient-toast--error" role="alert">
+        <strong>{t("Please review this")}</strong><p>{t(reason)}</p>{close}
+      </div>,document.body
     );
   }
   const message = error instanceof Error ? error.message : String(error);
-  return (
-    <div className="status status--error" role="alert">
-      <strong>{t("Something went wrong.")}</strong> {t(message)}
-    </div>
+  return createPortal(
+    <div className="patient-toast patient-toast--error" role="alert">
+      <strong>{t("Please review this")}</strong><p>{t(message)}</p>{close}
+    </div>,document.body
   );
 }
 

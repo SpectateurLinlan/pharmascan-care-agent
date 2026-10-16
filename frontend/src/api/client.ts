@@ -349,16 +349,16 @@ export const api = {
   recordBarrier:(values:import('./care').BarrierInput)=>request<import('./care').Barrier>(withClient('/api/me/adherence-barriers'),{method:'POST',body:JSON.stringify(values)}),
   medicationCareReview:(days:7|30)=>request<import('./care').MedicationCareReview>(withClient('/api/me/medication-review',{days:String(days)})),
   evidenceTasks:()=>request<EvidenceTask[]>(withClient('/api/evidence/tasks')),
-  checkInput:(file:File)=>request<ImageRoute>(withClient('/api/sources/check-input'),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'true'},body:file}),
+  checkInput:(file:File)=>request<ImageRoute>(withClient('/api/sources/check-input'),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'false'},body:file}),
   evidenceTask:(id:string)=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${id}`)),
   evidenceSources:(id:string)=>request<Array<{id:string;source_kind:string;review_status:string;reviewed_at?:string|null;recorded_at?:string|null;provided_by?:'patient';extraction_evidence:SourcePreview|null}>>(withClient(`/api/evidence/tasks/${id}/sources`)),
-  attachEvidence:(id:string,file:File,kind:'package'|'pharmacy_label'|'prescription',medicationId?:string,automaticallyRouted=false)=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${id}/sources`,{source_kind:kind,automatically_routed:String(automaticallyRouted),...(medicationId?{medication_id:medicationId}:{})}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'true'},body:file}),
+  attachEvidence:(id:string,file:File,kind:'package'|'pharmacy_label'|'prescription',medicationId?:string,automaticallyRouted=false)=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${id}/sources`,{source_kind:kind,automatically_routed:String(automaticallyRouted),...(medicationId?{medication_id:medicationId}:{})}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'false'},body:file}),
   reviewEvidence:(id:string,draft:EvidenceDraft,distinct_product_confirmed:boolean,options:{product_category?:EvidenceProduct['category'];replace_active_plan?:boolean}={})=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${id}/review`),{method:'POST',body:JSON.stringify({...options,draft,patient_reviewed:true,distinct_product_confirmed})}),
   personalGallery:()=>request<GalleryEntry[]>(withClient('/api/evidence/gallery')),
   retireReference:(id:string)=>request<GalleryImage>(withClient(`/api/evidence/images/${id}/retire`),{method:'POST',body:JSON.stringify({})}),
   referencePhoto:async(id:string)=>(await fetchResponse(withClient(`/api/evidence/images/${id}`))).blob(),
-  addReference:(medicationId:string,file:File,kind:'loose_pill'|'package'|'blister',source:string,reviewed:boolean,compare:boolean)=>request<GalleryImage>(withClient(`/api/evidence/gallery/${medicationId}/images`,{image_kind:kind,source_description:source,reviewed:String(reviewed),for_comparison:String(compare)}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'true'},body:file}),
-  checkPersonalDose:(file:File,regimenId:string|null)=>request<RecognitionEvidence>(withClient('/api/evidence/check-dose',regimenId?{regimen_id:regimenId}:{}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'true'},body:file}),
+  addReference:(medicationId:string,file:File,kind:'loose_pill'|'package'|'blister',source:string,reviewed:boolean,compare:boolean)=>request<GalleryImage>(withClient(`/api/evidence/gallery/${medicationId}/images`,{image_kind:kind,source_description:source,reviewed:String(reviewed),for_comparison:String(compare)}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'false'},body:file}),
+  checkPersonalDose:(file:File,regimenId:string|null)=>request<RecognitionEvidence>(withClient('/api/evidence/check-dose',regimenId?{regimen_id:regimenId}:{}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'false'},body:file}),
   conversationHistory:(before?:string)=>request<ConversationPage>(withClient('/api/agent/history',before?{before}:{})),
   clearConversationHistory:()=>request<{cleared:true}>(withClient('/api/agent/history'),{method:'DELETE',body:JSON.stringify({confirmed:true})}),
   doseDisplay:(basis:DoseBasis,units_per_dose:number,dose_unit:string)=>request<DoseDisplay>(withClient('/api/medications/dose-display'),{method:'POST',body:JSON.stringify({basis,units_per_dose,dose_unit})}),
@@ -378,7 +378,7 @@ export const api = {
   revokeCurrentPush:async(value:PushSubscriptionInput)=>{await fetchResponse(withClient('/api/reminders/push/unsubscribe'),{method:'POST',body:JSON.stringify(value)});},
   reminderAlerts:()=>request<DoseReminderAlert[]>(withClient('/api/reminders/alerts')),
   feedback:(payload:{id:string;category:'issue'|'suggestion';message:string})=>request<{id:string;status:'received';created_at:string}>(withClient('/api/feedback'),{method:'POST',body:JSON.stringify(payload)}),
-  visualCheck: (image:File, regimenId:string|null) => request<VisualCheckResult>(withClient('/api/visual-check',regimenId ? {regimen_id:regimenId} : {}), {method:'POST',headers:{'Content-Type':image.type,'X-Stage2-Consent':'true','X-Demo-Only':'true'},body:image}),
+  visualCheck: (image:File, regimenId:string|null) => request<VisualCheckResult>(withClient('/api/visual-check',regimenId ? {regimen_id:regimenId} : {}), {method:'POST',headers:{'Content-Type':image.type,'X-Stage2-Consent':'true','X-Demo-Only':'false'},body:image}),
   resumeDraft: (regimenId: string) => request<DraftCreateResponse>(withClient(`/api/medications/drafts/${regimenId}`)),
   reminders: () => request<ReminderRecord[]>(withClient('/api/reminders')),
   snoozeReminder: (occurrence_id: string, minutes: number) => request<ReminderRecord>(withClient('/api/reminders'), {method:'POST',body:JSON.stringify({occurrence_id,minutes})}),
@@ -387,9 +387,9 @@ export const api = {
   submitPrnReport: (payload: { regimen_id: string; intake_status: string; idempotency_key: string; challenge_id: string }) =>
     request<SelfReportResponse>(withClient('/api/prn/report'), { method: 'POST', body: JSON.stringify(payload) }),
   regimenHistory: () => request<RegimenHistoryItem[]>(withClient('/api/me/regimens')),
-  sourcePreview: (image: File, kind: 'package' | 'pharmacy_label') => request<SourcePreview>(
+  sourcePreview: (image: File, kind: 'package' | 'pharmacy_label' | 'prescription') => request<SourcePreview>(
     withClient('/api/sources/preview', { source_kind: kind }), {
-      method: 'POST', headers: { 'Content-Type': image.type, 'X-Stage2-Consent': 'true', 'X-Demo-Only': 'true' }, body: image,
+      method: 'POST', headers: { 'Content-Type': image.type, 'X-Stage2-Consent': 'true', 'X-Demo-Only': 'false' }, body: image,
     }),
   speechCapabilities: () => request<SpeechCapabilities>(withClient('/api/speech/capabilities')),
   transcribe: (audio: Blob) => request<TranscriptResponse>(withClient('/api/speech/transcribe'), {

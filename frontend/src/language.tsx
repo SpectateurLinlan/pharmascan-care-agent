@@ -1,4 +1,5 @@
 import {patientCopy} from './patientCopy';
+import {experienceCopy} from './experienceCopy';
 import {pushCopy} from './pushCopy';
 import {api,type PatientPreferences,type PreferenceUpdate} from './api/client';
 import {createContext,useContext,useState,useCallback,useEffect,type ReactNode} from 'react';
@@ -7,6 +8,8 @@ const englishLabels:Record<string,string>={blood_pressure:'Blood pressure',blood
  medication_review:'Medication review',medication_follow_up:'Medication follow-up',symptom_follow_up:'Symptom follow-up',expiry_storage:'Expiry and storage review',
  forgetfulness:'Forgetfulness',running_out:'Medication running out',side_effect_concern:'Concern about symptoms or side effects',scheduling:'Scheduling difficulty',unclear_instructions:'Unclear instructions',complexity:'Medication complexity',unsure_taken:'Unsure whether taken',prefer_not_to_say:'Prefer not to say'};
 const translations:Record<string,string>={
+ 'Add a photo to chat':'在对话中添加照片','Choose a photo':'选择照片','Photo attachment':'已附加的照片','Selected photo preview':'所选照片预览','Photo attached':'已发送照片','Remove photo':'移除照片','Prescription':'处方','Medicine packaging':'药品包装','Allow photo processing. The image is not saved; extracted details may appear in saved chats.':'允许处理照片。图片不会保存；提取的信息可能出现在已保存的对话中。','Allow photo processing before sending this image.':'发送前请允许处理这张照片。','Choose an image smaller than 8 MB.':'请选择小于 8 MB 的图片。','Please help me understand this photo.':'请帮我看看这张照片。',
+ 'Attach a medication photo to your message. The app routes it to label reading or visual evidence, then the assistant can help with your question. A photo does not confirm identity or prove that a dose was taken.':'将药品照片附在对话中。应用会根据照片选择标签读取或视觉核对，助手再协助回答您的问题。照片不能确认药物身份，也不能证明已经服药。',
  'Review medication supply':'核对药物余量与补药',
  'Source and regimen history':'来源与疗程历史','Label quantity evidence (not current stock)':'标签数量证据（不是现有库存）','Source document':'来源文件',
  'Stock and refill':'库存与补药','Last confirmed physical count':'最近确认的实际盘点','Estimated remaining':'估算余量','Estimated days of supply':'预计可用天数','Unknown':'未知','Not estimable':'无法估算',
@@ -432,6 +435,7 @@ Object.assign(translations, {
 });
 Object.assign(translations,patientCopy);
 Object.assign(translations,pushCopy);
+Object.assign(translations,experienceCopy);
 // Redesigned navigation, medication-record anatomy and status wording.
 Object.assign(translations,{
  'Me':'我',

@@ -65,7 +65,7 @@ it('header status derives from Auth and routes through Me, without displaying em
   const {rerender}=render(<HeaderAccountButton ready={false} onOpen={open} auth={auth}/>);
   expect(account).not.toHaveBeenCalled();
   rerender(<HeaderAccountButton ready onOpen={open} auth={auth}/>);
-  fireEvent.click(await screen.findByRole('button',{name:'Me: Guest demo'}));expect(open).toHaveBeenCalledOnce();
+  fireEvent.click(await screen.findByRole('button',{name:'Me: Guest'}));expect(open).toHaveBeenCalledOnce();
   account.mockResolvedValue({kind:'member',email:'demo@example.test',verified:true});
   rerender(<HeaderAccountButton ready onOpen={open} auth={{...auth}}/>);
   await screen.findByRole('button',{name:'Me: Your account'});

@@ -18,7 +18,7 @@ it('automatically prompts after server due status, even without notification per
 });
 it('shows a guest login, requires explicit account switching, and keeps Singpass outside primary account actions',async()=>{
  const auth:AccountPort={available:true,account:async()=>({kind:'guest',email:null,verified:false}),requestEmail:vi.fn().mockResolvedValue(undefined),verifyEmail:vi.fn().mockResolvedValue(undefined),passwordLogin:vi.fn().mockResolvedValue(undefined),setPassword:vi.fn().mockResolvedValue(undefined),signOut:vi.fn().mockResolvedValue(undefined)};
- render(<MeScreen auth={auth} onSettings={vi.fn()} onFeedback={vi.fn()} onIdentityChanged={vi.fn()}/>);await screen.findByText('Guest demo');
+ render(<MeScreen auth={auth} onSettings={vi.fn()} onFeedback={vi.fn()} onIdentityChanged={vi.fn()}/>);await screen.findByRole('heading',{name:'Guest'});
  expect(screen.queryByRole('button',{name:/Singpass/})).toBeNull();
  fireEvent.click(screen.getByRole('button',{name:'Sign in to an account'}));fireEvent.change(screen.getByLabelText('Email'),{target:{value:'synthetic@example.test'}});
  expect((screen.getByRole('button',{name:'Email code / Magic Link'}) as HTMLButtonElement).disabled).toBe(true);

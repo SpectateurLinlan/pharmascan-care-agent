@@ -1,3 +1,6 @@
+
+
+/* Focused patient interaction corrections. */
 /*
  * App layer: the patient-facing surfaces.
  *
@@ -99,6 +102,20 @@ details > * + * {
   white-space: nowrap;
 }
 
+.app-header .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.brand-mark {
+  display: block;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
 /* The three header actions share one shape. The language control is wrapped in
    a popover container, so it is matched explicitly rather than by direct child. */
 .app-header > button,
@@ -125,6 +142,9 @@ details > * + * {
   font-size: 1.75rem;
   line-height: 1;
   color: var(--ink);
+  /* The icon itself is inset inside its 48px target. Align its visible stroke
+     to the same content edge as the cards while preserving the full hit area. */
+  margin-inline-start: calc(-1 * var(--s-3));
 }
 
 .language-menu {
@@ -1244,6 +1264,75 @@ button.danger:hover:not(:disabled) {
   box-shadow: var(--e-1);
 }
 
+.photo-attachment {
+  position: fixed;
+  z-index: 30;
+  left: 50%;
+  bottom: calc(var(--bottom-nav-height, 4.5rem) + var(--s-3) + var(--tap-lg) + var(--s-2));
+  transform: translateX(-50%);
+  width: min(calc(100% - var(--s-6)), calc(var(--content-max) - var(--s-4)));
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--e-1);
+}
+
+.photo-attachment > img {
+  width: 3.5rem;
+  height: 3.5rem;
+  flex: 0 0 auto;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+}
+
+.photo-attachment__details {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  font-size: var(--fs-caption);
+}
+
+.photo-attachment__details strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.photo-attachment__details label {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.photo-attachment__details select {
+  min-width: 0;
+  max-width: 12rem;
+  min-height: var(--tap);
+  font-size: var(--fs-caption);
+}
+
+.photo-attachment__details .photo-consent {
+  align-items: flex-start;
+}
+
+.photo-consent input {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: 0 0 auto;
+  margin-top: 0.1rem;
+}
+
+.chat-photo-note {
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+}
+
 .composer-row input {
   flex: 1;
   min-width: 0;
@@ -1938,6 +2027,16 @@ button.danger:hover:not(:disabled) {
     margin-inline: auto;
     bottom: var(--s-5);
   }
+
+  .photo-attachment {
+    left: calc(var(--rail-width) + var(--s-8));
+    right: var(--s-8);
+    transform: none;
+    width: auto;
+    max-width: 34rem;
+    margin-inline: auto;
+    bottom: calc(var(--s-5) + var(--tap-lg) + var(--s-2));
+  }
 }
 
 /* A landscape phone has the width for a rail but not for a wide one. */
@@ -2141,3 +2240,69 @@ button.danger:disabled {
   font-size: var(--fs-small);
   color: var(--ink-3);
 }
+.patient-toast {
+  position: fixed;
+  top: calc(var(--app-header-height, 4.5rem) + var(--s-3));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  width: min(calc(100% - var(--s-6)), 40rem);
+  max-height: 45dvh;
+  overflow: auto;
+  padding: var(--s-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--e-1);
+}
+.patient-toast p { margin: var(--s-2) 0; }
+.patient-toast--error { border-color: var(--ink-2); }
+.image-consent { padding: var(--s-3); background: var(--surface-inset); border-radius: var(--r-md); }
+.consent input[type="checkbox"] { width: 1.4rem; height: 1.4rem; flex-shrink: 0; }
+.picker-field { display: block; padding-block: var(--s-2); cursor: pointer; }
+.picker-field input { width: 100%; }
+.time-input-row { display: flex; gap: var(--s-2); align-items: center; }
+.time-input-row .picker-field { flex: 1; min-width: 0; }
+.icon-button { min-width: var(--tap); min-height: var(--tap); display: inline-flex; align-items: center; justify-content: center; }
+.speech-toggle[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.history-controls { display: flex; gap: var(--s-2); align-items: center; }
+.history-controls .consent { flex: 1; }
+.history-controls small { display: block; color: var(--ink-2); }
+.conversation-panel { display: flex; flex-direction: column; overflow: hidden; }
+.conversation-panel .assistant-view { flex: 1; min-height: 0; overflow-y: auto; }
+.conversation-panel .transcript { flex: 1 0 auto; }
+.conversation-panel .composer-row { order: 50; flex-shrink: 0; margin-top: auto; border-radius: var(--r-md); }
+.companion-composer .composer-row { width: min(calc(100% - var(--s-8)), calc(var(--content-max) - var(--s-8))); }
+.extracted-preview { margin-top: var(--s-4); }
+
+.conversation-panel .conversation-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.conversation-panel .conversation-toolbar button { width: auto; flex: 0 0 auto; }
+.conversation-panel .assistant-view { overflow: hidden; }
+.conversation-panel .conversation-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.conversation-panel .composer-row { position: relative; bottom: auto; order: initial; margin: 0; }
+.conversation-panel .photo-attachment {
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  transform: none;
+  width: 100%;
+  max-width: none;
+  margin: auto 0 var(--s-2);
+  order: 49;
+}
+
+.history-controls .icon-button { border-radius: 50%; aspect-ratio: 1; }
+
+.picker-control { display: flex; border: 1px solid var(--line-strong); border-radius: var(--r-md); background: var(--surface); }
+.picker-control input { flex: 0 1 11rem; min-width: 0; border: 0; background: transparent; }
+.picker-control input::-webkit-calendar-picker-indicator { display: none; }
+.picker-control .picker-open { flex: 1; min-width: var(--tap); margin: 0; border: 0; justify-content: flex-end; display: flex; align-items: center; background: transparent; }
+.time-input-row > .field { flex: 1; min-width: 0; }
+
+.time-row > .field { flex: 1; min-width: 0; }
+
+.turn .actions .speech-toggle { width: var(--tap); max-width: var(--tap); flex: 0 0 var(--tap); border-radius: 50%; padding: var(--s-2); }
+.conversation-panel .conversation-toolbar { flex-direction: row; flex-wrap: nowrap; }
+.conversation-panel .conversation-toolbar strong { min-width: 0; flex: 1; }

@@ -1,3 +1,4 @@
+import {accountDisplayName} from './accountPresentation';
 import {Icon,type IconName} from './components/Icon';
 import {LanguageMenu} from './components/LanguageMenu';
 import {NotificationInvitation} from './components/NotificationInvitation';
@@ -25,7 +26,7 @@ import {MeScreen} from './components/MeScreen';
 import {SettingsScreen} from './components/SettingsScreen';
 import {FeedbackScreen} from './components/FeedbackScreen';
 import {ReminderMonitor} from './components/ReminderMonitor';
-import {accountAuth} from './api/auth';
+import {accountAuth,type Account} from './api/auth';
 import {OnboardingGuide} from './components/OnboardingGuide';
 import {TodayMedicationCarousel} from './components/TodayMedicationCarousel';
 import {readTour} from './onboarding';
@@ -74,13 +75,14 @@ function CompanionApp() {
   const {tab,navigate:setTab,back:goBack,isRoot}=useCareNavigation(guideOpen&&!loading&&!fatal&&Boolean(medications));
   const contentRef=useRef<HTMLDivElement>(null);
   useEffect(()=>{if(contentRef.current)contentRef.current.inert=guideOpen&&!loading&&!fatal&&Boolean(medications);},[guideOpen,loading,fatal,medications]);
-  const [member,setMember]=useState(false),[now,setNow]=useState(()=>new Date());
+  const [member,setMember]=useState(false),[identity,setIdentity]=useState<Account|null>(null),[now,setNow]=useState(()=>new Date());
   /* The signed-out state gets its own surface, so the shell needs to know the
      kind of identity and not only whether an email account is linked. */
   const [accountKind,setAccountKind]=useState<'member'|'guest'|'signed_out'|'local'|null>(null);
-  useEffect(()=>{void accountAuth.account().then(value=>{setMember(value.kind==='member');setAccountKind(value.kind);}).catch(()=>{setMember(false);setAccountKind(null);});const tick=()=>setNow(new Date());const timer=window.setInterval(tick,60000);window.addEventListener('focus',tick);return()=>{clearInterval(timer);window.removeEventListener('focus',tick);};},[]);
+  useEffect(()=>{void accountAuth.account().then(value=>{setMember(value.kind==='member');setIdentity(value);setAccountKind(value.kind);}).catch(()=>{setMember(false);setAccountKind(null);});const tick=()=>setNow(new Date());const timer=window.setInterval(tick,60000);window.addEventListener('focus',tick);return()=>{clearInterval(timer);window.removeEventListener('focus',tick);};},[]);
   const [focusRegimen,setFocusRegimen]=useState<string|null>(null);
   const closeGuide=()=>{setGuideOpen(false);requestAnimationFrame(()=>document.querySelector<HTMLButtonElement>('[data-guide="today"]')?.focus());};
+  useEffect(()=>{if(['today','medicines','records','me'].includes(tab))setEvidenceTaskId(null);},[tab]);
   const openGuide=()=>{setTab('today');setGuideReplay(true);setGuideOpen(true);};
   useEffect(()=>accountAuth.watchIdentity?.(()=>{window.localStorage.removeItem('pharmascan.agent-session');window.location.reload();}),[]);
   const refreshMedications = useCallback(async () => {
@@ -106,7 +108,7 @@ function CompanionApp() {
   },[loadPreferences,setTab]);
 
   const greeting=greetingAt(now,preferences.timezone);
-  const name=greetingName(member,preferences.display_name,t('Guest'));
+  const name=greetingName(member,accountDisplayName(identity,preferences.display_name,t('Guest')),t('Guest'));
   const accountPage=['me','settings','feedback','profile','account','caregivers','reminder-settings','language-settings','accessibility','privacy','about','help'].includes(tab);
   /**
    * The assistant has exactly two presentations and one rule for each:
@@ -130,13 +132,13 @@ function CompanionApp() {
   const guideVisible=guideOpen&&!loading&&!fatal&&Boolean(medications)&&tab==='today';
   return <div className={dockVisible?'app companion has-dock':standaloneSignIn?'app companion signin-shell':'app companion'}><div ref={contentRef} data-app-content>
     <a className="skip-link" href="#main-content">{t('Skip to content')}</a>
-    {!standaloneSignIn?<header ref={headerRef} className="companion-header app-header">{!isRoot?<button className="back-button" aria-label={t('Back')} onClick={goBack}><Icon name="chevron-left"/></button>:null}<div className="brand">MediThread</div><LanguageMenu/><button className="notification-shortcut" aria-label={t('Medication reminders')} onClick={()=>setTab('reminder-settings')}><Icon name="bell"/></button><button className="settings-shortcut" aria-label={t('Settings')} onClick={()=>setTab('settings')}><Icon name="settings"/></button></header>:null}
+    {!standaloneSignIn?<header ref={headerRef} className="companion-header app-header">{!isRoot?<button className="back-button" aria-label={t('Back')} onClick={goBack}><Icon name="chevron-left"/></button>:null}<div className="brand"><img className="brand-mark" src="/icon.svg" alt=""/><span>MediThread</span></div><LanguageMenu/><button className="notification-shortcut" aria-label={t('Medication reminders')} onClick={()=>setTab('reminder-settings')}><Icon name="bell"/></button><button className="settings-shortcut" aria-label={t('Settings')} onClick={()=>setTab('settings')}><Icon name="settings"/></button></header>:null}
     {preferenceError ? <p role="alert">{preferenceError}</p> : null}
     {fatal ? <ErrorNotice error={fatal} /> : null}
     <main id="main-content" className="app-main">
     {!guideOpen?<NotificationInvitation ownerId={guideOwner} onSettings={()=>setTab('reminder-settings')}/>:null}
     {loading&&!accountPage ? <Card title="Getting your records ready"><p role="status">{t('Starting your private demo session…')}</p></Card> : !medications&&!accountPage ? <Card title="Your records could not be loaded"><p>{t('Please retry the connection. An unavailable record is not an empty medication list.')}</p><button onClick={() => { if (health && sessionId) void refreshMedications(); else window.location.reload(); }}>{t('Retry loading records')}</button></Card> : <>
-      {tab === 'check'||tab==='check-result' ? <VisualCheckScreen initialFile={routedPhoto} showResult={tab==='check-result'} onResult={()=>setTab('check-result')} showBack={false} regimenId={visualRegimen} onBack={goBack} onAddSource={()=>setTab('label')}/> : null}
+      {tab === 'check'||tab==='check-result' ? <VisualCheckScreen ownerId={guideOwner} initialFile={routedPhoto} showResult={tab==='check-result'} onResult={()=>setTab('check-result')} showBack={false} regimenId={visualRegimen} onBack={goBack} onAddSource={()=>setTab('label')}/> : null}
       {tab === 'today' ? <>
         <section className="welcome"><h1 className="greeting">{t(greeting)}{preferences.preferred_language==='zh'?'，':', '}{name}!</h1><p>{t('Your medication and self-care companion')}</p></section>
         {currentMedications.length?<TodayMedicationCarousel medications={currentMedications} focusRegimenId={focusRegimen}>{medication=><TodayScreen key={medication.regimen_id} showTitle={false} focusRegimenId={focusRegimen} onFeeling={()=>{setHealthDescription('');setTab('health-notes');}} onVisualCheck={id=>{setVisualRegimen(id);setTab('check');}} compact medications={[medication]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')}/>}</TodayMedicationCarousel>:<TodayScreen compact medications={[]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')} onVisualCheck={()=>{setVisualRegimen(null);setTab('check');}}/>}
@@ -169,23 +171,16 @@ function CompanionApp() {
         </RowGroup>
         <HistoryScreen />
       </Screen> : null}
-      {tab==='me'?<PatientHub onOpen={setTab} onGuide={()=>setTab('help')}/>:null}
-      {tab==='help'?<Screen title="Help / User Guide" lead="Learn the buttons and voice settings"><RowGroup><Row icon="info" title="Quick start guide" hint="Seven short steps through the main screens" onClick={openGuide}/></RowGroup></Screen>:null}
+      {tab==='me'?<PatientHub onOpen={setTab} onGuide={openGuide}/>:null}
+      {tab==='help'?<OnboardingGuide owner={guideOwner} replay onClose={()=>setTab('me')}/>:null}
       {tab==='account'?<MeScreen standalone={standaloneSignIn} onGuest={()=>setTab('today')} onHelp={()=>setTab('help')} onSettings={()=>setTab('settings')} onFeedback={()=>setTab('feedback')} onIdentityChanged={()=>{window.localStorage.removeItem('pharmascan.agent-session');window.location.reload();}}/>:null}
-      {tab==='profile'?<ProfileScreen/>:null}
-      {tab==='privacy'||tab==='about'?<InformationScreen kind={tab} onPrivacy={()=>setTab('privacy')} onHistory={()=>setTab('records')}/>:null}
+      {tab==='profile'?<><ProfileScreen/><MeScreen onIdentityChanged={()=>window.location.reload()}/></>:null}
+      {tab==='privacy'||tab==='about'?<InformationScreen ownerId={guideOwner} kind={tab} onPrivacy={()=>setTab('privacy')} onHistory={()=>setTab('records')}/>:null}
       {tab==='caregivers'?<CaregiversScreen/>:null}
-      {tab==='settings'?<Screen title="Settings" lead="Everything you can change about how the app works for you.">
-        <RowGroup>
-          <Row icon="bell" title="Medication reminders" hint="When the app prompts you, and how it reaches you" onClick={()=>setTab('reminder-settings')}/>
-          <Row icon="languages" title="Language and speech" hint="English / 中文, voice and reading aloud" onClick={()=>setTab('language-settings')}/>
-          <Row icon="settings" title="Accessibility" hint="Text size and touch targets" onClick={()=>setTab('accessibility')}/>
-          <Row icon="info" title="Quick start guide" hint="Seven short steps through the main screens" onClick={openGuide}/>
-        </RowGroup>
-      </Screen>:null}
+      {tab==='settings'?<SettingsScreen/>:null}
       {tab==='reminder-settings'||tab==='language-settings'||tab==='accessibility'?<SettingsScreen section={tab==='reminder-settings'?'reminders':tab==='language-settings'?'language':'accessibility'}/>:null}
       {tab==='feedback'?<FeedbackScreen/>:null}
-      <div hidden={!assistantVisible}><AssistantScreen onClose={()=>{setAssistantOpen(false);if(tab==='assistant')goBack();}} contextSlots={assistantSlots} onExpand={openAssistant} active={assistantOpen||tab==='today'||tab==='assistant'} onHealthReview={description=>{setAssistantOpen(false);setHealthDescription(description);setTab('health-notes');}} onVisualCheck={id=>{setAssistantOpen(false);setVisualRegimen(id);setTab('check');}} sessionId={sessionId} onSession={setSessionId} compact={!assistantOpen&&tab!=='assistant'} onChanged={refreshMedications} onPhoto={()=>{setAssistantOpen(false);setTab('label');}}/></div>
+      <div hidden={!assistantVisible}><AssistantScreen ownerId={guideOwner} onClose={()=>{setAssistantOpen(false);if(tab==='assistant')goBack();}} contextSlots={assistantSlots} onExpand={openAssistant} active={assistantOpen||tab==='today'||tab==='assistant'} onHealthReview={description=>{setAssistantOpen(false);setHealthDescription(description);setTab('health-notes');}} onVisualCheck={id=>{setAssistantOpen(false);setVisualRegimen(id);setTab('check');}} sessionId={sessionId} onSession={setSessionId} compact={!assistantOpen&&tab!=='assistant'} onChanged={refreshMedications}/></div>
     </>}
     </main>
     {!standaloneSignIn?<ReminderMonitor enabled={!loading&&!fatal&&!guideVisible} onReview={id=>{setFocusRegimen(id);setTab('today');}}/>:null}

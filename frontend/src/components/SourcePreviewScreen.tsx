@@ -22,10 +22,10 @@ export function SourcePreviewScreen({ onUse }: { onUse?: (preview: SourcePreview
     <label className="field">{t('Source type')}<select value={kind} onChange={event => setKind(event.target.value as typeof kind)}>
       <option value="pharmacy_label">{t('Pharmacy label')}</option><option value="package">{t('Medicine package')}</option>
     </select></label>
-    <label className="field">{t('Synthetic demo image')}<input type="file" accept="image/png,image/jpeg"
+    <label className="field">{t('Medication photo')}<input type="file" accept="image/png,image/jpeg"
       onChange={event => setImage(event.target.files?.[0] ?? null)} /></label>
     <label className="consent"><input type="checkbox" checked={consent} onChange={event => setConsent(event.target.checked)} />
-      {t('This is a synthetic image and I agree to send it to PharmaScan for a label preview.')}</label>
+      {t('I allow this photo to be sent to the recognition service to read medication information.')}</label>
     <button onClick={() => void preview()} disabled={!image || !consent || busy}>{t(busy ? 'Reading label…' : 'Preview label')}</button>
     {error ? <ErrorNotice error={error} /> : null}
     {result ? <div><p>{t('Extraction needs your review. Use the manual form below to record the instructions you can verify.')}</p>

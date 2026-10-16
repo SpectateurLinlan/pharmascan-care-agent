@@ -6,7 +6,7 @@ import {readTour,saveTour} from '../onboarding';
 const steps = [
   {target:'[data-guide="today"]', title:'Your daily companion', body:'Today shows your reviewed schedule. Start by adding your medicine if your list is empty.'},
   {target:'[data-guide="medicines"]', title:'Add and manage medicines', body:'Open Medicines to read a label or enter instructions. Review and activate the plan before it appears in Today.'},
-  {target:'.composer-row .photo-button', title:'Use a photo', body:'The photo button adds label or packaging information for review. Compare a pill photo on Today opens a separate visual check.'},
+  {target:'.composer-row .photo-button', title:'Use a photo', body:'Attach a medication photo to your message. The app routes it to label reading or visual evidence, then the assistant can help with your question. A photo does not confirm identity or prove that a dose was taken.'},
   {target:'.composer-row', title:'Speak, review, then send', body:'Tap the microphone, allow speech recognition, then review or edit the words. Send is on the right. You can always type instead. Your browser may use an online speech service.'},
   {target:'[data-guide="records"]', title:'Record and review your reports', body:'After choosing I took it, confirm the separate summary to save your report. Cancel saves nothing. Records contains your reports and summaries; a report does not prove ingestion. Reminders are prompts, not changes to your plan.'},
   {target:'[data-guide="me"]', title:'Choose your voice settings', body:'Automatic reading is off by default. Turn on Read replies automatically in Language and speech if you want it. You can also use Play response and Stop audio. Browser voice is the default; cloud voice requires an explicit choice.'},

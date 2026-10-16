@@ -14,7 +14,7 @@ import {ErrorNotice} from './primitives';
  * unchanged.
  */
 export function ConversationHistory({revision,onCleared,blocked=false}:{revision:number;onCleared:()=>void;blocked?:boolean}){
- const {t,language,preferences,updatePreferences,preferenceError}=useLanguage();const [savingPreference,setSavingPreference]=useState(false);const [saveState,setSaveState]=useState<'idle'|'saved'|'failed'>('idle');const [open,setOpen]=useState(false),[rows,setRows]=useState<ConversationEntry[]>([]),[cursor,setCursor]=useState<string|null>(null),[error,setError]=useState<unknown>(null),[loading,setLoading]=useState(false),[confirm,setConfirm]=useState(false);
+ const {t,language,preferences,updatePreferences,preferenceError}=useLanguage();const [savingPreference,setSavingPreference]=useState(false);const [saveState,setSaveState]=useState<'idle'|'saved'|'failed'>('idle');const [open,setOpen]=useState(false),[rows,setRows]=useState<ConversationEntry[]>([]),[cursor,setCursor]=useState<string|null>(null),[error,setError]=useState<unknown>(null),[loading,setLoading]=useState(false),[confirm,setConfirm]=useState(false),[info,setInfo]=useState(false);
  // The provider reports a failed preference save through context state rather
  // than by rejecting, so the latest value is read after the update settles.
  const preferenceErrorRef=useRef(preferenceError);preferenceErrorRef.current=preferenceError;
@@ -30,16 +30,16 @@ export function ConversationHistory({revision,onCleared,blocked=false}:{revision
    setSaveState(preferenceErrorRef.current?'failed':'saved');
   }catch{setSaveState('failed');}finally{setSavingPreference(false);}
  }
- return <details className="conversation-history" onToggle={event=>setOpen(event.currentTarget.open)}><summary>{t('Saved conversations')}</summary>
- <p>{t('Optional history shows up to 200 conversations from the last 30 days. This is a viewing window, not scheduled deletion. Use Clear saved conversations to remove stored chat text. Medication records are separate.')}</p>
- <label className="consent"><input type="checkbox" disabled={savingPreference} checked={enabled} onChange={event=>void saveHistoryPreference(event.target.checked)}/>{t('Save new conversations on this account')}</label>
- <p className="history-state">{t('Saving starts from now on. Messages sent before you turn this on are not added.')}</p>
+ return <section className="conversation-history">
+ <div className="history-controls"><label className="consent"><input type="checkbox" disabled={savingPreference} checked={enabled} onChange={event=>void saveHistoryPreference(event.target.checked)}/><span>{t('Save new conversations')}<small>{t('View up to 200 conversations from the last 30 days. Saving starts when enabled.')}</small></span></label><button className="icon-button" aria-label={t('About saved conversations')} onClick={()=>setInfo(true)}>?</button></div>
+ <button onClick={()=>setOpen(!open)} aria-expanded={open}>{t(open?'Hide saved conversations':'View saved conversations')}</button>
+ {info?<BottomSheet title={t('About saved conversations')} onCancel={()=>setInfo(false)}><p>{t('Optional history shows up to 200 conversations from the last 30 days. This is a viewing window, not scheduled deletion. Use Clear saved conversations to remove stored chat text. Medication records are separate.')}</p><p>{t('Saving starts from now on. Messages sent before you turn this on are not added.')}</p><button onClick={()=>setInfo(false)}>{t('Close')}</button></BottomSheet>:null}
  {savingPreference?<p role="status">{t('Saving preference...')}</p>:null}
  {saveState==='saved'?<p className="history-state" role="status">{enabled?t('Saving is on. New conversations will be stored on this account.'):t('Saving is off. New conversations will not be stored.')}</p>:null}
  {saveState==='failed'?<div className="history-retry" role="alert"><p>{t('Could not confirm the saving setting. Reload to check its current status, then try again.')}</p><button disabled={savingPreference} onClick={()=>void saveHistoryPreference(!enabled)}>{t('Try again')}</button></div>:null}
- {!saveState&&preferenceError?<p role="alert">{t(preferenceError)}</p>:null}{error?<ErrorNotice error={error}/>:null}{loading?<p role="status">{t('Loading conversations…')}</p>:null}{!loading&&!error&&!rows.length?<p>{t('No saved conversations yet.')}</p>:null}
- {rows.map(row=><article className="history-message" key={row.id}><time>{new Date(row.created_at).toLocaleString(language==='zh'?'zh-CN':'en-SG',{timeZone:preferences.timezone})}</time><p className="user-message">{row.user_text}</p><p>{row.assistant_text}</p></article>)}
- {cursor?<button disabled={loading} onClick={()=>void more()}>{t('Load earlier conversations')}</button>:null}<button disabled={loading||blocked} onClick={()=>setConfirm(true)}>{t('Clear saved conversations')}</button>
+ {!saveState&&preferenceError?<p role="alert">{t(preferenceError)}</p>:null}{error?<ErrorNotice error={error}/>:null}{loading?<p role="status">{t('Loading conversations…')}</p>:null}{open&&!loading&&!error&&!rows.length?<p>{t('No saved conversations yet.')}</p>:null}
+ {open?rows.map(row=><article className="history-message" key={row.id}><time>{new Date(row.created_at).toLocaleString(language==='zh'?'zh-CN':'en-SG',{timeZone:preferences.timezone})}</time><p className="user-message">{row.user_text}</p><p>{row.assistant_text}</p></article>):null}
+ {open&&cursor?<button disabled={loading} onClick={()=>void more()}>{t('Load earlier conversations')}</button>:null}<button disabled={loading||blocked} onClick={()=>setConfirm(true)}>{t('Clear saved conversations')}</button>
  {confirm?<BottomSheet title={t('Clear saved conversations?')} busy={loading} onCancel={()=>setConfirm(false)}><p>{t('This removes saved messages and recent chat text. Your medication plans, reports and follow-ups stay in their own records.')}</p><button className="primary" disabled={loading} onClick={async()=>{setLoading(true);setError(null);try{await api.clearConversationHistory();setRows([]);setCursor(null);setConfirm(false);onCleared();}catch(caught){setError(caught);}finally{setLoading(false);}}}>{t('Confirm clear')}</button><button disabled={loading} onClick={()=>setConfirm(false)}>{t('Cancel')}</button></BottomSheet>:null}
- </details>;
+ </section>;
 }

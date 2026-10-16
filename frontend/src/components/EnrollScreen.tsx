@@ -1,3 +1,5 @@
+import {Icon} from './Icon';
+import {MedicationDate} from './MedicationInputs';
 import {DoseDetails,emptyDoseBasis} from './DoseDetails';
 import type {DoseBasis,DoseDisplay} from '../api/dose';
 import { useLanguage } from '../language';
@@ -265,9 +267,9 @@ export function EnrollScreen({
     <p className="notice">{t('Units per dose is how many you take each time — for example 1 tablet. It is not the strength printed on the pack.')}</p>
 
     <DoseDetails id={fieldId('dose-basis')} basis={doseBasis} onChange={setDoseBasis} amount={doseAmount} unit={doseUnit}/>
-    <div className="grid-2">
-      <div className="field"><label htmlFor={fieldId('course-start')}>{t('Course start date')}</label><input id={fieldId('course-start')} type="date" value={courseStart} onChange={event => {setCourseStart(event.target.value);if(courseDays)setCourseEnd(courseEndForDuration(event.target.value,Number(courseDays))??'');}} /></div>
-      <div className="field"><label htmlFor={fieldId('course-end')}>{t('Last day (inclusive)')}</label><input id={fieldId('course-end')} type="date" min={courseStart || undefined} value={courseEnd} onChange={event => {setCourseEnd(event.target.value);setCourseDays('');}} /></div>
+    <div className="grid-2 picker-fields">
+      <MedicationDate label="Course start date" value={courseStart} onChange={value=>{setCourseStart(value);if(courseDays)setCourseEnd(courseEndForDuration(value,Number(courseDays))??'');}}/>
+      <MedicationDate label="Last day (inclusive)" min={courseStart} value={courseEnd} onChange={value=>{setCourseEnd(value);setCourseDays('');}}/>
     </div>
     <div className="field"><label htmlFor={fieldId('course-days')}>{t('Number of days')}</label><input id={fieldId('course-days')} type="number" min="1" max="3660" value={courseDays} onChange={event=>{setCourseDays(event.target.value);setCourseEnd(courseEndForDuration(courseStart,Number(event.target.value))??'');}}/><p className="notice">{t('Enter a start date and the duration in your reviewed instructions. The last day is calculated inclusively.')}</p></div>
     <div className="field"><label htmlFor="food-instruction">{t('Food instructions')}</label><select id="food-instruction" value={foodInstruction} onChange={event=>setFoodInstruction(event.target.value)}><option value="">{t('Not specified')}</option>{['before food','after food','with food','without regard to food'].map(value=><option key={value} value={value}>{t(value)}</option>)}</select></div>
@@ -280,16 +282,8 @@ export function EnrollScreen({
       </p>
       {times.map((value, index) => (
         <div key={index} className="time-row">
-          <label htmlFor={`${editFrom?'edit-':''}med-time-${index}`} className="visually-hidden">
-            {t('Dose time')} {index + 1}
-          </label>
-          <input
-            id={`${editFrom?'edit-':''}med-time-${index}`}
-            type="time"
-            value={value}
-            onChange={(event) => setTimeAt(index, event.target.value)}
-            disabled={isPrn}
-          />
+          <MedicationDate id={`${editFrom?'edit-':''}med-time-${index}`} type="time" label={`${t('Dose time')} ${index+1}`} value={value} onChange={value=>setTimeAt(index,value)}/>
+          {index===times.length-1?<button type="button" className="icon-button" aria-label={t('Add another time')} onClick={addTime} disabled={isPrn}><Icon name="plus"/></button>:null}
           <button
             type="button"
             onClick={() => removeTimeAt(index)}
@@ -300,9 +294,6 @@ export function EnrollScreen({
           </button>
         </div>
       ))}
-      <button type="button" onClick={addTime} disabled={isPrn}>
-        {t('Add another time')}
-      </button>
       {!isPrn && normalisedTimes().length < times.length ? (
         <span className="notice">
           {t('Duplicate times are treated as a single dose.')}
@@ -327,7 +318,7 @@ export function EnrollScreen({
   // --- added ---------------------------------------------------------------
   if (activated) {
     return <Card title={editFrom?'Review a new plan version':'Add a medication'}>
-      <div className="status status--ok" role="status">{t('Medication added. It now appears in your medication list.')}</div>
+      <div className="patient-toast" role="status"><p>{t('Medication added. It now appears in your medication list.')}</p><button onClick={reset}>{t('Close')}</button></div>
       <div className="actions">
         <button onClick={reset} disabled={busy}>{t('Add another')}</button>
       </div>

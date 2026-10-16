@@ -12,7 +12,7 @@ vi.mock('../api/auth',()=>({accountAuth:{account:async()=>({kind:'guest',email:n
 afterEach(()=>{cleanup();vi.resetAllMocks();});
 const medication:MedicationSummary={medication_id:'DEMO-med',regimen_id:'DEMO-regimen',display_name:'DEMO Metformin',is_prn:false,version_no:1,identity_status:'unverified',source_backed:true,dose_amount:500,dose_unit:'mg',frequency_rule:{kind:'daily',local_times:['20:00'],days_of_week:[]},food_instruction:'after food',course_start_date:'2026-10-14',course_end_date:'2099-10-20'};
 it('Me is an entry hierarchy with a separate account destination, not an expanded email form',async()=>{
- const open=vi.fn();render(<PatientHub onOpen={open}/>);await screen.findByText('Guest demo');
+ const open=vi.fn();render(<PatientHub onOpen={open}/>);await screen.findAllByText('Guest');
  expect(screen.queryByLabelText('Email')).toBeNull();expect(screen.queryByRole('button',{name:/Singpass/})).toBeNull();
  fireEvent.click(screen.getByRole('button',{name:'Login or register'}));expect(open).toHaveBeenLastCalledWith('account');
  fireEvent.click(screen.getByRole('button',{name:/Personal profile/}));expect(open).toHaveBeenLastCalledWith('profile');

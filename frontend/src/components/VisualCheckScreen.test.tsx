@@ -15,7 +15,7 @@ it('previews a selected image and requires consent before selected-regimen visua
  expect((screen.getByRole('button',{name:'Check photo'}) as HTMLButtonElement).disabled).toBe(true);expect(api.visualCheck).not.toHaveBeenCalled();
  fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'Check photo'}));
  await screen.findByText('Add a personal reference first');expect(api.checkPersonalDose).toHaveBeenCalledWith(image,'demo-regimen');expect(api.visualCheck).not.toHaveBeenCalled();
- expect(screen.getByText(/photo cannot prove ingestion/)).toBeTruthy();
+ expect(screen.getByText(/Compare the original label/)).toBeTruthy();expect(screen.queryByText(/photo cannot prove ingestion/)).toBeNull();
  expect(onResult).toHaveBeenCalledOnce();
  view.rerender(<VisualCheckScreen regimenId="demo-regimen" onBack={vi.fn()} showResult={false}/>);
  expect((screen.getByLabelText('Take or choose a photo') as HTMLInputElement).files?.[0]).toBe(image);
