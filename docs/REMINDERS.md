@@ -86,6 +86,10 @@ adapter), and `vercel.json` (Singapore `sin1`, 60-second function max, explicit 
 `.vercelignore` (private/local files). `deploy/dispatcher/index.py` exposes only the existing
 dispatcher app, adds the bundled `backend` source directory to Python's import
 path, and derives/injects the project-root path from its own source location.
+The function's bundle patterns use compact brace globs: Vercel limits each
+`includeFiles` / `excludeFiles` string to 256 characters. Keep `.vercelignore`
+for upload exclusions as well; the function glob separately excludes private
+directories, hidden directories, environment files and development assets.
 No `PYTHONPATH` setting is required. No patient API,
 Agent, Gemini, Stage2, voice or migration entrypoint is exported by this project.
 Leave Build Command and Output

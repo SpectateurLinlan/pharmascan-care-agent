@@ -9,6 +9,16 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 
+def test_vercel_bundle_patterns_respect_public_schema_limits():
+    """Vercel's public schema limits each bundle glob string to 256 chars."""
+    root = Path(__file__).resolve().parents[2]
+    config = json.loads((root / "vercel.json").read_text(encoding="utf-8"))
+    for function in config["functions"].values():
+        for name in ("includeFiles", "excludeFiles"):
+            assert isinstance(function[name], str)
+            assert len(function[name]) <= 256, name
+
+
 def test_vercel_custom_entry_from_other_cwd_is_dispatcher_only(monkeypatch, tmp_path):
     root = Path(__file__).resolve().parents[2]
     project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
