@@ -1,6 +1,6 @@
 # External PharmaScan Stage2, Main Backend and Agent Tool Contracts
 
-**Current integration candidate: v0.8.0 (2026-10-13).** Owner-supplied snapshot: `docs/external/pharmascan-api-openapi-0.8.0.json`; preserved actual historical snapshot: `docs/external/pharmascan-api-openapi-0.4.0.json` (recovered byte-for-byte from local Git HEAD, not regenerated). The v0.8.0 snapshot is frozen for local validation, not a promise that all deployed POST behavior or model performance is verified. Historical designs below do not override section G. Live GET /health and /v1/model-info were checked; image POST behavior remains SCHEMA-VERIFIED / LIVE-UNVERIFIED.
+**Current external integration: v0.10.0.** Canonical snapshot: `docs/external/pharmascan-api-openapi-0.10.0.json`;0.8/0.4 snapshots remain historical. The upgrade's actual field mapping and live synthetic evidence are recorded in [STAGE2_V010_UPGRADE.md](STAGE2_V010_UPGRADE.md). API version and embedding model/space/preprocessing are separate compatibility checks. This long-term-care round does not modify external contracts or invoke Stage2. Earlier design sections remain historical where superseded by current implemented contracts below and the coverage matrix.
 
 ## A. Prior external endpoints vs app-level ownership (historical table; see current v0.8.0 section G)
 
@@ -312,3 +312,76 @@ GET/POST /api/me/caregivers lists/adds patient-owned contact notes; PUT/DELETE /
 Runtime snapshot: docs/external/pharmascan-api-openapi-0.10.0.json; older snapshots retained. SourcePreview adds optional label_kind, dispensed_by and message; product adds release/release_printed. RegimenEvidence adds instructions(text/line,dose.amount/amount_max/unit,times_per_day,every_hours,as_needed,times_of_day,food,duration,max_per_day), indication, cautions and supplied_quantity. Original printed fields remain. Legacy derived dose/frequency/time/duration placeholders remain null; these are not authoritative regimen values. Missing/new optional properties default unknown.
 
 POST /api/sources/check-input accepts bounded consented synthetic PNG/JPEG under verified AuthContext and returns typed image_type/checked/abstained/suggested_workflow/message. It never executes remote next_tools, creates a regimen or records intake. Existing evidence-task attach/review/activation APIs are retained; review rejects explicit source contradictions, incomplete duration/course bounds and unsupported interval/range activation. Private sources/task JSON retain new fields without a migration. Upstream read-label uses multipart image plus optional medications JSON string from the owned repository, not caller ownership input. See STAGE2_V010_UPGRADE.md for exact external changes/errors and live-vs-synthetic acceptance.
+
+## Reminder/navigation release additions (2026-10-15)
+
+- GET `/api/reminders/plan`: typed occurrence/regimen/rule/due/reminder projection, owner from principal.
+- GET `/api/reminders/calendar?days=30`: private text/calendar attachment, maximum31 days/500 events; no fixed PRN/incomplete export; no-store.
+- GET `/api/reminders/push/config`: only availability/public VAPID key; disabled by default.
+- GET/POST `/api/reminders/push/subscriptions`: list id/enabled only or validate/save endpoint+P256DH/auth; no patient_id argument.
+- DELETE `/api/reminders/push/subscriptions/{id}` and POST `/api/reminders/push/unsubscribe`: owner-scoped revocation, including cleanup while provider is disabled.
+- PUT preferences adds `reminders_enabled` and validated IANA timezone. Existing rule timezones remain immutable.
+- POST `/api/medications/drafts?medication_id=...`: optional same-owner existing identity; exact product name must agree. Creates a separate unreviewed regimen version using the existing review/activation flow.
+- POST `/api/medications/{regimen_id}/end` with explicit `confirmed:true`: authenticated, idempotent record-stop, preserves history; not exposed as an LLM tool.
+- GET regimen history includes typed frequency_rule for faithfully editing weekday plans.
+
+No external Stage2 contract or Gemini function allowlist changed. Reminder/notification actions never create dose_events. Browser deep links use `#today/#medicines/#records/#me`; legacy `#history` normalizes to Records.
+
+The internal application runtime marker is `patient-ux-reminders-v1` (separate from the unchanged Stage2 API0.10 contract). Photo results use a `#check-result` child route; acquisition/file state survives task Back/Forward. Unknown/missing-reference HTTP fixtures in navigation tests are explicitly MOCK, not new real Stage2 evidence. Account display metadata is optional for greeting; verified business-record access does not depend on that extra metadata read.
+## Long-term care public HTTP and model tools (2026-10-16)
+
+All routes require the existing verified patient context. Identity is not a body/model argument. DTOs reject extra fields.
+
+| HTTP | Public DTO / application use case |
+|---|---|
+| `GET /api/me/inventory/{medication_id}` | `StockStatus`, current ledger estimate + optional printed quantity evidence |
+| `POST /api/me/inventory/{medication_id}` | `StockInput`, explicit `confirmed=true`, stable UUID; atomic append then idempotent task reconciliation |
+| `GET /api/me/adherence-barriers` / `POST` | `Barrier[]` / patient-confirmed `BarrierInput`; immutable self-reports |
+| `GET /api/me/care-tasks?actionable=true` | owned tasks / actionable projection |
+| `POST /api/me/care-tasks` | patient-confirmed `CareTaskInput`, medication-related category/date/context |
+| `POST /api/me/care-tasks/refresh` | deterministic idempotent supply-task reconciliation, no stock/dose change |
+| `POST /api/me/care-tasks/{task_id}` | confirmed `TaskUpdate`, stable change ID + expected version; complete/contact/defer/cancel/history |
+| `GET /api/me/medication-review?days=7` or `30` | `MedicationCareReport`; numeric query coercion tested, other windows422 |
+| Existing health-observation PUT | adds validated measurement kind/value/secondary BP/unit, retaining old note inputs |
+
+Missing/foreign references fail with existing NOT_FOUND/AUTH_REQUIRED envelopes; unit/idempotency/version/confirmation errors use INVALID_INPUT. Provider failures remain unavailable, not empty stock. Database list adapters verify bounded complete pagination rather than silently truncating a history.
+
+Exact Gemini additions: `get_medication_inventory`, `get_adherence_history`, `get_health_observations`, `get_longitudinal_summary`, `prepare_medication_review`, `get_unresolved_follow_ups`, `prepare_stock_change`, `prepare_adherence_barrier`, `prepare_medication_care_task`, `prepare_care_task_update`, `clarify_medication_care`. The four prepare-change functions return an unconfirmed `care_request: CareReview`; they cannot execute writes. The clarification function accepts only an allowlisted missing-field enum and returns a controlled question, storing a bounded optional `care_clarification` marker separately from dose clarification. No owner/token/confirmed arguments are exposed. The existing four-round budget, stateless Interactions and provider quota remain. Visit preparation requires complete review evidence, with at most one coverage-repair request within that budget. Deterministic summaries ground factual replies. Audit groups are `get_long_term_care` / `prepare_care_action`, with exact function in the HTTP trace payload. Verified server time and patient timezone enter context via injected clock/preferences.
+
+See [LONG_TERM_CARE](LONG_TERM_CARE.md) for source/stock distinctions and review-window semantics. Existing Stage2 v0.10 external contracts are unchanged.
+
+## Session 04.5 public additions
+
+- POST /api/medications/dose-display: authenticated DoseDisplayInput {basis, units_per_dose, dose_unit}; response calculated / not_calculated / conflict with nullable total and explanation. Read-only arithmetic, no dosing authorization.
+- DraftCreateRequest optionally accepts dose_basis; retained on its source. Old payloads remain valid and old regimen history is not rewritten. MedicationSummary optionally returns that basis.
+- Existing-product drafts validate known identity facts from owned original/historical sources before writing: conflicting strength, formulation or counted-dose form requires explicit source reconciliation. Names alone do not authorize product reuse. Dose display abstains on multiple/negative/ambiguous mass instructions; it never silently selects the first printed count. Request/response DTO shapes remain unchanged.
+- GET /api/agent/history?before=<owned-entry-UUID>&limit=1..20: keyset-paginated {entries,next_before}; entries contain id, user_text, assistant_text, created_at, never executable confirmations. Foreign/missing cursor is rejected.
+- DELETE /api/agent/history with {confirmed:true}: clears owned saved messages and recent raw chat text, preserving clinical records/task state. Unknown extra fields are rejected.
+- Agent response history_saved is nullable: not requested, saved, or storage failure. A history failure does not fabricate success or suppress the actual answer.
+- Evidence attachment accepts automatically_routed=false by default. When true, source kind follows the actual read-label label_kind; a check-input printed prediction alone does not establish dispensing authority.
+
+Stage2 v0.10.0 snapshots are unchanged. Existing check-input is consumed through the backend. next_tools is a provider suggestion, never a tool-execution grant. PDF is not newly enabled.
+## Medication course conflicts
+
+`POST /api/medications/drafts` and `POST /api/medications/activate` return HTTP 409 with `code=REGIMEN_OVERLAP` when a same-patient active plan for the same normalized medication name or known product ID conflicts with the incoming course. Different medication-row IDs, per-dose amounts or PRN flags do not bypass this guard. Explicitly end an obsolete recorded plan before replacing it; activation does not automatically supersede it. Existing request/response DTOs remain compatible. `replace_active_plan` on evidence review is retained for compatibility but cannot authorize an automatic replacement. Applied migration025 provides the database backstop; see [data model](DATA_MODEL.md#migration-025-conservative-overlapping-plan-restriction).
+
+This response represents the current MVP's conservative storage limitation, not a diagnosis of an incorrect prescription or an instruction to discontinue medication. UI integrations should explain that overlapping PRN/scheduled or different-dose combinations may be legitimate but are unsupported here, preserve the draft/evidence, and offer review/back actions. Do not automatically retire an existing plan or infer which prescription is correct.
+
+During Vite development, an unavailable FastAPI target now returns structured HTTP 503 `PROVIDER_UNAVAILABLE` rather than an empty proxy 500. Run both services using `python scripts/start_dev.py` and check `/api/health` before diagnosing preference or history persistence.
+
+# Worker dispatcher and device diagnostics
+
+The worker-only application `app.transport.dispatcher:create_dispatcher_app` is
+not mounted on the patient API. Its fixed `POST /internal/notifications/dispatch`
+requires an expiring HMAC signature, fixed input and no browser Origin. Request
+process timeout25s, max5 delivery attempts/pass, shared application projection and
+database lease/queue. Counts are processed attempts, never device receipts.
+See [authentication, deployment and limits](REMINDERS.md#protected-dispatcher-and-device-setup-local-implementation).
+
+Patient JWT routes additionally provide `POST /api/reminders/push/current`
+(`PushSubscriptionInput` → owned id/enabled or null) and `POST /api/reminders/push/test`
+(`subscription_id`, UUID `request_id` → `DeliveryResult`). The verified principal
+is the only ownership source; no caller-specified patient/destination/message.
+Config includes optional backward-compatible `test_available`. Expired test
+subscriptions are disabled. Diagnostic sends have local cooldown/replay protection
+and do not consume medication reminders, create occurrences or record intake.

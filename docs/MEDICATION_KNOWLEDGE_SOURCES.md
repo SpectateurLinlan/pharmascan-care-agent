@@ -1,6 +1,18 @@
-# Medication knowledge sources ? P1/P2 research
+# MediThread medication knowledge sources
 
-Date:2026-10-15. No knowledge/RAG/DDI tool is enabled by this research. Patient-specific schedule remains structured reviewed regimen data.
+## Current implementation (2026-10-16)
+
+General medication education uses a bounded, read-only openFDA Drug Label provider
+through `MedicationUnderstandingService` and the allowlisted
+`get_medication_understanding` tool. It requires conservative ingredient, form,
+route, release and strength matching; returns label Set ID, version, date and
+citation; and abstains on insufficient/conflicting evidence. Personal instructions
+come exclusively from the current reviewed regimen, not US general label dosing.
+No patient identity/history is sent to the public label lookup. There is no
+bulk ingestion, vector database, HealthHub/ASHP content import or enabled DDI tool.
+See [the public interface and safety policy](../backend/MEDICATION_UNDERSTANDING.md).
+
+## Other sources evaluated (2026-10-15)
 
 | Primary source | API / coverage | Licence / reuse boundary | Current decision |
 |---|---|---|---|
@@ -9,8 +21,8 @@ Date:2026-10-15. No knowledge/RAG/DDI tool is enabled by this research. Patient-
 | [MedlinePlus web service](https://medlineplus.gov/about/developers/webservices/) | Health-topic retrieval and attribution, not a patient-medication schedule or pairwise interaction API. | [Content policy](https://medlineplus.gov/about/using/usingcontent/) distinguishes government and licensed/vendor content. Do not assume all drug/illustration content is freely reusable. | P2: narrowly attributed patient information after licensing/coverage review. |
 | [DDInter terms](https://ddinter.scbdd.com/terms/) | Drug-interaction dataset; product/ingredient/market coverage must be established. | CC BY-NC-SA4.0; commercial use permission is unresolved. | Not integrated. Obtain appropriate licensed DDI data/permission before any interaction screening claim. |
 
-Future get_medication_knowledge must carry source/version/citation/product-market coverage. A document RAG is not a validated interaction checker. No alert is not evidence of safety; Gemini must not invent dose adjustments or infer diagnoses. Until a licensed validated tool exists, retain source evidence and recommend pharmacist/doctor verification for unresolved interactions or doses.
+Any additional knowledge provider must carry source/version/citation/product-market coverage. A document RAG is not a validated interaction checker. No alert is not evidence of safety; Gemini must not invent dose adjustments or infer diagnoses. Retain source evidence and recommend pharmacist/doctor verification for unresolved interactions or doses.
 
-## 0.10.0 bounded service evaluation (2026-10-15)
+## Historical Stage2 0.10.0 bounded service evaluation (2026-10-15)
 
 REAL LIVE /v1/safety/medications returned a typed coverage response with unscreened inputs and uncheckable pairs. An intentionally unknown synthetic product was nevertheless resolved to an ingredient with all_identified=true. Patient screening therefore stays disabled. [DDInter2.0 official terms](https://ddinter2.scbdd.com/terms/) were checked and state CC BY-NC-SA4.0; commercial permission remains unresolved. [openFDA label documentation](https://open.fda.gov/apis/drug/label/) describes US manufacturer/distributor-submitted SPL data with responsible-use limitations. /safety/label is not a Singapore patient instruction source and is not enabled. No general knowledge/interaction tool was added to Gemini.

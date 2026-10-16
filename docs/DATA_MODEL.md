@@ -1,6 +1,14 @@
 # PostgreSQL Data Model — source, medication, regimen, visual evidence, adherence and Agent state
 
-**System of record:** Supabase PostgreSQL, Supabase Auth and private object storage. The current personal embeddings are bounded typed JSON; the earlier `pgvector` target below is not the implemented gallery storage. **Do not put relational/PHI records into Hugging Face model Space**. These are target schemas, **not migrations already run**. See `AGENTS.md` for mandatory RLS, trace and testing rules.
+## Implemented long-term additions (migrations022–023)
+
+`patient_medications` has many append-only `inventory_transactions`, scoped by owner+concrete identity+count unit; label quantity remains in source extraction evidence. `regimen_versions` may be referenced by patient-reported `adherence_barriers` and `medication_care_tasks`, never overwritten. Barriers optionally reference an owned task. Tasks retain original source and a bounded transition history/version; completion/deferral/cancellation preserves prior entries.
+
+Existing `health_observations` now optionally stores validated numeric measurements. All old descriptive notes remain valid. Existing `notification_deliveries` has either its original occurrence/regimen/rule or an owned task, enforced by an exclusive-source check and owner foreign keys; unique task/device/time prevents repeated delivery jobs.
+
+022 adds schema/atomic RPCs/FORCE RLS,023 tightens changed human-task retry payload rejection. Both applied to development, no rollback or data deletion. Patient-owned RPC ownership is `auth.uid()`; no arbitrary owner input or direct authenticated stock/task DML. The administrative worker retains its explicit separate connection. Exact fields, rules and rollback scope: [LONG_TERM_CARE](LONG_TERM_CARE.md).
+
+**System of record:** Supabase PostgreSQL, Supabase Auth and private object storage. The current personal embeddings are bounded typed JSON; the earlier `pgvector` target below is not the implemented gallery storage. **Do not put relational/PHI records into Hugging Face model Space**. These are target schemas, **not migrations already run**. See [architecture](ARCHITECTURE.md) and [safety](SAFETY_AND_EVALUATION.md) for patient isolation, traceability and testing boundaries.
 
 ## A. ER design and key ownership
 
@@ -60,7 +68,7 @@ Do **not** combine `MedicationProduct`, `PatientMedication`, `RegimenVersion`, `
 - **Patient isolation**: `auth.uid() = patient_id` for every owned table, or join policy through parent ownership. Private storage bucket signed URLs and appropriate storage policy. Backend `service_role` bypasses RLS: never send it to browser, and do not rely solely on RLS if server uses elevated key; validate patient scoping in service.
 - **Index** `(patient_id, effective_from/effective_to)` via join/snapshot for active regimens, `(patient_id, due_at)` for dose occurrences, `(patient_id,event_time)` for dose events, `(patient_id,observed_at)` observations, `(session_id,called_at)` tool logs, `(reference_set_id, image_type)` images.
 - **Vectors**: `vector(256)` is valid only after exact embedding width verified. If model upgrade changes dimensions, add dimensioned table/version or migrate intentionally; don't coerce unrelated embedding spaces. Small Gallery requires exact cosine, not premature approximate vector search. Even if L2-normalized, semantic confidence must be empirically calibrated.
-- **Regimen state**: require source-reviewed quantity/frequency/etc to mark `active`; historical rows immutable except explicit audited corrections. Use transaction for `supersede(old) + activate(new) + reschedule future dose occurrences`. Previous events remain attached to old version.
+- **Regimen state**: require source-reviewed quantity/frequency/etc to mark `active`; historical rows stay immutable. A replacement requires an explicit stop of the previous recorded plan before activation; activation no longer automatically supersedes an active plan. Previous events remain attached to their original version.
 - **Time**: UTC timestamptz database, patient IANA timezone for planned local doses; `created_at` ≠ occurrence time; never infer ingestion from reminders.
 - **Demo seeding**: create synthetic products and 7-day patient records with deterministic seed, idempotent per demo user; use fresh anonymous `auth.uid()` per evaluator, explicit Reset Demo. Protect anonymous creation from spam and schedule cleanup.
 - **Images**: original uploaded photo optionally retained for enrollment references; dose-check original short retention or inference-only with results retained. Preserve ability to recompute embeddings if consent/source allows after model change. Never use `.hf.space` as patient gallery database.
@@ -132,3 +140,25 @@ SourceEvidenceView extends the existing public SourceDocumentDTO with SourceLink
 ## 0.10.0 source evidence (2026-10-15)
 
 No schema migration. Existing immutable source_documents.extraction_evidence retains the new printed instruction parts and original line, product release, list comparison and label classification. Existing medication_evidence_tasks.data retains the independent product, source ids, missing fields, conflicts and reviewable regimen proposal; medication_source_links and private medication_images retain each source. A code/strength/release or instruction conflict is persisted, never an overwrite. Existing same-user owner RLS applies. Optional recognition outcome imprint_check/imprint_read_for is retained in recognition_runs JSON; absent/unavailable reads do not prove matching. Existing JSON size limits remain unchanged.
+
+## Reminder delivery migration021 (2026-10-15)
+
+Reuse regimen_versions, dose_rules, dose_occurrences, dose_reminders and patient_profiles; no second medication schedule. Add reminders_enabled on profile; push_subscriptions binds owner/device endpoint/keys/enabled with eight-active-device limit. notification_deliveries binds owner/regimen/rule/occurrence/subscription, reminder instant, stable slot, pending/sending/sent/cancelled/failed state, attempts/backoff and scrubbed error category. Composite owner FKs and FORCE RLS preserve isolation. Authenticated patients have subscription SELECT/INSERT/UPDATE, delivery SELECT only; administrative worker alone claims/updates jobs. Migration and disposable-only rollback provided; no shared rollback/reset performed. Historical regimens/sources/events remain preserved.
+
+## Additive migration024: dose evidence and optional conversations
+
+202610160024_conversation_history.sql adds nullable source_documents.dose_basis and patient_profiles.conversation_history_enabled (default false), plus conversation_turns. Conversation rows have owner/session constraints, indexes and ENABLE/FORCE RLS. Same-user append/clear RPCs validate auth.uid; no new Agent or frontend privileged table access exists.
+
+Saved history displays up to200 pairs from the last30days; pages are at most20. This is a read/RLS visibility window, not an independent timed physical purge. Supabase removes old/excess archive rows on a later successful append; inactive accounts can retain older text. The simulated memory adapter trims count and filters reads, without age-based physical cleanup. Explicit Clear removes the owner's archive and recent session text; it preserves clinical/task/challenge state. IDs are derived from session + client-turn ID to reject mismatched repeat writes. Source basis is immutable after review. Clinical facts, regimen versions, occurrences and dose events are separate and are not deleted with conversations. No scheduled deletion guarantee is made.
+
+Migration024 was applied additively to the development Supabase after earlier ledger hashes were checked. Rollback is provided but intentionally refuses retained feature data; it was not executed. Do not edit applied forward SQL.
+
+## Migration 025: conservative overlapping-plan restriction
+
+`202610160025_regimen_overlap_guard.sql` adds a SECURITY INVOKER trigger; it does not delete, merge or rewrite existing records. It serializes same-patient draft/activation checks with an owned profile row lock. Matching known product IDs or normalized medication names cannot have overlapping active course dates; dose amount, PRN status and different medication-row IDs do not bypass the rule. The final day is inclusive and an unspecified end is open. The existing single-active-version-per-medication constraint remains stricter for versions of the same record.
+
+The application checks before draft writes and rechecks on activation. Database SQLSTATE `P7501` maps to HTTP 409 `REGIMEN_OVERLAP`. Migration 025 was applied with owner authorization on 2026-10-16, together with its custom ledger entry; migrations001–024 were not replayed. Existing records were not rewritten. Rollback removes only the added trigger/function and requires separate approval.
+
+This is an MVP representation restriction, **not a medical judgment** that same-name products, different doses or PRN plus scheduled instructions are inherently wrong. Reliable professional instructions may legitimately require combinations this MVP cannot represent. Exact normalized-name matching is conservative and does not establish ingredient/strength/form equivalence. Do not automatically stop, merge or delete existing plans. Explicitly ending an obsolete application record is distinct from advising a patient to stop taking medicine.
+
+The opt-in `tests/backend/test_regimen_overlap_live.py` exercises real same-user JWT persistence, reviewed/B14 activation, conservative PRN conflicts, stop-and-replace, dose-event idempotency/history, independent concurrent Data API activations and cross-owner RLS. These are database/application checks, not hosted browser acceptance or evidence of clinical appropriateness. The concurrent transport gate synchronizes real requests and does not mock the provider response.

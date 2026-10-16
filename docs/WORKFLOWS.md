@@ -1,6 +1,6 @@
-# PharmaScan Care — Detailed Business, Agent, Activity and Tool Flows
+# MediThread — Detailed Business, Agent, Activity and Tool Flows
 
-> Intent states and backend effects are **design contracts**. No claims of existing implementation. Preserve prior design snapshots in `docs/reference/` as the Stage2 owner is already following them.
+Implemented workflows and current evidence are recorded in the dated runtime sections and [runtime workflows](WORKFLOWS.md). Earlier lifecycle diagrams include design targets; use that matrix to distinguish live integration, local tests and future work. External Stage2 v0.10.0 remains frozen.
 
 ## I. The overall medicine lifecycle (Claude's A–D + our agentic extension)
 
@@ -237,3 +237,37 @@ Me -> Caregiver contacts -> Add caregiver contact -> enter name, optional relati
 ## Stage2 0.10.0 Singapore sticker acceptance
 
 Use the [upgrade-specific Demo A/B/C steps](STAGE2_V010_UPGRADE.md#reproducible-acceptance). New evidence components render parsed fields beside original lines and missing-value guidance, in both languages. Save identity -> supplement same owned task -> compare independent strength/release/ingredients/product codes and instructions -> clarify conflict/missing time/course -> patient review -> separate activation. Fixed daily frequency requires explicit clock slots; no label date/quantity inferred course. Gallery embed requests imprint reading and retains unavailable/skipped distinctions without claiming text verification. Current source tasks/references remain private and durable across reload. The new browser regression is e2e/stage2-v010.spec.ts; live provider results are recorded separately from Vitest fixtures in current QA records.
+
+## Current patient navigation and reminders (2026-10-15 implementation)
+
+Primary locations: Today (daily occurrences, prompts and one composer), Medicines (identity/regimen/source/gallery, registration and version history), Records (dose reports, health observations and summaries), Me (profile/Auth/caregiver/preferences/privacy/help/feedback/about). Assistant expands as a task view and Back returns to its actual origin. Root tabs do not replay all prior root visits through app Back. Draft and conversation state survive root switches. Missing deep-link medication context requests selection.
+
+Activated reviewed timed plan -> deterministic rules/occurrences -> automatic reminder projection -> due in-app alert or independently scheduled Web Push -> patient opens Today -> optional report challenge -> explicit B14 confirmation -> atomic dose_event. Reminder delivery/opening never records intake. Editing creates/reviews/activates a new version; stopping the recorded plan retains history and excludes future jobs. Calendar download is a finite one-time import and old events require manual cleanup after changes. [Operational setup and platform limits](REMINDERS.md).
+## Current medication-related long-term workflow (2026-10-16)
+
+Four root tabs remain Today / Medicines / Records / Me. Today summarizes open care tasks and keeps the same Assistant. Medicines detail owns stock/refill. Records owns barriers, numeric observations/trends and medication review/export. Quick links share these same services and state.
+
+Stock: user physical count → human review/confirm → atomic owner-bound ledger → deterministic estimate → idempotent refill-review task → patient reports contact/refill → human confirms → transaction and task/history update. PRN/incomplete/ended plans do not generate fixed demand; cancelled/closed supply tasks do not repeatedly reopen for one stock revision.
+
+Follow-up: user-reported medication review/monitoring plan → Agent asks necessary date/medicine → typed prepared proposal → human confirmation → persistence → Today/shared worker reminder → complete/defer/cancel. Current database facts win over earlier chat. No diagnosis, prescribing, general vaccination/screening or automatic caregiver contact.
+
+ScenarioD/E/F Chinese repeatable steps and data expectations: [LONG_TERM_CARE](LONG_TERM_CARE.md). All six internal demo states and earlier real A/B/C evidence: the local acceptance records. These internal demos are not claimed as an official required six-demo list.
+
+## Session 04.5 patient workflow changes
+
+Upload defaults to automatic content routing. A checked package / printed label / document may enter source review; uncertain/unchecked/blister inputs require clarification. A supported loose-pill prediction offers the existing pill workflow using the same selected file. OCR source classification remains independent of visual type. Manual correction stays available. Consent precedes processing; refresh restores the last owned task and persisted sources, not an unconsented raw file.
+
+Manual enrollment separates product strength from units per dose. Total display requires explicit patient-checked count instructions, simple single-ingredient solid form, compatible unit and supported strength. Negative/conditional/multiple instructions, liquid/combination/unknown formulation or unsupported splitting abstain; no count is inferred. Source review and activation remain explicit.
+
+ConversationHistory is an optional text archive, not unlimited model memory. Enable it explicitly in the assistant disclosure, load earlier pages on demand and confirm clear separately. Older unsaved text cannot be reconstructed. Current medication, inventory, observations and follow-ups still come from authorized tools.
+
+Conservative MVP plan guard: creating or activating a same-patient overlapping plan for the same recorded medicine is blocked with `REGIMEN_OVERLAP` (409), including separate medication rows and PRN versus timed plans. The patient must explicitly end an obsolete recorded plan before replacing it; stopping a record is not advice to stop taking medicine. Existing overlapping rows are preserved and shown for review, not silently merged or deleted. Today shows course dates instead of internal version labels such as “Plan 1”. A known product ID or normalized exact name establishes the check; the app does not guess brand/generic equivalence. Database-level serialization is installed by owner-approved migration025. This conservative representation limit must not be described as proof that a different-dose or PRN/scheduled prescription combination is medically wrong.
+
+### 中文可重复验收步骤
+
+1. 首次进入，Next 后刷新应恢复步骤；外部点击或 Escape 不关闭。Skip/Finish 后应回到 Today，不自动展开助手。Me → Help 可重新查看。
+2. 切换四个 Tab，根页面不出现 Back。点击 Today 输入或展开按钮，在当前页面打开对话；输入草稿、关闭、切到 Medicines 再打开，草稿应保留。
+3. Medicines 上传合成包装，允许处理后自动判断；不确定或透明铝塑板应追问。手动纠正后可继续审核；刷新后读取持久化的同一任务。此步骤需可用 Stage2，不能以本地模拟宣布模型准确。
+4. 手动登记每次1片，展开规格依据，填500 mg、普通片、单一成分及原文 Take 1 tablet。核对后可显示500 mg；改成2片应冲突，缓释半片、复方或液体应不换算。仍须审核、确认才能激活。
+5. 启用保存对话后发送消息，在 Saved conversations 查看分页记录；刷新后仍可读取。Clear 需二次确认，不应删除用药计划或跟进事项。
+6. 以390/430/768/1280px、English/中文及150%字体检查 Today、Me、Guide 和助手。真实手机键盘、语音、Push 接收及日历客户端导入仍需设备验收。

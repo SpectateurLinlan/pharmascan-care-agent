@@ -1,5 +1,13 @@
 # Architecture, Deployment, Components and Trust Boundaries
 
+## Current long-term care boundary (2026-10-16)
+
+`LongTermCareService` composes public enrollment, observations and review summaries with read-only event/rule ports and `CareRepository`. `domain/inventory.py` contains pure balance/demand rules; stock logic is not duplicated in UI/Agent/reminders. Concrete memory and same-user-JWT adapters are injected only at `transport/container.py`. Typed DTOs are in `contracts/long_term.py`; no cross-private component imports or new patient privileged path are introduced.
+
+Gemini's added read/prepare tools call this service. `CareReview` goes to a shared human confirmation sheet before authorized HTTP writes. Long-term truth is re-read from owned persistence across sessions; bounded conversation text is not authoritative. B14 and clinical regimen guards remain separate. Care tasks reuse `notification_deliveries`/`NotificationWorker`; no new scheduler/provider. Exact implemented interfaces and limits: [LONG_TERM_CARE](LONG_TERM_CARE.md). Component boxes later in this document include design targets: PDF/automatic caregiver delivery are not implemented. Bounded openFDA knowledge and reviewed personal instructions are implemented through the [Medication Understanding interface](../backend/MEDICATION_UNDERSTANDING.md); use the [runtime workflows](WORKFLOWS.md) for remaining runtime status.
+
+The eleven added functions include controlled missing-field clarification. Optional bounded clarification state remains separate from dose-choice state. Clock and patient timezone are injected context metadata. Combined visit preparation requires complete review evidence; one coverage repair fits inside the unchanged four-round orchestration limit. A later narrow tool read cannot replace an already verified full review.
+
 ## A. Logical component map (public boundaries)
 
 ```mermaid
@@ -135,7 +143,7 @@ PWA manifest provides install metadata only; no offline clinical workflow or rel
 
 ### Occurrence-bound reminder preferences
 
-ReminderService depends on ReminderRepository/occurrence/regimen ports and injected Clock. InMemory retains deterministic tests; persistent requests inject same-user JWT SupabaseReminderRepository. Agent create_reminder is typed and allowlisted, resolves one current occurrence through check_due_dose, and never writes regimen/intake. The UI offers15/30-minute snooze; one patient/occurrence record is updated. In-app state works on active/reopened app. Reliable closed-browser delivery, SMS and caregiver push are FUTURE.
+ReminderService depends on ReminderRepository/occurrence/regimen ports and injected Clock. InMemory retains deterministic tests; persistent requests inject same-user JWT SupabaseReminderRepository. Agent create_reminder is typed and allowlisted, resolves one current occurrence through check_due_dose, and never writes regimen/intake. The UI offers15/30-minute snooze; one patient/occurrence record is updated. In-app state works on active/reopened app. Background Web Push now has an independent worker/subscription implementation (configuration and device acceptance pending); SMS/caregiver delivery remain FUTURE.
 
 ## Manual acceptance repair (2026-10-14)
 
@@ -208,3 +216,41 @@ CaregiversScreen -> typed HTTP API -> verified AuthContext -> CaregiverService -
 ## Current Stage2 0.10.0 boundary (2026-10-15)
 
 This supersedes earlier v0.8/v0.9 runtime notes. All three production gateways inject the supplied0.10.0 contract; legacy snapshots/tests remain. Infrastructure normalizes structured sticker instructions and optional imprint evidence into public typed DTOs. Application reconciles owned immutable sources and pending tasks, proposes only printed dose/food/PRN, and leaves missing clock times/course dates for patient review. Gemini keeps the existing provider and allowlisted reconciliation tool; no provider suggested next_tools become permissions. Check-input uses its own typed routing port, authenticated HTTP and a patient-chosen workflow. Auth/RLS/B14 and separate historical regimens are unchanged. See [contract diff, mapping and verification](STAGE2_V010_UPGRADE.md). No schema migration or external service modification.
+
+## Four-tab navigation and proactive reminders (2026-10-15)
+
+Presentation ownership: `navigation.ts` manages bounded task history/hash deep links. Root Today/Medicines/Records/Me selections replace the current entry; child navigation pushes and retains origin. Assistant is a single mounted view/composer, not a root tab. Both manual/new-version enrollment drafts remain mounted during tab changes. Deep links without a selected medication show a selection fallback; no foreign record is inferred.
+
+Guide state v2 is browser-local, scoped to the verified session patient, with bounded step/status. Legacy global v1 dismissal does not mark another user complete. In-progress steps survive reload; explicit Skip/Finish have distinct results. Manual replay preserves the original result. A non-dismissible modal, inert background and focus containment block unintended actions; storage restrictions can still prevent browser persistence.
+
+Greeting reads preferred display name only for Auth members, never email/UID; patient IANA timezone and an injected date helper determine period, including a neutral late-night greeting.
+
+Application `ReminderPlanService` projects the existing reviewed active rules/occurrences for settings/calendar/worker. New-version review uses existing `enroll_draft(existing_medication_id=...)` and activation; explicit record-stop calls `end_regimen` without deleting history. Neither path changes B14 or exposes write tools to Gemini.
+
+The independent notification worker is an administrative infrastructure process over repository ports. Its DB access is not imported into patient HTTP. Patient subscription operations use verified principal + same-user JWT + FORCE RLS. Notification delivery rows are patient-read-only. Worker claims are atomic and eligibility is rechecked; provider acceptance is not device receipt. Full setup/limits are in [Reminders](REMINDERS.md). Frozen Stage2 and Gemini provider architecture are unchanged.
+
+The internal frontend/backend compatibility marker is now `patient-ux-reminders-v1`; a stale API fails before patient setup/business queries with a restart instruction. Hash navigation leaves an unconsumed Auth callback intact until the identity SDK handles/scrubs it. Photo acquisition and result are separate task layers (`#check` / `#check-result`) while retaining the same selected file; Back/Forward preserves acquisition/result state, and late responses from an unmounted task cannot open an old result.
+
+## Session 04.5: interaction and request boundaries
+
+The four root destinations remain Today / Medicines / Records / Me. Assistant state is owned by the always-mounted AssistantScreen; ConversationSurface is a portal presentation layer over the originating page, with inert background, focus containment and compact/full views. Legacy assistant deep links remain supported. Source task IDs are restored from owner-scoped local state; actual evidence is read through authorized HTTP APIs.
+
+DoseDisplayInput/DoseBasis are neutral public contracts. domain/dose_display.py performs pure, conservative display arithmetic; it neither prescribes nor derives a count from strength. Enrollment persists optional original evidence on source_documents. ConversationHistoryService uses an injected clock/repository; saved text is optional, bounded and distinct from structured clinical records and six-turn model context. The new shared privacy contract avoids importing Agent-private helpers into application services.
+
+Composition creates one HTTP connection pool per authorized request, closes it in middleware (also on errors), and shares one request-scoped preference repository. Owner checks precede cache use and writes invalidate it. No global cross-patient cache or skipped JWT verification was introduced. Independent initial reads are parallel; hidden evidence screens are lazy and only the selected Today detail fetches status.
+# Worker dispatch transport boundary
+
+`NotificationDispatchService` owns one bounded administrative pass, injected with
+projection, lease, clock and existing `NotificationWorker`. Composition is solely
+`transport/worker_container.py`, reused by `scripts/run_reminders.py`. The separate
+`transport/dispatcher.py` ASGI application exposes the fixed HMAC-protected trigger;
+`ProcessDispatchRunner` executes the pass in a request-owned child with a hard
+deadline. No CLI/worker factory is imported into the patient app or Agent registry.
+
+Patient `PushTestService` receives a sender/clock and the request's public
+`PushSubscriptions` protocol, whose infrastructure adapter uses the existing
+same-user JWT Data API. It has no privileged DB connection or scheduling key.
+Its explicitly requested diagnostic uses generic content without mutating clinical
+queue/events. Per-process diagnostic replay/cooldown is bounded but not durable
+across API instances. All scheduled notification deduplication remains in the
+existing PostgreSQL queue. No new migration/table/RLS policy is required.

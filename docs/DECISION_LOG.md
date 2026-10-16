@@ -108,3 +108,18 @@ Read-only synthetic duplicate audit found one anonymous owner group with two Aml
 ## 2026-10-15 - Adopt supplied Stage2 0.10.0 without changing clinical authority
 
 Use the supplied snapshot for every runtime Stage2 gateway while preserving older snapshots and tests. Reuse immutable source evidence and durable enrollment tasks instead of new source/regimen systems. Map printed instructions into review proposals only; reject conflicting strength/release/code/instruction evidence, retain missing clock times/course starts, and preserve B14. check-input can suggest a workflow but cannot grant tools. Enable imprint requests only for loose pills and forward query reads only when used. Keep embedding search explicit/infrastructure-only and safety/feedback inactive: real coverage and unknown-name identification remain inadequate to claim clinical screening, and DDInter commercial permission is unresolved. PDF application parsing remains a separate incomplete slice.
+
+## 2026-10-15: Four roots and explicit proactive-reminder delivery
+
+Keep a small typed History API/hash navigator instead of adding a routing dependency: root replace, bounded child/origin history, deep-link parent fallback, protected identity callbacks. One mounted Assistant owns its draft/turns; Today shows a compact entry/latest response. Guide uses non-dismissible focus-contained UI and owner-scoped browser v2 progress, with distinct Skip/Finish and replay semantics.
+
+Reuse reviewed rules and canonical occurrences for all reminder projections. Preserve existing explicit snoozes; add a separate administrative Push worker with patient-managed RLS subscriptions/read-only delivery records. Web Push remains explicitly configured, with generic en/zh service-worker messages, bounded sends and no success claim for unknown SDK responses, redirects or uncertain timeouts. Calendar uses finite UTC events/private stable UIDs rather than an unbounded recurrence or native alarm claim. Clinical source, dose and B14 authority are unchanged.
+## 2026-10-16 — medication-centred long-term care
+
+Extend existing patient/regimen/source/observation/reminder boundaries rather than adding Inventory/Prevention/Review root tabs or a second notification scheduler. Patient-confirmed stock uses an append-only count-unit ledger; label quantity remains evidence. Reuse a bounded versioned care-task row/history and the existing delivery queue. Agent adds read/proposal tools; only explicit UI confirmation writes records. Current DB facts override old session summaries. Preventive care is scoped to medication supply/review/treatment monitoring; broad screening/vaccination/lifestyle coaching is excluded. No knowledge/RAG dataset, clinical advice, caregiver delivery or billed provider was introduced. Applied022/023 are forward compatible; never rewrite applied migration checksums. Evidence semantics and limits: LONG_TERM_CARE.md and WORKFLOWS.md.
+
+## Session 04.5 bounded UX and publication
+
+Preserve four roots and established teal visual language; expand Assistant in-place rather than adding a fifth tab. Keep six-turn model context bounded and introduce a separate optional200-pair/30day text archive. Separate count/strength evidence through a pure typed display endpoint and immutable reviewed source basis. Reuse request-scoped I/O; do not cache authorization across patients.
+
+Project owner selected Apache-2.0 and approved an audited11-file local-only publication manifest. Originals/backups remain local; source, migrations and all dependency-backed Stage2 fixtures remain public. No history rewrite, commit, push or deployment. Public docs link to public architecture/workflows, not private submission materials.
