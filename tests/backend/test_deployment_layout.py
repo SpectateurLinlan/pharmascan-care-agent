@@ -3,6 +3,7 @@
 import importlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import tomllib
@@ -51,6 +52,26 @@ def test_frontend_upload_rules_support_git_and_local_path_bases():
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_frontend_proxies_api_without_spa_fallback_or_cache():
+    """API errors must remain API responses; SPA fallback must exclude API paths."""
+    root = Path(__file__).resolve().parents[2]
+    config = json.loads((root / "frontend/vercel.json").read_text(encoding="utf-8"))
+    api_route, spa_route = config["rewrites"]
+    assert api_route == {
+        "source": "/api/:path*",
+        "destination": "https://medithread-patient-api.onrender.com/api/:path*",
+    }
+    assert "?" not in api_route["destination"]  # Do not replace the incoming query.
+    assert spa_route["destination"] == "/index.html"
+    for path in ["/api", "/api/health", "/api/agent/history", "/api/nonexistent"]:
+        assert re.fullmatch(spa_route["source"], path) is None
+    for path in ["/", "/account", "/medicines/detail"]:
+        assert re.fullmatch(spa_route["source"], path) is not None
+    headers = {item["source"]: item["headers"] for item in config["headers"]}
+    assert {"key": "Cache-Control", "value": "private, no-store"} in headers["/api/:path*"]
+    assert {"key": "Cache-Control", "value": "no-cache"} in headers["/sw.js"]
 
 
 def test_vercel_bundle_patterns_respect_public_schema_limits():

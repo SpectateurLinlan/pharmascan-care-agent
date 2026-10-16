@@ -70,14 +70,35 @@ publication, install frontend dev dependencies and run
 `node tests/check_vercel_inputs.cjs` from the repository root. Testing only paths
 relative to `frontend/` can miss a removed lockfile in a Git deployment.
 
-After the patient API has an approved Render HTTPS hostname, merge the `rewrites`
-entry from [the routing template](frontend/vercel.json.example) into
-`frontend/vercel.json`, replacing the explicit placeholder with that hostname.
-Keep the existing install/build/output settings. The template itself is not
-deployable. Without this rewrite the static frontend can build, but patient API
-calls will not work. Root `vercel.json` belongs exclusively to the Dispatcher;
-never copy it into the frontend project. `VITE_API_TARGET` only affects local
-Vite and does not configure production routing.
+The frontend's committed API rewrite targets
+`https://medithread-patient-api.onrender.com/api/:path*`, retaining the suffix and
+incoming query parameters. The SPA fallback explicitly excludes `/api` paths;
+API errors must not become successful HTML responses. Existing static assets
+are served by Vercel's filesystem routing. Root `vercel.json` remains exclusively
+the Dispatcher configuration. Do not copy it into the frontend project.
+
+Patient HTTP clients use same-origin `/api/...`; `VITE_API_BASE_URL` is not read.
+Do not configure it to bypass the proxy. `VITE_API_TARGET` is a local Vite dev
+proxy setting only. Vercel Production needs `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_PUBLISHABLE_KEY` for the same existing project as Render. These
+are public identity configuration; never add server-only credentials. Environment
+changes require a new frontend build.
+
+Production origin is `https://medithread.vercel.app`. The Render service's
+`APP_ORIGIN` must equal this exact origin (no trailing slash). Supabase Auth
+Site URL and allowed Redirect URLs must include this frontend origin; enable
+anonymous sign-in for the existing guest workflow. Email login/linking uses
+`window.location.origin`. Do not substitute the Render API URL as the callback.
+Preview deployments need separately approved origins/callbacks; do not add a
+blanket wildcard or relax backend CORS.
+
+After publishing the approved revision, check frontend `/api/health` returns
+Render JSON (not HTML), an unauthenticated patient route returns401, and Auth
+callback/hash navigation restores normally. Then run isolated synthetic
+Enrollment/B14, Gemini tools and saved-conversation checks. Health values
+`gemini_configured` and `stage2_vision=live` indicate wiring, not successful
+provider execution. The reusable [routing template](frontend/vercel.json.example)
+still requires an explicit hostname when adapting the project for another host.
 
 Use project name `medithread` for the frontend and a distinct worker project
 name, such as `medithread-push-dispatcher`. These display names do not rename

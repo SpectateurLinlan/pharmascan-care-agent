@@ -115,6 +115,19 @@ describe('api client', () => {
     expect(calledUrl).toContain('client_id=');
   });
 
+  it('keeps patient paths and encoded query values on the frontend origin', async () => {
+    const fetchMock = mockFetch(200, {items: [], next_before: null});
+    vi.stubGlobal('fetch', fetchMock);
+    await api.conversationHistory('2026-10-16T20:00:00+08:00');
+    const calledUrl = fetchMock.mock.calls[0]?.[0] as string;
+    const url = new URL(calledUrl, 'https://medithread.vercel.app');
+    expect(calledUrl.startsWith('/api/')).toBe(true);
+    expect(url.origin).toBe('https://medithread.vercel.app');
+    expect(url.pathname).toBe('/api/agent/history');
+    expect(url.searchParams.get('before')).toBe('2026-10-16T20:00:00+08:00');
+    expect(url.pathname).not.toContain('/api/api/');
+  });
+
   it('posts a draft as JSON', async () => {
     const fetchMock = mockFetch(200, {
       medication_id: 'm',
