@@ -215,57 +215,15 @@ access; never paste a long-lived key into cron.job.command. Cron/pg_net submissi
 success is not HTTP success: inspect pg_net response code and safe Worker logs too.
 No SQL is automatically applied by app startup and no Cron Job is created here.
 
-#### Reviewed Cron command template (operator action only)
+#### Production SQL and device acceptance (operator action only)
 
-Before using this template, confirm the actual `pgcrypto` function schema with
-`SELECT e.extnamespace::regnamespace FROM pg_extension e WHERE e.extname='pgcrypto'`.
-The template assumes `extensions`; change that qualifier if the read-only result
-differs. Confirm exactly one Vault secret with the name below using `count(*)`;
-never print its decrypted value. Substitute only the approved Dispatcher HTTPS
-host. Save the dedicated HMAC secret under the Vault name
-`medithread_push_dispatch_hmac`; store the same value as Vercel's
-`PUSH_DISPATCH_TOKEN`. The following SQL is documentation, **not** a migration:
-
-```sql
-SELECT cron.schedule(
-  'medithread-push-minute',
-  '* * * * *',
-  $job$
-  WITH stamp AS (
-    SELECT floor(extract(epoch FROM clock_timestamp()))::bigint AS seconds
-  ), signing AS (
-    SELECT stamp.seconds,
-      encode(extensions.hmac(
-        convert_to('POST' || chr(10) || '/internal/notifications/dispatch' || chr(10)
-                   || stamp.seconds::text, 'UTF8'),
-        convert_to(v.decrypted_secret, 'UTF8'), 'sha256'
-      ), 'hex') AS signature
-    FROM stamp CROSS JOIN vault.decrypted_secrets v
-    WHERE v.name = 'medithread_push_dispatch_hmac'
-  )
-  SELECT net.http_post(
-    url := 'https://YOUR-DISPATCHER-HOST/internal/notifications/dispatch',
-    body := '{}'::jsonb,
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'X-Dispatch-Timestamp', seconds::text,
-      'X-Dispatch-Signature', signature
-    ),
-    timeout_milliseconds := 45000
-  ) FROM signing;
-  $job$
-);
-```
-
-Run the `WITH ... SELECT net.http_post(...)` command **once**, without
-`cron.schedule`, for the first approved trigger. Check the returned pg_net
-request ID against `net._http_response` and the Dispatcher audit outcome;
-the request ID alone is not delivery. Only after a reviewed one-shot result
-and a real subscribed device should the operator create the named minute Job.
-If scheduling must stop, use `SELECT cron.unschedule('medithread-push-minute')`;
-do not reset the database or remove queue history. The long-lived token appears
-only in Vault and the isolated Dispatcher environment; queued pg_net headers
-contain a short-lived HMAC signature, which trusted DB LOGIN roles can read.
+Use [PUSH_OPERATIONS](PUSH_OPERATIONS.md) for the current service URLs,
+environment boundaries, read-only preflight, Vault configuration, one-shot
+signed request, response inspection, inactive Cron creation, separate activation
+and rollback. The complete [inactive-job SQL](../deploy/dispatcher/push-cron.sql)
+contains no signing secret and refuses to replace an existing named job.
+The pgcrypto function schema must match the actual database. Neither the
+runbook nor the SQL file is executed by application startup or migrations.
 
 Rollback: disable only the named Job, turn off runtime, revoke/rotate only the
 dedicated signing secret. Preserve clinical queues/history. Do NOT uninstall
