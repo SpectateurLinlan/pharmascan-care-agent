@@ -1,0 +1,47 @@
+# Patient API only. Importing this Blueprint creates a service: owner approval required.
+# No migrations, worker, database provisioning, or shared secret group.
+services:
+  - type: web
+    name: medithread-patient-api
+    runtime: python
+    plan: free
+    region: singapore
+    autoDeployTrigger: commit
+    buildCommand: python -m pip install . && python scripts/run_patient_api.py --check-resources
+    startCommand: python scripts/run_patient_api.py
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: AUTH_MODE
+        value: supabase
+      - key: PERSISTENCE
+        value: supabase
+      - key: ENABLE_DEMO_SEED
+        value: "false"
+      - key: APP_ORIGIN
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: MODEL_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash-lite
+      - key: GEMINI_THINKING_LEVEL
+        value: low
+      - key: DEMO_AGENT_DAILY_TURN_LIMIT
+        value: "20"
+      - key: VISION_API_BASE_URL
+        value: https://davidpansx-pharmascan-api.hf.space
+      - key: ENABLE_WEB_PUSH
+        value: "false"
+      - key: ENABLE_SPEECH
+        value: "false"
+      - key: STT_PROVIDER
+        value: browser
+      - key: TTS_PROVIDER
+        value: browser
