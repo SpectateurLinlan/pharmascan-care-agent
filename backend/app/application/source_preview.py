@@ -23,8 +23,8 @@ class SourcePreviewService:
         self._routing = routing
 
     def route(self, *, content: bytes, consent: bool, demo_only: bool) -> ImageRoute:
-        if not consent or not demo_only:
-            raise ValidationError("Only consented synthetic images may be routed")
+        if not consent:
+            raise ValidationError("Agree to image processing before reading this photo")
         if self._routing is None:
             from ..domain.errors import ProviderUnavailableError
 
@@ -40,8 +40,8 @@ class SourcePreviewService:
         demo_only: bool,
         medications: tuple[ListedMedication, ...] = (),
     ) -> MedicationSourceExtractionDTO:
-        if not consent or not demo_only:
-            raise ValidationError("Only consented synthetic demo images may be sent for extraction")
+        if not consent:
+            raise ValidationError("Agree to image processing before reading this photo")
         if not self._inflight.acquire(blocking=False):
             from ..domain.errors import ProviderUnavailableError
 

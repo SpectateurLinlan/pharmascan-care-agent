@@ -24,6 +24,34 @@ def synthetic_png():
     return output.getvalue()
 
 
+def test_real_image_marker_does_not_bypass_consent_or_create_persistence():
+    """Synthetic bytes simulate an ordinary upload; no real patient photo is used."""
+    root = build_container()
+    seen = []
+
+    class Provider:
+        def extract_medication_source(self, **kwargs):
+            seen.append(kwargs)
+            from app.contracts.source_extraction import MedicationSourceExtractionDTO
+
+            return MedicationSourceExtractionDTO(
+                source_document_id=kwargs["source_document_id"],
+                source_kind=kwargs["source_kind"],
+                provider_source="photo",
+                extraction_model="SIMULATED",
+                candidates=[],
+                note="DEMO only",
+            )
+
+    service = SourcePreviewService(provider=Provider(), ids=root.ids)
+    with pytest.raises(ValidationError):
+        service.preview(content=synthetic_png(), source_kind="pharmacy_label", consent=False, demo_only=False)
+    assert not seen
+    result = service.preview(content=synthetic_png(), source_kind="pharmacy_label", consent=True, demo_only=False)
+    assert result.review_required and not result.candidates
+    assert len(seen) == 1 and not root.store.sources and not root.store.regimens
+
+
 def test_source_preview_preserves_evidence_without_any_regimen_or_dose_write():
     fixture = json.loads((ROOT / "tests/fixtures/stage2/v0_8_0/read_label_success.json").read_text(encoding="utf-8"))
     calls = []

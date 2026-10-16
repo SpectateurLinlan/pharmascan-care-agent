@@ -35,13 +35,13 @@ async def check_input(
 @router.post("/preview", response_model=MedicationSourceExtractionDTO)
 async def preview(
     request: Request,
-    source_kind: Literal["package", "pharmacy_label"] = Query(),
+    source_kind: Literal["package", "pharmacy_label", "prescription"] = Query(),
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ) -> MedicationSourceExtractionDTO:
     mime = request.headers.get("content-type", "").split(";")[0]
     if mime not in ("image/png", "image/jpeg"):
-        raise ValidationError("Synthetic PNG/JPEG images only; use manual entry for PDF/prescription")
+        raise ValidationError("Choose a PNG/JPEG photo; use manual entry for PDF")
     if container.source_preview is None:
         raise ProviderUnavailableError("Label extraction is unavailable; use manual enrollment")
     content = bytearray()

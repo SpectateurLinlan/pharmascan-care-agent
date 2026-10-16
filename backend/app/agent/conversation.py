@@ -13,6 +13,7 @@ from ..contracts.model import ConversationalModel, ModelProviderError
 from ..contracts.ports import AgentSessionRepository, IdGenerator
 from ..domain.errors import DomainError, ValidationError
 from ..domain.health_safety import needs_urgent_help_notice
+from .knowledge_intent import medication_question
 from .memory import bounded_text, record_context
 from .model_tools import ModelTools, model_tool_schemas
 from .orchestrator import AgentOrchestrator, AgentReply, AgentTurn
@@ -69,6 +70,56 @@ def grounded_message(model_text: str, summary: str) -> str:
 
 
 class ConversationService:
+    def medication_fallback(self, *, patient_id: UUID, session_id: UUID, turn: AgentTurn) -> AgentReply | None:
+        """Use the existing audited read tool if AI cannot answer an explicit education request."""
+        arguments = medication_question(turn.text)
+        if arguments is None:
+            return None
+        session = self._fallback.get_session(patient_id=patient_id, session_id=session_id)
+        if session is None or session.state == "expired":
+            raise ValidationError("Reopen your assistant session")
+        try:
+            executed = self._tools.execute(
+                name="get_medication_understanding",
+                arguments=arguments,
+                patient_id=patient_id,
+                session_id=session_id,
+                correlation_id=self._ids.new_id(),
+                client_turn_id=str(turn.slots.get("client_turn_id", "turn-1")),
+                turn=turn,
+            )
+        except DomainError:
+            return AgentReply(
+                message=(
+                    "请选择药物名称，我会查找有来源的用途资料；个人服法以您核对的计划为准。"
+                    if turn.language == "zh"
+                    else "Choose a medication name so I can look up sourced information. "
+                    "Your own instructions come from your reviewed plan."
+                ),
+                intent=AgentIntent.CLARIFICATION,
+                session_id=session_id,
+                session_state=session.state,
+                mode="deterministic_degraded",
+            )
+        summary = str(executed.data["patient_safe_summary"])
+        context = record_context(
+            session.context,
+            text=turn.text,
+            message=summary,
+            intent=executed.intent.value,
+            language=turn.language,
+            results=executed.results,
+        )
+        self._sessions.update(session.model_copy(update={"context": context}))
+        return AgentReply(
+            message=summary,
+            intent=executed.intent,
+            session_id=session_id,
+            session_state=session.state,
+            tool_results=executed.results,
+            mode="deterministic_degraded",
+        )
+
     def __init__(
         self,
         *,
@@ -148,6 +199,10 @@ class ConversationService:
                 reply = self._model.create(history=history, tools=model_tool_schemas(), instruction=INSTRUCTION)
                 history.extend(reply.replay)
                 if not reply.calls:
+                    if not results and medication_question(turn.text):
+                        grounded = self.medication_fallback(patient_id=patient_id, session_id=session_id, turn=turn)
+                        if grounded:
+                            return grounded
                     if (
                         review_requested
                         and results
@@ -345,5 +400,9 @@ class ConversationService:
             raise
         except (DomainError, SchemaError) as exc:
             LOGGER.warning("Model tool fallback error_type=%s", type(exc).__name__)
+            if medication_question(turn.text):
+                knowledge = self.medication_fallback(patient_id=patient_id, session_id=session_id, turn=turn)
+                if knowledge:
+                    return knowledge
             # Genuine deterministic fallback; never present it as a model answer.
             return self._fallback.handle_turn(patient_id=patient_id, session_id=session_id, turn=turn)

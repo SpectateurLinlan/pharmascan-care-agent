@@ -23,6 +23,74 @@ from pydantic import ValidationError
 USE = "Amlodipine besylate tablets are indicated for the treatment of hypertension, to lower blood pressure."
 
 
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("What is Amlodipine used for?", {"question": "general_use", "medication_name": "Amlodipine"}),
+        ("How should I take my Metformin?", {"question": "personal_instructions", "medication_name": "Metformin"}),
+        ("氨氯地平有什么用？", {"question": "general_use", "medication_name": "氨氯地平"}),
+        ("What is this medication for?", {"question": "general_use"}),
+        ("Should I double my dose?", None),
+        ("Tell me a joke", None),
+        ("What is DEMO-private@example.test used for?", None),
+    ],
+)
+def test_education_fallback_only_recognises_explicit_read_questions(text, expected):
+    from app.agent.knowledge_intent import medication_question
+
+    assert medication_question(text) == expected
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_education_tool_remains_available_when_model_omits_tool_or_fails(reviewed, wired, failure):
+    """SIMULATED Gemini/openFDA; real tool authorization, source matching and fallback."""
+    from app.application.ai_quota import QuotaAgent
+    from app.contracts.model import ModelProviderError
+    from app.infrastructure.memory_quota import MemoryQuota
+
+    knowledge, patient, _, requests = reviewed
+    registry = ToolRegistry(
+        enrollment=wired.enrollment,
+        schedule=wired.schedule,
+        self_report=wired.self_report,
+        traces=wired.traces,
+        clock=wired.clock,
+        ids=wired.ids,
+    )
+    fallback = AgentOrchestrator(
+        registry=registry, sessions=wired.sessions, router=DeterministicIntentRouter(), clock=wired.clock, ids=wired.ids
+    )
+    session = fallback.start_session(patient_id=patient)
+
+    class Model:
+        def create(self, **kwargs):
+            if failure:
+                raise ModelProviderError("timeout")
+            return ModelReply(text="Unsupported invented personal instructions")
+
+    conversation = ConversationService(
+        model=Model(),
+        tools=ModelTools(registry=registry, fallback=fallback, medication_understanding=knowledge),
+        fallback=fallback,
+        sessions=wired.sessions,
+        ids=wired.ids,
+    )
+    quota = QuotaAgent(
+        repository=MemoryQuota(clock=wired.clock, nonce_factory=lambda: str(uuid4())),
+        conversation=conversation,
+        fallback=fallback,
+    )
+    reply = quota.handle_turn(
+        patient_id=patient,
+        session_id=session.id,
+        turn=AgentTurn(text="What is Amlodipine besylate used for?", language="en"),
+    )
+    assert "dailymed.nlm.nih.gov" in reply.message and len(requests) == 1
+    assert "Unsupported invented" not in reply.message
+    assert reply.tool_results[0].payload["action"] == "get_medication_understanding"
+    assert reply.mode != "gemini" and not wired.store.events
+
+
 def label(**updates):
     return {
         "id": "aaaaaaaa-1111-4111-8111-111111111111",

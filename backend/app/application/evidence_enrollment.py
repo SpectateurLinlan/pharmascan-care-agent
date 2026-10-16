@@ -128,8 +128,8 @@ class EvidenceEnrollmentService:
         demo_only: bool,
         automatically_routed: bool = False,
     ) -> EnrollmentTask:
-        if not consent or not demo_only:
-            raise ValidationError("Consented synthetic source files only")
+        if not consent:
+            raise ValidationError("Agree to private storage and image processing before saving")
         if source_kind not in {"package", "pharmacy_label", "prescription"}:
             raise ValidationError("PDF extraction is not available; upload a label image or enter instructions")
         existing = self._repo.get(patient_id, "tasks", task_id)
@@ -160,7 +160,7 @@ class EvidenceEnrollmentService:
             for medication in self._repo.medications(patient_id)[:20]
         )
         extraction = self._preview.preview(
-            content=clean, source_kind=source_kind, consent=True, demo_only=True, medications=listed
+            content=clean, source_kind=source_kind, consent=True, demo_only=demo_only, medications=listed
         )
         if extraction.label_kind == "none" or len(extraction.candidates) != 1:
             raise ValidationError("Choose a source with one clearly named medication, or use manual entry")
@@ -420,8 +420,24 @@ class EvidenceEnrollmentService:
             or (draft.course_end_date - draft.course_start_date).days + 1 != task.printed_course_days
         ):
             raise ValidationError("Review the explicitly printed course duration and start/end dates")
-        if task.possible_duplicate_ids and not distinct_product_confirmed:
-            raise ValidationError("Choose an existing product or confirm a genuinely different product")
+        if task.possible_duplicate_ids:
+            # Reviewed product attributes, not a UI checkbox, can distinguish
+            # products. Missing metadata is never evidence of a difference.
+            known = {row.medication_id: row.product for row in self.list(patient_id)}
+            for medication_id in task.possible_duplicate_ids:
+                other = known.get(medication_id)
+                if other is None or not any(
+                    left and right and str(left).strip().casefold() != str(right).strip().casefold()
+                    for left, right in (
+                        (task.product.strength, other.strength),
+                        (task.product.dose_form, other.dose_form),
+                        (task.product.formulation, other.formulation),
+                    )
+                ):
+                    raise ValidationError(
+                        "A similar medicine is already saved. "
+                        "Choose the existing product or add clearer product evidence."
+                    )
         if draft.medication_name.casefold() != task.product.name.casefold():
             raise ValidationError("Product name conflict")
         if task.draft_regimen_id:

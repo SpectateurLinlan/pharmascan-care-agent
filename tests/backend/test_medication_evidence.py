@@ -137,6 +137,34 @@ def attach(service, task, image=b"DEMO package", kind="package"):
     )
 
 
+@pytest.mark.parametrize("different_strength", [False, True])
+@pytest.mark.parametrize("legacy_hint", [False, True])
+def test_review_uses_product_evidence_instead_of_distinct_checkbox(evidence, different_strength, legacy_hint):
+    service, _, _, label, _ = evidence
+    first = attach(service, uuid4())
+    if different_strength:
+        label.strength = "1000 mg"
+    second = attach(service, uuid4(), image=b"DEMO second product")
+    assert first.medication_id in second.possible_duplicate_ids
+    values = dict(
+        patient_id=PATIENT,
+        task_id=second.id,
+        patient_reviewed=True,
+        distinct_product_confirmed=legacy_hint,
+        draft=RegimenDraftInput(
+            medication_name=second.product.name,
+            dose_amount=1,
+            dose_unit="tablet",
+            frequency_rule=FrequencyRuleDTO(kind="daily", local_times=["20:00"]),
+        ),
+    )
+    if different_strength:
+        assert service.prepare_review(**values).draft_regimen_id is not None
+    else:
+        with pytest.raises(ValidationError, match="similar medicine"):
+            service.prepare_review(**values)
+
+
 def test_package_then_label_retains_sources_identity_and_clarifies(evidence, wired):
     service, _, repo, label, _ = evidence
     task_id = uuid4()

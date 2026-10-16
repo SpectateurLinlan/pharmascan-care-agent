@@ -114,8 +114,8 @@ class PersonalGalleryService:
         consent: bool,
         demo_only: bool,
     ) -> MedicationImage:
-        if not consent or not demo_only:
-            raise ValidationError("Consented synthetic demo images only")
+        if not consent:
+            raise ValidationError("Agree to photo processing before continuing")
         medication = self._enrollment.get_medication(patient_id, medication_id)
         if medication is None:
             raise NotFoundError("Owned medication not found")
@@ -180,8 +180,8 @@ class PersonalGalleryService:
     def check(
         self, *, patient_id: UUID, regimen_id: UUID | None, image: bytes, consent: bool, demo_only: bool
     ) -> RecognitionRun:
-        if not consent or not demo_only:
-            raise ValidationError("Consented synthetic demo images only")
+        if not consent:
+            raise ValidationError("Agree to photo processing before continuing")
         selected = self._enrollment.get_regimen(patient_id, regimen_id) if regimen_id else None
         if regimen_id and selected is None:
             raise NotFoundError("Owned regimen not found")

@@ -177,3 +177,21 @@ Image type is routing evidence only. Unsupported blister cannot enter a loose-pi
 Saved conversations require explicit opt-in, a200-pair bound,30-day read visibility and patient RLS. The visibility window is not scheduled physical deletion: Supabase cleanup occurs on later append, so inactive accounts can retain older text; explicit Clear removes chat text. History is text-only: old B14 controls are never replayed. Clearing text preserves challenge/task/clinical state. The Assistant overlay does not authorize writes; independent confirmation sheets remain controlled. Same-user request-scoped connection/preference reuse does not weaken verified AuthContext.
 
 Use pytest default offline regression and opt-in tests/backend/test_session045_live.py for owned-history/source-basis isolation. Browser checks use synthetic local persistence and explicitly mocked visual responses where identified. Physical device Push receipt, clinician validation and real calendar import are separate acceptance outcomes.
+## Current consented-photo workflow
+
+Ordinary patient photos are supported with explicit image-processing consent;
+the application no longer requires callers to label them synthetic. Test fixtures
+remain synthetic and labelled as such. Permission is initially off, stored only
+for the current owner on the current device, and revocable in Privacy and data.
+It is not clinical review, storage consent or authorisation to access another
+patient. Reading uses the authenticated read-only preview endpoint; a separate
+Save action writes the original photo and medication evidence to private storage.
+Provider-side processing may include personal details visible in the photo.
+The product does not claim automatic redaction or zero provider retention.
+No identity-document fields or new patient data tables are introduced.
+
+The removed distinct-product checkbox is replaced by checks of nonempty product
+evidence; legacy confirmation flags cannot override ambiguous identity. Patients
+still review their instructions and separately confirm activation/intake. The
+existing same-name overlap restriction remains a conservative MVP constraint,
+not a medical determination that two prescriptions are incompatible.

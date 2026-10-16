@@ -385,3 +385,28 @@ is the only ownership source; no caller-specified patient/destination/message.
 Config includes optional backward-compatible `test_available`. Expired test
 subscriptions are disabled. Diagnostic sends have local cooldown/replay protection
 and do not consume medication reminders, create occurrences or record intake.
+# Patient feedback integration: image preview and consent
+
+`POST /api/sources/preview` now also accepts `source_kind=prescription` for
+PNG/JPEG prescription photos (not PDF). It remains authenticated, size/signature
+validated and read-only: no source, image, regimen or dose is persisted by this
+application endpoint. Reading and saving are separate patient actions. Saving
+uses the existing owned `POST /api/evidence/tasks/{task_id}/sources` interface and
+re-extracts the photo; a browser-supplied extraction is never trusted for writes.
+
+`X-Stage2-Consent: true` remains mandatory for image processing. `X-Demo-Only`
+describes the caller's synthetic test input and is no longer a requirement for
+ordinary consented photos. Patient UI uploads send `false`; synthetic test
+fixtures continue to use `true` when appropriate. No private patient identifier
+is chosen by the model. The original photo may contain personal information:
+it is sent to the recognition provider and, only on explicit save, stored in
+patient-owned private storage. This does not promise provider-side zero retention
+or automated removal of personal information.
+
+Same-name product review can use differing, nonempty reviewed strength/form/
+formulation evidence without a distinct-product checkbox. Missing or identical
+metadata still requires linking existing records or better evidence. Existing
+activation, source-conflict and migration025 overlap guards remain authoritative;
+different product evidence does not authorise overlapping plans.
+The legacy `distinct_product_confirmed` field remains accepted for wire
+compatibility but cannot override this product-evidence check.

@@ -6,6 +6,7 @@ from dataclasses import replace
 from uuid import UUID
 
 from ..agent.conversation import ConversationService
+from ..agent.knowledge_intent import medication_question
 from ..agent.orchestrator import AgentOrchestrator, AgentReply, AgentTurn
 from ..contracts.enums import AgentIntent
 from ..contracts.model import ModelProviderError
@@ -96,6 +97,12 @@ class QuotaAgent:
         except ModelProviderError as exc:
             LOGGER.warning("Model provider fallback category=%s", exc.category)
             snapshot = self._repository.finish(patient_id, reservation, False)
+            if medication_question(turn.text):
+                knowledge = self._conversation.medication_fallback(
+                    patient_id=patient_id, session_id=session_id, turn=turn
+                )
+                if knowledge:
+                    return replace(knowledge, usage=snapshot)
             fallback = self._fallback.handle_turn(patient_id=patient_id, session_id=session_id, turn=turn)
             message = (
                 PROVIDER_LIMIT[turn.language]

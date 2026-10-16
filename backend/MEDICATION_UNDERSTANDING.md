@@ -131,3 +131,12 @@ adds descriptive actual endpoint/count/time/unit differences to the care tool's
 summary, including both BP values. It makes no clinical trend, target or causal claim.
 Rollback is the isolated knowledge wiring/tool and trend-renderer patch; no DB
 rollback or historical record modification is needed.
+# Provider failure and omitted tool calls
+
+Explicit medication-use/personal-instruction questions can use the existing
+audited `get_medication_understanding` read tool when Gemini fails or omits the
+required tool. The application renders `patient_safe_summary` and records the
+tool result; it does not fabricate a Gemini success. Provider failures still
+refund the reserved AI turn through the existing quota service. Unmatched or
+ambiguous products and unavailable sources retain their existing uncertainty
+rules. General labels never replace personal reviewed instructions.

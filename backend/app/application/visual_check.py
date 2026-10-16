@@ -33,8 +33,8 @@ class VisualCheckService:
         demo_only: bool,
         enrollment: MedicationEnrollmentService,
     ) -> VisualCheckResult:
-        if not consent or not demo_only:
-            raise ValidationError("Consented synthetic images only")
+        if not consent:
+            raise ValidationError("Agree to image processing before comparing this photo")
         name = None
         if regimen_id is not None:
             regimen = enrollment.get_regimen(patient_id, regimen_id)
