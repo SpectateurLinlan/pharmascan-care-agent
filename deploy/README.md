@@ -63,6 +63,13 @@ materials in public configuration. `frontend/` remains available; its own
 These upload rules do not control Git tracking or remove previously published
 content from Git history.
 
+Keep both repository-relative (`frontend/package-lock.json`) and project-relative
+(`package-lock.json`) inputs in the frontend upload allowlist. Git build filtering
+and local project uploads can use different path bases. To check both before
+publication, install frontend dev dependencies and run
+`node tests/check_vercel_inputs.cjs` from the repository root. Testing only paths
+relative to `frontend/` can miss a removed lockfile in a Git deployment.
+
 After the patient API has an approved Render HTTPS hostname, merge the `rewrites`
 entry from [the routing template](frontend/vercel.json.example) into
 `frontend/vercel.json`, replacing the explicit placeholder with that hostname.

@@ -3,9 +3,12 @@
 import importlib
 import json
 import os
+import shutil
+import subprocess
 import tomllib
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -31,6 +34,23 @@ def test_frontend_has_independent_install_and_build_configuration():
     assert "**/.*" in shared_rules
     private_rules = (frontend / ".vercelignore").read_text(encoding="utf-8").splitlines()
     assert {"/*", "!/src/", "!/public/", "!/package-lock.json", "**/.*"} <= set(private_rules)
+
+
+def test_frontend_upload_rules_support_git_and_local_path_bases():
+    """Check ignore semantics for both Git checkout paths and local UI uploads."""
+    root = Path(__file__).resolve().parents[2]
+    node = shutil.which("node")
+    if not node or not (root / "frontend/node_modules/ignore").is_dir():
+        pytest.skip("Requires Node and installed frontend development dependencies")
+    result = subprocess.run(
+        [node, str(root / "tests/check_vercel_inputs.cjs")],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_vercel_bundle_patterns_respect_public_schema_limits():

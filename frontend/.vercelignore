@@ -1,5 +1,16 @@
 # Upload only Vite build inputs and public assets.
+# Git builds can filter repository-relative paths; local uploads can use project-relative paths.
 /*
+!/frontend/
+/frontend/*
+!/frontend/src/
+!/frontend/public/
+!/frontend/index.html
+!/frontend/package.json
+!/frontend/package-lock.json
+!/frontend/tsconfig.json
+!/frontend/vite.config.ts
+!/frontend/vercel.json
 !/src/
 !/public/
 !/index.html
