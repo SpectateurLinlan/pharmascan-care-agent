@@ -288,6 +288,13 @@ class InMemoryAgentSessionRepository:
     def update(self, session: AgentSessionDTO) -> None:
         self._store.sessions[(session.patient_id, session.id)] = session
 
+    def clear_conversation_text(self, patient_id: UUID) -> None:
+        """Privacy operation preserves clinical references and confirmation lifecycle."""
+        for key, session in list(self._store.sessions.items()):
+            if key[0] == patient_id:
+                context = session.context.model_copy(update={"recent_turns": [], "conversation_summary": ""})
+                self._store.sessions[key] = session.model_copy(update={"context": context})
+
     def is_owned_by_other_patient(self, patient_id: UUID, session_id: UUID) -> bool:
         """Ownership probe: a session id may never be shared across patients."""
         return any(owner != patient_id and sid == session_id for owner, sid in self._store.sessions)

@@ -15,7 +15,7 @@ from app.contracts.source_extraction import (
     RegimenEvidence,
 )
 from app.contracts.vision import EmbeddingResult, MatchOutcome, ModelMetadata
-from app.domain.errors import NotFoundError, ValidationError
+from app.domain.errors import NotFoundError, RegimenOverlapError, ValidationError
 from app.infrastructure.evidence_repos import MemoryEvidenceRepository, MemoryImageStore
 
 PATIENT = UUID(int=100)
@@ -497,8 +497,11 @@ def test_new_course_uses_same_identity_and_preserves_previous_regimen(evidence, 
         distinct_product_confirmed=False,
         product_category="supplement",
     )
-    with pytest.raises(ValidationError):
+    with pytest.raises(RegimenOverlapError):
         service.prepare_review(**params)
+    with pytest.raises(RegimenOverlapError):
+        service.prepare_review(**params, replace_active_plan=True)
+    wired.enrollment.end_regimen(patient_id=PATIENT, regimen_id=first.draft_regimen_id)
     second = service.prepare_review(**params, replace_active_plan=True)
     assert service.prepare_review(**params, replace_active_plan=True).draft_regimen_id == second.draft_regimen_id
     assert len(repo.medications(PATIENT)) == 1 and second.product.category_basis == "patient_entered"
@@ -514,7 +517,7 @@ def test_new_course_uses_same_identity_and_preserves_previous_regimen(evidence, 
         session_state="awaiting_confirmation",
         session_state_version=2,
     )
-    assert wired.enrollment.get_regimen(PATIENT, first.draft_regimen_id).state.value == "superseded"
+    assert wired.enrollment.get_regimen(PATIENT, first.draft_regimen_id).state.value == "ended"
     assert wired.enrollment.get_regimen(PATIENT, second.draft_regimen_id).dose_amount == 2
     assert len(wired.enrollment.list_regimens(PATIENT, first.medication_id)) == 2 and not wired.store.events
 

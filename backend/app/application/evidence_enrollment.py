@@ -27,7 +27,7 @@ from ..contracts.ports import (
     SourceFieldRepository,
 )
 from ..contracts.source_extraction import ListedMedication
-from ..domain.errors import NotFoundError, ProviderUnavailableError, ValidationError
+from ..domain.errors import NotFoundError, ProviderUnavailableError, RegimenOverlapError, ValidationError
 from .enrollment import MedicationEnrollmentService
 from .printed_instructions import apply_printed_parts, validate_printed_review
 from .source_preview import SourcePreviewService
@@ -126,6 +126,7 @@ class EvidenceEnrollmentService:
         medication_id: UUID | None,
         consent: bool,
         demo_only: bool,
+        automatically_routed: bool = False,
     ) -> EnrollmentTask:
         if not consent or not demo_only:
             raise ValidationError("Consented synthetic source files only")
@@ -164,6 +165,12 @@ class EvidenceEnrollmentService:
         if extraction.label_kind == "none" or len(extraction.candidates) != 1:
             raise ValidationError("Choose a source with one clearly named medication, or use manual entry")
         candidate = extraction.candidates[0]
+        if automatically_routed:
+            # check-input identifies text vs pills, not a dispensing document's
+            # authority. Use read-label evidence for source kind, then require review.
+            if extraction.label_kind not in {"package", "dispensing"}:
+                raise ValidationError("Please choose the source type after checking the original document")
+            source_kind = "pharmacy_label" if extraction.label_kind == "dispensing" else "package"
         product = ProductEvidence(
             name=candidate.product.name[:160],
             strength=candidate.product.strength,
@@ -420,10 +427,8 @@ class EvidenceEnrollmentService:
         if task.draft_regimen_id:
             return task
         active = self._enrollment.find_active_regimen(patient_id, task.medication_id)
-        if active is not None and not replace_active_plan:
-            raise ValidationError(
-                "This product has an active plan. Review a plan change separately; it will not be overwritten."
-            )
+        if active is not None:
+            raise RegimenOverlapError()
         for source_id in task.source_ids:
             source = self._sources.get(patient_id, source_id)
             if source and source.review_status == SourceReviewStatus.EXTRACTED:

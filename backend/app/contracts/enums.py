@@ -120,6 +120,8 @@ class ToolName(StrEnum):
     RECONCILE_MEDICATION_SOURCES = "reconcile_medication_sources"
 
     CREATE_REMINDER = "create_reminder"
+    GET_LONG_TERM_CARE = "get_long_term_care"
+    PREPARE_CARE_ACTION = "prepare_care_action"
     LIST_ACTIVE_MEDICATIONS = "list_active_medications"
     GET_MEDICATION_HISTORY = "get_medication_history"
     #: Read-only lookup of what the patient has *reported* for one medication
@@ -148,6 +150,7 @@ class ErrorCode(StrEnum):
     CONFIRMATION_REQUIRED = "CONFIRMATION_REQUIRED"
     CONFIRMATION_EXPIRED = "CONFIRMATION_EXPIRED"
     DUPLICATE_EVENT = "DUPLICATE_EVENT"
+    REGIMEN_OVERLAP = "REGIMEN_OVERLAP"
     STALE_VERSION = "STALE_VERSION"
     POLICY_BLOCKED = "POLICY_BLOCKED"
     INVALID_INPUT = "INVALID_INPUT"

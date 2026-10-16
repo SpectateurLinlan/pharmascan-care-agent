@@ -6,7 +6,8 @@ import httpx
 import pytest
 from app.contracts.model import ModelProviderError
 from app.infrastructure.gemini_model import GeminiModel
-from google.genai import errors
+from google import genai
+from google.genai import errors, types
 
 
 class Client:
@@ -75,3 +76,42 @@ def test_malformed_function_call_is_not_executable():
             history=[], tools=[], instruction="safe"
         )
     assert raised.value.category == "schema"
+
+
+def test_non_provider_programming_failure_is_not_silently_downgraded():
+    client = Client(failure=RuntimeError("local implementation failure"))
+    with pytest.raises(RuntimeError, match="local implementation failure"):
+        GeminiModel(model="gemini-3.5-flash-lite", client_factory=lambda: client).create(
+            history=[], tools=[], instruction="Synthetic adapter test"
+        )
+
+
+@pytest.mark.parametrize("status,category", [(429, "quota"), (503, "unavailable"), (None, "timeout")])
+def test_real_interactions_sdk_exceptions_are_scrubbed(status, category):
+    calls = []
+
+    def respond(request):
+        calls.append(request.method)
+        if status is None:
+            raise httpx.ReadTimeout("PRIVATE_PROVIDER_DETAIL", request=request)
+        return httpx.Response(status, json={"error": {"message": "PRIVATE_PROVIDER_DETAIL", "code": status}})
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as http:
+        model = GeminiModel(
+            model="gemini-3.5-flash-lite",
+            client_factory=lambda: genai.Client(
+                api_key="DEMO-not-a-real-key",
+                http_options=types.HttpOptions(
+                    httpx_client=http,
+                    base_url="https://sdk.example.invalid",
+                    retry_options=types.HttpRetryOptions(attempts=1),
+                ),
+            ),
+        )
+        with pytest.raises(ModelProviderError) as raised:
+            model.create(history=[], tools=[], instruction="Synthetic adapter failure test")
+        assert raised.value.category == category
+        assert "PRIVATE_PROVIDER_DETAIL" not in str(raised.value)
+        # The pinned Interactions SDK retries a retryable HTTP response once;
+        # a timeout from this injected transport is not retried.
+        assert calls == (["POST"] if status is None else ["POST", "POST"])

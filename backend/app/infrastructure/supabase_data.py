@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import nullcontext
 from typing import Any
 from uuid import UUID
 
 import httpx
 
 from ..config import validate_publishable_key
-from ..domain.errors import AuthenticationRequiredError, ProviderUnavailableError, ValidationError
+from ..domain.errors import AuthenticationRequiredError, ProviderUnavailableError, RegimenOverlapError, ValidationError
 
 
 class SupabaseDataClient:
@@ -21,6 +22,7 @@ class SupabaseDataClient:
         access_token: str,
         patient_id: UUID,
         client_factory: Callable[[], httpx.Client] = httpx.Client,
+        client: httpx.Client | None = None,
     ) -> None:
         if not access_token or not publishable_key or publishable_key.startswith("sb_secret_"):
             raise AuthenticationRequiredError("User access token and publishable key required")
@@ -29,6 +31,7 @@ class SupabaseDataClient:
         self._base_url = base_url.rstrip("/")
         self._headers = {"apikey": publishable_key, "Authorization": f"Bearer {access_token}"}
         self._client_factory = client_factory
+        self._client = client
 
     def request(
         self,
@@ -43,7 +46,7 @@ class SupabaseDataClient:
         # Requests are bounded; writes are not retried implicitly. The caller
         # can retry with its stable idempotency key after an uncertain outcome.
         try:
-            with self._client_factory() as client:
+            with nullcontext(self._client) if self._client is not None else self._client_factory() as client:
                 response = client.request(
                     method,
                     self._base_url + path,
@@ -56,14 +59,16 @@ class SupabaseDataClient:
             raise ProviderUnavailableError("Supabase Data API unavailable") from None
         if response.status_code in (401, 403):
             raise AuthenticationRequiredError("Supabase rejected authenticated data access")
-        if response.status_code >= 500 or response.status_code == 429:
-            raise ProviderUnavailableError(f"Supabase unavailable (HTTP {response.status_code})")
         if response.status_code >= 400:
             # Provider bodies may contain patient data. Never echo them.
             try:
                 code = response.json().get("code", "unknown")
             except (ValueError, AttributeError):
                 code = "malformed"
+            if code == "P7501":
+                raise RegimenOverlapError()
+            if response.status_code >= 500 or response.status_code == 429:
+                raise ProviderUnavailableError(f"Supabase unavailable (HTTP {response.status_code})")
             safe_code = code if isinstance(code, str) and code.isalnum() and len(code) <= 12 else "unknown"
             raise ValidationError(f"Supabase rejected data operation (HTTP {response.status_code}; code {safe_code})")
         if not response.content:

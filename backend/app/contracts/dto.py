@@ -14,6 +14,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .agent_context import AgentContext
+from .dose_display import DoseBasis
 from .enums import (
     FieldName,
     IdentityStatus,
@@ -44,6 +45,7 @@ IDEMPOTENCY_KEY_PATTERN = r"^[A-Za-z0-9_.:-]{1,128}$"
 
 
 class SourceDocumentDTO(DTO):
+    dose_basis: DoseBasis | None = None
     extraction_evidence: MedicationSourceExtractionDTO | None = None
     id: UUID
     patient_id: UUID

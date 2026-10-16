@@ -54,6 +54,8 @@ class ReminderAlertService:
             regimen = self._enrollment.find_active_regimen(patient_id, medication.id)
             if regimen is None or regimen.is_prn:
                 continue
+            if regimen.course_end_date and now.astimezone(ZoneInfo(timezone)).date() > regimen.course_end_date:
+                continue
             self._schedule.materialize(patient_id=patient_id, regimen_id=regimen.id, days=2)
             rows = {
                 row.id: row

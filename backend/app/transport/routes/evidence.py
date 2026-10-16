@@ -74,6 +74,7 @@ async def attach(
     request: Request,
     source_kind: Literal["package", "pharmacy_label", "prescription"] = Query(),
     medication_id: UUID | None = Query(default=None),
+    automatically_routed: bool = Query(default=False),
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ):
@@ -82,6 +83,7 @@ async def attach(
         container.evidence_enrollment.attach,
         patient_id=principal.patient_id,
         task_id=task_id,
+        automatically_routed=automatically_routed,
         image=content,
         source_kind=source_kind,
         medication_id=medication_id,

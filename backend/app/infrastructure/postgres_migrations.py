@@ -72,6 +72,12 @@ RLS_REQUIRED_TABLES: tuple[str, ...] = (
     "image_embeddings",
     "recognition_runs",
     "caregiver_contacts",
+    "conversation_turns",
+    "inventory_transactions",
+    "medication_care_tasks",
+    "adherence_barriers",
+    "push_subscriptions",
+    "notification_deliveries",
 )
 
 

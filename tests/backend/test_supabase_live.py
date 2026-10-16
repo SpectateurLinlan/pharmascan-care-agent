@@ -583,6 +583,132 @@ def course_live():
     return create_live_harness()
 
 
+def test_live_push_subscription_rls_jobs_and_calendar_without_network_delivery(course_live):
+    """REAL Supabase/JWT/SQL; synthetic endpoint, fake sender, zero external push."""
+    import base64
+
+    from app.application.reminder_plan import PlannedReminder
+    from app.contracts.notifications import DeliveryResult
+    from app.contracts.push import PushSubscriptionInput
+    from app.infrastructure.notification_jobs import PostgresNotificationJobs
+    from app.infrastructure.postgres_db import PostgresDatabase
+    from app.infrastructure.push_subscriptions import SupabasePushSubscriptions
+    from icalendar import Calendar
+
+    settings, identities, clients, app, clock = course_live
+    owner = identities[0].user_id
+    headers = {"Authorization": "Bearer " + identities[0].access_token}
+    other = {"Authorization": "Bearer " + identities[1].access_token}
+    endpoint = "https://fcm.googleapis.com/fcm/send/DEMO-not-real-" + uuid4().hex
+    value = PushSubscriptionInput(
+        endpoint=endpoint,
+        keys={
+            "auth": base64.urlsafe_b64encode(b"x" * 16).decode().rstrip("="),
+            "p256dh": base64.urlsafe_b64encode(b"\x04" + b"x" * 64).decode().rstrip("="),
+        },
+    )
+    subscriptions = SupabasePushSubscriptions(clients[0])
+    saved = subscriptions.save(owner, value)
+    try:
+        assert subscriptions.save(owner, value).id == saved.id
+        assert not clients[1].rows("push_subscriptions")
+        assert (
+            clients[1].request(
+                "PATCH", "/rest/v1/push_subscriptions", params={"id": f"eq.{saved.id}"}, body={"enabled": False}
+            )
+            == []
+        )
+        with pytest.raises(AuthenticationRequiredError):
+            clients[1].request(
+                "POST", "/rest/v1/push_subscriptions", body={"patient_id": str(owner), **value.model_dump()}
+            )
+        start = app.post("/api/demo/start", headers=headers, json={"client_id": "DEMO-push"}).json()
+        draft = app.post(
+            "/api/medications/drafts",
+            headers=headers,
+            json={
+                "medication_name": "DEMO push synthetic medicine",
+                "dose_amount": 1,
+                "dose_unit": "tablet",
+                "frequency_kind": "daily",
+                "frequency_local_times": [
+                    (datetime.now(UTC) + timedelta(minutes=10)).astimezone(ZoneInfo("Asia/Singapore")).strftime("%H:%M")
+                ],
+            },
+        ).json()
+        assert (
+            app.post(
+                f"/api/medications/drafts/{draft['source_id']}/review", headers=headers, json={"field_ids": None}
+            ).status_code
+            == 200
+        )
+        challenge = app.post(
+            f"/api/medications/drafts/{draft['regimen_id']}/challenge",
+            headers=headers,
+            params={"session_id": start["session_id"]},
+        ).json()
+        assert (
+            app.post(
+                "/api/medications/activate",
+                headers=headers,
+                json={
+                    "regimen_id": draft["regimen_id"],
+                    "challenge_id": challenge["challenge_id"],
+                    "session_id": start["session_id"],
+                    "session_state": challenge["session_state"],
+                    "session_state_version": challenge["session_state_version"],
+                },
+            ).status_code
+            == 200
+        )
+        clock.moment = datetime.now(UTC)
+        assert app.put("/api/me/preferences", headers=headers, json={"reminder_lead_minutes": 15}).status_code == 200
+        response = app.get("/api/reminders/plan", headers=headers)
+        assert response.status_code == 200
+        rows = [PlannedReminder.model_validate(row) for row in response.json()]
+        assert rows and all(str(row.regimen_id) == draft["regimen_id"] for row in rows)
+        assert app.get("/api/reminders/plan", headers=other).json() == []
+        exported = app.get("/api/reminders/calendar", headers=headers)
+        assert exported.status_code == 200 and Calendar.from_ical(exported.content).walk("VEVENT")
+        jobs = PostgresNotificationJobs(PostgresDatabase(dsn=settings.require_database_url()), patient_scope=owner)
+        jobs.sync(owner, rows, clock.now())
+        jobs.sync(owner, rows, clock.now())
+        assert len(clients[0].rows("notification_deliveries")) == len(rows)
+        assert not clients[1].rows("notification_deliveries")
+        with pytest.raises((AuthenticationRequiredError, ValidationError)):
+            clients[0].request("PATCH", "/rest/v1/notification_deliveries", body={"status": "sent"})
+        claimed = jobs.claim(clock.now())
+        assert claimed is not None
+        jobs.finish(claimed, DeliveryResult(status="sent"), clock.now())  # SIMULATED delivery acknowledgement only.
+        assert jobs.claim(clock.now()) is None  # Same due occurrence is not sent twice.
+        assert not clients[0].rows("dose_events")
+        assert (
+            app.post(f"/api/medications/{draft['regimen_id']}/end", headers=other, json={"confirmed": True}).status_code
+            == 404
+        )
+        assert (
+            app.post(
+                f"/api/medications/{draft['regimen_id']}/end", headers=headers, json={"confirmed": True}
+            ).status_code
+            == 200
+        )
+        assert (
+            app.post(
+                f"/api/medications/{draft['regimen_id']}/end", headers=headers, json={"confirmed": True}
+            ).status_code
+            == 200
+        )
+        assert app.get("/api/reminders/plan", headers=headers).json() == []
+        assert app.put("/api/me/preferences", headers=headers, json={"reminders_enabled": False}).status_code == 200
+        assert app.get("/api/reminders/alerts", headers=headers).json() == []
+        assert app.get("/api/reminders/plan", headers=headers).json() == []
+        assert jobs.claim(clock.now()) is None
+        assert all(row["status"] in {"sent", "cancelled"} for row in clients[0].rows("notification_deliveries"))
+    finally:
+        subscriptions.revoke(owner, saved.id)
+    assert not subscriptions.list_for_patient(owner)[0].enabled
+
+
 def test_live_verified_auth_fastapi_and_atomic_confirmation(live):
     _settings, identities, clients, app, clock = live
     a, token = identities[0]

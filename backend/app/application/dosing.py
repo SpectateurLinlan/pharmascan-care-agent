@@ -140,14 +140,16 @@ class DoseScheduleService:
         now = self._clock.now()
         local_today = now.astimezone(tz).date()
         window_start = datetime(local_today.year, local_today.month, local_today.day, tzinfo=tz).astimezone(UTC)
-        horizon_end = window_start + timedelta(days=days)
+        horizon_end = (
+            datetime(local_today.year, local_today.month, local_today.day, tzinfo=tz) + timedelta(days=days)
+        ).astimezone(UTC)
         generated: list[DoseOccurrenceDTO] = []
 
         for rule in self._rules.list_for_regimen(patient_id, regimen_id):
             if rule.rule_kind != RuleKind.SCHEDULED or not rule.enabled:
                 continue
-            for due_at in self._expand(rule, window_start, horizon_end, tz):
-                course_day = due_at.astimezone(tz).date()
+            for due_at in self._expand(rule, window_start, horizon_end, ZoneInfo(rule.timezone)):
+                course_day = due_at.astimezone(ZoneInfo(rule.timezone)).date()
                 if regimen.course_start_date and course_day < regimen.course_start_date:
                     continue
                 if regimen.course_end_date and course_day > regimen.course_end_date:
@@ -207,7 +209,9 @@ class DoseScheduleService:
                 for hh, mm in times:
                     moment = _at(day, hh, mm)
                     if start <= moment < end:
-                        moments.append(moment)
+                        local = moment.astimezone(tz)
+                        if (local.date(), local.hour, local.minute) == (day, hh, mm):
+                            moments.append(moment)
                 day = day + timedelta(days=1)
         return sorted(moments)
 

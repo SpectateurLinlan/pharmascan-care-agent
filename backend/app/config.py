@@ -99,6 +99,11 @@ class Settings:
     gemini_model: str = "gemini-3.5-flash-lite"
     gemini_thinking_level: str = "low"
     demo_agent_daily_turn_limit: int = 20
+    enable_web_push: bool = False
+    vapid_public_key: str | None = field(default=None, repr=False)
+    vapid_private_key: str | None = field(default=None, repr=False)
+    vapid_subject: str | None = field(default=None, repr=False)
+    push_dispatch_token: str | None = field(default=None, repr=False)
     tts_provider: str = "browser"
     stt_provider: str = "browser"
     enable_speech: bool = False
@@ -162,6 +167,11 @@ class Settings:
             gemini_api_key=read("GEMINI_API_KEY"),
             gemini_model=read("GEMINI_MODEL") or "gemini-3.5-flash-lite",
             demo_agent_daily_turn_limit=int(limit),
+            enable_web_push=(read("ENABLE_WEB_PUSH") or "").lower() in {"1", "true", "yes"},
+            vapid_public_key=read("VAPID_PUBLIC_KEY"),
+            vapid_private_key=read("VAPID_PRIVATE_KEY"),
+            vapid_subject=read("VAPID_SUBJECT"),
+            push_dispatch_token=read("PUSH_DISPATCH_TOKEN"),
             tts_provider=tts_provider,
             stt_provider=stt_provider,
             enable_speech=(read("ENABLE_SPEECH") or "").lower() in {"1", "true", "yes"},

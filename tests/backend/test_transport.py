@@ -645,7 +645,7 @@ def test_missing_client_id_is_rejected(client: TestClient) -> None:
 
 def test_openapi_schema_is_generated(client: TestClient) -> None:
     schema = client.get("/openapi.json").json()
-    assert schema["info"]["title"] == "PharmaScan Care Agent API"
+    assert schema["info"]["title"] == "MediThread Agent API"
     assert "/api/medications/drafts" in schema["paths"]
     assert "/api/agent/messages" in schema["paths"]
 

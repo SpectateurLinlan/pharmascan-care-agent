@@ -15,6 +15,7 @@ from app.domain.errors import (
     ConfirmationRequiredError,
     IncompleteRegimenError,
     NotFoundError,
+    RegimenOverlapError,
     SourceUnreviewedError,
     ValidationError,
 )
@@ -160,7 +161,7 @@ def test_incomplete_regimen_cannot_activate_even_when_reviewed_and_confirmed(wir
         )
 
 
-def test_new_version_supersedes_previous_and_keeps_history(wired):
+def test_new_version_requires_stopping_previous_and_keeps_history(wired):
     first = wired.enrollment.enroll_draft(patient_id=PATIENT, draft=_complete_draft())
     first_challenge, _ = wired.enrollment.request_activation_challenge(
         patient_id=PATIENT, regimen_id=first.regimen.id, session_id=UUID(int=303), session_state_version=1
@@ -175,10 +176,14 @@ def test_new_version_supersedes_previous_and_keeps_history(wired):
         session_state_version=1,
     )
 
-    # A second enrollment for the same medication would normally be a new
-    # prescription; here we simulate a new version of the same medication.
+    # The app must not silently replace an active course, even when a new
+    # medication row or a different dose would previously bypass the guard.
+    with pytest.raises(RegimenOverlapError):
+        wired.enrollment.enroll_draft(patient_id=PATIENT, draft=_complete_draft())
+    wired.enrollment.end_regimen(patient_id=PATIENT, regimen_id=first.regimen.id)
     second = wired.enrollment.enroll_draft(
         patient_id=PATIENT,
+        existing_medication_id=first.medication.id,
         draft=RegimenDraftInput(
             medication_name="Amlodipine 5mg",
             dose_amount=2,
@@ -192,7 +197,6 @@ def test_new_version_supersedes_previous_and_keeps_history(wired):
     wired.enrollment.confirm_challenge(patient_id=PATIENT, challenge_id=second_challenge.id)
     wired.enrollment.review_source_fields(patient_id=PATIENT, source_id=second.regimen.source_id)
 
-    # Different medication row -> activating does not retire the first one.
     activated = wired.enrollment.activate_regimen(
         patient_id=PATIENT,
         regimen_id=second.regimen.id,
@@ -202,11 +206,12 @@ def test_new_version_supersedes_previous_and_keeps_history(wired):
     )
     assert activated.regimen.state == RegimenState.ACTIVE
     assert activated.superseded_regimen_ids == []
+    assert activated.regimen.version_no == 2
 
     # The historical version is still readable and unchanged.
     original = wired.regimens.get(PATIENT, first.regimen.id)
     assert original is not None
-    assert original.state == RegimenState.ACTIVE
+    assert original.state == RegimenState.ENDED
     assert original.version_no == 1
 
 
@@ -252,6 +257,37 @@ def test_invalid_dose_and_prn_frequency_are_rejected(wired):
                 frequency_rule=FrequencyRuleDTO(kind="daily", local_times=["08:00"]),
             ),
         )
+
+
+def test_rejected_enrollment_does_not_leave_partial_provenance(wired):
+    """A 422-worthy domain validation must happen before any persistence."""
+    invalid_drafts = (
+        RegimenDraftInput(medication_name="Zero dose", dose_amount=0, dose_unit="tablet"),
+        RegimenDraftInput(
+            medication_name="Invalid weekly day",
+            dose_amount=1,
+            dose_unit="tablet",
+            frequency_rule=FrequencyRuleDTO(kind="weekly", local_times=["08:00"], days_of_week=[8]),
+        ),
+        RegimenDraftInput(
+            medication_name="PRN with schedule",
+            dose_amount=1,
+            dose_unit="tablet",
+            is_prn=True,
+            frequency_rule=FrequencyRuleDTO(kind="daily", local_times=["08:00"]),
+        ),
+    )
+
+    for draft in invalid_drafts:
+        before = {
+            name: len(getattr(wired.store, name)) for name in ("sources", "source_fields", "medications", "regimens")
+        }
+        with pytest.raises(ValidationError):
+            wired.enrollment.enroll_draft(patient_id=PATIENT, draft=draft)
+        after = {
+            name: len(getattr(wired.store, name)) for name in ("sources", "source_fields", "medications", "regimens")
+        }
+        assert after == before
 
 
 def test_prn_draft_requires_indication_guidance_not_a_schedule(wired):

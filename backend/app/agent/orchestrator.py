@@ -21,6 +21,7 @@ from uuid import UUID
 from ..contracts.agent_context import CandidateReference, ClarificationContext
 from ..contracts.dto import AgentSessionDTO, PendingSelfReportDTO
 from ..contracts.enums import AgentIntent, ToolName, ToolStatus
+from ..contracts.long_term import CareReview
 from ..contracts.observations import HealthNoteReview
 from ..contracts.ports import AgentSessionRepository, Clock, IdGenerator
 from ..contracts.quota import Usage
@@ -80,6 +81,7 @@ class AgentTurn:
 
 @dataclass(frozen=True)
 class AgentReply:
+    care_request: CareReview | None = field(default=None, kw_only=True)
     health_note_request: HealthNoteReview | None = field(default=None, kw_only=True)
     visual_check_request: VisualCheckRequest | None = field(default=None, kw_only=True)
     usage: Usage | None = field(default=None, kw_only=True)

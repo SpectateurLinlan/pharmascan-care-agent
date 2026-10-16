@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import ValidationError as SchemaError
 
-from ..contracts.enums import AgentIntent
+from ..contracts.enums import AgentIntent, ToolName
 from ..contracts.model import ConversationalModel, ModelProviderError
 from ..contracts.ports import AgentSessionRepository, IdGenerator
 from ..domain.errors import DomainError, ValidationError
@@ -17,7 +17,19 @@ from .memory import bounded_text, record_context
 from .model_tools import ModelTools, model_tool_schemas
 from .orchestrator import AgentOrchestrator, AgentReply, AgentTurn
 
-INSTRUCTION = """You are PharmaScan Care, a bounded medication companion, not a prescriber.
+INSTRUCTION = """You are MediThread, a bounded medication companion, not a prescriber.
+For stock/refill requests read get_medication_inventory; clarify medicine, count and tablet/capsule units,
+then prepare_stock_change. Never treat label quantity as stock or strength as unit count.
+For reported difficulties use prepare_adherence_barrier, never infer missed doses from missing reports.
+For follow-ups, clarify the patient's requested date and medication context, then prepare_medication_care_task.
+Use prepare_care_task_update for requested completion/defer/cancel. These only open human review.
+For monthly progress, pharmacist preparation and past difficulties, call get_longitudinal_summary,
+prepare_medication_review, get_adherence_history or get_unresolved_follow_ups. Read persisted facts every time.
+For pharmacist/doctor visit preparation or a combined symptoms-and-follow-ups review, call
+prepare_medication_review. get_unresolved_follow_ups alone only covers tasks, not the full requested review.
+Use clarify_medication_care for missing date/time, medicine, stock count/unit or support action.
+Ask the controlled question instead of guessing a permanent fact. current_time/timezone are server metadata.
+No broad screening/vaccination, clinical targets, dose changes or automatic pharmacy/caregiver contact.
 For enrollment/package/label follow-ups with an enrollment_task_id, call reconcile_medication_sources.
 Linked sources may conflict or lack regimen instructions: ask the patient to add evidence or review.
 Printed strength is not per-dose quantity. Daily count is not clock times. Duration without a start
@@ -33,7 +45,11 @@ For uncertainty call get_dose_status, never prepare a self-report. Multiple poss
 For explicit I took it use prepare_self_report, then stop for human confirmation. Never invent IDs.
 For a patient describing feelings or symptoms, use prepare_health_observation to offer human review.
 Never infer symptoms are caused by medication; no health note is saved by this tool.
-No medication knowledge source is available. Do not invent medical advice.
+For medication uses, personal instructions and why prescribed, call get_medication_understanding.
+Choose general_use, personal_instructions or personal_reason respectively. Only tools establish facts.
+General US label evidence cannot determine personal indication, Singapore registration or dosing.
+If the tool cannot match, ask for the original label/product details.
+Never fabricate citations or translate missing facts.
 Reply briefly in the preferred language. Factual medication/status wording is deterministically checked by the server.
 After a tool returns patient_safe_summary, copy it verbatim. You may prepend only
 "Here is your reviewed record: " or "我帮您查看了已核对的记录。".
@@ -106,7 +122,7 @@ class ConversationService:
                         "text": json.dumps(
                             {
                                 "context": context,
-                                "timezone": "Asia/Singapore",
+                                **self._tools.context_metadata(),
                                 "current_input": bounded_text(turn.text, 2000),
                             }
                         ),
@@ -118,6 +134,13 @@ class ConversationService:
         intent = AgentIntent.CLARIFICATION
         tools_used = 0
         evidence_summary = None
+        full_review_summary = None
+        text = turn.text.lower()
+        review_requested = (
+            any(word in text for word in ("prepare", "preparing"))
+            and any(word in text for word in ("pharmacist", "doctor", "visit", "medication review"))
+        ) or any(word in text for word in ("就诊准备", "复查准备", "准备复诊"))
+        requested_review_repair = False
         try:
             for _round in range(self._rounds):
                 if on_model_request:
@@ -125,6 +148,32 @@ class ConversationService:
                 reply = self._model.create(history=history, tools=model_tool_schemas(), instruction=INSTRUCTION)
                 history.extend(reply.replay)
                 if not reply.calls:
+                    if (
+                        review_requested
+                        and results
+                        and any(row.tool_name == ToolName.GET_LONG_TERM_CARE for row in results)
+                        and full_review_summary is None
+                        and not any(row.payload.get("care_clarification") for row in results)
+                    ):
+                        if requested_review_repair:
+                            raise ValidationError("Requested medication review evidence is incomplete")
+                        # Bounded coverage repair: a narrow task read cannot
+                        # satisfy a requested medication/health visit review.
+                        requested_review_repair = True
+                        history.append(
+                            {
+                                "type": "user_input",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": "Application coverage check: only a partial read is available. "
+                                        "Call prepare_medication_review to complete the requested visit review; "
+                                        "do not infer missing health or medication information.",
+                                    }
+                                ],
+                            }
+                        )
+                        continue
                     # Multiple medicines must clarify even if the model stops
                     # after listing. The existing deterministic policy owns it.
                     if any(
@@ -189,8 +238,17 @@ class ConversationService:
                     if len(json.dumps(executed.data)) > 16000:
                         raise ValidationError("Tool result exceeds bounded model context")
                     results.extend(executed.results)
-                    if call.name == "reconcile_medication_sources":
-                        evidence_summary = str(executed.data["patient_safe_summary"])
+                    if "patient_safe_summary" in executed.data:
+                        current_summary = str(executed.data["patient_safe_summary"])
+                        if call.name in ("prepare_medication_review", "get_longitudinal_summary"):
+                            full_review_summary = current_summary
+                        # A subsequent narrow read must not erase verified
+                        # symptoms/supply from a completed medication review.
+                        evidence_summary = (
+                            current_summary
+                            if executed.care_review or "care_clarification" in executed.data
+                            else full_review_summary or current_summary
+                        )
                     intent = executed.intent
                     history.append(
                         {
@@ -213,6 +271,26 @@ class ConversationService:
                             ],
                         }
                     )
+                    if executed.care_review:
+                        saved = self._fallback.get_session(patient_id=patient_id, session_id=session_id)
+                        new_context = record_context(
+                            saved.context,
+                            text=turn.text,
+                            message=evidence_summary,
+                            intent=intent.value,
+                            language=turn.language,
+                            results=results,
+                        )
+                        self._sessions.update(saved.model_copy(update={"context": new_context}))
+                        return AgentReply(
+                            message=evidence_summary,
+                            intent=intent,
+                            session_id=session_id,
+                            session_state=saved.state,
+                            tool_results=results,
+                            mode="gemini",
+                            care_request=executed.care_review,
+                        )
                     if executed.visual_request:
                         return AgentReply(
                             message=(

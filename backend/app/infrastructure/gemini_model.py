@@ -53,6 +53,16 @@ class GeminiModel:
             raise ModelProviderError("unavailable") from None
         except (ValidationError, KeyError, TypeError, AttributeError, ValueError):
             raise ModelProviderError("schema") from None
+        except Exception as exc:
+            # Interactions in pinned google-genai 2.30.1 raises a separate SDK
+            # exception hierarchy not exported by google.genai.errors. Normalize
+            # it here without importing SDK-private modules or leaking bodies.
+            if not type(exc).__module__.startswith("google.genai."):
+                raise
+            timeout = any(base.__name__ == "APITimeoutError" for base in type(exc).__mro__)
+            status = getattr(exc, "status_code", None)
+            category = "timeout" if timeout else "quota" if status == 429 else "unavailable"
+            raise ModelProviderError(category) from None
 
 
 def build_gemini_model(*, key: str, model: str) -> GeminiModel:

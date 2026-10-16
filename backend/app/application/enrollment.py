@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Any
 from uuid import UUID
 
+from ..contracts.dose_display import DoseBasis, DoseDisplayInput
 from ..contracts.dto import (
     ActivationResultDTO,
     ConfirmationChallengeDTO,
@@ -45,7 +46,9 @@ from ..contracts.ports import (
 )
 from ..contracts.source_extraction import MedicationSourceExtractionDTO
 from ..domain import policy
-from ..domain.errors import NotFoundError, ValidationError
+from ..domain.dose_display import dose_display
+from ..domain.errors import NotFoundError, RegimenOverlapError, ValidationError
+from ..domain.regimen_overlap import courses_overlap, same_recorded_medicine
 from .timezone import LOCAL_TZ_PROVIDER, LocalTzProvider
 
 CONFIRMATION_TTL = timedelta(minutes=10)
@@ -113,6 +116,18 @@ class MedicationEnrollmentService:
     def list_regimens(self, patient_id: UUID, medication_id: UUID) -> list[RegimenVersionDTO]:
         return self._regimens.list_for_medication(patient_id, medication_id)
 
+    def end_regimen(self, *, patient_id: UUID, regimen_id: UUID) -> RegimenVersionDTO:
+        """Record the patient's explicit stop action; preserve instructions/history."""
+        regimen = self._require_regimen(patient_id, regimen_id)
+        if regimen.state == RegimenState.ENDED:
+            return regimen
+        if regimen.state != RegimenState.ACTIVE:
+            raise ValidationError("Only an active plan can be stopped")
+        self._regimens.update(
+            regimen.model_copy(update={"state": RegimenState.ENDED, "effective_to": self._clock.now()})
+        )
+        return self._require_regimen(patient_id, regimen_id)
+
     def resume_draft(self, patient_id: UUID, regimen_id: UUID) -> EnrollmentResultDTO:
         regimen = self._regimens.get(patient_id, regimen_id)
         if regimen is None:
@@ -141,6 +156,7 @@ class MedicationEnrollmentService:
         extraction_evidence: MedicationSourceExtractionDTO | None = None,
         existing_medication_id: UUID | None = None,
         evidence_task_id: UUID | None = None,
+        dose_basis: DoseBasis | None = None,
     ) -> EnrollmentResultDTO:
         """Create medication + draft regimen + provenance fields.
 
@@ -149,6 +165,13 @@ class MedicationEnrollmentService:
         """
         if not draft.medication_name.strip():
             raise ValidationError("medication_name is required")
+        medication = self._medications.get(patient_id, existing_medication_id) if existing_medication_id else None
+        if existing_medication_id and medication is None:
+            raise NotFoundError("Owned medication not found")
+        if medication:
+            if medication.display_name.casefold() != draft.medication_name.casefold():
+                raise ValidationError("Product name conflict requires review")
+            self._validate_existing_product(medication, draft, dose_basis)
         if evidence_task_id and existing_medication_id:
             prior = next(
                 (
@@ -188,9 +211,34 @@ class MedicationEnrollmentService:
             and len(json.dumps(extraction_evidence.model_dump(mode="json")).encode()) > 65536
         ):
             raise ValidationError("Extraction evidence is too large")
+
+        # Validate all deterministic request rules before the first repository
+        # write. A rejected draft must not leave a source document without its
+        # corresponding medication and regimen.
+        if dose_basis and draft.dose_amount is not None and draft.dose_unit:
+            display = dose_display(
+                DoseDisplayInput(basis=dose_basis, units_per_dose=draft.dose_amount, dose_unit=draft.dose_unit)
+            )
+            if display.status == "conflict":
+                raise ValidationError(display.reason)
+        if draft.dose_amount is not None and draft.dose_amount <= 0:
+            raise ValidationError("dose_amount must be > 0")
+        if draft.frequency_rule is not None:
+            policy.validate_frequency_rule(draft.frequency_rule, is_prn=draft.is_prn)
+
+        self._check_overlapping_plan(
+            patient_id=patient_id,
+            name=draft.medication_name,
+            medication_id=existing_medication_id,
+            product_id=medication.product_id if medication else None,
+            course_start=draft.course_start_date,
+            course_end=draft.course_end_date,
+        )
+
         now = self._clock.now()
         source_id = self._ids.new_id()
         source = SourceDocumentDTO(
+            dose_basis=dose_basis,
             extraction_evidence=extraction_evidence,
             id=source_id,
             patient_id=patient_id,
@@ -198,17 +246,17 @@ class MedicationEnrollmentService:
             review_status=SourceReviewStatus.EXTRACTED,
             reviewed_at=None,
         )
-        self._sources.add(source)
 
         provided: dict[str, Any] = {FieldName.MEDICATION_NAME.value: draft.medication_name}
+        if dose_basis and dose_basis.strength_text:
+            provided[FieldName.STRENGTH.value] = dose_basis.strength_text
+        if dose_basis and dose_basis.form != "unknown":
+            provided[FieldName.FORM.value] = dose_basis.form
         if draft.dose_amount is not None:
-            if draft.dose_amount <= 0:
-                raise ValidationError("dose_amount must be > 0")
             provided[FieldName.DOSE_AMOUNT.value] = draft.dose_amount
         if draft.dose_unit is not None:
             provided[FieldName.DOSE_UNIT.value] = draft.dose_unit
         if draft.frequency_rule is not None:
-            policy.validate_frequency_rule(draft.frequency_rule, is_prn=draft.is_prn)
             provided[FieldName.FREQUENCY_RULE.value] = draft.frequency_rule.model_dump()
         if draft.is_prn:
             provided[FieldName.IS_PRN.value] = True
@@ -221,10 +269,10 @@ class MedicationEnrollmentService:
         if draft.course_end_date is not None:
             provided[FieldName.COURSE_END_DATE.value] = draft.course_end_date.isoformat()
 
-        field_dtos: list[SourceFieldDTO] = []
-        # Source was just created as EXTRACTED; appending is allowed.
-        for name, value in provided.items():
-            field_dto = SourceFieldDTO(
+        # Construct the complete aggregate before persisting any of it. This
+        # catches DTO validation failures without leaving partial evidence.
+        field_dtos = [
+            SourceFieldDTO(
                 id=self._ids.new_id(),
                 patient_id=patient_id,
                 source_id=source_id,
@@ -233,14 +281,9 @@ class MedicationEnrollmentService:
                 review_status=SourceReviewStatus.EXTRACTED,
                 reviewed_at=None,
             )
-            self._source_fields.add(field_dto)
-            field_dtos.append(field_dto)
+            for name, value in provided.items()
+        ]
 
-        medication = self._medications.get(patient_id, existing_medication_id) if existing_medication_id else None
-        if existing_medication_id and medication is None:
-            raise NotFoundError("Owned medication not found")
-        if medication and medication.display_name.casefold() != draft.medication_name.casefold():
-            raise ValidationError("Product name conflict requires review")
         medication = medication or PatientMedicationDTO(
             id=self._ids.new_id(),
             patient_id=patient_id,
@@ -249,12 +292,8 @@ class MedicationEnrollmentService:
             source_id=source_id,
             identity_status=IdentityStatus.UNVERIFIED,
         )
-        if not existing_medication_id:
-            self._medications.add(medication)
-
         missing = policy.missing_required_instructions(provided, is_prn=draft.is_prn)
         state = RegimenState.PENDING_CLARIFICATION if missing else RegimenState.DRAFT
-
         regimen = RegimenVersionDTO(
             evidence_task_id=evidence_task_id,
             id=self._ids.new_id(),
@@ -277,6 +316,14 @@ class MedicationEnrollmentService:
             confirmation_challenge_id=None,
             created_at=now,
         )
+
+        # Persistence begins only after the source, fields, medication and
+        # regimen DTOs have all passed their validation.
+        self._sources.add(source)
+        for field_dto in field_dtos:
+            self._source_fields.add(field_dto)
+        if not existing_medication_id:
+            self._medications.add(medication)
         self._regimens.add(regimen)
 
         return EnrollmentResultDTO(
@@ -285,6 +332,131 @@ class MedicationEnrollmentService:
             missing_instructions=[MissingInstruction(field=m) for m in missing],
             source_fields=field_dtos,
         )
+
+    def _check_overlapping_plan(
+        self,
+        *,
+        patient_id: UUID,
+        name: str,
+        medication_id: UUID | None,
+        product_id: UUID | None,
+        course_start: date | None,
+        course_end: date | None,
+        regimen_id: UUID | None = None,
+    ) -> None:
+        """Reject duplicate active courses across separate medication records.
+
+        Check before draft writes and again on activation: another draft may
+        have been activated meanwhile. Database protection handles concurrency.
+        A single medication record still allows only one active version.
+        """
+        zone = self._tz.local_tz(patient_id)
+        today = self._clock.now().astimezone(zone).date()
+        start = max(course_start or today, today)
+        for recorded in self._medications.list_for_patient(patient_id):
+            if not same_recorded_medicine(name, recorded.display_name, product_id, recorded.product_id):
+                continue
+            for active in self._regimens.list_for_medication(patient_id, recorded.id):
+                if active.state != RegimenState.ACTIVE or active.id == regimen_id:
+                    continue
+                active_start = max(
+                    active.course_start_date or date.min,
+                    active.effective_from.astimezone(zone).date() if active.effective_from else date.min,
+                )
+                if recorded.id == medication_id or courses_overlap(
+                    first_start=start,
+                    first_end=course_end,
+                    second_start=active_start,
+                    second_end=active.course_end_date,
+                ):
+                    raise RegimenOverlapError()
+
+    def _validate_existing_product(
+        self, medication: PatientMedicationDTO, draft: RegimenDraftInput, incoming: DoseBasis | None
+    ) -> None:
+        """A new regimen cannot silently redefine its existing product identity.
+
+        Compare known original source facts before any writes. Unknown details
+        stay unknown; different products require the source-reconciliation path.
+        No mass/count conversion or chemical equivalence is inferred here.
+        """
+        source_ids = {medication.source_id} if medication.source_id else set()
+        source_ids.update(
+            row.source_id
+            for row in self._regimens.list_for_medication(medication.patient_id, medication.id)
+            if row.source_id
+        )
+        for source_id in source_ids:
+            self._validate_product_source(medication.patient_id, source_id, draft, incoming)
+
+    def _validate_product_source(
+        self, patient_id: UUID, source_id: UUID, draft: RegimenDraftInput, incoming: DoseBasis | None
+    ) -> None:
+        source = self._sources.get(patient_id, source_id)
+        if source is None:
+            return
+        known = source.dose_basis
+        fields = self._source_fields.list_for_source(patient_id, source_id)
+        identity = {field.field_name: field.field_value for field in fields}
+        strength = known.strength_text if known and known.strength_text else identity.get(FieldName.STRENGTH)
+        form = known.form if known and known.form != "unknown" else identity.get(FieldName.FORM)
+        product = (
+            source.extraction_evidence.candidates[0].product
+            if source.extraction_evidence and len(source.extraction_evidence.candidates) == 1
+            else None
+        )
+        strength = strength or (product.strength if product else None)
+        form = form or (product.dose_form.value if product and product.dose_form else None)
+
+        def differs(old: object, new: str) -> bool:
+            return (
+                isinstance(old, str)
+                and bool(old.strip())
+                and " ".join(old.casefold().split()) != " ".join(new.casefold().split())
+            )
+
+        if incoming and (
+            (incoming.strength_text and differs(strength, incoming.strength_text))
+            or (incoming.form != "unknown" and differs(form, incoming.form))
+            or (
+                known
+                and known.formulation != "unknown"
+                and incoming.formulation != "unknown"
+                and known.formulation != incoming.formulation
+            )
+            or (
+                known
+                and known.single_ingredient is not None
+                and incoming.single_ingredient is not None
+                and known.single_ingredient != incoming.single_ingredient
+            )
+        ):
+            raise ValidationError("Product strength/form conflict requires separate source reconciliation")
+        if (
+            incoming
+            and product
+            and (
+                (
+                    product.release
+                    and incoming.formulation != "unknown"
+                    and not (product.release == "ER" and incoming.formulation == "modified_release")
+                )
+                or (
+                    product.ingredients
+                    and incoming.single_ingredient is not None
+                    and incoming.single_ingredient != (len(product.ingredients) == 1)
+                )
+            )
+        ):
+            raise ValidationError("Product strength/form conflict requires separate source reconciliation")
+        unit = (draft.dose_unit or "").strip().casefold()
+        if (
+            isinstance(form, str)
+            and form.casefold() in {"tablet", "capsule"}
+            and unit in {"tablet", "tablets", "capsule", "capsules"}
+            and unit not in {form.casefold(), form.casefold() + "s"}
+        ):
+            raise ValidationError("Product form and dose unit conflict requires review")
 
     # -- review --------------------------------------------------------------
 
@@ -405,6 +577,16 @@ class MedicationEnrollmentService:
             now=self._clock.now(),
         )
 
+        self._check_overlapping_plan(
+            patient_id=patient_id,
+            name=medication.display_name,
+            medication_id=medication.id,
+            product_id=medication.product_id,
+            course_start=regimen.course_start_date,
+            course_end=regimen.course_end_date,
+            regimen_id=regimen_id,
+        )
+
         challenge = self._challenges.get(patient_id, challenge_id)
         policy.check_confirmation(
             challenge=challenge,
@@ -419,15 +601,6 @@ class MedicationEnrollmentService:
         )
 
         now = self._clock.now()
-        superseded: list[UUID] = []
-        active = self._regimens.find_active_for_medication(patient_id, medication.id)
-        if active is not None and active.id != regimen_id:
-            decision = policy.check_regimen_state_transition(active.state, RegimenState.SUPERSEDED)
-            if not decision.allowed:
-                raise ValidationError(decision.reason)
-            self._regimens.update(active.model_copy(update={"state": RegimenState.SUPERSEDED, "effective_to": now}))
-            superseded.append(active.id)
-
         self._regimens.update(
             regimen.model_copy(
                 update={
@@ -448,7 +621,7 @@ class MedicationEnrollmentService:
         self._persist_dose_rules(patient_id=patient_id, regimen=regimen)
         return ActivationResultDTO(
             regimen=self._require_regimen(patient_id, regimen_id),
-            superseded_regimen_ids=superseded,
+            superseded_regimen_ids=[],
         )
 
     def _persist_dose_rules(self, *, patient_id: UUID, regimen: RegimenVersionDTO) -> None:

@@ -15,7 +15,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from ..contracts.dose_display import DoseBasis
 from ..contracts.dto import IDEMPOTENCY_KEY_PATTERN, PendingSelfReportDTO
+from ..contracts.long_term import CareReview
 from ..contracts.observations import HealthNoteReview
 from ..contracts.quota import Usage
 from ..contracts.source_extraction import MedicationSourceExtractionDTO
@@ -29,7 +31,7 @@ class Request(BaseModel):
 
 
 class HealthResponse(BaseModel):
-    runtime_contract: Literal["session03-manual-acceptance-v2"] = "session03-manual-acceptance-v2"
+    runtime_contract: Literal["patient-ux-reminders-v1"] = "patient-ux-reminders-v1"
     model_config = ConfigDict(extra="forbid")
 
     status: Literal["ok"] = "ok"
@@ -82,6 +84,8 @@ class ToolTraceResponse(BaseModel):
 
 
 class AgentMessageResponse(BaseModel):
+    history_saved: bool | None = None
+    care_request: CareReview | None = None
     health_note_request: HealthNoteReview | None = None
     visual_check_request: VisualCheckRequest | None = None
     usage: Usage | None = None
@@ -99,6 +103,7 @@ class AgentMessageResponse(BaseModel):
 
 
 class MedicationSummary(BaseModel):
+    dose_basis: DoseBasis | None = None
     dose_amount: float | None = None
     dose_unit: str | None = None
     frequency_rule: dict[str, Any] | None = None
@@ -126,6 +131,7 @@ class MedicationListResponse(BaseModel):
 
 
 class DraftCreateRequest(Request):
+    dose_basis: DoseBasis | None = None
     course_start_date: date | None = None
     course_end_date: date | None = None
 

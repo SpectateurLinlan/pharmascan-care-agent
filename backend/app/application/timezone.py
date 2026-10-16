@@ -39,3 +39,13 @@ def to_utc(moment: datetime) -> datetime:
 
 def local_date_of(utc_moment: datetime, tz: ZoneInfo) -> str:
     return utc_moment.astimezone(tz).date().isoformat()
+
+
+class PreferenceTzProvider:
+    """Injected preference reader; persisted rule timezones remain unchanged."""
+
+    def __init__(self, preferences):
+        self._preferences = preferences
+
+    def local_tz(self, patient_id: object) -> ZoneInfo:
+        return ZoneInfo(self._preferences.get(patient_id).timezone)

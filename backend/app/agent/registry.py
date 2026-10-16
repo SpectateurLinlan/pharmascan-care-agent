@@ -84,6 +84,12 @@ class ToolRegistry:
             ToolName.RECORD_SELF_REPORT: self._record_self_report,
         }
 
+    def record_care_result(self, request: ToolRequest, result: ToolResult) -> None:
+        """Audit application-only long-term tools without logging patient content."""
+        if result.tool_name not in (ToolName.GET_LONG_TERM_CARE, ToolName.PREPARE_CARE_ACTION):
+            raise UnknownToolError("Unsupported extension trace")
+        self._record_trace(result.tool_name, request, result, 0)
+
     def _create_reminder(self, request: ToolRequest) -> ToolResult:
         assert isinstance(request, CreateReminderRequest)
         if self._reminders is None:

@@ -17,6 +17,16 @@ class ValidationError(DomainError):
     code = ErrorCode.INVALID_INPUT
 
 
+class RegimenOverlapError(DomainError):
+    code = ErrorCode.REGIMEN_OVERLAP
+
+    def __init__(self) -> None:
+        super().__init__(
+            "An overlapping plan for this medicine is already active. "
+            "Review and stop the previous recorded plan before adding a replacement."
+        )
+
+
 class AuthenticationRequiredError(DomainError):
     """Raised at the transport boundary when no verified identity is present.
 

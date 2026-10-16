@@ -1,25 +1,51 @@
-"""Agent conversation endpoint.
+"""Patient-owned conversations and stateless model orchestration through typed tools.
 
-The orchestrator is real (state machine, bounded steps, confirmation gating,
-traces); only the intent router is a deterministic rule engine standing in for
-the unavailable LLM. Every response carries ``mode`` so the UI cannot present
-this as live LLM behaviour.
+History never restores executable confirmations or replaces structured patient facts.
+Every response identifies Gemini or the deterministic fallback.
 """
 
 from __future__ import annotations
 
+import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, ConfigDict
 
 from ...agent.orchestrator import AgentTurn
 from ...contracts.agent_context import RecentTurn
-from ...domain.errors import NotFoundError
+from ...contracts.conversation_history import HistoryPage
+from ...domain.errors import DomainError, NotFoundError
 from ..auth import AuthenticatedPrincipal
 from ..deps import ApplicationContainer, get_container, get_principal
 from ..schemas import AgentMessageRequest, AgentMessageResponse, ToolTraceResponse
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
+
+
+@router.get("/history", response_model=HistoryPage)
+def conversation_history(
+    before: UUID | None = None,
+    limit: int = Query(default=20, ge=1, le=20),
+    principal: AuthenticatedPrincipal = Depends(get_principal),
+    container: ApplicationContainer = Depends(get_container),
+):
+    return container.conversation_history.page(principal.patient_id, before, limit)
+
+
+class ClearHistory(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirmed: bool
+
+
+@router.delete("/history")
+def clear_history(
+    payload: ClearHistory,
+    principal: AuthenticatedPrincipal = Depends(get_principal),
+    container: ApplicationContainer = Depends(get_container),
+):
+    container.conversation_history.clear(principal.patient_id, confirmed=payload.confirmed)
+    return {"cleared": True}
 
 
 @router.get("/sessions/{session_id}/recent-turns", response_model=list[RecentTurn])
@@ -58,7 +84,19 @@ def send_message(
     )
     handler = container.ai_agent or container.orchestrator
     reply = handler.handle_turn(patient_id=patient_id, session_id=session_id, turn=turn)
+    history_saved = None
+    if container.conversation_history and container.preferences.get(patient_id).conversation_history_enabled:
+        try:
+            container.conversation_history.append(
+                patient_id, reply.session_id, payload.client_turn_id, payload.text, reply.message
+            )
+            history_saved = True
+        except DomainError as error:
+            # The actual reply/confirmation must survive a history-storage failure.
+            logging.getLogger("pharmascan.history").warning("History unavailable: %s", type(error).__name__)
+            history_saved = False
     return AgentMessageResponse(
+        history_saved=history_saved,
         message=reply.message,
         intent=reply.intent.value,
         session_id=reply.session_id,
@@ -69,6 +107,7 @@ def send_message(
         usage=reply.usage,
         visual_check_request=reply.visual_check_request,
         health_note_request=reply.health_note_request,
+        care_request=reply.care_request,
         tool_traces=[
             ToolTraceResponse(
                 tool_name=r.tool_name.value,

@@ -26,6 +26,19 @@ class RecentTurn(BaseModel):
     assistant: str = Field(max_length=700)
 
 
+class CareClarification(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    missing_field: Literal[
+        "medication",
+        "stock_quantity",
+        "stock_unit",
+        "follow_up_date",
+        "follow_up_type",
+        "barrier_time",
+        "support_action",
+    ]
+
+
 class AgentContext(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     version: Literal[1] = 1
@@ -36,6 +49,7 @@ class AgentContext(BaseModel):
     referenced_occurrence_id: UUID | None = None
     enrollment_task_id: UUID | None = None
     awaiting_clarification: ClarificationContext | None = None
+    care_clarification: CareClarification | None = None
     preferred_language: Literal["en", "zh"] = "en"
     recent_turns: list[RecentTurn] = Field(default_factory=list, max_length=6)
     conversation_summary: str = Field(default="", max_length=600)

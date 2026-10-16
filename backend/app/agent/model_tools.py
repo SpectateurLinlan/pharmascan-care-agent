@@ -9,12 +9,17 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..application.enrollment import MedicationEnrollmentService
 from ..application.evidence_enrollment import EvidenceEnrollmentService
+from ..application.long_term import LongTermCareService
+from ..application.medication_understanding import MedicationUnderstandingService
 from ..application.observations import ObservationService
 from ..application.visual_check import VisualCheckService
 from ..contracts.enums import AgentIntent, ToolName, ToolStatus
+from ..contracts.long_term import CareReview
 from ..contracts.observations import HealthNoteReview
+from ..contracts.ports import Clock
 from ..contracts.visual_check import VisualCheckRequest
 from ..domain.errors import ProviderUnavailableError, ValidationError
+from .long_term_tools import CARE_SPECS, execute_care_tool
 from .orchestrator import AgentOrchestrator, AgentReply, AgentTurn
 from .registry import ToolRegistry
 from .tools import (
@@ -23,6 +28,7 @@ from .tools import (
     GetDoseStatusRequest,
     ListActiveMedicationsRequest,
     MedicationHistoryRequest,
+    ToolRequest,
     ToolResult,
 )
 
@@ -51,6 +57,12 @@ class History(Arguments):
     days: int = Field(default=7, ge=1, le=30)
 
 
+class Understanding(Arguments):
+    medication_id: UUID | None = None
+    medication_name: str | None = Field(default=None, min_length=1, max_length=160)
+    question: Literal["general_use", "personal_instructions", "personal_reason"] = "general_use"
+
+
 class Prepare(Arguments):
     regimen_id: UUID | None = None
     occurrence_id: UUID | None = None
@@ -68,6 +80,14 @@ class ImageCheck(Arguments):
 
 SPECS = MappingProxyType(
     {
+        **CARE_SPECS,
+        "get_medication_understanding": (
+            Understanding,
+            "Required for what is this medicine for / how should I take it / why prescribed. "
+            "Read patient-reviewed identity and current instructions; general uses require reliably matched "
+            "openFDA evidence. Never invent form, route, indication, citations or dose. "
+            "Use personal_instructions for personal dosing; personal_reason never proves the doctor's reason.",
+        ),
         "reconcile_medication_sources": (
             Empty,
             "Read the verified current enrollment task, linked product/source evidence, "
@@ -122,6 +142,7 @@ class ExecutedTool:
     prepared_reply: AgentReply | None = None
     visual_request: VisualCheckRequest | None = None
     health_review: HealthNoteReview | None = None
+    care_review: CareReview | None = None
 
 
 class ModelTools:
@@ -134,11 +155,22 @@ class ModelTools:
         enrollment: MedicationEnrollmentService | None = None,
         observations: ObservationService | None = None,
         evidence_enrollment: EvidenceEnrollmentService | None = None,
+        long_term: LongTermCareService | None = None,
+        medication_understanding: MedicationUnderstandingService | None = None,
+        timezone: str = "Asia/Singapore",
+        clock: Clock | None = None,
     ):
         self._registry, self._fallback = registry, fallback
         self._visual, self._enrollment = visual_check, enrollment
         self._observations = observations
         self._evidence = evidence_enrollment
+        self._long_term, self._timezone = long_term, timezone
+        self._understanding = medication_understanding
+        self._clock = clock
+
+    def context_metadata(self) -> dict[str, str | None]:
+        """Injected current time and patient zone; no owner or credential data."""
+        return {"timezone": self._timezone, "current_time": self._clock.now().isoformat() if self._clock else None}
 
     def evidence_context(self, patient_id: UUID, task_id: UUID) -> dict[str, object]:
         if self._evidence is None:
@@ -201,6 +233,81 @@ class ModelTools:
         if name not in SPECS:
             raise ValidationError("Unknown model tool")
         params = SPECS[name][0].model_validate(arguments).model_dump(exclude_none=True)
+        if name == "get_medication_understanding":
+            if self._understanding is None:
+                raise ProviderUnavailableError("Medication knowledge unavailable")
+            if not params.get("medication_id") and not params.get("medication_name"):
+                session = self._fallback.get_session(patient_id=patient_id, session_id=session_id)
+                if session and session.context.referenced_medication_id:
+                    params["medication_id"] = session.context.referenced_medication_id
+            understanding = self._understanding.explain(
+                patient_id=patient_id, **params, language=turn.language, timezone=self._timezone
+            )
+            payload = {
+                "action": name,
+                "item_count": 1,
+                "state": "medication_understanding",
+                **understanding.model_dump(mode="json"),
+            }
+            # Existing grouped read audit contract also covers medication education;
+            # no new DB tool-name constraint, patient identity or write authority.
+            unavailable = understanding.general_knowledge and understanding.general_knowledge.status == "unavailable"
+            result = ToolResult(
+                tool_name=ToolName.GET_LONG_TERM_CARE,
+                status=ToolStatus.BLOCKED if unavailable else ToolStatus.SUCCESS,
+                payload=payload,
+                error_code="PROVIDER_UNAVAILABLE" if unavailable else None,
+            )
+            self._registry.record_care_result(
+                ToolRequest(
+                    patient_id=patient_id,
+                    session_id=session_id,
+                    correlation_id=correlation_id,
+                    client_turn_id=client_turn_id,
+                ),
+                result,
+            )
+            return ExecutedTool(data=payload, intent=AgentIntent.CLARIFICATION, results=[result])
+        if name in CARE_SPECS:
+            if self._long_term is None:
+                raise ProviderUnavailableError("Long-term care unavailable")
+            output = execute_care_tool(
+                self._long_term,
+                name=name,
+                arguments=arguments,
+                patient_id=patient_id,
+                session_id=session_id,
+                turn_id=client_turn_id,
+                text=turn.text,
+                language=turn.language,
+                timezone=self._timezone,
+            )
+            result = ToolResult(
+                tool_name=ToolName.PREPARE_CARE_ACTION if output.review else ToolName.GET_LONG_TERM_CARE,
+                status=ToolStatus.SUCCESS,
+                payload={
+                    "item_count": 1,
+                    "patient_safe_summary": output.data["patient_safe_summary"],
+                    "action": name,
+                    **(
+                        {"care_clarification": output.data["care_clarification"]}
+                        if "care_clarification" in output.data
+                        else {}
+                    ),
+                },
+            )
+            self._registry.record_care_result(
+                ToolRequest(
+                    patient_id=patient_id,
+                    session_id=session_id,
+                    correlation_id=correlation_id,
+                    client_turn_id=client_turn_id,
+                ),
+                result,
+            )
+            return ExecutedTool(
+                data=output.data, intent=AgentIntent.CLARIFICATION, results=[result], care_review=output.review
+            )
         if name == "reconcile_medication_sources":
             session = self._fallback.get_session(patient_id=patient_id, session_id=session_id)
             task_id = turn.slots.get("evidence_task_id") or (session.context.enrollment_task_id if session else None)

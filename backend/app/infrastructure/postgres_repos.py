@@ -264,6 +264,7 @@ def ensure_patient_profile(
 
 def _source_document(row: dict[str, Any]) -> SourceDocumentDTO:
     return SourceDocumentDTO(
+        dose_basis=row.get("dose_basis"),
         id=_as_uuid(row["id"]),
         patient_id=_as_uuid(row["patient_id"]),
         source_kind=_enum(row["source_kind"]),
@@ -430,7 +431,7 @@ class PostgresSourceDocumentRepository:
             row = _one(
                 conn,
                 """
-                SELECT id, patient_id, source_kind, review_status, reviewed_at, demo_only
+                SELECT id, patient_id, source_kind, review_status, reviewed_at, demo_only, dose_basis
                   FROM public.source_documents
                  WHERE patient_id = %s AND id = %s
                 """,
@@ -446,8 +447,8 @@ class PostgresSourceDocumentRepository:
                 """
                 INSERT INTO public.source_documents
                     (id, patient_id, source_kind, is_synthetic, review_status,
-                     reviewed_at, checksum, demo_only)
-                VALUES (%s, %s, %s, true, %s, %s, %s, true)
+                     reviewed_at, checksum, demo_only, dose_basis)
+                VALUES (%s, %s, %s, true, %s, %s, %s, true, %s)
                 """,
                 (
                     document.id,
@@ -456,6 +457,7 @@ class PostgresSourceDocumentRepository:
                     str(document.review_status),
                     document.reviewed_at,
                     synthetic_source_checksum(document.patient_id, document.id),
+                    Jsonb(document.dose_basis.model_dump(mode="json")) if document.dose_basis else None,
                 ),
             )
 

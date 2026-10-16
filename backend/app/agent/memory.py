@@ -1,17 +1,11 @@
 """Only successful typed tool results may establish patient references."""
 
-import re
 from uuid import UUID
 
-from ..contracts.agent_context import AgentContext, RecentTurn
+from ..contracts.agent_context import AgentContext, CareClarification, RecentTurn
 from ..contracts.enums import ToolName, ToolStatus
+from ..contracts.privacy import bounded_text as bounded_text
 from .tools import ToolResult
-
-
-def bounded_text(text: str, limit: int) -> str:
-    # User input can contain secrets: never retain/retransmit token-shaped text.
-    text = re.sub(r"eyJ[\w-]+\.[\w-]+\.[\w-]+|sb_secret_[\w-]+|AKID[\w]+|AIza[\w-]+", "[redacted]", text)
-    return text[:limit]
 
 
 def record_context(
@@ -29,6 +23,12 @@ def record_context(
     for result in results:
         if result.status != ToolStatus.SUCCESS:
             continue
+        if result.tool_name in (ToolName.GET_LONG_TERM_CARE, ToolName.PREPARE_CARE_ACTION):
+            action = result.payload.get("action")
+            if isinstance(action, str) and len(action) <= 50:
+                values["active_task"] = action
+            clarification = result.payload.get("care_clarification")
+            values["care_clarification"] = CareClarification.model_validate(clarification) if clarification else None
         rows = result.payload.get("schedule", result.payload.get("due_doses", []))
         if result.tool_name == ToolName.LIST_ACTIVE_MEDICATIONS:
             rows = result.payload.get("medications", [])

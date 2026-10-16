@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pharmascan-care-backend"
 version = "0.1.0"
-description = "PharmaScan Care agent backend (FastAPI, typed tools, deterministic safety policy)"
+description = "MediThread agent backend (FastAPI, typed tools, deterministic safety policy)"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
@@ -15,16 +15,25 @@ dependencies = [
     "jsonschema>=4.23,<5",
     "Pillow>=11,<13",
     "google-genai==2.30.1",
+    "psycopg[binary]>=3.2,<4",
+    "pywebpush==2.5.0",
 ]
 
 [project.optional-dependencies]
+push = ["pywebpush==2.5.0"]
 dev = [
     "pytest>=8.0",
     "ruff>=0.6",
+    "icalendar>=7,<8",
+    "pywebpush==2.5.0",
 ]
 
 [tool.setuptools]
 package-dir = {"" = "backend"}
+
+# Only the isolated Vercel project reads this. Render uses run_patient_api.py.
+[tool.vercel]
+entrypoint = "deploy.dispatcher.index:app"
 
 [tool.setuptools.packages.find]
 where = ["backend"]

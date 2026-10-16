@@ -9,13 +9,15 @@ only — they never touch a repository or the DB.
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
 
-from ...application.timezone import LOCAL_TZ_PROVIDER
+from ...contracts.dose_display import DoseDisplay, DoseDisplayInput
 from ...contracts.dto import FrequencyRuleDTO, RegimenDraftInput
+from ...domain.dose_display import dose_display
 from ...domain.errors import NotFoundError
 from ..auth import AuthenticatedPrincipal
 from ..deps import ApplicationContainer, get_container, get_principal
@@ -34,6 +36,12 @@ from ..schemas import (
 router = APIRouter(prefix="/api", tags=["medications"])
 
 
+@router.post("/medications/dose-display", response_model=DoseDisplay)
+def display_total(payload: DoseDisplayInput, principal: AuthenticatedPrincipal = Depends(get_principal)):
+    """Read-only arithmetic, never selects a count or changes a regimen."""
+    return dose_display(payload)
+
+
 class RegimenHistoryItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
     regimen_id: UUID
@@ -50,6 +58,7 @@ class RegimenHistoryItem(BaseModel):
     food_instruction: str | None
     is_prn: bool
     local_times: list[str]
+    frequency_rule: FrequencyRuleDTO | None = None
 
 
 @router.get("/me/regimens", response_model=list[RegimenHistoryItem])
@@ -76,6 +85,7 @@ def regimen_history(
                     food_instruction=regimen.food_instruction,
                     is_prn=regimen.is_prn,
                     local_times=(regimen.frequency_rule or {}).get("local_times", []),
+                    frequency_rule=regimen.frequency_rule,
                 )
             )
     return result
@@ -94,6 +104,11 @@ def list_medications(
             continue
         summaries.append(
             MedicationSummary(
+                dose_basis=(
+                    source.dose_basis
+                    if regimen.source_id and (source := container.enrollment.get_source(patient_id, regimen.source_id))
+                    else None
+                ),
                 medication_id=medication.id,
                 regimen_id=regimen.id,
                 display_name=medication.display_name,
@@ -132,11 +147,20 @@ def resume_draft(
 @router.post("/medications/drafts", response_model=DraftCreateResponse)
 def create_draft(
     payload: DraftCreateRequest,
+    medication_id: UUID | None = Query(default=None),
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ) -> DraftCreateResponse:
     """Create a draft. Missing required inputs keep it pending — never active."""
     patient_id = principal.patient_id
+    if medication_id is not None:
+        from ...domain.errors import ValidationError
+
+        medication = container.enrollment.get_medication(patient_id, medication_id)
+        if medication is None:
+            raise NotFoundError("Medication not found")
+        if medication.display_name != payload.medication_name:
+            raise ValidationError("A changed product identity needs separate source reconciliation")
 
     frequency: FrequencyRuleDTO | None = None
     if payload.frequency_kind is not None:
@@ -148,6 +172,8 @@ def create_draft(
         )
 
     result = container.enrollment.enroll_draft(
+        dose_basis=payload.dose_basis,
+        existing_medication_id=medication_id,
         extraction_evidence=payload.extraction_evidence,
         patient_id=patient_id,
         draft=RegimenDraftInput(
@@ -170,6 +196,22 @@ def create_draft(
         missing_instructions=[m.field.value for m in result.missing_instructions],
         reviewable_field_ids=[f.id for f in result.source_fields],
     )
+
+
+class EndPlanRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirmed: Literal[True]
+
+
+@router.post("/medications/{regimen_id}/end")
+def end_plan(
+    regimen_id: UUID,
+    payload: EndPlanRequest,
+    principal: AuthenticatedPrincipal = Depends(get_principal),
+    container: ApplicationContainer = Depends(get_container),
+):
+    row = container.enrollment.end_regimen(patient_id=principal.patient_id, regimen_id=regimen_id)
+    return {"regimen_id": row.id, "state": row.state}
 
 
 @router.post("/medications/drafts/{source_id}/review", response_model=DraftReviewResponse)
@@ -232,7 +274,7 @@ def request_challenge(
             "frequency": regimen.frequency_rule,
             "is_prn": regimen.is_prn,
             "version_no": regimen.version_no,
-            "local_timezone": str(LOCAL_TZ_PROVIDER.local_tz(patient_id)),
+            "local_timezone": container.schedule.local_timezone(patient_id),
             "course_start_date": regimen.course_start_date,
             "food_instruction": regimen.food_instruction,
             "course_end_date": regimen.course_end_date,

@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from ..agent.conversation import ConversationService
 from ..agent.model_tools import ModelTools
@@ -41,25 +41,34 @@ from ..agent.orchestrator import AgentOrchestrator, DeterministicIntentRouter
 from ..agent.registry import ToolRegistry
 from ..application.ai_quota import QuotaAgent
 from ..application.caregivers import CaregiverService
+from ..application.conversation_history import ConversationHistoryService
 from ..application.dosing import DoseScheduleService, SelfReportService
 from ..application.enrollment import MedicationEnrollmentService
 from ..application.evidence_enrollment import EvidenceEnrollmentService
+from ..application.long_term import LongTermCareService
 from ..application.observations import ObservationService
 from ..application.patient_feedback import FeedbackService
 from ..application.personal_gallery import PersonalGalleryService
 from ..application.preferences import PreferenceService
+from ..application.push_test import PushTestService
 from ..application.reminder_alerts import ReminderAlertService
+from ..application.reminder_plan import ReminderPlanService
 from ..application.reminders import ReminderService
 from ..application.review_summary import ReviewSummaryService
 from ..application.source_preview import SourcePreviewService
 from ..application.speech import SpeechService
+from ..application.timezone import PreferenceTzProvider
 from ..application.visual_check import VisualCheckService
 from ..config import Settings
 from ..contracts.model import ConversationalModel
 from ..contracts.ports import Clock, IdGenerator, PatientProvisioner
+from ..contracts.push import PushSubscriptions
 from ..contracts.reminders import ReminderRepository
+from ..infrastructure.care_repos import MemoryCareRepository, SupabaseCareRepository
 from ..infrastructure.caregiver_repos import MemoryCaregivers, SupabaseCaregivers
+from ..infrastructure.conversation_history import MemoryConversationHistory, SupabaseConversationHistory
 from ..infrastructure.feedback_repos import MemoryFeedback, SupabaseFeedback
+from ..infrastructure.identifiers import RandomIdGenerator
 from ..infrastructure.memory_repos import (
     InMemoryAgentSessionRepository,
     InMemoryConfirmationChallengeRepository,
@@ -106,10 +115,15 @@ class ApplicationContainer:
     conversational_model: ConversationalModel | None = None
     reminders: ReminderService | None = None
     reminder_alerts: ReminderAlertService | None = None
+    reminder_plan: ReminderPlanService | None = None
+    push_subscriptions: PushSubscriptions | None = None
+    push_public_key: str | None = None
+    push_test: PushTestService | None = None
     feedback: FeedbackService | None = None
     caregivers: CaregiverService | None = None
     observations: ObservationService | None = None
     review_summary: ReviewSummaryService | None = None
+    long_term: LongTermCareService | None = None
     persistence: str = "simulated_in_memory"
     #: Which connection the patient repositories actually use. Reported by
     #: ``/api/health`` so the separation can be observed, not assumed.
@@ -122,6 +136,8 @@ class ApplicationContainer:
     source_preview: SourcePreviewService | None = None
     evidence_enrollment: EvidenceEnrollmentService | None = None
     gallery: PersonalGalleryService | None = None
+    close_request: Callable[[], None] | None = None
+    conversation_history: ConversationHistoryService | None = None
 
 
 def _services(
@@ -139,9 +155,11 @@ def _services(
     clock: Clock,
     ids: IdGenerator,
     reminder_repo: ReminderRepository | None = None,
+    tz_provider=None,
 ):
     """Wire the application services over whichever repository set is given."""
     enrollment = MedicationEnrollmentService(
+        tz_provider=tz_provider,
         medications=medications,
         regimens=regimens,
         sources=sources,
@@ -152,6 +170,7 @@ def _services(
         ids=ids,
     )
     schedule = DoseScheduleService(
+        tz_provider=tz_provider,
         regimens=regimens,
         rules=dose_rules,
         occurrences=occurrences,
@@ -159,6 +178,7 @@ def _services(
         ids=ids,
     )
     self_report = SelfReportService(
+        tz_provider=tz_provider,
         regimens=regimens,
         medications=medications,
         occurrences=occurrences,
@@ -169,7 +189,9 @@ def _services(
         ids=ids,
     )
     reminders = (
-        ReminderService(repository=reminder_repo, occurrences=occurrences, regimens=regimens, clock=clock)
+        ReminderService(
+            repository=reminder_repo, occurrences=occurrences, regimens=regimens, clock=clock, tz_provider=tz_provider
+        )
         if reminder_repo is not None
         else None
     )
@@ -213,8 +235,10 @@ def build_container(
     sessions = InMemoryAgentSessionRepository(store)
     challenges = InMemoryConfirmationChallengeRepository(store)
     traces = InMemoryToolTraceRepository(store)
+    preference_repo = MemoryPreferences(rows={}, clock=the_clock)
 
     enrollment, schedule, self_report, registry, orchestrator, reminders = _services(
+        tz_provider=PreferenceTzProvider(preference_repo),
         reminder_repo=MemoryReminderRepository(store),
         medications=medications,
         regimens=regimens,
@@ -256,14 +280,30 @@ def build_container(
         ids=the_ids,
     )
     observations_service = ObservationService(MemoryObservations(), medications, the_clock)
+    summary_service = ReviewSummaryService(enrollment, occurrences, events, observations_service, the_clock)
+    long_term = LongTermCareService(
+        MemoryCareRepository(), enrollment, events, observations_service, summary_service, the_clock, dose_rules
+    )
     return ApplicationContainer(
+        conversation_history=ConversationHistoryService(
+            MemoryConversationHistory(sessions.clear_conversation_text), the_clock
+        ),
+        long_term=long_term,
         evidence_enrollment=evidence_service,
         gallery=gallery_service,
         observations=observations_service,
-        review_summary=ReviewSummaryService(enrollment, occurrences, events, observations_service, the_clock),
-        preferences=PreferenceService(MemoryPreferences(rows={}, clock=the_clock)),
+        review_summary=summary_service,
+        preferences=PreferenceService(preference_repo),
         feedback=FeedbackService(MemoryFeedback({}), the_clock),
         caregivers=CaregiverService(MemoryCaregivers(), the_clock),
+        reminder_plan=ReminderPlanService(
+            medications=medications,
+            regimens=regimens,
+            schedule=schedule,
+            events=events,
+            reminders=reminders,
+            clock=the_clock,
+        ),
         reminder_alerts=ReminderAlertService(
             enrollment=enrollment,
             schedule=schedule,
@@ -425,11 +465,6 @@ def build_container_from_settings(
     return root
 
 
-class RandomIdGenerator:
-    def new_id(self) -> UUID:
-        return uuid4()
-
-
 def build_supabase_container(
     *,
     settings: Settings,
@@ -454,6 +489,19 @@ def build_supabase_container(
     root.store = None
     root.persistence = "supabase"
     root.patient_data_path = "supabase_user_jwt_rls"
+    push_key = None
+    if settings.enable_web_push:
+        from ..infrastructure.web_push import WebPushProvider, validate_vapid
+
+        try:
+            validate_vapid(settings.vapid_public_key, settings.vapid_private_key, settings.vapid_subject)
+        except ValueError:
+            push_key = None  # Explicitly unavailable; malformed VAPID is never ready.
+        else:
+            push_key = settings.vapid_public_key
+            root.push_test = PushTestService(
+                WebPushProvider(private_key=settings.vapid_private_key, subject=settings.vapid_subject), root.clock
+            )
     root.speech = build_speech_service(settings=settings, clock=root.clock, ids=root.ids)
     root.source_preview = build_source_preview(settings=settings, ids=root.ids)
     root.visual_check = build_visual_check(settings=settings)
@@ -465,131 +513,200 @@ def build_supabase_container(
     def for_patient(principal: AuthenticatedPrincipal) -> ApplicationContainer:
         if not principal.authenticated or not principal.access_token:
             raise ConfigError("Verified user context required")
+        import httpx
+
+        http = httpx.Client()
+        knowledge_http = None
+
+        def close_request() -> None:
+            http.close()
+            if knowledge_http is not None:
+                knowledge_http.close()
+
         client = SupabaseDataClient(
-            base_url=base_url, publishable_key=key, access_token=principal.access_token, patient_id=principal.patient_id
+            base_url=base_url,
+            publishable_key=key,
+            access_token=principal.access_token,
+            patient_id=principal.patient_id,
+            client=http,
         )
-        # Identity already exists in Auth; create only its own owner profile.
-        client.request(
-            "POST",
-            "/rest/v1/patient_profiles",
-            params={"on_conflict": "user_id"},
-            body={"user_id": str(principal.patient_id), "timezone": "Asia/Singapore", "demo_only": True},
-            prefer="resolution=ignore-duplicates,return=minimal",
-        )
-        repos = build_supabase_repositories(client)
-        services = _services(
-            reminder_repo=SupabaseReminderRepository(client),
-            medications=repos.medications,
-            regimens=repos.regimens,
-            sources=repos.sources,
-            source_fields=repos.source_fields,
-            dose_rules=repos.dose_rules,
-            occurrences=repos.occurrences,
-            events=repos.events,
-            sessions=repos.sessions,
-            challenges=repos.challenges,
-            traces=repos.traces,
-            clock=root.clock,
-            ids=ids or RandomIdGenerator(),
-        )
-        import json
-        from pathlib import Path
+        preference_repo = SupabasePreferences(client)
+        try:
+            # Reuse this request's owned profile read. Provision only when absent,
+            # rather than posting an unchanged profile on every patient read.
+            from ..domain.errors import NotFoundError
 
-        from ..infrastructure.evidence_images import patient_reference_image, patient_source_image
-        from ..infrastructure.evidence_repos import SupabaseEvidenceRepository, SupabaseImageStore
-        from ..infrastructure.personal_vision import PersonalVisionGateway
-        from ..infrastructure.stage2_schema import Stage2Contract
-
-        evidence_repo = SupabaseEvidenceRepository(client, repos.medications)
-        image_store = SupabaseImageStore(
-            base_url=base_url, publishable_key=key, access_token=principal.access_token, patient_id=principal.patient_id
-        )
-        vision = None
-        if settings.vision_api_base_url:
-            snapshot = Path(__file__).resolve().parents[3] / "docs/external/pharmascan-api-openapi-0.10.0.json"
-            vision = PersonalVisionGateway(
-                base_url=settings.vision_api_base_url,
-                contract=Stage2Contract(json.loads(snapshot.read_text(encoding="utf-8"))),
-            )
-        evidence_service = EvidenceEnrollmentService(
-            repository=evidence_repo,
-            medications=repos.medications,
-            sources=repos.sources,
-            fields=repos.source_fields,
-            enrollment=services[0],
-            preview=root.source_preview,
-            storage=image_store,
-            normalize=patient_source_image,
-            clock=root.clock,
-            ids=ids or RandomIdGenerator(),
-        )
-        gallery_service = PersonalGalleryService(
-            repository=evidence_repo,
-            storage=image_store,
-            vision=vision,
-            enrollment=services[0],
-            normalize=patient_reference_image,
-            clock=root.clock,
-            ids=ids or RandomIdGenerator(),
-        )
-        observations_service = ObservationService(SupabaseObservations(client), repos.medications, root.clock)
-        ai_agent = None
-        if root.conversational_model:
-            conversation = ConversationService(
-                model=root.conversational_model,
-                tools=ModelTools(
-                    registry=services[3],
-                    fallback=services[4],
-                    visual_check=root.visual_check,
-                    enrollment=services[0],
-                    observations=observations_service,
-                    evidence_enrollment=evidence_service,
-                ),
-                fallback=services[4],
-                sessions=repos.sessions,
-                ids=ids or RandomIdGenerator(),
-            )
-            ai_agent = QuotaAgent(
-                repository=SupabaseQuota(client),
-                conversation=conversation,
-                fallback=services[4],
-                daily_limit=settings.demo_agent_daily_turn_limit,
-            )
-        return ApplicationContainer(
-            evidence_enrollment=evidence_service,
-            gallery=gallery_service,
-            observations=observations_service,
-            review_summary=ReviewSummaryService(
-                services[0], repos.occurrences, repos.events, observations_service, root.clock
-            ),
-            ai_agent=ai_agent,
-            feedback=FeedbackService(SupabaseFeedback(client), root.clock),
-            caregivers=CaregiverService(SupabaseCaregivers(client), root.clock),
-            reminder_alerts=ReminderAlertService(
-                enrollment=services[0],
-                schedule=services[1],
+            try:
+                preference_repo.get(principal.patient_id)
+            except NotFoundError:
+                client.request(
+                    "POST",
+                    "/rest/v1/patient_profiles",
+                    params={"on_conflict": "user_id"},
+                    body={"user_id": str(principal.patient_id), "timezone": "Asia/Singapore", "demo_only": True},
+                    prefer="resolution=ignore-duplicates,return=minimal",
+                )
+                preference_repo.get(principal.patient_id)
+            repos = build_supabase_repositories(client)
+            services = _services(
+                tz_provider=PreferenceTzProvider(preference_repo),
+                reminder_repo=SupabaseReminderRepository(client),
+                medications=repos.medications,
+                regimens=repos.regimens,
+                sources=repos.sources,
+                source_fields=repos.source_fields,
+                dose_rules=repos.dose_rules,
                 occurrences=repos.occurrences,
                 events=repos.events,
-                reminders=services[5],
+                sessions=repos.sessions,
+                challenges=repos.challenges,
+                traces=repos.traces,
                 clock=root.clock,
-            ),
-            preferences=PreferenceService(SupabasePreferences(client)),
-            reminders=services[5],
-            store=None,
-            clock=root.clock,
-            ids=ids or RandomIdGenerator(),
-            enrollment=services[0],
-            schedule=services[1],
-            self_report=services[2],
-            registry=services[3],
-            orchestrator=services[4],
-            auth=auth,
-            persistence="supabase",
-            patient_data_path="supabase_user_jwt_rls",
-            speech=root.speech,
-            source_preview=root.source_preview,
-            visual_check=root.visual_check,
-        )
+                ids=ids or RandomIdGenerator(),
+            )
+            import json
+            from pathlib import Path
+
+            from ..infrastructure.evidence_images import patient_reference_image, patient_source_image
+            from ..infrastructure.evidence_repos import SupabaseEvidenceRepository, SupabaseImageStore
+            from ..infrastructure.personal_vision import PersonalVisionGateway
+            from ..infrastructure.stage2_schema import Stage2Contract
+
+            evidence_repo = SupabaseEvidenceRepository(client, repos.medications)
+            image_store = SupabaseImageStore(
+                base_url=base_url,
+                publishable_key=key,
+                access_token=principal.access_token,
+                patient_id=principal.patient_id,
+            )
+            vision = None
+            if settings.vision_api_base_url:
+                snapshot = Path(__file__).resolve().parents[3] / "docs/external/pharmascan-api-openapi-0.10.0.json"
+                vision = PersonalVisionGateway(
+                    base_url=settings.vision_api_base_url,
+                    contract=Stage2Contract(json.loads(snapshot.read_text(encoding="utf-8"))),
+                )
+            evidence_service = EvidenceEnrollmentService(
+                repository=evidence_repo,
+                medications=repos.medications,
+                sources=repos.sources,
+                fields=repos.source_fields,
+                enrollment=services[0],
+                preview=root.source_preview,
+                storage=image_store,
+                normalize=patient_source_image,
+                clock=root.clock,
+                ids=ids or RandomIdGenerator(),
+            )
+            gallery_service = PersonalGalleryService(
+                repository=evidence_repo,
+                storage=image_store,
+                vision=vision,
+                enrollment=services[0],
+                normalize=patient_reference_image,
+                clock=root.clock,
+                ids=ids or RandomIdGenerator(),
+            )
+            observations_service = ObservationService(SupabaseObservations(client), repos.medications, root.clock)
+            summary_service = ReviewSummaryService(
+                services[0], repos.occurrences, repos.events, observations_service, root.clock
+            )
+            long_term = LongTermCareService(
+                SupabaseCareRepository(client),
+                services[0],
+                repos.events,
+                observations_service,
+                summary_service,
+                root.clock,
+                repos.dose_rules,
+            )
+            ai_agent = None
+            if root.conversational_model:
+                from time import monotonic
+
+                from ..application.medication_understanding import MedicationUnderstandingService
+                from ..infrastructure.openfda_knowledge import OpenFDAKnowledge
+
+                # A distinct client prevents Supabase JWTs/cookies from reaching openFDA.
+                knowledge_http = httpx.Client()
+                conversation = ConversationService(
+                    model=root.conversational_model,
+                    tools=ModelTools(
+                        registry=services[3],
+                        fallback=services[4],
+                        visual_check=root.visual_check,
+                        enrollment=services[0],
+                        observations=observations_service,
+                        evidence_enrollment=evidence_service,
+                        long_term=long_term,
+                        medication_understanding=MedicationUnderstandingService(
+                            services[0], OpenFDAKnowledge(knowledge_http, root.clock, monotonic=monotonic), root.clock
+                        ),
+                        timezone=preference_repo.get(principal.patient_id).timezone,
+                        clock=root.clock,
+                    ),
+                    fallback=services[4],
+                    sessions=repos.sessions,
+                    ids=ids or RandomIdGenerator(),
+                )
+                ai_agent = QuotaAgent(
+                    repository=SupabaseQuota(client),
+                    conversation=conversation,
+                    fallback=services[4],
+                    daily_limit=settings.demo_agent_daily_turn_limit,
+                )
+            from ..infrastructure.push_subscriptions import SupabasePushSubscriptions
+
+            return ApplicationContainer(
+                conversation_history=ConversationHistoryService(SupabaseConversationHistory(client), root.clock),
+                long_term=long_term,
+                push_subscriptions=SupabasePushSubscriptions(client),
+                push_public_key=push_key,
+                push_test=root.push_test,
+                evidence_enrollment=evidence_service,
+                gallery=gallery_service,
+                observations=observations_service,
+                review_summary=summary_service,
+                ai_agent=ai_agent,
+                feedback=FeedbackService(SupabaseFeedback(client), root.clock),
+                caregivers=CaregiverService(SupabaseCaregivers(client), root.clock),
+                reminder_plan=ReminderPlanService(
+                    medications=repos.medications,
+                    regimens=repos.regimens,
+                    schedule=services[1],
+                    events=repos.events,
+                    reminders=services[5],
+                    clock=root.clock,
+                ),
+                reminder_alerts=ReminderAlertService(
+                    enrollment=services[0],
+                    schedule=services[1],
+                    occurrences=repos.occurrences,
+                    events=repos.events,
+                    reminders=services[5],
+                    clock=root.clock,
+                ),
+                preferences=PreferenceService(preference_repo),
+                close_request=close_request,
+                reminders=services[5],
+                store=None,
+                clock=root.clock,
+                ids=ids or RandomIdGenerator(),
+                enrollment=services[0],
+                schedule=services[1],
+                self_report=services[2],
+                registry=services[3],
+                orchestrator=services[4],
+                auth=auth,
+                persistence="supabase",
+                patient_data_path="supabase_user_jwt_rls",
+                speech=root.speech,
+                source_preview=root.source_preview,
+                visual_check=root.visual_check,
+            )
+        except Exception:
+            close_request()
+            raise
 
     root.patient_factory = for_patient
     return root
