@@ -83,13 +83,14 @@ Local Vercel preflight files are `.python-version` (3.12), the existing
 `pyproject.toml` runtime dependencies (including pywebpush, required by the worker
 adapter), and `vercel.json` (Singapore `sin1`, 60-second function max, explicit inclusion of
 `backend/app/**` and `scripts/run_reminders.py`, development-tree exclusions), and
-`.vercelignore` (private/local files). `deploy/dispatcher/index.py` exposes only the existing
+`.vercelignore` (public runtime source allowlist). `deploy/dispatcher/index.py` exposes only the existing
 dispatcher app, adds the bundled `backend` source directory to Python's import
 path, and derives/injects the project-root path from its own source location.
 The function's bundle patterns use compact brace globs: Vercel limits each
 `includeFiles` / `excludeFiles` string to 256 characters. Keep `.vercelignore`
-for upload exclusions as well; the function glob separately excludes private
-directories, hidden directories, environment files and development assets.
+for the upload allowlist as well; the function glob separately excludes frontend,
+hidden files/directories, credentials and generated assets. Unlisted root paths
+are not uploaded; public configuration does not enumerate local-only materials.
 No `PYTHONPATH` setting is required. No patient API,
 Agent, Gemini, Stage2, voice or migration entrypoint is exported by this project.
 Leave Build Command and Output

@@ -1,0 +1,18 @@
+# Upload only Vite build inputs and public assets.
+/*
+!/src/
+!/public/
+!/index.html
+!/package.json
+!/package-lock.json
+!/tsconfig.json
+!/vite.config.ts
+!/vercel.json
+**/.*
+**/node_modules/**
+**/*.local
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/credentials.json

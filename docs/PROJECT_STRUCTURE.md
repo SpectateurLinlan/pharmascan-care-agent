@@ -20,7 +20,7 @@ pharmascan-care-agent/
 ├── .python-version    # Hosted Python version selection
 ├── pyproject.toml     # Python dependencies, test/lint configuration, worker entry
 ├── vercel.json        # Independent Push Dispatcher project only
-└── .vercelignore      # Worker deployment upload exclusions
+└── .vercelignore      # Deployment source allowlist; separate from Git tracking
 ```
 
 ---

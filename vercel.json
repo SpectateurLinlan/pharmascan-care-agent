@@ -7,7 +7,7 @@
         "sin1"
       ],
       "includeFiles": "{deploy/dispatcher/**,backend/app/**,scripts/run_reminders.py}",
-      "excludeFiles": "{{frontend,tests,docs,supabase,internal,status,outputs,evidence,assets,private_data,personal_data,patient_uploads,uploads,submission_private,prompts}/**,**/node_modules/**,**/__pycache__/**,**/.*/**,**/.env*,AGENTS.md,CODEBUDDY.md,skills-lock.json}"
+      "excludeFiles": "{frontend/**,**/node_modules/**,**/__pycache__/**,**/.*,**/.*/**,**/*.py[cod],**/*.pem,**/*.key,**/*.p12,**/*.pfx,**/credentials.json}"
     }
   }
 }

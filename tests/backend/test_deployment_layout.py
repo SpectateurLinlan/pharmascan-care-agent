@@ -9,6 +9,30 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 
+def test_frontend_has_independent_install_and_build_configuration():
+    """The UI needs dev build tools and must not inherit the worker config."""
+    root = Path(__file__).resolve().parents[2]
+    frontend = root / "frontend"
+    config = json.loads((frontend / "vercel.json").read_text(encoding="utf-8"))
+    assert config["framework"] == "vite"
+    assert config["installCommand"] == "npm ci --include=dev"
+    assert config["buildCommand"] == "npm run build"
+    assert config["outputDirectory"] == "dist"
+    assert "functions" not in config
+    package = json.loads((frontend / "package.json").read_text(encoding="utf-8"))
+    assert "vite" in package["devDependencies"]
+    assert (frontend / "package-lock.json").is_file()
+    shared_rules = (root / ".vercelignore").read_text(encoding="utf-8").splitlines()
+    assert "/*" in shared_rules
+    assert "!/frontend/" in shared_rules
+    assert "!/backend/app/" in shared_rules
+    assert "!/deploy/dispatcher/" in shared_rules
+    assert "!/scripts/run_reminders.py" in shared_rules
+    assert "**/.*" in shared_rules
+    private_rules = (frontend / ".vercelignore").read_text(encoding="utf-8").splitlines()
+    assert {"/*", "!/src/", "!/public/", "!/package-lock.json", "**/.*"} <= set(private_rules)
+
+
 def test_vercel_bundle_patterns_respect_public_schema_limits():
     """Vercel's public schema limits each bundle glob string to 256 chars."""
     root = Path(__file__).resolve().parents[2]
