@@ -13,8 +13,6 @@
     "test:browser": "playwright test"
   },
   "dependencies": {
-    "@esbuild/win32-x64": "^0.28.2",
-    "@rollup/rollup-win32-x64-msvc": "^4.64.5",
     "@supabase/auth-js": "^2.109.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
@@ -23,6 +21,7 @@
     "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.64.0",
     "@testing-library/react": "^16.3.3",
+    "@types/node": "^22.20.5",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^5.2.0",

@@ -22,7 +22,7 @@ export function HistoryScreen() {
     void api.doseHistory(selected).then(result => { if (active) { setHistory(result); setError(null); } })
       .catch(caught => { if (active) setError(caught); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; }; }, [selected]);
-  return <Card title="My history" hint="Your reports are kept with each medication version. A report is not proof of ingestion.">
+  return <Card title="My history" hint="Your reports, kept with each medication version.">
     {regimens.length ? <div className="field"><label htmlFor="history-medication">{t('Medication and version')}</label>
       <select id="history-medication" value={selected} onChange={event => setSelected(event.target.value)}>
         {regimens.map(row => <option key={row.regimen_id} value={row.regimen_id}>{row.display_name} · {t('version')} {row.version_no} ·

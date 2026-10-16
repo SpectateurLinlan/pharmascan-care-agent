@@ -94,14 +94,14 @@ describe('compact primary medication card', () => {
     fireEvent.click(screen.getByRole('button',{name:'My Medicines'})); expect(medicines).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole('button',{name:'My History'})); expect(history).toHaveBeenCalledOnce();
   });
-  it('loads real API status into the primary card without another Today card', async () => {
+  it('keeps the secondary photo check visible on the primary card, with no disclosure to open', async () => {
     vi.mocked(api.dueDose).mockResolvedValue({occurrence_id:'demo-occurrence',regimen_id:'demo-regimen',medication_display_name:medication.display_name,dose_description:'1 tablet',due_at:'2026-10-14T00:00:00Z',is_prn:false,visual_status:'not_checked',ingestion_proven:false});
     render(<TodayScreen compact medications={[medication]} onChanged={vi.fn()}/>);
     await screen.findByText(/1 tablet/); expect(screen.getAllByRole('heading',{level:2})).toHaveLength(1);
-    const actionGroup=screen.getByText('View medication actions').closest('details');
-    expect(actionGroup?.open).toBe(false);
-    fireEvent.click(screen.getByText('View medication actions'));
-    expect(actionGroup?.open).toBe(true);
+    // The photo check used to live behind a closed "More options" disclosure, so a
+    // patient had to guess that it existed. It is now a plain visible action, and
+    // the disclosure is gone rather than merely opened by default.
+    expect(screen.queryByText('More options')).toBeNull();
     expect(screen.getByRole('button',{name:'Compare a pill photo'})).toBeTruthy();
     expect(api.requestReportChallenge).not.toHaveBeenCalled();expect(api.submitReport).not.toHaveBeenCalled();
   });

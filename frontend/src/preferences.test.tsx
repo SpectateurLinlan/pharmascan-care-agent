@@ -16,7 +16,7 @@ beforeEach(()=>{
 });
 it('loads the persisted Chinese preference and readable daily quota/reset disclosure',async()=>{
  render(<LanguageProvider><Harness/></LanguageProvider>);fireEvent.click(screen.getByText('Load preference'));
- expect((await screen.findByText(/AI 演示额度: 18 \/ 20/)).textContent).toContain('新加坡时间凌晨零点重置');
+ expect((await screen.findByText(/今日剩余 AI 对话次数: 2 \/ 20/)).textContent).toContain('新加坡时间凌晨零点重置');
  expect(screen.getByTestId('language').textContent).toBe('zh');
  expect((screen.getByLabelText('发送前检查或编辑内容') as HTMLInputElement).disabled).toBe(false);
 });

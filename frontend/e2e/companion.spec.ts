@@ -1,3 +1,4 @@
+import {skipInitialGuide} from './navigation-helpers';
 /** REAL Auth/application; AUTOMATED SYNTHETIC STT and browser synthesis events, no billable speech calls. */
 import { test, expect } from '@playwright/test';
 test.skip(process.env.RUN_LIVE_BROWSER !== '1', 'Explicit live browser opt-in required');
@@ -26,7 +27,7 @@ test('mobile companion synthetic speech -> real Agent -> consent -> synthetic br
       speak:(utterance:{lang:string})=>{document.documentElement.dataset.audioPlayed='true';document.documentElement.dataset.spokenLanguage=utterance.lang;}
     }});
   });
-  await page.goto('/'); await expect(page.getByRole('button',{name:'Compare a pill photo'})).toBeVisible();
+  await page.goto('/');await skipInitialGuide(page); await expect(page.getByRole('button',{name:'Compare a pill photo'})).toBeVisible();
   await expect(page.getByRole('button',{name:'Speak your message'})).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(page.locator('h2:visible')).toHaveCount(1);
@@ -81,7 +82,7 @@ test('mobile companion synthetic speech -> real Agent -> consent -> synthetic br
   const reportSaved=page.waitForResponse(response=>/\/report(?:\?|$)/.test(response.url()));
   await page.getByRole('button',{name:'Confirm record'}).click(); expect((await reportSaved).status()).toBe(200);
   await expect(page.getByText(/Your report was saved/)).toBeVisible({timeout:30000}); expect(reportWrites).toBe(1);
-  await page.getByRole('button',{name:'History',exact:true}).click(); await expect(page.getByText(/reported taking/).first()).toBeVisible({timeout:30000});
+  await page.getByRole('button',{name:'Records',exact:true}).click(); await expect(page.getByText(/reported taking/).first()).toBeVisible({timeout:30000});
 
   await page.getByRole('button',{name:'Today',exact:true}).click();
   await page.getByRole('button',{name:'Compare a pill photo'}).click();
@@ -92,9 +93,9 @@ test('mobile companion synthetic speech -> real Agent -> consent -> synthetic br
   const checked=page.waitForResponse(response=>response.url().includes('/visual-check'));
   await page.getByRole('button',{name:'Check photo',exact:true}).click();expect((await checked).status()).toBe(200);
   await expect(page.getByText(/Medicine remains unverified|Photo needs another look/)).toBeVisible();expect(reportWrites).toBe(1);
-  await page.getByRole('button',{name:'Back to Today'}).click();
+  await page.getByRole('button',{name:'Back',exact:true}).first().click();
   const languageSaved=page.waitForResponse(r=>r.url().includes('/me/preferences')&&r.request().method()==='PUT');
-  await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:/Language and speech/}).last().click();await page.getByLabel('Settings language',{exact:true}).selectOption('zh');expect((await languageSaved).status()).toBe(200);
+  await page.locator('[data-guide="me"]').click();await page.getByRole('button',{name:/Language and speech/}).last().click();await page.getByLabel('Settings language',{exact:true}).selectOption('zh');expect((await languageSaved).status()).toBe(200);
   await page.reload();await page.getByRole('button',{name:'设置',exact:true}).click();await page.getByRole('button',{name:/语言与语音/}).last().click();
   await expect(page.getByLabel('Settings language',{exact:true})).toHaveValue('zh');
   await page.getByRole('button',{name:'今日',exact:true}).click();

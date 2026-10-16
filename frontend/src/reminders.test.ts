@@ -53,8 +53,9 @@ describe('reminder port', () => {
   });
 
   it('states its real limitation verbatim', () => {
-    expect(REMINDER_LIMITATION).toContain('only while this page is open');
-    expect(REMINDER_LIMITATION).toContain('background push');
+    expect(REMINDER_LIMITATION).toContain('page open or reopened');
+    expect(REMINDER_LIMITATION).toContain('configure Web Push');
+    expect(REMINDER_LIMITATION).toContain('server scheduler');
   });
 
   it('refuses to notify when permission is not granted', async () => {

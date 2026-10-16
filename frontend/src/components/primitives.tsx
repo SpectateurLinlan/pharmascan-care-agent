@@ -37,10 +37,14 @@ export function ErrorNotice({ error }: { error: unknown }) {
       'Complete record counts could not be verified. Please retry.',
       'Records changed during loading. Please retry.',
       'Complete records could not be verified. Please retry.',
+      'This service is temporarily unavailable. Please try again.',
     ];
+    const reason=error.code==='REGIMEN_OVERLAP'
+      ?'This version cannot save overlapping plans for the same medicine, including different doses or as-needed and scheduled combinations. This does not mean your prescription is wrong. Review the existing records; do not change your medication because of this message.'
+      :safeReasons.includes(error.message)?error.message:'Please check your input or try again. Your records have not been confirmed by this error.';
     return (
       <div className="status status--error" role="alert">
-        <strong>{t("Could not complete this request.")}</strong> {t(safeReasons.includes(error.message)?error.message:'Please check your input or try again. Your records have not been confirmed by this error.')}
+        <strong>{t("Could not complete this request.")}</strong> {t(reason)}
         <details><summary>{t('Request details')}</summary><p>{error.code} · HTTP {error.status}</p></details>
       </div>
     );

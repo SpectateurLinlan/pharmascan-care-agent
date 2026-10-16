@@ -1,14 +1,31 @@
+import {DoseDetails,emptyDoseBasis} from './DoseDetails';
+import type {DoseBasis,DoseDisplay} from '../api/dose';
 import { useLanguage } from '../language';
 /**
- * Medication enrollment: draft -> review -> explicit confirmation -> active.
+ * Medication enrollment: two perceived steps over the same backend states.
  *
- * The UI enforces nothing on its own: every gate (required inputs, source
- * review, single-use confirmation) is enforced by the backend and the UI only
- * reflects what the backend returns. A refusal is always displayed, never
- * swallowed.
+ * Perceived flow
+ * --------------
+ *   1. Add a medication  — identity, strength, units per dose, schedule, course.
+ *   2. Review and add    — one consolidated, editable summary; an explicit
+ *                          patient review acknowledgement; then the existing
+ *                          B14 confirmation; then activation.
+ *
+ * The four screens this replaces (form -> "step 2 of 3" -> "show me the
+ * summary" -> B14 sheet) made the patient walk the *backend's* state machine.
+ * The states are unchanged and still enforced server-side:
+ *   draft -> validation -> patient review -> single-use challenge ->
+ *   explicit confirmation -> activation.
+ * Nothing here can activate an unreviewed plan, invent a missing dose, or clear
+ * a conflict; a refusal is always displayed, never swallowed.
+ *
+ * Field meanings are deliberately kept apart and never conflated:
+ *   Strength       per unit of product   e.g. "500 mg" per tablet
+ *   Units per dose a count               e.g. "1" tablet
+ *   Total dose     derived by the server from both, or honestly "not calculated"
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   api,
   ApiError,
@@ -16,29 +33,31 @@ import {
   type DraftCreateResponse,
   type MedicationListResponse,
   type SourcePreview,
+  type RegimenHistoryItem,
 } from '../api/client';
+import { BottomSheet } from './BottomSheet';
 import { Card, ErrorNotice, Tag } from './primitives';
 
-type Phase =
-  | { kind: 'idle' }
-  | { kind: 'drafted'; draft: DraftCreateResponse }
-  | { kind: 'reviewed'; draft: DraftCreateResponse }
-  | { kind: 'confirming'; draft: DraftCreateResponse; challenge: ConfirmChallengeResponse }
-  | { kind: 'activated'; regimenId: string };
+const WEEKDAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 
 export function EnrollScreen({
   sessionId,
   medications,
-  onChanged, sourceSelection, resumeRegimenId,
+  onChanged, sourceSelection, resumeRegimenId, resumeRow, editFrom, onActivated,
 }: {
+  editFrom?: RegimenHistoryItem | null; onActivated?:(id:string)=>void;
   sessionId: string | null;
   medications: MedicationListResponse | null;
-  onChanged: () => void; resumeRegimenId?: string | null; sourceSelection?: { preview: SourcePreview; name: string } | null;
+  onChanged: () => void; resumeRegimenId?: string | null; resumeRow?: RegimenHistoryItem | null;
+  sourceSelection?: { preview: SourcePreview; name: string } | null;
 }) {
   const {t}=useLanguage();
+  const fieldId=(value:string)=>editFrom?`edit-${value}`:value;
+  const [step,setStep]=useState<'form'|'review'>('form');
   const [name, setName] = useState('');
   const [doseAmount, setDoseAmount] = useState('');
-  const [doseUnit, setDoseUnit] = useState('mg');
+  const [doseBasis,setDoseBasis]=useState<DoseBasis>(emptyDoseBasis);
+  const [doseUnit, setDoseUnit] = useState('tablet');
   //: One entry per daily dose time. A twice-daily medicine has two entries and
   //: the backend materialises one schedule rule per time.
   const [times, setTimes] = useState<string[]>(['08:00']);
@@ -49,19 +68,56 @@ export function EnrollScreen({
   const [foodInstruction,setFoodInstruction]=useState('');
   const [frequency, setFrequency] = useState<'daily' | 'weekly'>('daily');
   const [weekdays, setWeekdays] = useState<number[]>([]);
-  const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
+  //: The medication a re-commit belongs to. Set after the first successful
+  //: draft so editing re-uses the product instead of registering a second one.
+  const [medicationId,setMedicationId]=useState<string|null>(editFrom?.medication_id??null);
+  const [draft,setDraft]=useState<DraftCreateResponse|null>(null);
+  const [challenge,setChallenge]=useState<ConfirmChallengeResponse|null>(null);
+  //: The patient's own statement that the details match their instructions.
+  //: This is the source-review gate and is never set on the patient's behalf.
+  const [reviewed,setReviewed]=useState(false);
+  const [activated,setActivated]=useState(false);
+  const [total,setTotal]=useState<DoseDisplay|null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { if (sourceSelection) { setName(sourceSelection.name); setDoseAmount('');setTimes(['']);setCourseStart('');setCourseEnd('');setCourseDays('');setFoodInstruction('');setIsPrn(false); setPhase({kind:'idle'}); } }, [sourceSelection]);
+  // A checked source and a course belong to one enrollment, never the next drug.
+  function clearEntryFields() {
+    setName('');setDoseAmount('');setDoseUnit('tablet');setDoseBasis(emptyDoseBasis);
+    setTimes(['08:00']);setIsPrn(false);setCourseStart('');setCourseEnd('');setCourseDays('');
+    setFoodInstruction('');setFrequency('daily');setWeekdays([]);
+  }
 
+  const prefilled=useRef<string|null>(null);
+  useEffect(()=>{if(!editFrom||prefilled.current===editFrom.regimen_id)return;prefilled.current=editFrom.regimen_id;
+    setDoseBasis(emptyDoseBasis);setCourseDays('');
+    setFrequency(editFrom.frequency_rule?.kind==='weekly'?'weekly':'daily');setWeekdays(editFrom.frequency_rule?.days_of_week??[]);setName(editFrom.display_name);setDoseAmount(String(editFrom.dose_amount??''));setDoseUnit(editFrom.dose_unit??'');setTimes(editFrom.local_times.length?editFrom.local_times:['']);setIsPrn(editFrom.is_prn);setCourseStart(editFrom.course_start_date??'');setCourseEnd(editFrom.course_end_date??'');setFoodInstruction(editFrom.food_instruction??'');setStep('form');
+  },[editFrom]);
+  useEffect(() => { if (sourceSelection) { clearEntryFields();setName(sourceSelection.name);setTimes(['']);setStep('form'); } }, [sourceSelection]);
+
+  /**
+   * Resume an unfinished registration. The form is prefilled from the known
+   * regimen row so the patient can complete it, and the medication is reused
+   * rather than registered a second time.
+   */
   useEffect(() => {
     if (!resumeRegimenId) return;
     let active = true;
-    void api.resumeDraft(resumeRegimenId).then(draft => { if(active) setPhase({kind:'drafted',draft}); })
-      .catch(caught => { if(active) setError(caught); });
+    void api.resumeDraft(resumeRegimenId).then(saved => {
+      if(!active)return;
+      setMedicationId(saved.medication_id);
+      setDraft(saved);
+      if(resumeRow){
+        setDoseBasis(emptyDoseBasis);setCourseDays('');
+        setFrequency(resumeRow.frequency_rule?.kind==='weekly'?'weekly':'daily');setWeekdays(resumeRow.frequency_rule?.days_of_week??[]);
+        setName(resumeRow.display_name);setDoseAmount(String(resumeRow.dose_amount??''));setDoseUnit(resumeRow.dose_unit??'tablet');
+        setTimes(resumeRow.local_times.length?resumeRow.local_times:['08:00']);setIsPrn(resumeRow.is_prn);
+        setCourseStart(resumeRow.course_start_date??'');setCourseEnd(resumeRow.course_end_date??'');setFoodInstruction(resumeRow.food_instruction??'');
+      }
+      setStep('form');
+    }).catch(caught => { if(active) setError(caught); });
     return () => { active = false; };
-  }, [resumeRegimenId]);
+  }, [resumeRegimenId, resumeRow]);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -89,274 +145,268 @@ export function EnrollScreen({
       new Set(times.map((value) => normaliseTime(value)).filter((value) => value !== '')),
     ).sort();
 
-  const submitDraft = () =>
+  const draftInput = () => {
+    const parsedAmount = doseAmount.trim() === '' ? null : Number(doseAmount);
+    const selectedTimes = normalisedTimes();
+    return {
+      course_start_date: courseStart || null,
+      course_end_date: courseEnd || null,
+      ...(sourceSelection && sourceSelection.name.trim() === name.trim() ? { extraction_evidence: sourceSelection.preview } : {}),
+      medication_name: name.trim(),
+      dose_basis: doseBasis.strength_text||doseBasis.instructions_text?doseBasis:null,
+      dose_amount: parsedAmount,
+      dose_unit: parsedAmount === null ? null : doseUnit.trim() || null,
+      frequency_kind: isPrn ? null : frequency,
+      frequency_days_of_week: frequency === 'weekly' ? weekdays : [],
+      frequency_local_times: isPrn ? [] : selectedTimes,
+      is_prn: isPrn,
+      food_instruction: [isPrn?'as needed':'',foodInstruction].filter(Boolean).join('; ')||null,
+    };
+  };
+
+  const formBlocked = () =>
+    name.trim() === '' || (!!courseDays&&!courseEnd) || (frequency==='weekly'&&!isPrn&&!weekdays.length);
+
+  /**
+   * Commit: the single action that walks the real state machine.
+   *
+   * draft -> review -> challenge. The B14 sheet is then shown for the explicit
+   * confirmation; activation only ever happens from that sheet.
+   */
+  const commit = () =>
     run(async () => {
-      const parsedAmount = doseAmount.trim() === '' ? null : Number(doseAmount);
       const selectedTimes = normalisedTimes();
       if (!isPrn && selectedTimes.length === 0) {
         throw new Error('Add at least one time of day, or tick "only when needed".');
       }
-      const draft = await api.createDraft({
-        course_start_date: courseStart || null,
-        course_end_date: courseEnd || null,
-        ...(sourceSelection && sourceSelection.name.trim() === name.trim() ? { extraction_evidence: sourceSelection.preview } : {}),
-        medication_name: name.trim(),
-        dose_amount: parsedAmount,
-        dose_unit: parsedAmount === null ? null : doseUnit.trim() || null,
-        frequency_kind: isPrn ? null : frequency,
-        frequency_days_of_week: frequency === 'weekly' ? weekdays : [],
-        frequency_local_times: isPrn ? [] : selectedTimes,
-        is_prn: isPrn,
-        food_instruction: [isPrn?'as needed':'',foodInstruction].filter(Boolean).join('; ')||null,
-      });
-      setPhase({ kind: 'drafted', draft }); onChanged();
-    });
-
-  const submitReview = (draft: DraftCreateResponse) =>
-    run(async () => {
-      await api.reviewDraft(draft.source_id);
-      setPhase({ kind: 'reviewed', draft });
-    });
-
-  const requestConfirmation = (draft: DraftCreateResponse) =>
-    run(async () => {
+      const created = await api.createDraft(draftInput(), medicationId ?? undefined);
+      setDraft(created); setMedicationId(created.medication_id);
+      if (created.missing_instructions.length > 0) {
+        // The draft is stored but is NOT active. Nothing is inferred to fill the
+        // gap; the patient supplies it and commits again.
+        return;
+      }
+      await api.reviewDraft(created.source_id);
       if (!sessionId) {
         throw new Error('No agent session yet — start the demo session first.');
       }
-      const challenge = await api.requestChallenge(draft.regimen_id, sessionId);
-      setPhase({ kind: 'confirming', draft, challenge });
+      setChallenge(await api.requestChallenge(created.regimen_id, sessionId));
     });
 
-  const confirmActivation = (draft: DraftCreateResponse, challenge: ConfirmChallengeResponse) =>
+  const confirmActivation = () =>
     run(async () => {
-      const activated = await api.activate({
-        regimen_id: draft.regimen_id,
+      if(!challenge) return;
+      const activatedRow = await api.activate({
+        regimen_id: challenge.regimen_id,
         challenge_id: challenge.challenge_id,
         session_id: challenge.session_id,
         session_state: challenge.session_state,
         session_state_version: challenge.session_state_version,
       });
-      setPhase({ kind: 'activated', regimenId: activated.regimen_id });
-      setName('');
-      setDoseAmount('');
-      onChanged();
+      setChallenge(null);
+      setActivated(true);
+      window.dispatchEvent(new Event('pharmascan:plan-activated'));
+      clearEntryFields();setDraft(null);setMedicationId(null);setReviewed(false);
+      await onChanged();onActivated?.(activatedRow.regimen_id);
     });
 
   const reset = () => {
-    setPhase({ kind: 'idle' });
-    setError(null);
+    setStep('form');setDraft(null);setReviewed(false);setError(null);setChallenge(null);setActivated(false);
   };
 
+  /** The server's own arithmetic. Never a locally derived pill count. */
+  useEffect(()=>{
+    let live=true;
+    if(step!=='review'||!doseBasis.strength_text||!doseAmount||!Number.isFinite(Number(doseAmount))||Number(doseAmount)<=0){setTotal(null);return;}
+    void api.doseDisplay(doseBasis,Number(doseAmount),doseUnit).then(value=>{if(live)setTotal(value);}).catch(()=>{if(live)setTotal(null);});
+    return ()=>{live=false;};
+  },[step,doseBasis,doseAmount,doseUnit]);
+
+  const scheduleText=()=>{
+    if(isPrn)return t('Only when needed');
+    if(frequency==='weekly')return `${t('Selected weekdays')}: ${weekdays.map(day=>t(WEEKDAYS[day-1]??'')).join(', ')}`;
+    return normalisedTimes().join(', ');
+  };
+  const courseText=()=>`${courseStart||t('Not specified')} → ${courseEnd||t('Not specified')}`;
+
+  const fields=()=><>
+    <div className="field">
+      <label htmlFor={fieldId('med-name')}>{t('Medication name')}</label>
+      <input
+        id={fieldId('med-name')}
+        readOnly={Boolean(editFrom)} value={name}
+        onChange={(event) => {setName(event.target.value);setDoseBasis(emptyDoseBasis);}}
+        placeholder="e.g. Amlodipine"
+        autoComplete="off"
+      />
+    </div>
+
+    <div className="grid-2">
+      <div className="field">
+        <label htmlFor={fieldId('med-dose')}>{t('Units per dose')}<span className="sr-only"> · {t('Dose amount')}</span></label>
+        <input
+          id={fieldId('med-dose')} aria-label={t('Dose amount')}
+          value={doseAmount}
+          onChange={(event) => setDoseAmount(event.target.value)}
+          inputMode="decimal"
+          placeholder="1"
+        />
+      </div>
+      <div className="field">
+        <label htmlFor={fieldId('med-unit')}>{t('Dose unit')}<span className="sr-only"> · {t('Unit')}</span></label>
+        <input
+          id={fieldId('med-unit')} aria-label={t('Unit')}
+          value={doseUnit}
+          onChange={(event) => setDoseUnit(event.target.value)}
+          placeholder="tablet"
+        />
+      </div>
+    </div>
+    <p className="notice">{t('Units per dose is how many you take each time — for example 1 tablet. It is not the strength printed on the pack.')}</p>
+
+    <DoseDetails id={fieldId('dose-basis')} basis={doseBasis} onChange={setDoseBasis} amount={doseAmount} unit={doseUnit}/>
+    <div className="grid-2">
+      <div className="field"><label htmlFor={fieldId('course-start')}>{t('Course start date')}</label><input id={fieldId('course-start')} type="date" value={courseStart} onChange={event => {setCourseStart(event.target.value);if(courseDays)setCourseEnd(courseEndForDuration(event.target.value,Number(courseDays))??'');}} /></div>
+      <div className="field"><label htmlFor={fieldId('course-end')}>{t('Last day (inclusive)')}</label><input id={fieldId('course-end')} type="date" min={courseStart || undefined} value={courseEnd} onChange={event => {setCourseEnd(event.target.value);setCourseDays('');}} /></div>
+    </div>
+    <div className="field"><label htmlFor={fieldId('course-days')}>{t('Number of days')}</label><input id={fieldId('course-days')} type="number" min="1" max="3660" value={courseDays} onChange={event=>{setCourseDays(event.target.value);setCourseEnd(courseEndForDuration(courseStart,Number(event.target.value))??'');}}/><p className="notice">{t('Enter a start date and the duration in your reviewed instructions. The last day is calculated inclusively.')}</p></div>
+    <div className="field"><label htmlFor="food-instruction">{t('Food instructions')}</label><select id="food-instruction" value={foodInstruction} onChange={event=>setFoodInstruction(event.target.value)}><option value="">{t('Not specified')}</option>{['before food','after food','with food','without regard to food'].map(value=><option key={value} value={value}>{t(value)}</option>)}</select></div>
+    <div className="field"><label htmlFor={fieldId('med-frequency')}>{t('Schedule')}</label><select id={fieldId('med-frequency')} disabled={isPrn} value={frequency} onChange={event => setFrequency(event.target.value as 'daily' | 'weekly')}><option value="daily">{t('Every day')}</option><option value="weekly">{t('Selected weekdays')}</option></select></div>
+    {!isPrn && frequency === 'weekly' ? <fieldset className="field"><legend>{t('Selected weekdays')}</legend>{WEEKDAYS.map((day,index)=><label key={day}><input type="checkbox" checked={weekdays.includes(index+1)} onChange={event => setWeekdays(current => event.target.checked ? [...current,index+1] : current.filter(value=>value!==index+1))} />{t(day)}</label>)}</fieldset> : null}
+    <fieldset className="field" disabled={isPrn}>
+      <legend>{t('Times of day')}</legend>
+      <p className="notice" style={{ marginTop: 0 }}>
+        {t('Add one entry per dose. Two entries (e.g. 08:00 and 20:00) means the medication is taken twice daily.')}
+      </p>
+      {times.map((value, index) => (
+        <div key={index} className="time-row">
+          <label htmlFor={`${editFrom?'edit-':''}med-time-${index}`} className="visually-hidden">
+            {t('Dose time')} {index + 1}
+          </label>
+          <input
+            id={`${editFrom?'edit-':''}med-time-${index}`}
+            type="time"
+            value={value}
+            onChange={(event) => setTimeAt(index, event.target.value)}
+            disabled={isPrn}
+          />
+          <button
+            type="button"
+            onClick={() => removeTimeAt(index)}
+            disabled={isPrn || times.length <= 1}
+            aria-label={`Remove dose time ${index + 1}`}
+          >
+            {t('Remove')}
+          </button>
+        </div>
+      ))}
+      <button type="button" onClick={addTime} disabled={isPrn}>
+        {t('Add another time')}
+      </button>
+      {!isPrn && normalisedTimes().length < times.length ? (
+        <span className="notice">
+          {t('Duplicate times are treated as a single dose.')}
+        </span>
+      ) : null}
+    </fieldset>
+
+    <div className="field">
+      <label htmlFor={fieldId('med-prn')}>
+        <input
+          id={fieldId('med-prn')}
+          type="checkbox"
+          checked={isPrn}
+          onChange={(event) => setIsPrn(event.target.checked)}
+          style={{ width: 'auto', minHeight: 'auto', marginRight: '0.5rem' }}
+        />
+        {t('Take only when needed (no fixed schedule)')}
+      </label>
+    </div>
+  </>;
+
+  // --- added ---------------------------------------------------------------
+  if (activated) {
+    return <Card title={editFrom?'Review a new plan version':'Add a medication'}>
+      <div className="status status--ok" role="status">{t('Medication added. It now appears in your medication list.')}</div>
+      <div className="actions">
+        <button onClick={reset} disabled={busy}>{t('Add another')}</button>
+      </div>
+      {medications && medications.item_count > 0 ? <p className="notice">{medications.item_count} {t('active medications on your list')}</p> : null}
+    </Card>;
+  }
+
+  // --- step 2: review and add ----------------------------------------------
+  if (step === 'review') {
+    const missing = draft?.missing_instructions ?? [];
+    return <>
+      <Card
+        title={t('Review and add')}
+        hint={t('Check the details below. Nothing becomes an active plan until you confirm.')}
+      >
+        <dl className="review-summary">
+          <div><dt>{t('Medication name')}</dt><dd>{name.trim()||t('Not specified')}</dd></div>
+          <div><dt>{t('Strength')}</dt><dd>{doseBasis.strength_text||t('Not recorded')}</dd></div>
+          <div><dt>{t('Units per dose')}</dt><dd>{doseAmount?`${doseAmount} ${doseUnit.trim()?t(doseUnit.trim()):''}`.trim():t('Not recorded')}</dd></div>
+          <div><dt>{t('Total dose')}</dt><dd>{total?.status==='calculated'?`${total.total_amount} ${total.total_unit}`:t('Not calculated')}</dd></div>
+          <div><dt>{t('Schedule')}</dt><dd>{scheduleText()||t('Not specified')}</dd></div>
+          <div><dt>{t('Course')}</dt><dd>{courseText()}</dd></div>
+          <div><dt>{t('Food instructions')}</dt><dd>{foodInstruction?t(foodInstruction):t('Not specified')}</dd></div>
+        </dl>
+
+        {missing.length ? <div className="status status--warn" role="alert">
+          {t('Still needed')}: <strong>{missing.map(value=>t(value)).join(', ')}</strong>. {t('Activating will be refused until these are provided.')}
+        </div> : null}
+
+        <details className="review-edit">
+          <summary>{t('Edit details')}</summary>
+          {fields()}
+        </details>
+
+        <label className="consent">
+          <input type="checkbox" checked={reviewed} onChange={event=>setReviewed(event.target.checked)}/>
+          {t('I have checked these details against my original instructions.')}
+        </label>
+
+        <div className="actions">
+          <button className="primary" onClick={()=>void commit()} disabled={busy||formBlocked()||missing.length>0||!reviewed}>
+            {t(busy?'Saving...':'Add this medication')}
+          </button>
+          <button onClick={()=>setStep('form')} disabled={busy}>{t('Back to details')}</button>
+        </div>
+      </Card>
+
+      {error ? <ErrorNotice error={error} /> : null}
+
+      {challenge ? <BottomSheet title={t('Please check this before I save it')} busy={busy} onCancel={()=>setChallenge(null)}>
+        <p className="confirm-what">{challenge.summary.medication_name}: {challenge.summary.dose_amount} {t(challenge.summary.dose_unit??'')}</p>
+        <p>{challenge.summary.is_prn?t('only when needed'):challenge.summary.frequency?.local_times.join(', ')}</p>
+        <p>{challenge.summary.course_start_date??t('Not specified')} → {challenge.summary.course_end_date??t('Not specified')}</p>
+        <p className="notice">{t('Confirmation expires')} {new Date(challenge.expires_at).toLocaleTimeString()}</p>
+        <div className="actions">
+          <button className="primary" disabled={busy} onClick={()=>void confirmActivation()}>{t('Yes, save this medication')}</button>
+          <button disabled={busy} onClick={()=>setChallenge(null)}>{t('Cancel')}</button>
+        </div>
+      </BottomSheet> : null}
+    </>;
+  }
+
+  // --- step 1: add a medication --------------------------------------------
   return (
     <Card
-      title="Add a medication"
-      hint="A draft is never active on its own. You review the details, then explicitly confirm."
+      title={editFrom?'Review a new plan version':'Add a medication'}
+      hint="Enter the amount in your medication instructions, then review the plan."
     >
-      {phase.kind === 'idle' || phase.kind === 'activated' ? (
-        <>
-          {phase.kind === 'activated' ? (
-            <div className="status status--ok" role="status">
-              {t('Regimen activated. It now appears in your medication list.')}
-            </div>
-          ) : null}
+      {fields()}
 
-          <div className="field">
-            <label htmlFor="med-name">{t('Medication name')}</label>
-            <input
-              id="med-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="e.g. Amlodipine"
-              autoComplete="off"
-            />
-          </div>
-
-          <div className="grid-2">
-            <div className="field">
-              <label htmlFor="med-dose">{t('Dose amount')}</label>
-              <input
-                id="med-dose"
-                value={doseAmount}
-                onChange={(event) => setDoseAmount(event.target.value)}
-                inputMode="decimal"
-                placeholder="e.g. 5"
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="med-unit">{t('Unit')}</label>
-              <input
-                id="med-unit"
-                value={doseUnit}
-                onChange={(event) => setDoseUnit(event.target.value)}
-                placeholder="mg"
-              />
-            </div>
-          </div>
-
-          <div className="grid-2">
-            <div className="field"><label htmlFor="course-start">{t('Course start date')}</label><input id="course-start" type="date" value={courseStart} onChange={event => {setCourseStart(event.target.value);if(courseDays)setCourseEnd(courseEndForDuration(event.target.value,Number(courseDays))??'');}} /></div>
-            <div className="field"><label htmlFor="course-end">{t('Last day (inclusive)')}</label><input id="course-end" type="date" min={courseStart || undefined} value={courseEnd} onChange={event => {setCourseEnd(event.target.value);setCourseDays('');}} /></div>
-          </div>
-          <div className="field"><label htmlFor="course-days">{t('Number of days')}</label><input id="course-days" type="number" min="1" max="3660" value={courseDays} onChange={event=>{setCourseDays(event.target.value);setCourseEnd(courseEndForDuration(courseStart,Number(event.target.value))??'');}}/><p className="notice">{t('Enter a start date and the duration in your reviewed instructions. The last day is calculated inclusively.')}</p></div>
-          <div className="field"><label htmlFor="food-instruction">{t('Food instructions')}</label><select id="food-instruction" value={foodInstruction} onChange={event=>setFoodInstruction(event.target.value)}><option value="">{t('Not specified')}</option>{['before food','after food','with food','without regard to food'].map(value=><option key={value} value={value}>{t(value)}</option>)}</select></div>
-          <p className="notice">{t('Use the dates in your reviewed instructions. Leave the end date blank if not specified; the app will not infer it.')}</p>
-          <div className="field"><label htmlFor="med-frequency">{t('Schedule')}</label><select id="med-frequency" disabled={isPrn} value={frequency} onChange={event => setFrequency(event.target.value as 'daily' | 'weekly')}><option value="daily">{t('Every day')}</option><option value="weekly">{t('Selected weekdays')}</option></select></div>
-          {!isPrn && frequency === 'weekly' ? <fieldset className="field"><legend>{t('Selected weekdays')}</legend>{['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map((day,index)=><label key={day}><input type="checkbox" checked={weekdays.includes(index+1)} onChange={event => setWeekdays(current => event.target.checked ? [...current,index+1] : current.filter(value=>value!==index+1))} />{t(day)}</label>)}</fieldset> : null}
-          <fieldset className="field" disabled={isPrn}>
-            <legend>{t('Times of day')}</legend>
-            <p className="notice" style={{ marginTop: 0 }}>
-              {t('Add one entry per dose. Two entries (e.g. 08:00 and 20:00) means the medication is taken twice daily.')}
-            </p>
-            {times.map((value, index) => (
-              <div key={index} className="time-row">
-                <label htmlFor={`med-time-${index}`} className="visually-hidden">
-                  {t('Dose time')} {index + 1}
-                </label>
-                <input
-                  id={`med-time-${index}`}
-                  type="time"
-                  value={value}
-                  onChange={(event) => setTimeAt(index, event.target.value)}
-                  disabled={isPrn}
-                />
-                <button
-                  type="button"
-                  onClick={() => removeTimeAt(index)}
-                  disabled={isPrn || times.length <= 1}
-                  aria-label={`Remove dose time ${index + 1}`}
-                >
-                  {t('Remove')}
-                </button>
-              </div>
-            ))}
-            <button type="button" onClick={addTime} disabled={isPrn}>
-              {t('Add another time')}
-            </button>
-            {!isPrn && normalisedTimes().length < times.length ? (
-              <span className="notice">
-                {t('Duplicate times are treated as a single dose.')}
-              </span>
-            ) : null}
-          </fieldset>
-
-          <div className="field">
-            <label htmlFor="med-prn">
-              <input
-                id="med-prn"
-                type="checkbox"
-                checked={isPrn}
-                onChange={(event) => setIsPrn(event.target.checked)}
-                style={{ width: 'auto', minHeight: 'auto', marginRight: '0.5rem' }}
-              />
-              {t('Take only when needed (no fixed schedule)')}
-            </label>
-          </div>
-
-          <div className="actions">
-            <button
-              className="primary"
-              onClick={submitDraft}
-              disabled={busy || name.trim() === '' || (!!courseDays&&!courseEnd) || (frequency==='weekly'&&!isPrn&&!weekdays.length)}
-            >
-              {t('Create draft')}
-            </button>
-            {phase.kind === 'activated' ? (
-              <button onClick={reset} disabled={busy}>
-                Add another
-              </button>
-            ) : null}
-          </div>
-        </>
-      ) : null}
-
-      {phase.kind === 'drafted' ? (
-        <>
-          <p className="setup-progress">{t('Step 2 of 3: review, then activate. Drafts are not active medications.')}</p>
-          <div className="status status--warn" role="status">
-            {t('Draft saved — not active yet.')}
-            {phase.draft.missing_instructions.length > 0 ? (
-              <>
-                {' '}
-                {t('Still needed')}: <strong>{phase.draft.missing_instructions.map(value=>t(value)).join(', ')}</strong>.
-                {t('Activating will be refused until these are provided.')}
-              </>
-            ) : null}
-          </div>
-          <p className="notice">
-            {t('Next: confirm the extracted details are correct. This marks the medication-name evidence as reviewed by you.')}
-          </p>
-          <div className="actions">
-            <button className="primary" onClick={() => submitReview(phase.draft)} disabled={busy}>
-              {t('I have reviewed these details')}
-            </button>
-            <button onClick={reset} disabled={busy}>
-              {t('Cancel')}
-            </button>
-          </div>
-        </>
-      ) : null}
-
-      {phase.kind === 'reviewed' ? (
-        <>
-          <div className="status status--ok" role="status">
-            {t('Details marked as reviewed by you. The regimen is still not active.')}
-          </div>
-          <div className="actions">
-            <button
-              className="primary"
-              onClick={() => requestConfirmation(phase.draft)}
-              disabled={busy}
-            >
-              {t('Show me the summary to confirm')}
-            </button>
-            <button onClick={reset} disabled={busy}>
-              {t('Cancel')}
-            </button>
-          </div>
-        </>
-      ) : null}
-
-      {phase.kind === 'confirming' ? (
-        <>
-          <div className="status status--warn" role="status">
-            <strong>{t('Please check this before I save it.')}</strong>
-            <ul style={{ margin: '0.4rem 0 0', paddingLeft: '1.2rem' }}>
-              <li>{t('Medication')}: {phase.challenge.summary.medication_name}</li>
-              <li>
-                {t('Dose amount')}: {phase.challenge.summary.dose_amount ?? '—'}{' '}
-                {t(phase.challenge.summary.dose_unit ?? '')}
-              </li>
-              <li>
-                {t('Schedule')}:{' '}
-                {phase.challenge.summary.is_prn
-                  ? t('only when needed')
-                  : (phase.challenge.summary.frequency?.local_times.join(', ') ??
-                    'not specified')}
-              </li>
-              <li>{t('Course start date')}: {phase.challenge.summary.course_start_date ?? t('Not specified')}</li>
-              <li>{t('Last day (inclusive)')}: {phase.challenge.summary.course_end_date ?? t('Not specified')}</li>
-              <li>{t('Food instructions')}: {phase.challenge.summary.food_instruction?.split('; ').map(value=>t(value)).join('；')??t('Not specified')}</li>
-              <li>{t('Time zone')}: {phase.challenge.summary.local_timezone}</li>
-            </ul>
-            <span className="status__code">
-              {t('Confirmation expires')}{' '}
-              {new Date(phase.challenge.expires_at).toLocaleTimeString()}
-            </span>
-          </div>
-          <div className="actions">
-            <button
-              className="primary"
-              onClick={() => confirmActivation(phase.draft, phase.challenge)}
-              disabled={busy}
-            >
-              {t('Yes, save this medication')}
-            </button>
-            <button onClick={reset} disabled={busy}>
-              {t('No, go back')}
-            </button>
-          </div>
-        </>
-      ) : null}
+      <div className="actions">
+        <button
+          className="primary"
+          onClick={()=>{setError(null);setStep('review');}}
+          disabled={busy || formBlocked()}
+        >
+          {t('Review and add')}
+        </button>
+      </div>
 
       {error ? <ErrorNotice error={error} /> : null}
 

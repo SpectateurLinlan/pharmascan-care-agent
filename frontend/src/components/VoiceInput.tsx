@@ -7,10 +7,8 @@ export function VoiceInput({ onTranscript, provider, disabled = false }: {
 }) {
   const {preferences,t}=useLanguage();
   const speech = useRef(provider === undefined ? browserSpeechProvider() : provider);
-  const [consent, setConsent] = useState(false);
   const [state, setState] = useState<SpeechState>('idle');
   const [notice, setNotice] = useState('');
-  const [showConsent, setShowConsent] = useState(false);
   const current = useRef<NativeRecognition | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mounted = useRef(false);
@@ -22,9 +20,17 @@ export function VoiceInput({ onTranscript, provider, disabled = false }: {
     if (timer.current) clearTimeout(timer.current);
     current.current?.abort(); current.current = null; setState('idle'); setNotice('Listening cancelled. You can still type.');
   }
+  /**
+   * One tap reaches the browser's own microphone prompt.
+   *
+   * There used to be an in-app checkbox gate first, so a patient had to agree
+   * twice for the same act and the browser prompt only appeared on the second
+   * try. The browser prompt is the real permission and it is never bypassed;
+   * the privacy statement lives in Settings and beside the open conversation
+   * rather than in a second blocking dialog here.
+   */
   function start() {
     if (!speech.current || disabled) return;
-    if (!consent) { setShowConsent(true); return; }
     setNotice(''); setState('requesting');
     const active = speech.current.create(); current.current = active;
     let transcript = ''; let failed = false;
@@ -60,8 +66,6 @@ export function VoiceInput({ onTranscript, provider, disabled = false }: {
       disabled={disabled || !speech.current} onClick={() => listening ? current.current?.stop() : start()}>
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg>
     </button>
-    {showConsent && !consent ? <label className="speech-consent"><input type="checkbox" onChange={event => { setConsent(event.target.checked); setShowConsent(false); }} />
-      {t("Allow speech recognition. Your browser may send audio to its speech service.")}</label> : null}
     {listening ? <div className="speech-status" role="status">{t(state === 'requesting' ? 'Allow microphone...' : state === 'processing' ? 'Processing...' : 'Listening...')}
       <button onClick={cancel}>{t("Cancel")}</button></div> : null}
     {!speech.current ? <p className="speech-status" role="status">{t("Voice is unsupported in this browser. You can type.")}</p> : null}

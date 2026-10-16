@@ -1,7 +1,32 @@
+import {patientCopy} from './patientCopy';
+import {pushCopy} from './pushCopy';
 import {api,type PatientPreferences,type PreferenceUpdate} from './api/client';
 import {createContext,useContext,useState,useCallback,useEffect,type ReactNode} from 'react';
 export type Language='en'|'zh';
+const englishLabels:Record<string,string>={blood_pressure:'Blood pressure',blood_glucose:'Blood glucose',weight:'Weight',sleep:'Sleep',mood:'Mood',note:'Descriptive note',
+ medication_review:'Medication review',medication_follow_up:'Medication follow-up',symptom_follow_up:'Symptom follow-up',expiry_storage:'Expiry and storage review',
+ forgetfulness:'Forgetfulness',running_out:'Medication running out',side_effect_concern:'Concern about symptoms or side effects',scheduling:'Scheduling difficulty',unclear_instructions:'Unclear instructions',complexity:'Medication complexity',unsure_taken:'Unsure whether taken',prefer_not_to_say:'Prefer not to say'};
 const translations:Record<string,string>={
+ 'Review medication supply':'核对药物余量与补药',
+ 'Source and regimen history':'来源与疗程历史','Label quantity evidence (not current stock)':'标签数量证据（不是现有库存）','Source document':'来源文件',
+ 'Stock and refill':'库存与补药','Last confirmed physical count':'最近确认的实际盘点','Estimated remaining':'估算余量','Estimated days of supply':'预计可用天数','Unknown':'未知','Not estimable':'无法估算',
+ 'Low stock: review your supply with your pharmacy.':'库存较少，请与药房核对补药安排。','Low stock':'库存较少',
+ 'Estimate from confirmed counts, stock changes and compatible reported doses. Unreported consumption is unknown. PRN and incomplete plans have no daily estimate.':'根据确认盘点、库存流水及单位相符的自述服药记录估算；未报告的消耗未知。按需用药及不完整计划不估算每日需求。',
+ 'Update stock or record refill':'更新库存或登记补药','Stock action':'库存操作','count':'实际盘点','refill':'补药','adjustment':'手动修正','lost':'遗失','discarded':'丢弃','damaged':'损坏','Quantity':'数量','Stock unit':'库存单位','Low-stock threshold':'低库存提醒阈值','Your note':'您的备注',
+ 'Count the units you physically have now. Label quantity is not your current stock.':'请清点现在实际持有的数量。标签配发数量不等于现有库存。','Enter a signed correction. Use a new count if you are unsure.':'输入增加或减少的修正量；不确定时请重新盘点。','Enter the number of units added or removed, not medicine strength.':'输入增加或减少的片数或粒数，不是药品规格。',
+ 'Review stock change':'核对库存变动','Stock transaction history':'库存流水','Loading stock records…':'正在读取库存记录…',
+ 'Medication follow-ups':'用药跟进','Loading follow-ups…':'正在读取跟进事项…','No open medication follow-ups.':'暂无未完成的用药跟进。','View or add follow-up':'查看或添加跟进','Your reported plans, not professional instructions or automatic pharmacy orders.':'记录您提供的安排，不等同于专业医嘱或自动向药房订药。',
+ 'Add medication follow-up':'添加用药跟进','Follow-up type':'跟进类型','Follow-up title':'跟进事项','Date and time':'日期与时间','Review follow-up':'核对跟进事项','Update follow-up':'更新跟进','New follow-up time':'新的跟进时间','Review follow-up change':'核对跟进变动','Follow-up history':'跟进历史','No medication follow-ups recorded.':'尚未记录用药跟进。',
+ 'medication_review':'用药复查','medication_follow_up':'用药相关随访','monitoring':'治疗相关监测','adherence':'服药困难跟进','symptom_follow_up':'症状跟进','expiry_storage':'有效期与储存核对','open':'待处理','contacted':'已联系药房','deferred':'已延期','completed':'已完成','cancelled':'已取消','Status':'状态',
+ 'Created from a low-stock estimate. Confirm your supply with your pharmacy.':'根据低库存估算建立，请与药房核对药物供应。','Patient-reported plan; not independently verified.':'患者自述安排，未获独立核实。',
+ 'Medication difficulties':'用药困难','Missing reports do not mean missed doses. These are your experiences, not diagnoses.':'没有记录不等于漏服。这里记录您的体验，不作诊断。','What made medication management difficult?':'什么影响了您的用药管理？','Your description':'您的描述','Chosen support action':'您选择的支持措施','Linked follow-up (optional)':'关联跟进（可选）','Review difficulty record':'核对困难记录','Loading records…':'正在读取记录…',
+ 'forgetfulness':'容易忘记','running_out':'药物快用完','side_effect_concern':'担心不适或副作用','scheduling':'时间安排困难','unclear_instructions':'服用说明不清楚','complexity':'药物安排复杂','unsure_taken':'不确定是否已服用','other':'其他','prefer_not_to_say':'暂不说明',
+ 'Review reminder settings':'查看提醒设置','Review stock and contact pharmacy':'盘点库存并联系药房','Record symptoms and prepare professional review':'记录症状并准备向专业人员咨询','Prepare timing questions for your pharmacist':'整理时间安排问题，向药剂师咨询','Review original label and ask your pharmacist':'核对原始标签并向药剂师确认','Prepare a medication review':'准备用药复查','Check reported history; do not assume an extra dose':'查看自述服药记录，不自行认定需要补服','Choose your own support action':'选择您需要的支持措施',
+ 'Review medication-care record':'核对用药管理记录','Patient-reported information. This does not change your prescription or record a dose.':'这是患者自述资料，不会修改处方或记录已服药。','Your medication-care record was saved.':'已保存您的用药管理记录。',
+ 'Medication review preparation':'就诊与用药复查准备','Observation window':'观察记录范围','Last 7 days':'最近7天','Last 30 days':'最近30天','Patient-reported information; review with your healthcare professional.':'以下包含患者自述资料，请与医生或药剂师共同核对。','Current medications and changes':'本期用药及变更','Patient-reported adherence':'患者自述服药情况','Health observations and trends':'健康观察与趋势','Inventory and refill concerns':'库存与补药关注事项','Unresolved follow-ups':'未完成的跟进','Questions for your pharmacist or doctor':'准备向药剂师或医生咨询的问题','Your additional questions (included in export)':'您的补充问题（会加入导出文件）','Export medication review':'导出用药复查资料','Downloaded to your device only. Review before choosing to share; nothing is sent automatically.':'文件仅下载至本设备。请核对后自行选择分享，不会自动发送。',
+ 'Only stored generated occurrences are counted. No report is not a missed dose. No adherence percentage is inferred.':'只统计已生成并存储的计划剂次。未报告不等于漏服，不据此推断依从率。','Insufficient measurements for a numeric trend.':'数值记录不足，无法展示趋势。','Observed change':'观测值变化','Insufficient data':'资料不足','Recorded measurements':'已记录的测量值','Irregular sampling; missing measurements are unknown. These changes do not establish a medication effect.':'采样时间不规则；缺失测量值未知。变化不能证明是药物造成的。','Registered medicine':'已登记药物','Long-term medication care':'长期用药管理',
+ 'Observation type':'观察类型','note':'感受或症状描述','blood_pressure':'血压','blood_glucose':'血糖','weight':'体重','sleep':'睡眠（与用药关注相关）','mood':'心情（自评分）','Systolic value':'收缩压','Diastolic value':'舒张压','Measured value':'测量值',
+ 'Discuss your reported medication difficulties and chosen support actions.':'讨论您报告的用药困难及所选择的支持措施。','Check medication supply and refill arrangements with your pharmacy.':'与药房核对药物供应及补药安排。',
  'morning':'早上', 'afternoon':'下午', 'evening':'傍晚', 'night':'晚上', 'bedtime':'睡前',
  'Product identifiers':'药物产品编号',
  'The product codes differ. Please check the original sources.':'产品编号不一致，请核对原始来源。',
@@ -101,7 +126,7 @@ const translations:Record<string,string>={
  "Confirm record":"确认记录","Confirm your dose report":"确认服药记录","Record how I feel":"记录感受","Skip for now":"稍后再说",
  "Your profile":"我的个人资料","Edit profile":"编辑个人资料","Personal profile":"个人资料","Display name":"显示名称","Save profile":"保存资料",
  "Link your guest account to restore your records on another device.":"您正在以访客身份使用。绑定账户后可在其他设备恢复资料。","Login or register":"登录或注册","Account and login":"账户与登录","Email and sign-in options":"邮箱与登录方式",
- "Caregiver contacts":"关联照护人","Sharing and consent":"共享与授权","Medication reminders":"用药提醒","In-app prompts and notifications":"页面提醒与通知","Language and speech":"语言与语音","Accessibility":"无障碍设置","Text size and touch controls":"字体大小与触摸操作","Privacy and data":"隐私与数据","Your records and conversation privacy":"个人记录与对话隐私","About PharmaScan":"关于 PharmaScan","Demo and feature limitations":"演示说明与功能边界","Send a suggestion or report an issue":"提交建议或报告问题",
+ "Caregiver contacts":"关联照护人","Sharing and consent":"共享与授权","Medication reminders":"用药提醒","In-app prompts and notifications":"页面提醒与通知","Language and speech":"语言与语音","Accessibility":"无障碍设置","Text size and touch controls":"字体大小与触摸操作","Privacy and data":"隐私与数据","Your records and conversation privacy":"个人记录与对话隐私","About MediThread":"关于 MediThread","Demo and feature limitations":"演示说明与功能边界","Send a suggestion or report an issue":"提交建议或报告问题",
  "Use a display name only. No identity document is needed for this demo.":"仅填写显示名称，演示不需要身份证明。",
  "Your records belong to your authenticated account. Business data stays behind FastAPI and database access controls.":"您的记录属于当前认证账户，业务数据通过后端与数据库访问控制保护。",
  "The assistant keeps up to six recent turns in a short-lived session. Raw audio is not saved. Browser speech recognition may use an online recognition service.":"助手在短期会话中保留最近六轮对话，不保存原始音频。浏览器语音识别可能使用在线服务。",
@@ -371,9 +396,202 @@ const translations:Record<string,string>={
  "Something went wrong.":"操作未完成。",
  "Spoken playback is unavailable. Please read the visible response.":"暂时无法播放语音，请阅读显示的回答。",
 };
-const defaults={preferred_language:'en',speech_locale:'en-SG',text_size:'standard',voice_enabled:true,tts_autoplay:false,reminder_lead_minutes:0,timezone:'Asia/Singapore'} as const;
+Object.assign(translations, {
+ 'Could not load reminders. Your medication records have not changed.':'无法加载提醒，用药记录没有改变。',
+ 'Photo check result':'照片核对结果',
+ 'MediThread helps you review medication plans, record your own reports and prepare medication and health summaries.':'MediThread 帮助您核对用药计划、记录个人自述，并整理用药与健康总结。',
+ 'In-app reminders need this page open or reopened. For background notifications, configure Web Push in Me. Delivery depends on your device and the server scheduler.':'应用内提醒需要打开或重新进入此页面。后台通知请在“我”中设置推送；送达取决于设备和服务器调度器。',
+ 'This confirmation expired. Please request a new summary.':'此确认已过期，请重新请求确认摘要。',
+ 'Review a new plan version':'核对新版用药计划','Regimen history':'疗程历史',
+ 'Stop this recorded plan':'停止此记录中的计划','Stop this recorded plan?':'停止此记录中的计划？',
+ 'Confirm stop':'确认停止',
+ "This stops reminders in MediThread and keeps past records. It does not advise changing your medication. Follow your clinician's instructions.":'此操作停止 MediThread 中的计划提醒，并保留历史记录。这不是改变用药的建议，请遵照医务人员的指示。',
+ 'Previously imported calendar events must be updated or removed in your calendar app.':'此前导入的日历事件需在系统日历中更新或删除。',
+ 'active':'已激活','ended':'已停止','superseded':'已被新版替代','draft':'草稿','pending_clarification':'待补充',
+ 'Records':'记录','Hello':'您好','Guest':'访客','Finish':'完成',
+ 'Help / User Guide':'帮助／使用指南','Ask your assistant':'询问用药助手','Open conversation':'展开助手对话',
+ 'Choose a medication':'选择药物','Enable medication reminders':'开启用药提醒',
+ 'Reminders come from your reviewed active timed plans. As-needed medicines have no automatic fixed reminders.':'提醒来自您已核对并激活的定时用药计划，按需用药不会自动产生固定提醒。',
+ 'Upcoming reminders':'近期提醒',
+ 'No upcoming timed reminders. Review your plan and confirm specific times in Medicines.':'暂无近期定时提醒，请到药物页面核对计划并确认具体时间。',
+ 'In-app reminders work while open or reopened. Background push also needs server configuration, a running scheduler and an authorized device.':'应用打开或重新进入时可显示提醒。后台推送还需要服务器配置、运行中的调度器及已授权设备。',
+ 'Notification permission':'通知权限','Unsupported':'不支持','granted':'已允许','denied':'已拒绝','default':'尚未授权',
+ 'Enable Web Push':'开启后台推送','Disable Web Push on all devices':'关闭此账户所有设备的推送','Add to Calendar':'添加到系统日历',
+ 'Web Push is unsupported on this device.':'此设备不支持后台推送。',
+ 'Web Push is not configured on this server.':'服务器尚未配置后台推送。',
+ 'Notification permission was not granted. In-app reminders still work.':'未获得通知权限，仍可使用应用内提醒。',
+ 'Could not verify the push subscription.':'无法核实推送订阅，请重试。',
+ 'Push subscription saved. Device delivery still depends on the browser and scheduler.':'推送订阅已保存，设备接收仍取决于浏览器和后台调度器。',
+ 'Push subscriptions disabled for this account.':'已关闭此账户的推送订阅。',
+ 'Calendar downloaded. Import it into your calendar app.':'日历文件已下载，请导入系统日历。',
+ 'Calendar export covers the next 30 days within your course. This is a one-time import, not synchronization. After changing or stopping a plan, update or delete old events in your calendar.':'日历导出涵盖疗程内未来 30 天。这是一次性导入，不会自动同步；修改或停用计划后，请在日历中更新或删除旧事件。',
+ 'On iPhone or iPad, Web Push requires iOS/iPadOS 16.4 or later and adding the app to the Home Screen. Delivery is not guaranteed by every device or browser.':'iPhone／iPad 后台推送需要 iOS／iPadOS 16.4 或以上，并将应用添加至主屏幕。设备和浏览器不保证每次都能送达。',
+ 'Future: native Android and iOS alarm integration, verified caregiver delivery and Singpass.':'未来方向：原生 Android／iOS 闹钟集成、经验证的照护人通知及 Singpass。',
+ 'After choosing I took it, confirm the separate summary to save your report. Cancel saves nothing. Records contains your reports and summaries; a report does not prove ingestion. Reminders are prompts, not changes to your plan.':'选择“已服用”后，需在独立弹窗确认才能保存；取消不会保存。健康记录提供自述和总结，自述不等于已证实吞服。提醒不会改变用药计划。',
+ 'Me contains your account status and settings. Link a guest account using email to access it on another device. Settings contains language, speech, text size and reminder options. You can reopen this guide from Me → Help / User Guide.':'“我”包含账户状态及设置。绑定邮箱后可在其他设备访问账户；语言、语音、字号和提醒设置均可在此找到。您可从“我 → 帮助／使用指南”重新查看引导。',
+});
+Object.assign(translations,patientCopy);
+Object.assign(translations,pushCopy);
+// Redesigned navigation, medication-record anatomy and status wording.
+Object.assign(translations,{
+ 'Me':'我',
+ 'Your account, and how this app works for you.':'您的账户，以及这个应用如何为您服务。',
+ 'What you are taking, and what is known about each medicine.':'您在服用哪些药物，以及每种药物已知的信息。',
+ 'Reviewed and active':'已核对并启用',
+ 'Awaiting review':'待核对',
+ 'Awaiting clarification':'待补充说明',
+ 'Ended':'已结束',
+ 'Replaced by a newer version':'已被新版本替代',
+ 'Source-backed':'有来源支持',
+ 'Not verified':'尚未核实',
+ 'Photos and evidence':'照片与证据',
+ 'Source photos, provenance and what they can and cannot show':'来源照片、出处，以及它们能说明和不能说明的内容',
+ 'No current medication plans.':'目前没有用药计划。',
+ 'Add a medication, review the instructions from your label or pharmacist, and activate the plan. Only a reviewed plan appears in Today.':'添加药物，核对标签或药剂师提供的说明，然后启用计划。只有已核对的计划才会显示在“今日”。',
+ 'Choose how you want to record this medicine. You will review everything before it is activated.':'请选择记录此药物的方式。启用前您会核对全部内容。',
+ 'A photo is evidence for review. It never confirms what is inside a medicine.':'照片是供核对使用的证据，无法确认药物内部的成分。',
+ 'What this medicine is':'这是什么药物',
+ 'Strength not recorded':'未记录规格',
+ 'The product identity is recorded separately from your plan and from your reports.':'药物身份、您的用药计划与自述记录分别保存。',
+ 'What you were told to take':'您被要求服用的内容',
+ 'Photos support review. They do not confirm the contents of a medicine or that it is safe to take.':'照片仅用于辅助核对，不能确认药物成分，也不能证明服用安全。',
+ 'Your reports':'您的自述记录',
+ 'A report records what you told the app. It is not proof that a medicine was swallowed.':'自述记录只记录您告诉应用的内容，不能证明药物已被吞服。',
+ 'Skip to content':'跳到主要内容',
+ 'Add your medication':'添加您的药物',
+ 'A photo check becomes available once you have a reviewed medicine.':'有已核对的药物后，即可使用照片核对。',
+ // Product identity is a separate fact from plan review state, and is worded as such.
+ 'Form':'剂型',
+ 'Product not identified':'药物尚未识别',
+ 'Identity from your document':'身份来自您的文档',
+ 'Identity professionally verified':'身份已由专业人员核实',
+ 'Active, product not identified':'已启用，但药物尚未识别',
+ // Records: a summary you can take to a professional review.
+ 'Your own reports, and the summaries you can take to a review.':'您的自述记录，以及可带去复诊的总结。',
+ 'How you have been feeling':'您近期的身体感受',
+ 'For preparing a professional review':'用于准备复诊',
+ // The dose card: the report action is visible, everything else is under one disclosure.
+ 'Report this dose':'记录本次用药',
+ 'You will see exactly what will be recorded before anything is saved.':'保存之前，您会先看到将被记录的确切内容。',
+ 'More options':'更多选项',
+ // One settings screen per concern, each with its own title.
+ 'Everything you can change about how the app works for you.':'您可以调整应用全部设置。',
+ 'Which language the app uses, and how it speaks to you.':'应用使用的语言，以及语音朗读方式。',
+ 'Make the app easier to read and to tap.':'让应用更易阅读、更易点击。',
+ 'When the app prompts you about a dose, and how that reaches you.':'应用何时提醒用药，以及提醒如何送达。',
+ 'Voice and speech':'语音与朗读',
+ 'Reminders':'提醒',
+ 'Seven short steps through the main screens':'七步了解主要页面',
+ 'When the app prompts you, and how it reaches you':'应用何时提醒您，以及提醒如何送达',
+ 'English / 中文, voice and reading aloud':'English / 中文、语音与朗读',
+ 'Text size and touch targets':'字号与可点击区域',
+});
+// UX Writing pass. These are the strings the redesign introduced or rewrote;
+// before this block every one of them fell back to English in the Chinese UI.
+Object.assign(translations, {
+ // --- the four defensive strings the product owner quoted, rewritten -------
+ 'Contacts are for your own reference. Saving one does not message the person or share your records.':'联系人仅供您自己查阅。保存联系人不会向对方发送消息，也不会共享您的记录。',
+ 'I have this person’s permission to save their details. This only stores the contact — it does not share my records.':'我已获得对方同意，可以保存其联系资料。此操作仅保存联系人，不会共享我的记录。',
+ 'Contacts are stored now. Verification and notifications are not switched on yet.':'联系人现在可以保存；身份核实与通知功能尚未开启。',
+ 'We compare your photo with the references you have saved. A photo cannot tell you whether a medicine is safe to take.':'我们会将照片与您保存的参考资料比对。照片无法判断药物是否可以安全服用。',
+ 'These are the follow-ups you recorded. Nothing is ordered or changed for you.':'这些是您自己记录的跟进事项。系统不会替您订药，也不会更改您的用药。',
+ // --- merged duplicates: one decision-point notice, one standing boundary --
+ 'A photo check is separate evidence. It never proves identity or ingestion.':'照片核对是独立的证据，不能证明药物身份，也不能证明已经服用。',
+ 'Your reports, kept with each medication version.':'您的自述记录，按用药计划版本保存。',
+ 'Check your original instructions before you confirm. This prototype is not clinically validated and does not replace your doctor or pharmacist.':'确认前请先核对原始服用说明。本原型尚未经过临床验证，不能替代医生或药剂师。',
+ 'The photo button adds label or packaging information for review. Compare a pill photo on Today opens a separate visual check.':'图片按钮用于添加标签或包装资料，供您核对。“今日”中的照片核对会打开独立的视觉核对。',
+ // --- medication enrollment (two perceived steps) -------------------------
+ 'Check the details below. Nothing becomes an active plan until you confirm.':'请核对以下内容。在您确认之前，不会生成已启用的计划。',
+ 'I have checked these details against my original instructions.':'我已对照原始服用说明核对过以上内容。',
+ 'Please check this before I save it':'请在保存前核对',
+ 'Review and add':'核对并添加',
+ 'Edit details':'修改详情',
+ 'Back to details':'返回填写详情',
+ 'Add another':'再添加一个',
+ 'Medication added. It now appears in your medication list.':'药物已添加，现在显示在您的药物列表中。',
+ 'Units per dose is how many you take each time — for example 1 tablet. It is not the strength printed on the pack.':'“每次服用数量”指每次服用几片或几粒，例如 1 片；它不是包装上标注的规格。',
+ 'Total dose':'单次总剂量',
+ 'Not calculated':'未计算',
+ 'Not recorded':'未记录',
+ 'Only when needed':'仅在需要时',
+ 'Course end date':'疗程结束日期',
+ 'Ingredient scope':'成分范围',
+ // --- saved registrations -------------------------------------------------
+ 'Saved source, not yet an active plan':'已保存来源资料，尚未成为已启用的计划',
+ // --- sign-in surface (guest path preserved) ------------------------------
+ 'Sign in or continue as a guest':'登录，或继续以访客身份使用',
+ 'You can use every medication feature without an account. Signing in only keeps your records available on other devices.':'无需账户即可使用全部用药功能。登录只是让您的记录可以在其他设备上查看。',
+ 'Continue as a guest':'以访客身份继续',
+ 'Your records stay private to this account or browser session. You choose what to export or share.':'您的记录仅保存在此账户或当前浏览器会话中。导出与分享由您决定。',
+ // --- conversation history: what the switch actually does ------------------
+ 'Save new conversations on this account':'在此账户保存新对话',
+ 'Saving starts from now on. Messages sent before you turn this on are not added.':'从开启时起开始保存；开启之前发送的消息不会被补存。',
+ 'Saving is on. New conversations will be stored on this account.':'保存已开启，新对话将保存在此账户。',
+ 'Saving is off. New conversations will not be stored.':'保存已关闭，新对话不会被保存。',
+ 'Could not change the saving setting. Your previous setting is unchanged.':'未能更改保存设置，原设置保持不变。',
+ 'Could not confirm the saving setting. Reload to check its current status, then try again.':'未能确认对话保存设置，请刷新核对当前状态后再重试。',
+ 'This service is temporarily unavailable. Please try again.':'服务暂时不可用，请稍后重试。',
+ 'An overlapping plan for this medicine is already active. Review and stop the previous recorded plan before adding a replacement.':'这种药物在该时间段已有已启用的计划。请先核对并停止应用中的旧计划，再登记替代计划。',
+ 'To replace this plan, first stop the previous recorded plan in the app. Follow your clinician’s instructions.':'如需替换此计划，请先停止应用中记录的旧计划。实际用药请遵照医务人员的指示。',
+ 'Multiple recorded plans have the same medicine name. Review them before reporting a dose; the app has not combined their instructions.':'已记录多个同名药物计划。请先逐项核对，再记录服药；应用未合并这些服用指示。',
+ 'medication plans':'项用药计划',
+ 'Try again':'重试',
+ 'Your saved chat text is kept for up to 30 days, up to 200 conversations. Your medication records are kept separately.':'已保存的对话文字最多保留 30 天、200 段对话。用药记录单独保存。',
+ // --- voice and speech ----------------------------------------------------
+ 'Voice uses your browser’s speech service. Audio is not saved.':'语音使用浏览器的语音服务，音频不会被保存。',
+ 'Voice input uses your browser’s speech service, which may be online. Your browser asks for microphone permission the first time; audio is not saved. Review the transcript before sending.':'语音输入使用浏览器的语音服务，可能需要联网。首次使用时浏览器会询问麦克风权限；音频不会被保存。发送前请核对转写文字。',
+ // --- the Today card, reminders and status words --------------------------
+ 'Recent history':'近期记录',
+ 'not reported':'尚无自述记录',
+ 'reminders unavailable':'提醒不可用',
+ 'reminders blocked':'提醒已被阻止',
+ 'Your browser is blocking notifications. You can allow them in your browser settings.':'浏览器正在阻止通知，您可以在浏览器设置中允许。',
+ 'Notify me about this dose':'提醒我这次用药',
+ 'Turn on local reminders':'开启应用内提醒',
+ 'Check what is due now':'查看现在应服用的药物',
+ 'records':'条记录',
+ // --- medication understanding, read from the matched label excerpt --------
+ 'What this medicine is used for':'这种药物通常用于什么',
+ 'From the label':'摘自标签',
+ 'This is general information from the medicine label, not a diagnosis or advice about your own treatment.':'这是药品标签上的一般信息，不是诊断，也不针对您个人的治疗方案。',
+ // --- medication difficulties, derived from records ------------------------
+ 'From your records':'根据您的记录',
+ 'These are counts from what you have already recorded. They are not a judgement about your medication use.':'这些数字来自您已记录的内容，不评价您的服药情况。',
+ '{count} scheduled doses in the last {days} days have no report from you. A missing report is not a missed dose.':'最近 {days} 天有 {count} 次计划用药没有您的自述记录。没有记录不等于漏服。',
+ 'You reported not taking {count} doses in the last {days} days.':'最近 {days} 天您自述有 {count} 次没有服用。',
+ 'You marked {count} doses as unsure whether you took them.':'您有 {count} 次标记为不确定是否已服用。',
+ 'Your recorded supply is low — about {count} days left at the recorded plan.':'按已记录的计划，您的库存较少，约还可使用 {count} 天。',
+ 'Observation from your records, not a diagnosis.':'这是来自您记录的观察结果，不是诊断。',
+ 'Nothing to show from your records yet.':'您的记录中暂时没有可展示的内容。',
+ 'Suggested next step':'建议的下一步',
+ 'Check your reported history':'查看您的自述记录',
+ 'Consider a next step':'可以考虑的下一步',
+ 'You can check your own reports instead of taking an extra dose.':'您可以先查看自己的自述记录，不必自行补服。',
+ 'You can record what made this difficult and choose a support action.':'您可以记录困难的原因，并选择需要的支持措施。',
+ 'This matches me — record it':'这符合我的情况，记录下来',
+ 'Not for me':'不适合我',
+ 'A suggestion is not a finding. You can ignore it, and you can record something different.':'建议不是结论。您可以忽略它，也可以记录不同的内容。',
+ 'You told us':'您告诉我们的情况',
+ 'Confirmed by you':'由您确认',
+ 'You have not recorded a difficulty yet.':'您还没有记录过用药困难。',
+ 'Add a note in my own words':'用自己的话添加备注',
+ // --- language menu, guide and unfinished surfaces ------------------------
+ 'Choose a language':'选择语言',
+ 'English / 中文':'English / 中文',
+ 'Not built yet':'尚未提供',
+ 'These are listed so nothing here looks finished when it is not.':'列出这些项目，是为了避免把尚未完成的功能当成已完成。',
+ // --- messages rendered through t(variable) -------------------------------
+ 'No dose is currently due for this medication.':'该药物目前没有应服用的剂次。',
+ 'Add at least one time of day, or tick "only when needed".':'请至少添加一个服用时间，或勾选“仅在需要时服用”。',
+ 'Please confirm you have checked these details before adding the medication.':'请先确认您已核对这些内容，再添加药物。',
+ 'No agent session yet — start the demo session first.':'尚未建立助手会话，请先启动演示会话。',
+ 'The server did not issue a confirmation challenge.':'服务器未返回确认挑战，请重试。',
+ 'Could not save preferences. Your previous preference is retained.':'未能保存偏好设置，原设置保持不变。',
+ 'This records what you tell me. It is not proof that a medicine was swallowed.':'这里记录的是您告诉我的内容，不能证明药物已被吞服。',
+});
+const defaults={preferred_language:'en',speech_locale:'en-SG',text_size:'standard',voice_enabled:true,tts_autoplay:false,reminders_enabled:true,reminder_lead_minutes:0,timezone:'Asia/Singapore'} as const;
 type PlaybackPreferences={ttsProvider:'browser'|'tencent';speechRate:number;setTtsProvider:(provider:'browser'|'tencent')=>void;setSpeechRate:(rate:number)=>void};
-type Profile=Pick<PatientPreferences,'display_name'|'preferred_language'|'speech_locale'|'text_size'|'text_scale_percent'|'voice_enabled'|'tts_autoplay'|'reminder_lead_minutes'|'timezone'>;
+type Profile=Pick<PatientPreferences,'display_name'|'preferred_language'|'speech_locale'|'text_size'|'text_scale_percent'|'voice_enabled'|'tts_autoplay'|'conversation_history_enabled'|'reminder_lead_minutes'|'reminders_enabled'|'timezone'>;
 const Context=createContext<PlaybackPreferences & {textScale:number;previewTextScale:(value:number|null)=>void;language:Language;preferences:Profile;setLanguage:(value:Language)=>void;updatePreferences:(value:PreferenceUpdate)=>Promise<void>;loadPreferences:()=>Promise<void>;preferenceError:string}>({textScale:100,previewTextScale:()=>undefined,ttsProvider:'browser',speechRate:.9,setTtsProvider:()=>undefined,setSpeechRate:()=>undefined,language:'en',preferences:defaults,setLanguage:()=>undefined,updatePreferences:async()=>undefined,loadPreferences:async()=>undefined,preferenceError:''});
 export function LanguageProvider({children}:{children:ReactNode}) {
  const [ttsProvider,setTtsProvider]=useState<'browser'|'tencent'>('browser'),[speechRate,setSpeechRate]=useState(.9);
@@ -386,4 +604,4 @@ export function LanguageProvider({children}:{children:ReactNode}) {
  function setLanguage(value:Language){void updatePreferences({preferred_language:value});}
  return <Context.Provider value={{textScale,previewTextScale,ttsProvider,setTtsProvider,speechRate,setSpeechRate,language:preferences.preferred_language,preferences,setLanguage,updatePreferences,loadPreferences,preferenceError}}>{children}</Context.Provider>;
 }
-export function useLanguage(){const context=useContext(Context);return {...context,t:(text:string)=>context.language==='zh'?(translations[text]??text):text};}
+export function useLanguage(){const context=useContext(Context);return {...context,t:(text:string)=>context.language==='zh'?(translations[text]??text):(englishLabels[text]??text)};}

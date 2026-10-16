@@ -22,8 +22,8 @@ export function CaregiversScreen({newId=()=>crypto.randomUUID()}: {newId?:()=>st
   }
   async function deleteContact(){if(!remove||busy)return;setBusy(true);setError(null);try{await api.deleteCaregiver(remove.id);setRows(previous=>previous.filter(row=>row.id!==remove.id));setRemove(null);}catch(caught){setError(caught);}finally{setBusy(false);}}
   return <><Card title="Caregiver contacts">
-    <p>{t('Save a contact for your own reference. This does not link their account, send an invitation or share your records.')}</p>
-    <p className="notice">{t('Contact verification and caregiver notifications are not enabled yet.')}</p>
+    <p>{t('Contacts are for your own reference. Saving one does not message the person or share your records.')}</p>
+    <p className="notice">{t('Contacts are stored now. Verification and notifications are not switched on yet.')}</p>
     <button className="primary" disabled={loading||Boolean(error)||busy} onClick={()=>setDraft({id:newId(),name:'',relationship:'',contact_type:'email',contact_value:'',consent:false,editing:false})}>{t('Add caregiver contact')}</button>
     {loading?<p role="status">{t('Loading contacts…')}</p>:null}
     {!loading&&!error&&!rows.length?<p>{t('No caregiver contacts saved yet.')}</p>:null}
@@ -39,7 +39,7 @@ export function CaregiversScreen({newId=()=>crypto.randomUUID()}: {newId?:()=>st
       <label className="field">{t('Relationship (optional)')}<input maxLength={80} autoComplete="off" value={draft.relationship} onChange={event=>setDraft({...draft,relationship:event.target.value})}/></label>
       <label className="field">{t('Contact method')}<select value={draft.contact_type} onChange={event=>setDraft({...draft,contact_type:event.target.value==='phone'?'phone':'email',contact_value:''})}><option value="email">{t('Email')}</option><option value="phone">{t('Phone')}</option></select></label>
       <label className="field">{t(draft.contact_type==='email'?'Email address':'Phone with country code')}<input required type={draft.contact_type==='email'?'email':'tel'} maxLength={254} autoComplete="off" value={draft.contact_value} onChange={event=>setDraft({...draft,contact_value:event.target.value})}/></label>
-      <label className="consent"><input type="checkbox" checked={draft.consent} onChange={event=>setDraft({...draft,consent:event.target.checked})}/>{t('I have permission to save this contact. This does not consent to sharing medication records or notifications.')}</label>
+      <label className="consent"><input type="checkbox" checked={draft.consent} onChange={event=>setDraft({...draft,consent:event.target.checked})}/>{t('I have this person’s permission to save their details. This only stores the contact — it does not share my records.')}</label>
       {error?<ErrorNotice error={error}/>:null}
       <div className="actions"><button type="button" disabled={busy} onClick={()=>{setDraft(null);setError(null);}}>{t('Cancel')}</button><button className="primary" type="submit" disabled={busy||!draft.consent||!draft.name.trim()||!draft.contact_value.trim()}>{t('Save contact')}</button></div>
     </form>

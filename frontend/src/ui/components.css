@@ -1,0 +1,335 @@
+/*
+ * Component layer: the shared primitives the redesign is built from.
+ * These are the only classes new screens should reach for. Legacy screen
+ * classes live in app.css and are being migrated onto these.
+ */
+
+/* --- screen --------------------------------------------------------------- */
+
+.ui-screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+
+.ui-screen__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.ui-screen__lead {
+  font-size: var(--fs-small);
+  color: var(--ink-2);
+  max-width: 60ch;
+}
+
+/* --- button --------------------------------------------------------------- */
+
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  text-align: center;
+}
+
+.ui-btn--primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--on-brand);
+  font-weight: var(--fw-strong);
+}
+
+.ui-btn--primary:hover:not(:disabled) {
+  background: var(--brand-strong);
+  border-color: var(--brand-strong);
+}
+
+.ui-btn--quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--brand);
+}
+
+.ui-btn--quiet:hover:not(:disabled) {
+  background: var(--brand-50);
+}
+
+.ui-btn--danger {
+  background: var(--danger-bg);
+  border-color: var(--danger-line);
+  color: var(--danger);
+  font-weight: var(--fw-strong);
+}
+
+.ui-btn--lg {
+  min-height: var(--tap-lg);
+  font-size: var(--fs-body);
+}
+
+.ui-btn--block {
+  width: 100%;
+}
+
+/* --- action row ----------------------------------------------------------- */
+
+.ui-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+}
+
+.ui-actions > * {
+  flex: 1 1 auto;
+}
+
+/* --- row group ------------------------------------------------------------ */
+
+.ui-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.ui-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  width: 100%;
+  min-height: 64px;
+  padding: var(--s-4) var(--s-1);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+}
+
+.ui-row:last-child {
+  border-bottom: 0;
+}
+
+.ui-row:hover:not(:disabled) {
+  background: var(--brand-50);
+}
+
+.ui-row__icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-radius: var(--r-sm);
+  background: var(--surface-inset);
+  color: var(--brand);
+}
+
+.ui-row__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.ui-row__title {
+  display: block;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  overflow-wrap: anywhere;
+}
+
+.ui-row__hint {
+  display: block;
+  font-size: var(--fs-small);
+  color: var(--ink-2);
+  margin-top: var(--s-1);
+}
+
+.ui-row__end {
+  flex: 0 0 auto;
+  max-width: 55%;
+  min-width: 0;
+  color: var(--ink-2);
+  display: flex;
+  align-items: center;
+}
+
+/* Preserve the medicine name and full provenance at enlarged text sizes. */
+.ui-row__end .ui-pill {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* --- pill (status and verification) --------------------------------------- */
+
+.ui-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-1) var(--s-3);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  background: var(--surface-inset);
+  color: var(--ink-2);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+
+.ui-pill::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 8px;
+}
+
+.ui-pill--ok {
+  background: var(--ok-bg);
+  border-color: var(--ok-line);
+  color: var(--ok);
+}
+
+.ui-pill--warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-line);
+  color: var(--warn);
+}
+
+.ui-pill--danger {
+  background: var(--danger-bg);
+  border-color: var(--danger-line);
+  color: var(--danger);
+}
+
+.ui-pill--info {
+  background: var(--info-bg);
+  border-color: var(--info-line);
+  color: var(--info);
+}
+
+.ui-pill--quiet {
+  background: var(--surface-inset);
+  border-color: var(--line);
+  color: var(--ink-2);
+}
+
+/* --- callout -------------------------------------------------------------- */
+
+.ui-callout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-4);
+  border: 1px solid var(--info-line);
+  border-left-width: 4px;
+  border-radius: var(--r-sm);
+  background: var(--info-bg);
+  color: var(--info);
+  font-size: var(--fs-small);
+}
+
+.ui-callout--ok {
+  border-color: var(--ok-line);
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+.ui-callout--warn {
+  border-color: var(--warn-line);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.ui-callout--danger {
+  border-color: var(--danger-line);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.ui-callout--quiet {
+  border-color: var(--line);
+  background: var(--surface-inset);
+  color: var(--ink-2);
+}
+
+/* --- empty and loading ---------------------------------------------------- */
+
+.ui-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-3);
+  padding: var(--s-6) var(--s-4);
+}
+
+.ui-empty__art {
+  width: 56px;
+  height: 56px;
+  color: var(--brand);
+}
+
+.ui-empty__title {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-strong);
+}
+
+.ui-empty__text {
+  font-size: var(--fs-small);
+  color: var(--ink-2);
+  max-width: 46ch;
+}
+
+.ui-skeleton {
+  border-radius: var(--r-sm);
+  background: var(--surface-inset);
+  animation: ui-pulse 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes ui-pulse {
+  to {
+    opacity: 0.55;
+  }
+}
+
+/* --- field ---------------------------------------------------------------- */
+
+.ui-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.ui-field + .ui-field {
+  margin-top: var(--s-4);
+}
+
+.ui-field__hint {
+  font-size: var(--fs-small);
+  color: var(--ink-2);
+  margin-top: var(--s-2);
+}
+
+.ui-field__error {
+  font-size: var(--fs-small);
+  color: var(--danger);
+  margin-top: var(--s-2);
+}
+
+/* --- provenance (evidence) ------------------------------------------------ */
+
+.ui-provenance {
+  display: flex;
+  gap: var(--s-4);
+  align-items: flex-start;
+  padding: var(--s-4);
+  border-radius: var(--r-sm);
+  background: var(--surface-inset);
+}
+
+.ui-provenance__thumb {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  border-radius: var(--r-sm);
+  background: var(--line);
+  object-fit: contain;
+}

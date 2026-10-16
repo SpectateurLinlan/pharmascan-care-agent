@@ -1,8 +1,9 @@
+import {skipInitialGuide} from './navigation-helpers';
 /** REAL browser/Auth/RLS/private PNG, synthetic packaging; no model/speech provider. */
 import {test,expect} from '@playwright/test';
 test.skip(process.env.RUN_LIVE_BROWSER!=='1','Synthetic live UI opt-in required');
 test('private packaging thumbnails decode on the product list and survive reload',async({page})=>{
- await page.goto('/');await page.getByRole('button',{name:'Medicines',exact:true}).click();await page.getByRole('button',{name:/Add medication/}).click();await page.getByRole('button',{name:/Add manually/}).click();
+ await page.goto('/');await skipInitialGuide(page);await page.getByRole('button',{name:'Medicines',exact:true}).click();await page.getByRole('button',{name:/Add medication/}).click();await page.getByRole('button',{name:/Add manually/}).click();
  await page.getByLabel('Medication name',{exact:true}).fill('DEMO Metformin 500 mg');await page.getByLabel('Dose amount',{exact:true}).fill('1');await page.getByLabel('Unit',{exact:true}).fill('tablet');await page.locator('#med-time-0').fill('20:00');
  await page.getByRole('button',{name:'Create draft',exact:true}).click();await page.getByRole('button',{name:'I have reviewed these details'}).click();await page.getByRole('button',{name:'Show me the summary to confirm'}).click();await page.getByRole('button',{name:'Yes, save this medication'}).click();
  await page.getByRole('button',{name:'Medicines',exact:true}).click();await page.getByRole('button',{name:/Personal gallery/}).click();await page.locator('.gallery-entry').click();

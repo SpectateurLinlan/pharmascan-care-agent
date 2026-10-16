@@ -29,7 +29,7 @@ function cleanCallbackUrl(){if(typeof window!=='undefined'&&window.location&&win
    if(location.hash.includes('access_token')||location.hash.includes('refresh_token')||location.searchParams.has('code')){location.hash='';location.searchParams.delete('code');window.history.replaceState(null,'',location.pathname+location.search);}}}
 function emailValue(email:string){if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)throw new AccountError('Enter a valid email address.');return email.trim();}
 export function createAuthGateway(environment:AuthEnvironment,factory:(url:string,key:string)=>Driver=(url,key)=>new GoTrueClient({url:`${url.replace(/\/$/,'')}/auth/v1`,headers:{apikey:key},detectSessionInUrl:true,fetch:authFetch})){
- const url=environment.VITE_SUPABASE_URL,key=environment.VITE_SUPABASE_PUBLISHABLE_KEY;
+ const url=environment.VITE_SUPABASE_URL?.trim(),key=environment.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
  if((url||key)&&(!url||!key||key.startsWith('sb_secret_')))throw new AccountError('Supabase Auth requires a URL and publishable key');
  const client=url&&key?factory(url,key):null;let signingIn:Promise<string>|null=null;
  const required=()=>{if(!client)throw new AccountError('Email sign in is unavailable in this local demo.');return client;};

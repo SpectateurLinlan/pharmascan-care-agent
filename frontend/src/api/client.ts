@@ -1,3 +1,4 @@
+import type {DoseBasis,DoseDisplay} from './dose';
 /**
  * Typed client for the PharmaScan Care backend.
  *
@@ -51,14 +52,22 @@ export function clientId(): string {
 
 async function fetchResponse(path: string, init?: RequestInit): Promise<Response> {
   const token = await accessToken();
-  const response = await fetch(path, {
+  const controller=new AbortController();
+  const abort=()=>controller.abort();
+  if(init?.signal?.aborted)controller.abort();else init?.signal?.addEventListener('abort',abort,{once:true});
+  const timer=setTimeout(abort,/agent\/messages|sources\/|evidence\/.*sources|visual|check-dose/.test(path)?120000:45000);
+  let response:Response;
+  try{response = await fetch(path, {
+    cache:'no-store',
     ...init,
+    signal:controller.signal,
     headers: {
       'Content-Type': 'application/json',
       ...(init?.headers ?? {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
+  }catch(caught){if(controller.signal.aborted&&!init?.signal?.aborted)throw new Error('Connection timed out. Please try again.');throw caught;}finally{clearTimeout(timer);init?.signal?.removeEventListener('abort',abort);}
 
   if (!response.ok) {
     let body: ApiErrorBody = {
@@ -87,7 +96,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export interface SpeechCapabilities { cloud_tts_allowed: boolean; available: boolean; provider: string; review_required: true; raw_audio_retained: false }
 export interface TranscriptResponse { text: string; provider: string; request_id: string; confidence: null; review_required: true }
-export interface RegimenHistoryItem { regimen_id: string; display_name: string; version_no: number; state: string;
+export interface RegimenHistoryItem { frequency_rule?:MedicationSummary['frequency_rule'];regimen_id: string; display_name: string; version_no: number; state: string;
   effective_from: string | null; effective_to: string | null; medication_id:string;course_start_date:string|null;course_end_date:string|null;
   dose_amount:number|null;dose_unit:string|null;food_instruction:string|null;is_prn:boolean;local_times:string[] }
 export interface PrintedEvidence {value:string;line:string}
@@ -107,18 +116,22 @@ function withClient(path: string, extra?: Record<string, string>): string {
 
 // --- response types (mirror backend schemas.py) -----------------------------
 
+export interface ConversationEntry {id:string;user_text:string;assistant_text:string;created_at:string}
+export interface ConversationPage {entries:ConversationEntry[];next_before:string|null}
 export interface PatientPreferences {
+  conversation_history_enabled?:boolean;
   display_name?:string|null;
   patient_id:string;preferred_language:'en'|'zh';speech_locale:'en-SG'|'zh-CN';
-  text_size:'standard'|'large';text_scale_percent?:number;voice_enabled:boolean;tts_autoplay:boolean;reminder_lead_minutes:number;
+  text_size:'standard'|'large';text_scale_percent?:number;voice_enabled:boolean;tts_autoplay:boolean;reminder_lead_minutes:number;reminders_enabled?:boolean;
   timezone:string;created_at:string;updated_at:string;
 }
 export interface CaregiverDetails {name:string;relationship:string|null;contact_type:'email'|'phone';contact_value:string;storage_consent:true}
 export interface CaregiverContact extends CaregiverDetails {id:string;patient_id:string;verification_status:'pending';notifications_enabled:false;sharing_enabled:false;created_at:string;updated_at:string;demo_only:true}
-export type PreferenceUpdate=Partial<Pick<PatientPreferences,'display_name'|'preferred_language'|'text_size'|'text_scale_percent'|'voice_enabled'|'tts_autoplay'|'reminder_lead_minutes'>>;
+export type PreferenceUpdate=Partial<Pick<PatientPreferences,'display_name'|'preferred_language'|'text_size'|'text_scale_percent'|'voice_enabled'|'tts_autoplay'|'conversation_history_enabled'|'reminder_lead_minutes'|'reminders_enabled'|'timezone'>>;
 
-export interface HealthObservation {id:string;patient_id:string;description:string;occurred_at:string;severity:'mild'|'moderate'|'severe'|null;notes:string|null;medication_id:string|null;source:'patient_reported';created_at:string;updated_at:string;demo_only:true}
-export type ObservationInput=Pick<HealthObservation,'id'|'description'|'occurred_at'|'severity'|'notes'|'medication_id'> & {confirmed:boolean};
+export interface Measurement {kind?:'note'|'blood_pressure'|'blood_glucose'|'weight'|'sleep'|'mood';value?:number|null;secondary_value?:number|null;unit?:'mmHg'|'mmol/L'|'mg/dL'|'kg'|'hours'|'score'|null}
+export interface HealthObservation extends Measurement {id:string;patient_id:string;description:string;occurred_at:string;severity:'mild'|'moderate'|'severe'|null;notes:string|null;medication_id:string|null;source:'patient_reported';created_at:string;updated_at:string;demo_only:true}
+export type ObservationInput=Pick<HealthObservation,'id'|'description'|'occurred_at'|'severity'|'notes'|'medication_id'> & Measurement & {confirmed:boolean};
 export interface ReviewSummary {period:'week'|'month'|'course';window_start:string;window_end:string;generated_at:string;timezone:string;reported_taken:number;reported_not_taken:number;unsure:number;observations:HealthObservation[];questions:string[];coverage_note:string;
   medications:Array<{medication_id:string;regimen_id:string;name:string;version:number;state:string;is_prn:boolean;dose_amount:number|null;dose_unit:string|null;food_instruction:string|null;course_start:string|null;course_end:string|null;local_times:string[];recorded_occurrences:number;without_report:number}>}
 
@@ -140,6 +153,7 @@ export interface DemoStartResponse {
 }
 
 export interface MedicationSummary {
+  dose_basis?:DoseBasis|null;
   dose_amount?: number | null;
   dose_unit?: string | null;
   frequency_rule?: {kind:string;local_times:string[];days_of_week:number[]} | null;
@@ -273,6 +287,8 @@ export interface ToolTrace {
 export interface AgentUsage {llm_user_turns:number;model_requests:number;limit:number;usage_date:string;next_reset_at:string;}
 
 export interface AgentMessageResponse {
+  history_saved?:boolean|null;
+  care_request?: import('./care').CareReview|null;
   health_note_request?:{description:string;requires_patient_review:true;urgent_help_advised?:boolean}|null;
   visual_check_request?: {regimen_id:string|null;requires_image:true;visual_status:"not_checked"}|null;
   usage?: AgentUsage | null;
@@ -295,6 +311,7 @@ export interface DraftInput {
   course_end_date?: string | null;
   extraction_evidence?: SourcePreview;
   medication_name: string;
+  dose_basis?:DoseBasis|null;
   dose_amount?: number | null;
   dose_unit?: string | null;
   frequency_kind?: 'daily' | 'weekly' | 'interval_hours' | null;
@@ -307,6 +324,9 @@ export interface DraftInput {
 }
 
 export interface ReminderRecord { is_due?: boolean; occurrence_id: string; patient_id: string; remind_at: string; demo_only: true }
+export interface PlannedReminder {occurrence_id:string;regimen_id:string;rule_id:string;medication_name:string;due_at:string;remind_at:string;slot:string}
+export interface PushSubscriptionInput {endpoint:string;keys:{p256dh:string;auth:string}}
+export interface PushSubscriptionRecord {id:string;enabled:boolean}
 export interface DoseReminderAlert {key:string;occurrence_id:string;regimen_id:string;medication_name:string;dose_amount:number|null;dose_unit:string|null;food_instruction:string|null;due_at:string;remind_at:string}
 
 export interface VisualCheckResult { decision:'unknown'|'ambiguous'|'unavailable'; selected_medication:string|null; comparison_available:false; reason:string; candidates:Array<{external_catalogue_id:string;display_name:string|null;visual_similarity:number|null;market:'US';strength:string|null}>; count_reliable:boolean; ingestion_proven:false; safe_to_take_confirmed:false; next_action:string }
@@ -319,22 +339,43 @@ export interface GalleryEntry {evidence_task_id?:string|null;similar_name_record
 export interface RecognitionEvidence {id:string;decision:'match'|'unknown'|'ambiguous'|'conflict'|'missing_reference'|'unavailable';reason:string;reference_ids:string[];outcome:{decision:string;medication_id:string|null;score:number|null;closest:{medication_id:string;name:string;score:number}|null}|null;safe_to_take:false;ingestion_proven:false}
 
 export const api = {
+  refreshFollowUps:()=>request<import('./care').CareTask[]>(withClient('/api/me/care-tasks/refresh'),{method:'POST'}),
+  inventory:(id:string)=>request<import('./care').StockStatus>(withClient(`/api/me/inventory/${encodeURIComponent(id)}`)),
+  recordStock:(id:string,values:import('./care').StockInput)=>request<import('./care').StockStatus>(withClient(`/api/me/inventory/${encodeURIComponent(id)}`),{method:'POST',body:JSON.stringify(values)}),
+  careTasks:(actionable=false)=>request<import('./care').CareTask[]>(withClient('/api/me/care-tasks',{actionable:String(actionable)})),
+  createCareTask:(values:import('./care').CareTaskInput)=>request<import('./care').CareTask>(withClient('/api/me/care-tasks'),{method:'POST',body:JSON.stringify(values)}),
+  updateCareTask:(id:string,values:import('./care').TaskUpdate)=>request<import('./care').CareTask>(withClient(`/api/me/care-tasks/${encodeURIComponent(id)}`),{method:'POST',body:JSON.stringify(values)}),
+  barriers:()=>request<import('./care').Barrier[]>(withClient('/api/me/adherence-barriers')),
+  recordBarrier:(values:import('./care').BarrierInput)=>request<import('./care').Barrier>(withClient('/api/me/adherence-barriers'),{method:'POST',body:JSON.stringify(values)}),
+  medicationCareReview:(days:7|30)=>request<import('./care').MedicationCareReview>(withClient('/api/me/medication-review',{days:String(days)})),
   evidenceTasks:()=>request<EvidenceTask[]>(withClient('/api/evidence/tasks')),
   checkInput:(file:File)=>request<ImageRoute>(withClient('/api/sources/check-input'),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'true'},body:file}),
   evidenceTask:(id:string)=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${id}`)),
   evidenceSources:(id:string)=>request<Array<{id:string;source_kind:string;review_status:string;reviewed_at?:string|null;recorded_at?:string|null;provided_by?:'patient';extraction_evidence:SourcePreview|null}>>(withClient(`/api/evidence/tasks/${id}/sources`)),
-  attachEvidence:(id:string,file:File,kind:'package'|'pharmacy_label'|'prescription',medicationId?:string)=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${id}/sources`,{source_kind:kind,...(medicationId?{medication_id:medicationId}:{})}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'true'},body:file}),
+  attachEvidence:(id:string,file:File,kind:'package'|'pharmacy_label'|'prescription',medicationId?:string,automaticallyRouted=false)=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${id}/sources`,{source_kind:kind,automatically_routed:String(automaticallyRouted),...(medicationId?{medication_id:medicationId}:{})}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'true'},body:file}),
   reviewEvidence:(id:string,draft:EvidenceDraft,distinct_product_confirmed:boolean,options:{product_category?:EvidenceProduct['category'];replace_active_plan?:boolean}={})=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${id}/review`),{method:'POST',body:JSON.stringify({...options,draft,patient_reviewed:true,distinct_product_confirmed})}),
   personalGallery:()=>request<GalleryEntry[]>(withClient('/api/evidence/gallery')),
   retireReference:(id:string)=>request<GalleryImage>(withClient(`/api/evidence/images/${id}/retire`),{method:'POST',body:JSON.stringify({})}),
   referencePhoto:async(id:string)=>(await fetchResponse(withClient(`/api/evidence/images/${id}`))).blob(),
   addReference:(medicationId:string,file:File,kind:'loose_pill'|'package'|'blister',source:string,reviewed:boolean,compare:boolean)=>request<GalleryImage>(withClient(`/api/evidence/gallery/${medicationId}/images`,{image_kind:kind,source_description:source,reviewed:String(reviewed),for_comparison:String(compare)}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'true'},body:file}),
   checkPersonalDose:(file:File,regimenId:string|null)=>request<RecognitionEvidence>(withClient('/api/evidence/check-dose',regimenId?{regimen_id:regimenId}:{}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'true'},body:file}),
+  conversationHistory:(before?:string)=>request<ConversationPage>(withClient('/api/agent/history',before?{before}:{})),
+  clearConversationHistory:()=>request<{cleared:true}>(withClient('/api/agent/history'),{method:'DELETE',body:JSON.stringify({confirmed:true})}),
+  doseDisplay:(basis:DoseBasis,units_per_dose:number,dose_unit:string)=>request<DoseDisplay>(withClient('/api/medications/dose-display'),{method:'POST',body:JSON.stringify({basis,units_per_dose,dose_unit})}),
   recentTurns:(sessionId:string)=>request<Array<{user:string;assistant:string}>>(withClient(`/api/agent/sessions/${sessionId}/recent-turns`)),
   observations:()=>request<HealthObservation[]>(withClient('/api/me/health-observations')),
   saveObservation:(record:ObservationInput)=>request<HealthObservation>(withClient('/api/me/health-observations'),{method:'PUT',body:JSON.stringify(record)}),
   deleteObservation:(id:string)=>request<{deleted:true}>(withClient(`/api/me/health-observations/${id}`),{method:'DELETE'}),
   reviewSummary:(period:'week'|'month'|'course',regimenId?:string)=>request<ReviewSummary>(withClient('/api/me/review-summary',{period,...(regimenId?{regimen_id:regimenId}:{})})),
+  reminderPlan:()=>request<PlannedReminder[]>(withClient('/api/reminders/plan')),
+  reminderCalendar:async()=>(await fetchResponse(withClient('/api/reminders/calendar'))).blob(),
+  pushConfig:()=>request<{available:boolean;public_key:string|null;test_available?:boolean}>(withClient('/api/reminders/push/config')),
+  currentPush:(value:PushSubscriptionInput)=>request<PushSubscriptionRecord|null>(withClient('/api/reminders/push/current'),{method:'POST',body:JSON.stringify(value)}),
+  testPush:(id:string,requestId:string)=>request<{status:'sent'|'temporary'|'expired_subscription'|'provider_rejected'|'invalid_subscription'|'uncertain_delivery'}>(withClient('/api/reminders/push/test'),{method:'POST',body:JSON.stringify({subscription_id:id,request_id:requestId})}),
+  pushSubscriptions:()=>request<PushSubscriptionRecord[]>(withClient('/api/reminders/push/subscriptions')),
+  savePushSubscription:(value:PushSubscriptionInput)=>request<PushSubscriptionRecord>(withClient('/api/reminders/push/subscriptions'),{method:'POST',body:JSON.stringify(value)}),
+  revokePushSubscription:async(id:string)=>{await fetchResponse(withClient(`/api/reminders/push/subscriptions/${encodeURIComponent(id)}`),{method:'DELETE'});},
+  revokeCurrentPush:async(value:PushSubscriptionInput)=>{await fetchResponse(withClient('/api/reminders/push/unsubscribe'),{method:'POST',body:JSON.stringify(value)});},
   reminderAlerts:()=>request<DoseReminderAlert[]>(withClient('/api/reminders/alerts')),
   feedback:(payload:{id:string;category:'issue'|'suggestion';message:string})=>request<{id:string;status:'received';created_at:string}>(withClient('/api/feedback'),{method:'POST',body:JSON.stringify(payload)}),
   visualCheck: (image:File, regimenId:string|null) => request<VisualCheckResult>(withClient('/api/visual-check',regimenId ? {regimen_id:regimenId} : {}), {method:'POST',headers:{'Content-Type':image.type,'X-Stage2-Consent':'true','X-Demo-Only':'true'},body:image}),
@@ -374,8 +415,9 @@ export const api = {
 
   listMedications: () => request<MedicationListResponse>(withClient('/api/me/medications')),
 
-  createDraft: (input: DraftInput) =>
-    request<DraftCreateResponse>(withClient('/api/medications/drafts'), {
+  endPlan:(regimenId:string)=>request<{regimen_id:string;state:string}>(withClient(`/api/medications/${encodeURIComponent(regimenId)}/end`),{method:'POST',body:JSON.stringify({confirmed:true})}),
+  createDraft: (input: DraftInput, medicationId?:string) =>
+    request<DraftCreateResponse>(withClient('/api/medications/drafts',medicationId?{medication_id:medicationId}:{}), {
       method: 'POST',
       body: JSON.stringify(input),
     }),

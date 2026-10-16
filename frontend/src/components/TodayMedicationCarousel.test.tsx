@@ -11,13 +11,22 @@ it('one medicine has no redundant selector or swipe controls',()=>{
   expect(screen.queryByRole('group',{name:'All current medicines'})).toBeNull();
   expect(screen.queryByRole('button',{name:'Next medicine'})).toBeNull();
 });
-it('shows all names/amounts, supports direct and next selection and keeps offscreen actions inert',()=>{
-  const scroll=vi.fn();Object.defineProperty(HTMLElement.prototype,'scrollTo',{value:scroll,configurable:true});
+it('shows all names/amounts and mounts actions only for the selected medicine',()=>{
   render(<TodayMedicationCarousel medications={medicines} focusRegimenId={null}>{row=><button>{row.display_name} report</button>}</TodayMedicationCarousel>);
-  expect(screen.getByRole('button',{name:/Metformin 500 mg/})).toBeTruthy();
-  fireEvent.click(screen.getByRole('button',{name:'Next medicine'}));
-  expect(screen.getByRole('button',{name:/Amlodipine 10 mg/}).getAttribute('aria-pressed')).toBe('true');
-  const slides=document.querySelectorAll<HTMLElement>('.medicine-slide');expect(slides[0]?.inert).toBe(true);expect(slides[1]?.inert).toBe(false);
-  fireEvent.click(screen.getByRole('button',{name:/Metformin 500 mg/}));
-  expect(slides[0]?.inert).toBe(false);expect(scroll).toHaveBeenCalled();
+  expect(screen.getByRole('button',{name:/Metformin Per dose: 500 mg/})).toBeTruthy();
+  expect(screen.getByRole('button',{name:'Metformin report'})).toBeTruthy();
+  expect(screen.queryByRole('button',{name:'Amlodipine report'})).toBeNull();
+  fireEvent.click(screen.getByRole('button',{name:/Amlodipine Per dose: 10 mg/}));
+  expect(screen.getByRole('button',{name:/Amlodipine Per dose: 10 mg/}).getAttribute('aria-pressed')).toBe('true');
+  expect(screen.getByRole('button',{name:'Amlodipine report'})).toBeTruthy();
+  expect(screen.queryByRole('button',{name:'Metformin report'})).toBeNull();
+});
+it('labels existing same-name records for review without showing unrelated version-one identifiers',()=>{
+ const first={...medicines[1]!,course_start_date:'2026-10-16',course_end_date:'2026-10-20'};
+ const second={...first,regimen_id:'DEMO-duplicate',dose_amount:5,is_prn:true};
+ render(<TodayMedicationCarousel medications={[first,second]} focusRegimenId={null}>{row=><p>{row.display_name}</p>}</TodayMedicationCarousel>);
+ expect(screen.getByRole('status').textContent).toContain('Multiple recorded plans');
+ expect(screen.queryByText(/Plan 1/)).toBeNull();
+ expect(screen.getByText('2 medication plans')).toBeTruthy();
+ expect(screen.getAllByRole('button').every(button=>button.textContent?.includes('2026-10-16'))).toBe(true);
 });

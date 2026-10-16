@@ -18,3 +18,14 @@ it('strength-only packaging is not rendered as a dose and list_check is review-o
  expect(screen.getByText('Possibly already registered — review before linking.')).toBeTruthy();
  expect(screen.queryByText('untrusted provider advice')).toBeNull();
 });
+it('shows the medicine’s general use with its source line, and invents nothing when the source returned none',()=>{
+ const withIndication={...candidate,regimen_evidence:{...candidate.regimen_evidence,indication:{value:'Used to treat type 2 diabetes',line:'DEMO label section 1'}}};
+ const first=render(<PrintedLabelEvidence candidate={withIndication}/>);
+ expect(screen.getByText('What this medicine is used for')).toBeTruthy();
+ expect(screen.getByText('Used to treat type 2 diabetes')).toBeTruthy();
+ expect(screen.getByText(/DEMO label section 1/)).toBeTruthy();
+ first.unmount();
+ render(<PrintedLabelEvidence candidate={candidate}/>);
+ expect(screen.queryByText('What this medicine is used for')).toBeNull();
+ expect(screen.queryByText(/type 2 diabetes/)).toBeNull();
+});

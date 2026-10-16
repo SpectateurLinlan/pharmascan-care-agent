@@ -1,3 +1,4 @@
+import {skipInitialGuide} from './navigation-helpers';
 /** REAL browser/Auth/RLS/Gemini/Stage2, synthetic labels/pill only. No provider interception. */
 import {test,expect,type Page,type Response} from '@playwright/test';
 import {readFileSync,writeFileSync} from 'node:fs';
@@ -25,7 +26,7 @@ test('Demo A/B/C: progressive evidence, actual personal match, persistent confli
    return response;
   };
  });
- await page.goto('/');await expect(page.getByRole('button',{name:'Medicines',exact:true})).toBeVisible();
+ await page.goto('/');await skipInitialGuide(page);await expect(page.getByRole('button',{name:'Medicines',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Medicines',exact:true}).click();await page.getByRole('button',{name:/Add medication/}).click();await page.getByRole('button',{name:/Read medication information/}).click();
  await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'../outputs/gallery-demo/add-source390.png'});
  const workspace=page.getByTestId('evidence-workspace');
@@ -66,7 +67,7 @@ test('Demo A/B/C: progressive evidence, actual personal match, persistent confli
  await expect(workspace.getByRole('option',{name:/metformin/i})).toHaveCount(1);await workspace.getByLabel('Link to a registered product').selectOption(first.medication_id);await workspace.getByLabel('Source type').selectOption('pharmacy_label');await workspace.getByLabel('Take or choose a photo').setInputFiles('../outputs/gallery-demo/conflict.png');
  await workspace.getByLabel('I agree to private storage and the selected image processing. Use synthetic files for this demo.').check();const conflict=capture(page,response=>response.request().method()==='POST'&&/\/api\/evidence\/tasks\/[^/]+\/sources/.test(response.url()));const conflictAgent=capture(page,response=>response.request().method()==='POST'&&response.url().includes('/api/agent/messages'));await workspace.getByRole('button',{name:'Read and save source'}).click();expect((await conflict).status()).toBe(200);expect((await conflictAgent).status()).toBe(200);
  await expect(workspace.getByText('Sources need clarification')).toBeVisible();await expect(workspace.getByRole('button',{name:'Review product and medication plan'})).toBeDisabled();await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'../outputs/gallery-demo/demoC-conflict390.png',fullPage:true});
- await page.getByRole('button',{name:'Assistant',exact:true}).click();await page.getByLabel('Review your message before sending').fill('The pharmacy label strength conflicts. What source should I provide?');const followup=capture(page,response=>response.request().method()==='POST'&&response.url().includes('/api/agent/messages'));await page.getByRole('button',{name:'Send',exact:true}).click();const followupReply=(await followup).body as {mode:string;tool_traces:Array<{tool_name:string}>};expect(followupReply.mode).toBe('gemini');expect(followupReply.tool_traces.some(row=>row.tool_name==='reconcile_medication_sources')).toBe(true);
+ await page.locator('[data-guide="today"]').click();await page.getByRole('button',{name:'Open conversation',exact:true}).click();await page.getByLabel('Review your message before sending').fill('The pharmacy label strength conflicts. What source should I provide?');const followup=capture(page,response=>response.request().method()==='POST'&&response.url().includes('/api/agent/messages'));await page.getByRole('button',{name:'Send',exact:true}).click();const followupReply=(await followup).body as {mode:string;tool_traces:Array<{tool_name:string}>};expect(followupReply.mode).toBe('gemini');expect(followupReply.tool_traces.some(row=>row.tool_name==='reconcile_medication_sources')).toBe(true);
  await page.reload();await page.getByRole('button',{name:'Medicines',exact:true}).click();await page.getByRole('button',{name:/Finish medication setup/}).click();await page.getByRole('button',{name:/Sources need clarification/}).click();await expect(workspace.getByText('Sources need clarification')).toBeVisible();
  await page.setViewportSize({width:430,height:932});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'../outputs/gallery-demo/demoC-restored430.png',fullPage:true});await page.setViewportSize({width:1280,height:900});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'../outputs/gallery-demo/demoC-desktop.png',fullPage:true});
  writeFileSync('../outputs/gallery-demo/live-demo-results.json',JSON.stringify({

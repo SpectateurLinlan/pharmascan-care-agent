@@ -56,8 +56,7 @@ it('restores bounded recent chat under StrictMode without replaying an earlier c
 });
 async function listen(speech: Speech) {
   const callback=vi.fn(); render(<VoiceInput provider={{create:()=>speech}} onTranscript={callback}/>);
-  fireEvent.click(screen.getByRole('button',{name:'Speak your message'}));
-  fireEvent.click(screen.getByRole('checkbox'));
+  // One tap reaches the browser prompt; there is no in-app consent gate.
   fireEvent.click(screen.getByRole('button',{name:'Speak your message'})); return callback;
 }
 describe('native browser speech wiring (SIMULATED events)',()=>{
@@ -69,10 +68,20 @@ describe('native browser speech wiring (SIMULATED events)',()=>{
   const first=render(<LanguageProvider><Controls/></LanguageProvider>); fireEvent.click(screen.getByText('Choose Chinese'));
   await screen.findByText('zh'); expect(api.updatePreferences).toHaveBeenCalledWith({preferred_language:'zh'}); first.unmount();
   render(<LanguageProvider><Controls/></LanguageProvider>);fireEvent.click(screen.getByText('Load preference')); await screen.findByText('zh');
-  fireEvent.click(screen.getByRole('button',{name:'语音输入'}));fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'语音输入'}));
+  fireEvent.click(screen.getByRole('button',{name:'语音输入'}));
   expect(speech.lang).toBe('zh-CN'); speech.result('今晚吃什么药？'); expect(transcript).toHaveBeenCalledWith('今晚吃什么药？');expect(api.sendMessage).not.toHaveBeenCalled();
  });
  it('detects unsupported browser and keeps typed fallback',()=>{ render(<AssistantScreen sessionId="demo" onSession={vi.fn()}/>); expect(screen.getByText(/unsupported/)).toBeTruthy(); expect(screen.getByLabelText('Review your message before sending')).toBeTruthy(); });
+ it('one tap on the microphone starts recognition without a second in-app consent',()=>{
+  const speech=new Speech(); const callback=vi.fn();
+  render(<VoiceInput provider={{create:()=>speech}} onTranscript={callback}/>);
+  fireEvent.click(screen.getByRole('button',{name:'Speak your message'}));
+  // The browser prompt is the only authorisation: recognition starts immediately
+  // and no checkbox dialog is interposed.
+  expect(speech.start).toHaveBeenCalledOnce();
+  expect(screen.queryByRole('checkbox')).toBeNull();
+  expect(screen.getByRole('button',{name:'Stop listening'})).toBeTruthy();
+ });
  it.each(['not-allowed','audio-capture','no-speech','network','aborted','service-not-allowed','unknown'])('handles recognition error %s without submitting',async code=>{ const speech=new Speech(); const callback=await listen(speech); speech.onerror?.({error:code}); await waitFor(()=>expect(screen.getByRole('button',{name:'Speak your message'})).toBeTruthy()); expect(callback).not.toHaveBeenCalled(); expect(api.sendMessage).not.toHaveBeenCalled(); });
  it('stop and cancel end listening without dispatching Agent',async()=>{ const speech=new Speech(); const callback=await listen(speech); fireEvent.click(screen.getByRole('button',{name:'Stop listening'})); expect(speech.stop).toHaveBeenCalledOnce(); expect(callback).not.toHaveBeenCalled(); });
  it('cancel aborts recognition',async()=>{ const speech=new Speech(); await listen(speech); fireEvent.click(screen.getByRole('button',{name:'Cancel'})); expect(speech.abort).toHaveBeenCalled(); });
@@ -82,9 +91,9 @@ describe('native browser speech wiring (SIMULATED events)',()=>{
  vi.advanceTimersByTime(30001); vi.useRealTimers(); await screen.findByText(/timed out/); expect(speech.abort).toHaveBeenCalled(); });
  it('transcript is editable, no auto-submit, and explicit Send uses Agent',async()=>{
   const speech=new Speech(); vi.stubGlobal('webkitSpeechRecognition',class { constructor(){return speech;} });
-  vi.mocked(api.sendMessage).mockResolvedValue({message:'Please review your report.',session_id:'demo',intent:'dose_self_report',session_state:'awaiting_confirmation',requires_confirmation:true,mode:'deterministic_degraded',tool_traces:[],pending_report:{challenge_id:'challenge',occurrence_id:'occurrence',regimen_id:'regimen',idempotency_key:'turn',expires_at:'2026-10-14T10:00:00Z',summary:{medication_display_name:'DEMO Metformin',dose_amount:1,dose_unit:'tablet',regimen_version_no:1,occurrence_due_at:null,local_due_time:'20:00',local_timezone:'Asia/Singapore',intake_status:'reported_taken',intake_status_label:'You reported taking this dose',safety_notice:'This does not prove ingestion.',ingestion_proven:false,visual_status:'not_checked'}}});
+  vi.mocked(api.sendMessage).mockResolvedValue({message:'Please review your report.',session_id:'demo',intent:'dose_self_report',session_state:'awaiting_confirmation',requires_confirmation:true,mode:'deterministic_degraded',tool_traces:[],pending_report:{challenge_id:'challenge',occurrence_id:'occurrence',regimen_id:'regimen',idempotency_key:'turn',expires_at:'2099-10-14T10:00:00Z',summary:{medication_display_name:'DEMO Metformin',dose_amount:1,dose_unit:'tablet',regimen_version_no:1,occurrence_due_at:null,local_due_time:'20:00',local_timezone:'Asia/Singapore',intake_status:'reported_taken',intake_status_label:'You reported taking this dose',safety_notice:'This does not prove ingestion.',ingestion_proven:false,visual_status:'not_checked'}}});
   render(<AssistantScreen sessionId="demo" onSession={vi.fn()}/>);
-  fireEvent.click(screen.getByRole('button',{name:'Speak your message'})); fireEvent.click(screen.getByRole('checkbox')); fireEvent.click(screen.getByRole('button',{name:'Speak your message'})); speech.result('I took it.');
+  fireEvent.click(screen.getByRole('button',{name:'Speak your message'})); speech.result('I took it.');
   await waitFor(()=>expect((screen.getByLabelText('Review your message before sending') as HTMLInputElement).value).toBe('I took it.'));
   expect(api.sendMessage).not.toHaveBeenCalled(); fireEvent.change(screen.getByLabelText('Review your message before sending'),{target:{value:'I already took my evening medicine.'}}); fireEvent.click(screen.getByRole('button',{name:'Send'}));
   await screen.findByText('Just to confirm'); expect(api.submitReport).not.toHaveBeenCalled();

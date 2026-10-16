@@ -1,0 +1,2143 @@
+/*
+ * App layer: the patient-facing surfaces.
+ *
+ * This file replaces the previous append-only stylesheet. Rules are grouped by
+ * area, defined once, and every value resolves to a token from tokens.css.
+ * No hard-coded colours, radii or spacing. No `!important` except for the
+ * `hidden` attribute contract the router relies on.
+ */
+
+/* ==== shell ================================================================ */
+
+/*
+ * The shell is one column on a phone and a rail plus a column on a desktop.
+ * Everything below is expressed in terms of `--rail-width`, `--bottom-nav-height`
+ * and `--dock-height`, so the two layouts share one set of spacing rules.
+ */
+
+.app {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Spacing is explicit: containers are flex columns with a token gap, so no rule
+   depends on a browser default margin and text size scaling moves everything. */
+.companion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  margin: 0 auto;
+  max-width: var(--content-max);
+  /* Reserve the real measured heights of the header, the bottom bar and the
+     composer, so nothing is ever hidden behind a fixed element. */
+  padding:
+    calc(var(--app-header-height, 4.5rem) + var(--s-5))
+    var(--s-4)
+    calc(var(--bottom-nav-height, 4.5rem) + var(--dock-height) + var(--s-5));
+}
+
+[data-app-content] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+/* No dock on this screen, so do not reserve room for one. */
+.companion:not(.has-dock) {
+  --dock-height: 0px;
+}
+
+.app-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+/* Wrapper elements the router and the settings screen use as grouping divs. */
+[data-app-content] div:not([class]),
+.card div:not([class]),
+.bottom-sheet div:not([class]) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+details > * + * {
+  margin-top: var(--s-2);
+}
+
+.app-header {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(100%, var(--content-max));
+  min-height: 4.5rem;
+  padding: var(--s-3) var(--s-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.companion-header {
+  margin: 0;
+}
+
+.brand {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-strong);
+  letter-spacing: var(--tracking-display);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The three header actions share one shape. The language control is wrapped in
+   a popover container, so it is matched explicitly rather than by direct child. */
+.app-header > button,
+.app-header .language-menu > button {
+  width: var(--tap);
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: var(--s-2);
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-sm);
+}
+
+.app-header > button:hover:not(:disabled),
+.app-header .language-menu > button:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.back-button {
+  font-size: 1.75rem;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.language-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.language-shortcut {
+  width: auto;
+  min-width: var(--tap);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-strong);
+  white-space: nowrap;
+  color: var(--brand);
+}
+
+.language-menu__list {
+  position: absolute;
+  top: calc(100% + var(--s-2));
+  right: 0;
+  z-index: 40;
+  min-width: 11rem;
+  margin: 0;
+  padding: var(--s-1);
+  list-style: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--e-1);
+}
+
+.language-menu__list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-3);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--fs-small);
+  text-align: left;
+}
+
+.language-menu__list button:hover {
+  background: var(--brand-50);
+}
+
+.language-menu__list button.is-current {
+  color: var(--brand);
+  font-weight: var(--fw-strong);
+}
+
+.header-account {
+  flex-direction: column;
+  gap: 2px;
+  color: var(--brand);
+}
+
+.header-account span {
+  font-size: var(--fs-caption);
+  line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.app-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.welcome {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-4) 0 0;
+}
+
+.welcome h1,
+.welcome .greeting {
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  font-weight: var(--fw-strong);
+  letter-spacing: var(--tracking-display);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.welcome p {
+  font-size: var(--fs-small);
+  color: var(--ink-2);
+  margin: 0;
+}
+
+.patient-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(100%, var(--content-max));
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s-1);
+  padding: var(--s-2) var(--s-2) max(var(--s-3), env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  z-index: 10;
+}
+
+.patient-nav button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-1);
+  min-width: 0;
+  min-height: var(--tap-lg);
+  padding: var(--s-1);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.patient-nav button:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+/* The current destination is marked by colour *and* weight *and* a filled
+   background, so it does not depend on hue alone. */
+.patient-nav button[aria-current='page'] {
+  background: var(--brand-50);
+  color: var(--brand);
+  font-weight: var(--fw-strong);
+}
+
+/* ==== panels =============================================================== */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--s-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.card__title {
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: var(--fw-strong);
+  margin: 0;
+}
+
+.card__hint {
+  font-size: var(--fs-small);
+  color: var(--ink-2);
+  margin: 0;
+}
+
+.entry-group {
+  padding: var(--s-1) var(--s-5);
+}
+
+.identity-card {
+  gap: var(--s-4);
+}
+
+.identity-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  width: 100%;
+  min-height: calc(var(--tap-lg) + var(--s-4));
+  padding: 0;
+  text-align: left;
+  border: 0;
+  background: transparent;
+}
+
+.identity-entry:hover:not(:disabled) {
+  background: transparent;
+}
+
+.identity-entry > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.identity-entry strong {
+  display: block;
+  font-size: var(--fs-h3);
+}
+
+.identity-entry small {
+  display: block;
+  font-size: var(--fs-small);
+  color: var(--ink-2);
+  margin-top: var(--s-1);
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  border-radius: 50%;
+  background: var(--brand-100);
+  color: var(--brand);
+}
+
+.guest-link {
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+}
+
+.guest-link p {
+  font-size: var(--fs-small);
+  color: var(--ink-2);
+  margin: 0 0 var(--s-3);
+}
+
+.guest-link .primary {
+  width: 100%;
+}
+
+/* ==== messages and honesty markers ======================================== */
+
+.banner {
+  border: 1px solid var(--info-line);
+  background: var(--info-bg);
+  color: var(--info);
+  border-radius: var(--r-md);
+  padding: var(--s-4);
+  font-size: var(--fs-small);
+}
+
+.banner strong {
+  display: block;
+  margin-bottom: var(--s-1);
+}
+
+.notice {
+  font-size: var(--fs-small);
+  color: var(--ink-2);
+  margin: 0;
+}
+
+.status {
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: var(--s-4);
+  font-size: var(--fs-small);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.status--ok {
+  background: var(--ok-bg);
+  border-color: var(--ok-line);
+  color: var(--ok);
+}
+
+.status--warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-line);
+  color: var(--warn);
+}
+
+.status--error {
+  background: var(--danger-bg);
+  border-color: var(--danger-line);
+  color: var(--danger);
+}
+
+.status__code {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.95;
+}
+
+.tag {
+  display: inline-block;
+  padding: var(--s-1) var(--s-3);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--warn-line);
+  background: var(--warn-bg);
+  color: var(--warn);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0;
+}
+
+.tag--muted {
+  border-color: var(--line);
+  background: var(--surface-inset);
+  color: var(--ink-2);
+}
+
+/* ==== buttons ============================================================= */
+
+.actions,
+.daily-actions,
+.quick-actions,
+.account-actions,
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+}
+
+.actions > *,
+.daily-actions > *,
+.account-actions > * {
+  flex: 1 1 auto;
+}
+
+.quick-actions > * {
+  flex: 1 1 8rem;
+}
+
+/* --- standalone sign-in ---------------------------------------------------
+ * Rendered without the app shell: no tabs, no rail, no composer. The guest
+ * path is a first-class action, not a fallback hidden behind a link. */
+.signin-screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  max-width: 30rem;
+  margin: 0 auto;
+  padding: var(--s-8) var(--s-4) var(--s-12);
+}
+
+.signin-lead {
+  color: var(--ink-2);
+  font-size: var(--fs-small);
+}
+
+.signin-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.signin-card h3 {
+  margin: 0;
+}
+
+.signin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+}
+
+.signin-actions > * {
+  flex: 1 1 10rem;
+  min-height: var(--tap-lg);
+}
+
+.signin-privacy {
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+/* No bottom bar and no composer on this surface, so the reserved space that
+   `.companion` normally leaves for them must collapse. */
+.companion.signin-shell {
+  --bottom-nav-height: 0px;
+  --dock-height: 0px;
+  padding-top: var(--s-6);
+  padding-bottom: var(--s-8);
+}
+
+.dominant {
+  width: 100%;
+  min-height: var(--tap-lg);
+}
+
+.choice {
+  flex: 1 1 6rem;
+  min-height: var(--tap);
+}
+
+button.primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--on-brand);
+  font-weight: var(--fw-strong);
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--brand-strong);
+  border-color: var(--brand-strong);
+}
+
+button.primary:active:not(:disabled) {
+  background: var(--brand-strong);
+  border-color: var(--brand-strong);
+}
+
+/* A destructive action never gets primary weight: it is quieter than the safe
+   action next to it, and its colour is the only thing that marks it. */
+button.danger {
+  background: var(--danger-bg);
+  border-color: var(--danger-line);
+  color: var(--danger);
+  font-weight: var(--fw-strong);
+}
+
+button.danger:hover:not(:disabled) {
+  border-color: var(--danger);
+}
+
+.assistant-entry {
+  align-self: flex-start;
+  min-height: var(--tap);
+  margin: 0;
+  padding: var(--s-2) var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--brand);
+  font-weight: var(--fw-strong);
+}
+
+/* One full-width target per period on a phone: three "This …" labels in a
+   390px card wrap to two lines each and stop reading as choices. */
+.period-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--s-3);
+}
+
+.period-actions button {
+  min-height: var(--tap-lg);
+  padding: var(--s-2) var(--s-4);
+  font-size: var(--fs-small);
+}
+
+/* ==== forms =============================================================== */
+
+.field {
+  display: flex;
+  flex-direction: column;
+}
+
+.field + .field {
+  margin-top: var(--s-4);
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--s-3);
+}
+
+.time-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin: var(--s-2) 0;
+}
+
+.time-row input[type='time'] {
+  flex: 1 1 auto;
+}
+
+.time-row button {
+  flex: 0 0 auto;
+}
+
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-regular);
+  line-height: 1.6;
+}
+
+.consent input {
+  margin-top: 2px;
+}
+
+.text-size-control label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.text-size-control output {
+  font-size: var(--fs-h2);
+  font-weight: var(--fw-strong);
+  color: var(--brand);
+  font-variant-numeric: tabular-nums;
+}
+
+.text-size-range {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+/* ==== today and dose ====================================================== */
+
+.today-overview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.today-overview-heading h2 {
+  font-size: var(--fs-h2);
+  margin: 0;
+}
+
+.today-overview-heading > span {
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.medicine-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: var(--s-3);
+  margin: var(--s-3) 0;
+}
+
+.medicine-overview.medicine-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+}
+
+.medicine-chip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  min-height: 64px;
+  min-width: 0;
+  padding: var(--s-2);
+  text-align: left;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+
+.medicine-chip strong {
+  font-size: var(--fs-small);
+  line-height: 1.35;
+}
+
+.medicine-chip span {
+  font-size: var(--fs-caption);
+  line-height: 1.4;
+  color: var(--ink-2);
+}
+
+.medicine-chip[aria-pressed='true'] {
+  border-color: var(--brand);
+  background: var(--brand-50);
+}
+
+.medicine-list-row.medicine-chip {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--s-4);
+  width: 100%;
+  min-height: 80px;
+  padding: var(--s-4) var(--s-1);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.medicine-list-row.medicine-chip:last-child {
+  border-bottom: 0;
+}
+
+.medicine-list-row.medicine-chip[aria-pressed='true'] {
+  background: var(--brand-50);
+}
+
+.medicine-time {
+  flex: 0 0 4.5rem;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-strong);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.medicine-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.medicine-label strong {
+  display: block;
+  font-size: var(--fs-body);
+  overflow-wrap: anywhere;
+}
+
+.medicine-label small {
+  display: block;
+  margin-top: var(--s-1);
+  font-size: var(--fs-small);
+  color: var(--ink-2);
+}
+
+.medicine-current .card {
+  border: 0;
+  border-radius: 0;
+  padding: var(--s-4) 0 0;
+  background: transparent;
+}
+
+/* Medication record: review state, and the plain-language data lines. */
+.record-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.record-line {
+  font-size: var(--fs-body);
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.medicine-row-end {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+@media (max-width: 600px) {
+  .ui-row:has(.medicine-row-end) {
+    flex-wrap: wrap;
+  }
+
+  .ui-row:has(.medicine-row-end) > .ui-row__text,
+  .ui-row:has(.medicine-row-end) > .ui-row__end {
+    flex: 1 1 100%;
+    max-width: 100%;
+  }
+
+  .medicine-row-end {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+/* ==== the dose card ====================================================== */
+
+.dose-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+
+.dose-name {
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: var(--fw-strong);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.dose-strength {
+  font-size: var(--fs-small);
+  color: var(--ink-2);
+  margin: 0;
+}
+
+/* What you were told to take, on one wrapped line. There is no label above it
+   and no inset panel around it any more: both cost a whole row on the screen a
+   patient opens most often, and neither added information. */
+.dose-plan {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--s-2);
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--ink-2);
+}
+
+.dose-plan strong {
+  color: var(--ink);
+  font-weight: var(--fw-strong);
+}
+
+.dose-plan__sep {
+  color: var(--ink-3);
+}
+
+/* A small label that names the block below it. Not a heading: the card
+   already has one, and the page must keep a single h2. */
+.dose-report__label {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-strong);
+  color: var(--ink-3);
+  letter-spacing: var(--tracking-display);
+  margin: 0;
+}
+
+.compact-dose-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  color: var(--brand);
+  margin: 0;
+}
+
+.compact-dose-status small {
+  font-size: var(--fs-small);
+  font-weight: var(--fw-regular);
+  color: var(--ink-2);
+}
+
+/* The report choices. Reporting a dose is the reason this screen exists, so it
+   is visible, full width and reachable with one thumb. */
+.dose-report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+}
+
+.dose-report__choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
+.dose-report__choices .choice {
+  min-height: var(--tap-lg);
+  font-weight: var(--fw-medium);
+}
+
+.dose-report__choices .choice.primary {
+  font-weight: var(--fw-strong);
+}
+
+.dose-details {
+  font-size: var(--fs-small);
+  color: var(--ink-2);
+  margin-top: var(--s-3);
+}
+
+.dose-details p {
+  margin: var(--s-1) 0;
+}
+
+/* The secondary action sits on the card itself. It used to be the summary of a
+   collapsed disclosure, which cost an extra row *and* hid the action. */
+.dose-secondary-action {
+  align-self: flex-start;
+  min-height: var(--tap);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--brand);
+  font: inherit;
+  font-weight: var(--fw-medium);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+/* ==== follow-up summary on Today ========================================== */
+
+.task-summary {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.task-summary li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-sm);
+  background: var(--surface-inset);
+}
+
+.task-summary__title {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-strong);
+}
+
+.task-summary__meta {
+  font-size: var(--fs-small);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.dose-evidence {
+  margin: var(--s-4) 0;
+  padding: var(--s-4);
+  background: var(--surface-inset);
+  border-radius: var(--r-sm);
+}
+
+.dose-evidence > summary {
+  min-height: var(--tap);
+  font-weight: var(--fw-strong);
+}
+
+/* Step 2 of enrollment: the consolidated summary the patient checks. */
+.review-summary {
+  display: flex;
+  flex-direction: column;
+  margin: var(--s-2) 0 var(--s-4);
+  border-top: 1px solid var(--line);
+}
+
+.review-summary > div {
+  display: grid;
+  grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
+  gap: var(--s-3);
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.review-summary dt {
+  color: var(--ink-2);
+  font-size: var(--fs-small);
+}
+
+.review-summary dd {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  overflow-wrap: anywhere;
+}
+
+.review-edit {
+  margin: var(--s-4) 0;
+  padding: var(--s-4);
+  background: var(--surface-inset);
+  border-radius: var(--r-sm);
+}
+
+.review-edit > summary {
+  min-height: var(--tap);
+  font-weight: var(--fw-strong);
+}
+
+/* Saved registrations are visible on arrival, not behind a disclosure: a
+   collapsed "continue" list is the same as not having one. */
+.saved-registrations {
+  margin: var(--s-4) 0;
+}
+
+.saved-registrations__title {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-strong);
+  margin-bottom: var(--s-2);
+}
+
+.saved-registrations .ui-row {
+  border-bottom: 1px solid var(--line);
+}
+
+.reminder-inline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin-top: var(--s-3);
+}
+
+.report-options {
+  font-size: var(--fs-small);
+  color: var(--ink-2);
+}
+
+/* ==== medicine records ==================================================== */
+
+.med-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.med {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-inset);
+}
+
+.med__name {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-strong);
+}
+
+.med__meta {
+  font-size: var(--fs-small);
+  color: var(--ink-2);
+}
+
+.gallery-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-3);
+  width: 100%;
+  text-align: left;
+}
+
+.gallery-thumbnail {
+  width: 112px;
+  height: 112px;
+  object-fit: contain;
+  border-radius: var(--r-sm);
+  background: var(--surface-inset);
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--s-4);
+}
+
+.gallery-grid figure {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.gallery-thumbnails {
+  display: flex;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+  margin-block: var(--s-4);
+}
+
+.evidence-review {
+  display: grid;
+  gap: var(--s-4);
+  margin-top: var(--s-4);
+}
+
+.inventory-panel {
+  margin-top: var(--s-4);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line);
+}
+
+.inventory-panel dd {
+  margin: var(--s-1) 0 var(--s-3);
+  font-weight: var(--fw-strong);
+  overflow-wrap: anywhere;
+}
+
+/* ==== history, notes, summaries =========================================== */
+
+.history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.history li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  padding: var(--s-4) 0;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.history li:last-child {
+  border-bottom: 0;
+}
+
+.health-note {
+  padding: var(--s-4) 0;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.health-note time {
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+.health-trend {
+  width: 100%;
+  max-height: 160px;
+  color: var(--brand);
+}
+
+.summary-counts {
+  display: flex;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+  padding: var(--s-4);
+  border-radius: var(--r-sm);
+  background: var(--brand-50);
+}
+
+.summary-counts p {
+  flex: 1;
+  min-width: 5rem;
+  margin: 0;
+  font-size: var(--fs-small);
+}
+
+.summary-counts strong {
+  display: block;
+  margin-top: var(--s-1);
+  font-size: var(--fs-h2);
+  color: var(--brand);
+  font-variant-numeric: tabular-nums;
+}
+
+.print-report {
+  color: var(--ink);
+}
+
+/* ==== assistant =========================================================== */
+
+.assistant-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  font-size: var(--fs-body);
+}
+
+.assistant-view > h1 {
+  font-size: var(--fs-h1);
+}
+
+.companion-composer {
+  position: relative;
+  margin: 0;
+}
+
+/* The daily AI allowance, inside the composer pill. In the dock the pill is the
+   only surface the patient sees, and the reserved strip is exactly as tall as the
+   pill, so a caption above it would not fit. The count therefore travels with the
+   field it belongs to; the full sentence is shown in the open conversation. */
+.composer-allowance {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+  padding-inline: var(--s-2);
+  font-size: var(--fs-caption);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  white-space: nowrap;
+  cursor: help;
+}
+
+.composer-row {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--bottom-nav-height, 4.5rem) + var(--s-3));
+  width: min(calc(100% - var(--s-6)), calc(var(--content-max) - var(--s-4)));
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: var(--tap-lg);
+  padding: var(--s-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: var(--e-1);
+}
+
+.composer-row input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-1);
+  border: 0;
+  background: transparent;
+  font-size: var(--fs-small);
+}
+
+.composer-row input:focus-visible {
+  outline-offset: -2px;
+}
+
+.composer-send {
+  flex: 0 0 auto;
+  min-width: 4.5rem;
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-small);
+}
+
+.photo-button,
+.mic-button {
+  display: grid;
+  place-items: center;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: var(--s-2);
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-2);
+}
+
+.photo-button:hover:not(:disabled),
+.mic-button:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.mic-button {
+  background: var(--brand-100);
+  color: var(--brand-strong);
+}
+
+.mic-button.is-listening {
+  background: var(--brand);
+  color: var(--on-brand);
+  animation: breathe 1.2s infinite alternate;
+}
+
+@keyframes breathe {
+  to {
+    box-shadow: 0 0 0 5px var(--brand-100);
+  }
+}
+
+.voice-inline {
+  position: relative;
+  width: var(--tap);
+  flex-shrink: 0;
+}
+
+.speech-status,
+.speech-consent {
+  position: absolute;
+  bottom: calc(var(--tap-lg) + var(--s-1));
+  right: 0;
+  width: 19rem;
+  max-width: calc(100vw - 9rem);
+  margin: 0;
+  padding: var(--s-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  font-size: var(--fs-small);
+  z-index: 1;
+}
+
+.speech-disclosure {
+  font-size: var(--fs-small);
+  color: var(--ink-2);
+  margin: var(--s-2) 0;
+}
+
+.ai-allowance {
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+  margin: var(--s-1) 0;
+}
+
+.transcript {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.turn {
+  padding: var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-inset);
+  font-size: var(--fs-small);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.turn__mode {
+  display: block;
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+.turn__text {
+  white-space: pre-wrap;
+}
+
+.user-message {
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--brand-100);
+  color: var(--ink);
+}
+
+.recent-chat {
+  margin: var(--s-3) 0;
+}
+
+.recent-chat article {
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.history-message {
+  padding: var(--s-4) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.history-message time {
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+/* --- conversation surface ------------------------------------------------- */
+
+.conversation-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgb(10 35 35 / 45%);
+}
+
+.conversation-panel {
+  position: relative;
+  bottom: var(--keyboard-offset, 0);
+  width: min(100%, 760px);
+  height: min(88dvh, var(--conversation-height, 100dvh));
+  max-height: calc(var(--conversation-height, 100dvh) - var(--s-4));
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background: var(--surface);
+  color: var(--ink);
+  padding-bottom: env(safe-area-inset-bottom);
+  scrollbar-color: var(--line) var(--surface);
+  display: flex;
+  flex-direction: column;
+}
+
+.conversation-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.conversation-toolbar strong {
+  flex: 1;
+  font-size: var(--fs-body);
+}
+
+.conversation-toolbar button {
+  min-height: var(--tap);
+  padding: var(--s-2);
+  font-size: var(--fs-small);
+}
+
+.conversation-panel .assistant-view {
+  padding: var(--s-4);
+  font-size: var(--fs-body);
+}
+
+.conversation-panel .assistant-view > h1 {
+  display: none;
+}
+
+.conversation-panel .composer-row {
+  position: sticky;
+  bottom: 0;
+  top: auto;
+  left: auto;
+  transform: none;
+  width: 100%;
+  margin-top: auto;
+  box-shadow: none;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  z-index: 1;
+}
+
+.voice-privacy {
+  margin: var(--s-2) 0 0;
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+}
+
+.conversation-panel .transcript {
+  padding: 0;
+}
+
+.conversation-panel .turn {
+  padding: var(--s-4) 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.conversation-history {
+  margin-top: var(--s-6);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+}
+
+.conversation-history > summary {
+  min-height: var(--tap);
+  font-weight: var(--fw-strong);
+}
+
+.history-state {
+  font-size: var(--fs-small);
+  color: var(--ink-2);
+  margin: var(--s-2) 0;
+}
+
+.history-retry {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border: 1px solid var(--danger-line);
+  border-radius: var(--r-sm);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: var(--fs-small);
+}
+
+.history-retry p {
+  margin: 0;
+}
+
+/* ==== sheets ============================================================== */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-4);
+  background: rgb(10 35 35 / 55%);
+}
+
+.sheet-backdrop {
+  align-items: flex-end;
+  padding: 0;
+}
+
+.bottom-sheet,
+.reminder-dialog {
+  width: min(100%, var(--content-max));
+  max-height: calc(100dvh - var(--s-8));
+  overflow: auto;
+  padding: var(--s-3) var(--s-6) max(var(--s-6), env(safe-area-inset-bottom));
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--e-1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.reminder-dialog {
+  padding: var(--s-6);
+  border-radius: var(--r-lg);
+}
+
+.bottom-sheet h2 {
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  margin: var(--s-4) 0 var(--s-2);
+}
+
+.bottom-sheet .actions button {
+  flex: 1;
+  min-height: var(--tap-lg);
+}
+
+.sheet-handle {
+  width: 42px;
+  height: 4px;
+  margin: 0 auto;
+  border-radius: var(--r-pill);
+  background: var(--line-strong);
+}
+
+/* ==== dose-report confirmation sheet ======================================
+   The patient must be able to read, at a glance, what is about to be recorded
+   and which of the three outcomes they chose. */
+
+.confirm-what {
+  font-size: var(--fs-h3);
+  line-height: var(--lh-h3);
+  font-weight: var(--fw-strong);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.confirm-status {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  color: var(--brand);
+  margin: 0;
+}
+
+/* ==== first-visit guide =================================================== */
+
+.onboarding-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+}
+
+.onboarding-tour .modal-backdrop {
+  z-index: auto;
+  background: rgb(10 35 35 / 55%);
+}
+
+.onboarding-tour .bottom-sheet {
+  position: fixed;
+  top: var(--guide-top);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(calc(100% - var(--s-8)), 398px);
+  max-height: calc(100dvh - var(--s-8));
+  margin: 0;
+  padding: var(--s-5);
+  border-radius: var(--r-lg);
+  z-index: 2;
+  box-shadow: var(--e-1);
+}
+
+.onboarding-tour .sheet-handle {
+  display: none;
+}
+
+.onboarding-tour .bottom-sheet h2 {
+  font-size: var(--fs-body);
+  margin: 0 0 var(--s-2);
+}
+
+.onboarding-tour h3 {
+  font-size: var(--fs-h3);
+  margin: var(--s-2) 0;
+}
+
+.onboarding-tour p {
+  font-size: var(--fs-small);
+  line-height: 1.65;
+  margin: var(--s-3) 0;
+}
+
+.guide-progress {
+  font-size: var(--fs-caption);
+  color: var(--ink-2);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.guide-highlight {
+  position: fixed;
+  border: 3px solid var(--surface);
+  border-radius: var(--r-md);
+  box-shadow: 0 0 0 3px var(--brand), 0 0 18px rgb(255 255 255 / 55%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.guide-actions {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: var(--s-4);
+}
+
+.guide-actions button {
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--fs-small);
+}
+
+.guide-actions .primary {
+  margin-left: auto;
+}
+
+.guide-preferences {
+  padding: var(--s-3);
+  border-radius: var(--r-sm);
+  background: var(--brand-50);
+  color: var(--brand-strong);
+}
+
+/* ==== settings and account =============================================== */
+
+.caregiver-list {
+  list-style: none;
+  margin: var(--s-3) 0 0;
+  padding: 0;
+}
+
+.caregiver-list li {
+  padding: var(--s-4) 0;
+  border-top: 1px solid var(--line);
+}
+
+.caregiver-list h3 {
+  margin: 0;
+}
+
+.caregiver-list p {
+  margin: var(--s-2) 0;
+  overflow-wrap: anywhere;
+}
+
+.about-intro {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-strong);
+  color: var(--brand);
+}
+
+.push-status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s-2) var(--s-4);
+  font-size: var(--fs-small);
+}
+
+.push-status dt {
+  color: var(--ink-2);
+}
+
+.push-status dd {
+  margin: 0;
+  font-weight: var(--fw-medium);
+  overflow-wrap: anywhere;
+}
+
+.push-devices {
+  padding-inline-start: var(--s-5);
+}
+
+.push-devices li {
+  margin-block: var(--s-3);
+  overflow-wrap: anywhere;
+}
+
+.push-devices button {
+  display: block;
+  margin-top: var(--s-2);
+}
+
+/* ==== responsive ========================================================== */
+
+@media (min-width: 640px) {
+  .grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 768px) {
+  :root {
+    --content-max: 52rem;
+  }
+
+  /* A wider screen can carry the larger greeting without crowding the card. */
+  .welcome h1,
+  .welcome .greeting {
+    font-size: var(--fs-display);
+    line-height: var(--lh-display);
+  }
+
+  .companion {
+    padding-left: var(--s-8);
+    padding-right: var(--s-8);
+  }
+
+  .composer-row {
+    max-width: 38rem;
+  }
+
+  .bottom-sheet {
+    width: 33rem;
+    margin-bottom: var(--s-8);
+    border-radius: var(--r-lg);
+  }
+
+  .sheet-backdrop {
+    align-items: center;
+  }
+
+  .conversation-backdrop {
+    align-items: center;
+    padding: var(--s-6);
+  }
+
+  .conversation-panel {
+    height: 85dvh;
+    border-radius: var(--r-lg);
+  }
+
+  .conversation-panel .assistant-view {
+    padding: var(--s-6);
+  }
+}
+
+/*
+ * Two columns once there is room for two readable measures. Screens built from
+ * `Screen`/`RowGroup` (Medicines, Records, Me, Settings) fill the width with
+ * paired groups instead of stretching one column or centring a phone layout.
+ * The screen head always spans the full width so the title and the primary
+ * action keep their position.
+ */
+/* Desktop and wide-tablet layout.
+ *
+ * This used to be `repeat(auto-fit, minmax(22rem, 1fr))`, which packs children
+ * into as many columns as happen to fit **in DOM order**. Two things went wrong:
+ *
+ *   1. `.ui-actions` is a direct child of `.ui-screen`, so the screen's primary
+ *      action was packed into column 1 while the first content group went into
+ *      column 2 — the "Add medication" button and the list it produces ended up
+ *      side by side, in different columns, at different heights.
+ *   2. Unrelated cards became neighbours purely because of their order in the
+ *      JSX, so the columns were ragged and the grouping looked accidental.
+ *
+ * The grid is now explicit. Every item spans the full width — a single reading
+ * column, which is the familiar settings pattern and the easiest to scan for
+ * older adults. `ui-span-4/6/8` remain available as an opt-in for a screen that
+ * genuinely has two peers, but no screen uses one today. The heading and the
+ * primary action always span, so the reading order is
+ * heading → action → content, never action → content side by side.
+ */
+@media (min-width: 900px) {
+  .ui-screen {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    align-items: start;
+    gap: var(--s-5);
+  }
+
+  /* Every direct child takes the whole row unless it opts into a narrower
+     span. Only then do two peers sit side by side — a pair appears because the
+     screen asked for it, never because the grid happened to have room. */
+  .ui-screen > * {
+    grid-column: 1 / -1;
+  }
+
+  .ui-screen > .ui-span-4 {
+    grid-column: span 4;
+  }
+
+  .ui-screen > .ui-span-6 {
+    grid-column: span 6;
+  }
+
+  .ui-screen > .ui-span-8 {
+    grid-column: span 8;
+  }
+
+  .ui-screen__lead {
+    max-width: 70ch;
+  }
+
+  /* A full-width group uses the width it was given: its entries sit in a row
+     instead of becoming one long narrow column down the page. Only groups that
+     opt in — the entries have to be interchangeable destinations for this to
+     read correctly, not a list of medicines. */
+  .entry-group--spread > .ui-rows {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+    align-items: start;
+  }
+}
+
+/*
+ * Desktop rail — and landscape phones, where vertical space is the scarce axis
+ * and a bottom bar costs the most. Both use the same single navigation element
+ * re-flowed by tokens; no screen changes and no route changes.
+ */
+@media (min-width: 1024px), (min-width: 700px) and (orientation: landscape) and (max-height: 520px) {
+  :root {
+    --rail-width: 15rem;
+    --content-max: 68rem;
+  }
+
+  .companion {
+    max-width: none;
+    padding-left: calc(var(--rail-width) + var(--s-8));
+    padding-right: var(--s-8);
+    /* No bottom bar here, so the dock is the only thing to clear. */
+    padding-bottom: calc(var(--dock-height) + var(--s-8));
+  }
+
+  [data-app-content] {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .app-header {
+    left: var(--rail-width);
+    right: 0;
+    transform: none;
+    width: auto;
+    /* Keep the brand and the shortcuts on the content column, not the viewport. */
+    padding-inline: max(var(--s-8), calc((100% - var(--content-max)) / 2));
+  }
+
+  .patient-nav {
+    left: 0;
+    right: auto;
+    top: 0;
+    bottom: 0;
+    transform: none;
+    width: var(--rail-width);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: var(--s-1);
+    /* Align the first destination with the start of the content column. */
+    padding: calc(var(--app-header-height, 4.5rem) + var(--s-4)) var(--s-3) var(--s-6);
+    border-top: 0;
+    border-right: 1px solid var(--line);
+  }
+
+  .patient-nav button {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: var(--s-3);
+    min-height: var(--tap);
+    padding: var(--s-2) var(--s-3);
+    text-align: left;
+  }
+
+  /* The composer is fixed, so it has to be aligned with the content column by
+     hand: same insets as `.companion`, then centred inside them. */
+  .composer-row {
+    left: calc(var(--rail-width) + var(--s-8));
+    right: var(--s-8);
+    transform: none;
+    width: auto;
+    max-width: 34rem;
+    margin-inline: auto;
+    bottom: var(--s-5);
+  }
+}
+
+/* A landscape phone has the width for a rail but not for a wide one. */
+@media (min-width: 700px) and (orientation: landscape) and (max-height: 520px) {
+  :root {
+    --rail-width: 11rem;
+    --content-max: 48rem;
+  }
+
+  .patient-nav {
+    padding-top: var(--s-4);
+  }
+}
+
+@media (max-width: 460px) {
+  .app-header .notification-shortcut {
+    display: none;
+  }
+
+  .medicine-time {
+    flex-basis: 4rem;
+  }
+
+  .conversation-toolbar strong {
+    flex-basis: 100%;
+  }
+
+  .conversation-toolbar button {
+    flex: 1;
+  }
+}
+
+@media (max-width: 340px) {
+  .companion {
+    padding-left: var(--s-3);
+    padding-right: var(--s-3);
+  }
+
+  .brand {
+    font-size: var(--fs-caption);
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .patient-nav {
+    padding-bottom: var(--s-1);
+  }
+
+  .patient-nav button {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mic-button.is-listening {
+    animation: none;
+  }
+
+  .ui-skeleton {
+    animation: none;
+  }
+}
+
+/* A disabled control keeps a readable label.
+   Fading the whole element with `opacity` also fades its text, so the patient
+   cannot read *why* the action is unavailable — which is the one thing a
+   disabled state has to communicate. Colour is changed instead. */
+button:disabled,
+button.primary:disabled,
+button.danger:disabled {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--ink-3);
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+/* The router relies on the `hidden` attribute to switch screens. */
+[hidden] {
+  display: none !important;
+}
+
+/* ==== medication understanding (source label evidence) ====================
+ * These two classes had no styling at all after the stylesheet split, so the
+ * label-preview surface was rendering as unformatted text. */
+
+.printed-label-evidence h4 {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-strong);
+  margin: 0 0 var(--s-2);
+}
+
+.source-instructions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--s-2) var(--s-4);
+  margin: var(--s-3) 0;
+  padding: var(--s-3);
+  border-radius: var(--r-md);
+  background: var(--surface-inset);
+}
+
+.source-instructions dt {
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-strong);
+  color: var(--ink-3);
+}
+
+.source-instructions dd {
+  margin: 0 0 var(--s-2);
+  font-size: var(--fs-body);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* What the label says the medicine is used for. Visually its own block, because
+   it is general information about the medicine — not this patient's plan. */
+.label-indication {
+  margin: var(--s-4) 0;
+  padding: var(--s-4);
+  border-left: 3px solid var(--brand);
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+  background: var(--surface-inset);
+}
+
+.label-indication__title {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-strong);
+  color: var(--ink);
+  margin: 0 0 var(--s-2);
+}
+
+.label-indication__value {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--ink);
+  margin: 0 0 var(--s-2);
+}
+
+.label-indication__source {
+  font-size: var(--fs-small);
+  color: var(--ink-3);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ==== medication difficulties: derived observations =======================
+ * Three tiers that must stay visually distinguishable: what the records show,
+ * what the app suggests, and what the patient confirmed. */
+
+.difficulties-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  margin-bottom: var(--s-5);
+}
+
+.observation-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.observation-group__title {
+  font-size: var(--fs-h3);
+  font-weight: var(--fw-strong);
+  color: var(--ink);
+  margin: 0;
+}
+
+.observation-group__note {
+  font-size: var(--fs-small);
+  color: var(--ink-2);
+  margin: 0;
+}
+
+.observation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.observation-list li {
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--surface-inset);
+}
+
+.observation-list__text {
+  margin: 0 0 var(--s-1);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--ink);
+}
+
+.observation-list__source {
+  margin: 0;
+  font-size: var(--fs-small);
+  color: var(--ink-3);
+}

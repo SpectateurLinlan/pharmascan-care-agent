@@ -1,0 +1,257 @@
+/*
+ * Base layer: reset, element defaults and accessibility primitives.
+ * Every value comes from tokens.css.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: var(--fw-regular);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+ul,
+ol,
+figure,
+fieldset {
+  margin: 0;
+}
+
+h1 {
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  font-weight: var(--fw-strong);
+  letter-spacing: var(--tracking-display);
+}
+
+h2 {
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: var(--fw-strong);
+}
+
+/* h3 shares the body size on purpose: it is separated by weight and colour,
+   which is what keeps the scale above it meaningful. */
+h3 {
+  font-size: var(--fs-h3);
+  line-height: var(--lh-h3);
+  font-weight: var(--fw-strong);
+}
+
+/* Chinese does not take negative tracking, and needs a taller line box. */
+:lang(zh),
+:lang(zh-Hans) {
+  letter-spacing: 0;
+}
+
+:lang(zh) h1,
+:lang(zh) h2,
+:lang(zh) h3,
+:lang(zh) p,
+:lang(zh) li,
+:lang(zh) button,
+:lang(zh) input,
+:lang(zh) label,
+:lang(zh-Hans) h1,
+:lang(zh-Hans) h2,
+:lang(zh-Hans) h3,
+:lang(zh-Hans) p,
+:lang(zh-Hans) li,
+:lang(zh-Hans) button,
+:lang(zh-Hans) input,
+:lang(zh-Hans) label {
+  line-height: 1.7;
+}
+
+a {
+  color: var(--brand);
+}
+
+/* --- controls -------------------------------------------------------------
+   Minimum 48px targets everywhere, because the audience includes tremor and
+   low vision. Component rules below may only make these larger, never smaller. */
+
+button {
+  font: inherit;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  color: var(--ink);
+  cursor: pointer;
+  min-height: var(--tap);
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+button:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+button:active:not(:disabled) {
+  background: var(--surface-inset);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  font-size: var(--fs-body);
+  color: var(--ink);
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: var(--tap);
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
+textarea {
+  min-height: calc(var(--tap) * 2);
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  flex: 0 0 24px;
+  padding: 0;
+  accent-color: var(--brand);
+}
+
+input[type='range'] {
+  min-height: var(--tap);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--brand);
+}
+
+label {
+  display: block;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  margin-bottom: var(--s-2);
+}
+
+fieldset {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--s-3) var(--s-4);
+}
+
+legend {
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  padding: 0 var(--s-2);
+}
+
+summary {
+  cursor: pointer;
+  font-size: var(--fs-small);
+  font-weight: var(--fw-medium);
+  color: var(--ink-2);
+}
+
+::selection {
+  background: var(--brand);
+  color: var(--on-brand);
+}
+
+input,
+textarea {
+  caret-color: var(--brand);
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* --- accessibility helpers ------------------------------------------------ */
+
+.sr-only,
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: var(--s-4);
+  top: -100px;
+  z-index: 200;
+  padding: var(--s-3) var(--s-4);
+  background: var(--brand);
+  color: var(--on-brand);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-small);
+  text-decoration: none;
+}
+
+.skip-link:focus {
+  top: var(--s-4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  .app-header,
+  .patient-nav,
+  .no-print,
+  .welcome,
+  .companion-composer,
+  .onboarding-tour,
+  .skip-link {
+    display: none !important;
+  }
+}

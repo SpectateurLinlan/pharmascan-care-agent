@@ -1,0 +1,181 @@
+/*
+ * PharmaScan Care — design tokens.
+ *
+ * Single source of truth for colour, type, space, shape and targets.
+ * Nothing outside this file may hard-code a colour, radius or spacing value.
+ * Direction and rationale: docs/UI_REDESIGN_DIRECTION.md ("Calm Clinical").
+ *
+ * Contrast values are verified against the surface each token sits on; see the
+ * table in the direction document. `--ink-3` is the lowest text tier allowed
+ * (4.6:1 on canvas) and exists so that no future rule can quietly go lighter.
+ */
+
+:root {
+  /* The patient's text-size preference multiplies the root, and every spacing
+     token below is expressed in rem, so spacing scales with the type. */
+  font-size: calc(16px * var(--font-scale, 1));
+
+  /* --- type ------------------------------------------------------------- */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI',
+    Roboto, 'Helvetica Neue', 'Noto Sans', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Menlo, Consolas, monospace;
+
+  /* Type scale.
+     Body is 18px and `--fs-small` (16px) is the floor for anything a patient
+     must read, so the four steps above body have to fit in 18→36px. The
+     measured build this replaces had body 16 / h2 18 / h1 24 — a 1.22:1 step,
+     which reads as one flat size. Every adjacent step here is >= 1.22:1 and
+     the two that carry the page structure (display→h1, h1→h2) are >= 1.27:1.
+     h3 is deliberately the body size and is separated by weight, not scale. */
+  --fs-display: 2.25rem; /* 36 */
+  --lh-display: 1.15;
+  --fs-h1: 1.75rem; /* 28 */
+  --lh-h1: 1.2;
+  --fs-h2: 1.375rem; /* 22 */
+  --lh-h2: 1.25;
+  --fs-h3: 1.125rem; /* 18, same as body: weight carries it */
+  --lh-h3: 1.4;
+  --fs-body: 1.125rem; /* 18 */
+  --lh-body: 1.55;
+  --fs-small: 1rem; /* 16 */
+  --lh-small: 1.5;
+  --fs-caption: 0.9375rem; /* 15 */
+  --lh-caption: 1.5;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-strong: 600;
+  --tracking-display: -0.01em;
+
+  /* --- space (rem: scales with the patient's text size) ------------------ */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.25rem;
+  --s-6: 1.5rem;
+  --s-8: 2rem;
+  --s-12: 3rem;
+
+  /* --- shape and elevation ---------------------------------------------- */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-pill: 999px;
+  --e-1: 0 1px 2px rgb(22 41 42 / 6%), 0 8px 24px rgb(22 41 42 / 6%);
+
+  /* --- targets ----------------------------------------------------------- */
+  --tap: 48px;
+  --tap-lg: 56px;
+
+  /* --- layout ------------------------------------------------------------
+   * One source of truth for the shell. The bottom bar and the desktop rail are
+   * the same navigation, so a screen never has to know which one is showing.
+   * `--rail-width` is 0 until the rail exists, which keeps every calculation
+   * below valid on a phone.
+   */
+  --rail-width: 0px;
+  --content-max: 430px;
+  --dock-height: 4.5rem;
+
+  /* --- light palette ----------------------------------------------------- */
+  --canvas: #f7f4ef;
+  --surface: #ffffff;
+  --surface-2: #f1ece4;
+  --surface-inset: #efeae2;
+  --line: #ded7cc;
+  --line-strong: #c6bcae;
+
+  --ink: #16292a;
+  --ink-2: #4e6263;
+  /* 4.8:1 on --surface-inset, the darkest surface this tone is used on, so a
+     small label stays legible rather than merely decorative. */
+  --ink-3: #55696b;
+
+  --brand: #0b5f55;
+  --brand-strong: #08463f;
+  --brand-100: #dcefe9;
+  --brand-50: #eef7f4;
+  --on-brand: #ffffff;
+  --focus: #0b5f55;
+
+  --ok: #1b6b3a;
+  --ok-bg: #e7f2e9;
+  --ok-line: #9cc7a9;
+  --warn: #8a5308;
+  --warn-bg: #fbf0da;
+  --warn-line: #e0bc7c;
+  --danger: #9b3220;
+  --danger-bg: #fbeae6;
+  --danger-line: #e2a697;
+  --info: #1b4e86;
+  --info-bg: #e7eff9;
+  --info-line: #9fbada;
+
+  /* --- legacy aliases ----------------------------------------------------
+     Kept so component CSS written before the redesign keeps resolving to the
+     new system instead of its old literal values. Remove once migration ends. */
+  --bg: var(--canvas);
+  --surface-alt: var(--surface-inset);
+  --border: var(--line);
+  --text: var(--ink);
+  --text-muted: var(--ink-2);
+  --muted: var(--ink-2);
+  --accent: var(--brand);
+  --accent-contrast: var(--on-brand);
+  --ok-border: var(--ok-line);
+  --ok-text: var(--ok);
+  --warn-border: var(--warn-line);
+  --warn-text: var(--warn);
+  --info-border: var(--info-line);
+  --info-text: var(--info);
+  --danger-border: var(--danger-line);
+  --danger-text: var(--danger);
+  --radius: var(--r-md);
+  --gap: var(--s-4);
+  --base-font: var(--fs-body);
+  --space-1: var(--s-1);
+  --space-2: var(--s-2);
+  --space-3: var(--s-3);
+  --space-4: var(--s-4);
+  --space-6: var(--s-6);
+  --space-8: var(--s-8);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: #0e1a19;
+    --surface: #152422;
+    --surface-2: #1b2c2a;
+    --surface-inset: #1b2c2a;
+    --line: #2c4240;
+    --line-strong: #3d5654;
+
+    --ink: #eaf3f1;
+    --ink-2: #b7cbc8;
+    --ink-3: #9db3b0;
+
+    --brand: #5fc0b1;
+    --brand-strong: #8ad6ca;
+    --brand-100: #173d38;
+    --brand-50: #142e2b;
+    --on-brand: #06201e;
+    --focus: #8ad6ca;
+
+    --ok: #8fd3a6;
+    --ok-bg: #15341f;
+    --ok-line: #3c7a52;
+    --warn: #f0c67a;
+    --warn-bg: #382a10;
+    --warn-line: #7a5d22;
+    --danger: #f0a392;
+    --danger-bg: #3a1d17;
+    --danger-line: #8a4234;
+    --info: #a8c8ee;
+    --info-bg: #16283d;
+    --info-line: #3f6795;
+
+    --e-1: 0 1px 2px rgb(0 0 0 / 30%), 0 8px 24px rgb(0 0 0 / 30%);
+  }
+}

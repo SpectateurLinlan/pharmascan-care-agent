@@ -1,8 +1,9 @@
+import {skipInitialGuide} from './navigation-helpers';
 /** REAL Auth/RLS/UI; synthetic user-entered regimen. Speech is not invoked. */
 import {test,expect} from '@playwright/test';
 test.skip(process.env.RUN_LIVE_BROWSER!=='1','Explicit real patient-path opt-in required');
 test('Metformin 500 mg at 20:00 persists after reload and is private to user A',async({page,browser})=>{
- await page.goto('/');await page.getByRole('button',{name:'My Medicines',exact:true}).click();
+ await page.goto('/');await skipInitialGuide(page);await page.getByRole('button',{name:'My Medicines',exact:true}).click();
  await page.getByRole('button',{name:/Add medication/}).click();await page.getByRole('button',{name:/Add manually/}).click();
  await page.getByLabel('Medication name',{exact:true}).fill('DEMO Metformin 500 mg');
  await page.getByLabel('Dose amount',{exact:true}).fill('500');await page.getByLabel('Unit',{exact:true}).fill('mg');
@@ -24,13 +25,13 @@ test('Metformin 500 mg at 20:00 persists after reload and is private to user A',
  await page.getByLabel('Review your message before sending').fill('What medicine should I take tonight?');
  await page.getByRole('button',{name:'Send',exact:true}).click();
  await expect(page.getByText(/Your reviewed schedule tonight:.*DEMO Metformin 500 mg.*500(?:\.0)? mg.*20:00/)).toBeVisible();
- const b=await browser.newContext();const other=await b.newPage();await other.goto(process.env.QA_BASE_URL??'http://127.0.0.1:5174');
+ const b=await browser.newContext();const other=await b.newPage();await other.goto(process.env.QA_BASE_URL??'http://127.0.0.1:5174');await skipInitialGuide(other);
  await other.getByRole('button',{name:'My Medicines',exact:true}).click();
  await expect(other.getByText('DEMO Metformin 500 mg',{exact:true})).toHaveCount(0);
  await expect(other.getByText('No current medication plans.')).toBeVisible();await b.close();
  await page.getByRole('button',{name:'Me',exact:true}).click();
  await expect(page.getByRole('button',{name:/Singpass/})).toHaveCount(0);await expect(page.getByText('Guest demo')).toBeVisible();
- await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:/Language and speech/}).last().click();
+ await page.locator('[data-guide="me"]').click();await page.getByRole('button',{name:/Language and speech/}).last().click();
  const saved=page.waitForResponse(r=>r.url().includes('/me/preferences')&&r.request().method()==='PUT');
  await page.getByLabel('Settings language').selectOption('zh');expect((await saved).status()).toBe(200);
  await page.getByRole('button',{name:'我',exact:true}).click();await expect(page.getByRole('heading',{name:'我',exact:true})).toBeVisible();

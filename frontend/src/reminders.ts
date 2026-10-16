@@ -5,8 +5,8 @@
  * - this is a **local, in-tab** reminder only. It uses the browser
  *   Notification API and therefore requires the page to be open.
  * - it is NOT background push. Reliable reminders while the tab is closed need
- *   a service worker plus a server or push subscription, which this build does
- *   not have (recorded as BLOCKED / P1).
+ *   the separate Web Push service worker, configured server and subscription.
+ *   This adapter itself does not perform background delivery.
  * - permission is requested ONLY when the patient explicitly asks for reminders,
  *   never on load, and never silently.
  *
@@ -71,4 +71,4 @@ export function createNoopReminderPort(): ReminderPort {
 
 /** Description of the reminder's real limits, shown to the patient verbatim. */
 export const REMINDER_LIMITATION =
-  'Reminders here work only while this page is open. Reliable reminders when the app is closed need background push, which is not available in this build.';
+  'In-app reminders need this page open or reopened. For background notifications, configure Web Push in Me. Delivery depends on your device and the server scheduler.';

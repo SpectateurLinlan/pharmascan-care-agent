@@ -11,6 +11,16 @@ export default defineConfig({
       '/api': {
         target: process.env.VITE_API_TARGET ?? 'http://127.0.0.1:8001',
         changeOrigin: true,
+        configure(proxy) {
+          // Report an unavailable development API explicitly instead of Vite's
+          // empty 500, which hides connection-refused failures from patients.
+          proxy.on('error', (_error, _request, response) => {
+            if ('writeHead' in response && !response.headersSent) {
+              response.writeHead(503, {'Content-Type':'application/json','Cache-Control':'no-store'});
+              response.end(JSON.stringify({code:'PROVIDER_UNAVAILABLE',message:'This service is temporarily unavailable. Please try again.',rule_id:null}));
+            }
+          });
+        },
       },
     },
   },

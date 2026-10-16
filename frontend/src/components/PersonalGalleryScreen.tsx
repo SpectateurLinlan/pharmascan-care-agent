@@ -1,13 +1,8 @@
+import {PrivateEvidencePhoto as PrivatePhoto} from './PrivateEvidencePhoto';
 import {useEffect,useState} from 'react';
-import {api,type GalleryEntry,type GalleryImage} from '../api/client';
+import {api,type GalleryEntry} from '../api/client';
 import {useLanguage} from '../language';
 import {Card,ErrorNotice} from './primitives';
-
-function PrivatePhoto({photo}:{photo:GalleryImage}){
- const [url,setUrl]=useState('');const {t}=useLanguage();
- useEffect(()=>{let live=true,objectUrl='';void api.referencePhoto(photo.id).then(blob=>{if(live){objectUrl=URL.createObjectURL(blob);setUrl(objectUrl);}}).catch(()=>{if(live)setUrl('');});return()=>{live=false;if(objectUrl)URL.revokeObjectURL(objectUrl);};},[photo.id]);
- return url?<img className="gallery-thumbnail" src={url} alt={t(photo.image_kind==='loose_pill'?'Pill reference photo':photo.image_kind==='blister'?'Blister reference photo':'Packaging/source photo')}/>:<span>{t('Photo loading or unavailable')}</span>;
-}
 
 export function PersonalGalleryScreen({onCheck,onSources}:{onCheck:(regimenId:string|null)=>void;onSources?:(taskId:string)=>void}){
  const {t}=useLanguage();const [rows,setRows]=useState<GalleryEntry[]>([]),[selected,setSelected]=useState<string|null>(null),[error,setError]=useState<unknown>(null),[busy,setBusy]=useState(false);
