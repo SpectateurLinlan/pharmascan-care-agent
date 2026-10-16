@@ -48,6 +48,7 @@ coverage/
 *.joblib
 
 # IDE / OS
+.vercel/
 .vscode/
 .idea/
 .DS_Store
@@ -64,26 +65,15 @@ desktop.ini
 nul
 
 # Generated browser QA output (no Auth storage state is recorded).
+/outputs/
 frontend/test-results/
 frontend/playwright-report/
 
-# Local submission media, QA output, uploads and development workspace.
-/assets/
-/outputs/
-/evidence/
+# Private uploads and generated material. Development-only exclusions are local.
 /private_data/
 /personal_data/
 /patient_uploads/
 /uploads/
-/.workbuddy-ai/
-/.codebuddy/
-/.codex/
-/.agents/
-/.claude/
-/.aws/
-/status/
-/prompts/
-/submission_private/
 /frontend/.auth/
 /.coverage
 /.coverage.*
