@@ -58,12 +58,12 @@ it('About MediThread does not duplicate privacy navigation',()=>{
 it('health review cancellation never saves; confirmation, edit and deletion are explicit',async()=>{
  vi.mocked(api.observations).mockResolvedValue([]);const record:HealthObservation={id:'DEMO-note',patient_id:'DEMO-owner',description:'DEMO feeling dizzy',occurred_at:'2026-10-14T00:00:00Z',notes:null,severity:null,medication_id:null,source:'patient_reported',created_at:'2026-10-14T00:00:00Z',updated_at:'2026-10-14T00:00:00Z',demo_only:true};
  vi.mocked(api.saveObservation).mockResolvedValue(record);vi.mocked(api.deleteObservation).mockResolvedValue({deleted:true});
- render(<HealthTrackingScreen medications={[medication]}/>);await screen.findByText(/No health notes recorded/);
- fireEvent.change(screen.getByLabelText('Describe how you feel'),{target:{value:'DEMO feeling dizzy'}});fireEvent.click(screen.getByRole('button',{name:'Review health note'}));
+ render(<HealthTrackingScreen medications={[medication]}/>);await screen.findByText(/No health notes yet/);
+ fireEvent.change(screen.getByLabelText('Describe how you feel (required)'),{target:{value:'DEMO feeling dizzy'}});fireEvent.click(screen.getByRole('button',{name:'Review health note'}));
  expect(api.saveObservation).not.toHaveBeenCalled();fireEvent.click(screen.getByRole('button',{name:'Cancel'}));expect(api.saveObservation).not.toHaveBeenCalled();
  vi.mocked(api.observations).mockResolvedValue([record]);fireEvent.click(screen.getByRole('button',{name:'Review health note'}));fireEvent.click(screen.getByRole('button',{name:'Confirm record'}));
  await waitFor(()=>expect(api.saveObservation).toHaveBeenCalledWith(expect.objectContaining({confirmed:true,description:'DEMO feeling dizzy',medication_id:null})));
- await screen.findByRole('button',{name:'Edit'});fireEvent.click(screen.getByRole('button',{name:'Edit'}));expect(screen.getByLabelText('Describe how you feel')).toHaveProperty('value','DEMO feeling dizzy');
+ await screen.findByRole('button',{name:'Edit'});fireEvent.click(screen.getByRole('button',{name:'Edit'}));expect(screen.getByLabelText('Describe how you feel (required)')).toHaveProperty('value','DEMO feeling dizzy');
  fireEvent.click(screen.getByRole('button',{name:'Delete'}));expect(api.deleteObservation).not.toHaveBeenCalled();
  const dialog=screen.getByRole('dialog',{name:'Delete this health note?'});expect(dialog).toBeTruthy();vi.mocked(api.observations).mockResolvedValue([]);
  fireEvent.click(dialog.querySelector('button:last-child')!);await waitFor(()=>expect(api.deleteObservation).toHaveBeenCalledWith('DEMO-note'));
@@ -71,5 +71,5 @@ it('health review cancellation never saves; confirmation, edit and deletion are 
 it('periodic summary uses actual HTTP counts and patient descriptions instead of a static option card',async()=>{
  vi.mocked(api.reviewSummary).mockResolvedValue({period:'week',window_start:'2026-10-11T16:00:00Z',window_end:'2026-10-14T00:00:00Z',generated_at:'2026-10-14T00:00:00Z',timezone:'Asia/Singapore',medications:[],reported_taken:2,reported_not_taken:1,unsure:0,observations:[],questions:[],coverage_note:'No report is not a missed dose.'});
  render(<ReviewSummaryScreen period="week" regimens={[]}/>);await screen.findByText('No report is not a missed dose.');expect(api.reviewSummary).toHaveBeenCalledWith('week',undefined);
- expect(screen.getByText('2')).toBeTruthy();expect(screen.getByRole('button',{name:'Export summary'})).toBeTruthy();expect(screen.getByText(/does not mean no symptoms/)).toBeTruthy();
+ expect(screen.getByText('2')).toBeTruthy();expect(screen.getByRole('button',{name:'Export summary'})).toBeTruthy();expect(screen.getByText(/No health notes yet/)).toBeTruthy();
 });

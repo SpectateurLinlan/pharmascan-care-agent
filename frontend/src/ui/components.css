@@ -379,3 +379,9 @@
   background: var(--line);
   object-fit: contain;
 }
+
+/* Keep long plan labels inside the readable form column. */
+.record-plan-select { width: 100%; min-width: 0; max-width: 100%; text-overflow: ellipsis; }
+.record-plan-description { overflow-wrap: anywhere; color: var(--muted); font-size: var(--fs-small); }
+.health-details { min-inline-size: 0; margin: var(--s-4) 0; padding: 0; border: 0; }
+.health-details legend { margin-bottom: var(--s-3); font-weight: var(--fw-strong); }

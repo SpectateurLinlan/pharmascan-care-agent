@@ -109,7 +109,7 @@ test('Me categories and Records summary/actions use the intended responsive hier
   });
   expect(layout.rowLines).toBe(layout.wide?2:4);expect(layout.buttonLines).toBe(layout.wide?1:3);
  }
- for(const [label,route] of [['This week','#summary-week'],['This month','#summary-month'],['This course','#summary-course']] as const){
+ for(const [label,route] of [['This week','#summary-week'],['This month','#summary-month'],['By medication plan','#summary-course']] as const){
   const routePage=await page.context().newPage();await mockPatientApp(routePage);await routePage.goto('/e2e/patient-feedback.html?shell=1');
   await routePage.locator('[data-guide="records"]').click();await routePage.getByRole('button',{name:label,exact:true}).click();
   await expect.poll(()=>routePage.evaluate(()=>location.hash)).toBe(route);await routePage.close();
@@ -120,6 +120,37 @@ test('Me categories and Records summary/actions use the intended responsive hier
   await expect.poll(()=>routePage.evaluate(()=>location.hash)).toBe(route);await routePage.close();
  }
  expect(errors).toEqual([]);
+});
+
+test('patient record labels preserve plan identity and remain usable across languages and text sizes',async({context})=>{
+ const plans=['DEMO-old','DEMO-current','DEMO-separate-course'].map((id,index)=>({regimen_id:id,medication_id:'DEMO-med',display_name:'DEMO very long medication product name with documented strength 5 mg and extended release formulation',version_no:index+1,state:index===1?'active':'ended',effective_from:`2026-${index===2?'08':'10'}-0${index+1}T00:00:00Z`,effective_to:null,course_start_date:index===2?'2026-08-01':'2026-10-01',course_end_date:null,dose_amount:1,dose_unit:'tablet',food_instruction:null,is_prn:false,local_times:['08:00']}));
+ for(const language of ['en','zh'] as const)for(const scale of [100,150]){
+  const page=await context.newPage();const {prefs,errors}=await mockPatientApp(page);prefs.preferred_language=language;prefs.text_scale_percent=scale;
+  const queries:string[]=[];
+  await page.route(url=>new URL(url).pathname==='/api/me/regimens',route=>route.fulfill({json:plans}));
+  await page.route(url=>new URL(url).pathname==='/api/me/dose-history',route=>{
+   expect(route.request().headers().authorization).toBe('Bearer DEMO.synthetic-session-token');queries.push(new URL(route.request().url()).searchParams.get('regimen_id')!);
+   return route.fulfill({json:{item_count:4,note:'demo_only',entries:['reported_taken','reported_not_taken','unsure',null].map((status,index)=>({occurrence_id:`DEMO-dose-${index}`,due_at:'2026-10-02T00:00:00Z',event_time:status?'2026-10-02T00:10:00Z':null,intake_status:status,visual_status:null,reported:status!==null}))}});
+  });
+  await page.goto('/e2e/patient-feedback.html?shell=1');await page.locator('[data-guide="records"]').click();
+  const select=page.locator('#history-medication');await expect(select.locator('option')).toHaveCount(3);
+  await expect(page.locator('.history li')).toHaveCount(4);
+  await expect(page.locator('.history')).toContainText(language==='zh'?'这次用药还没有记录服用情况。':'This dose has no record of whether you took it yet.');
+  for(const plan of plans){await select.selectOption(plan.regimen_id);await expect.poll(()=>queries.at(-1)).toBe(plan.regimen_id);}
+  for(const width of [390,430,768,1024,1280,1600]){
+   await page.setViewportSize({width,height:950});await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+   await expect(select).toBeVisible();const box=(await select.boundingBox())!;expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(width);
+   if((width===390&&language==='zh'&&scale===150)||(width===1600&&language==='en'&&scale===100))await page.screenshot({path:`../outputs/record-semantics-${width}-${language}-${scale}.png`,fullPage:true});
+  }
+  await page.locator('.records-navigation-group .ui-row').first().click();
+  await expect(page.locator('#health-description')).toBeVisible();await expect(page.getByLabel(language==='zh'?'程度':'Severity')).toBeVisible();
+  await page.setViewportSize({width:390,height:950});await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.getByRole('button',{name:language==='zh'?'记录健康感受':'Record how you feel',exact:true}).click();await expect(page.locator('#health-description')).toBeFocused();
+  await page.locator('[data-guide="records"]').click();await page.locator('.records-navigation-group .ui-row').nth(2).click();
+  const add=page.getByRole('button',{name:language==='zh'?'添加用药跟进':'Add medication follow-up',exact:true});await add.click();
+  await expect(page.locator('#follow-up-form')).toBeVisible();await page.locator('#follow-up-form').getByRole('button',{name:language==='zh'?'取消':'Cancel',exact:true}).click();await expect(page.locator('#follow-up-form')).toHaveCount(0);
+  expect(errors).toEqual([]);await page.close();
+ }
 });
 
 test('settings ownership, persisted reminder preferences and viewport launcher geometry',async({page})=>{

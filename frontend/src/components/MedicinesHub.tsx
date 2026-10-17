@@ -4,6 +4,7 @@ import {useLanguage} from '../language';
 import {ErrorNotice} from './primitives';
 import {BottomSheet} from './BottomSheet';
 import {intakeLabel} from './HistoryScreen';
+import {regimenLabel} from '../regimenPresentation';
 import {InventoryPanel} from './InventoryPanel';
 import {Icon} from './Icon';
 import {EmptyState, Row, RowGroup, Screen, VerificationBadge} from '../ui/primitives';
@@ -89,7 +90,7 @@ export function MedicationDetail({row,summary,onHistory,onGallery,onCheck,onEdit
    <p className="record-line">{row.is_prn?t('As needed'):row.local_times.join(', ')}</p>
    <p className="record-line">{row.food_instruction?.split('; ').map(t).join(' · ')??t('Not specified')}</p>
    <p className="record-line">{t('Course')}: {row.course_start_date??t('Not specified')} → {row.course_end_date??t('Not specified')}</p>
-   <details><summary>{t('Regimen history')}</summary>{versions.filter(version=>version.medication_id===row.medication_id).map(version=><p key={version.regimen_id}>{t('version')} {version.version_no} · {t(version.state)} · {version.course_start_date??version.effective_from?.slice(0,10)??t('Not specified')} → {version.course_end_date??version.effective_to?.slice(0,10)??t('Not specified')} · {version.dose_amount} {t(version.dose_unit??'')} · {version.local_times.join(', ')}</p>)}</details>
+   <details><summary>{t('Medication plan history')}</summary><p className="notice">{t('A plan update does not necessarily start a new treatment course.')}</p>{versions.filter(version=>version.medication_id===row.medication_id).map(version=><p className="record-line" key={version.regimen_id}>{regimenLabel(version,t,language==='zh'?'zh-CN':'en-SG',preferences.timezone)} · {version.local_times.join(', ')}<br/>{t('Course')}: {version.course_start_date??t('Not specified')} → {version.course_end_date??t('Not specified')}</p>)}</details>
   </section>
 
   <section className="card">

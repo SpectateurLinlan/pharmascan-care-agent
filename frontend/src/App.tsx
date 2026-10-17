@@ -161,7 +161,7 @@ function CompanionApp() {
       {tab.startsWith('summary-')?<ReviewSummaryScreen period={tab==='summary-week'?'week':tab==='summary-month'?'month':'course'} regimens={versions}/>:null}
       {tab === 'records' ? <Screen title="Records" lead="Your own reports, and the summaries you can take to a review.">
         <RowGroup title="Medication and health summary" className="records-summary">
-          <div className="period-actions records-summary-actions">{(['week','month','course'] as const).map(period=><button key={period} onClick={()=>setTab(`summary-${period}`)}>{t(period==='week'?'This week':period==='month'?'This month':'This course')}</button>)}</div>
+          <div className="period-actions records-summary-actions">{(['week','month','course'] as const).map(period=><button key={period} onClick={()=>setTab(`summary-${period}`)}>{t(period==='week'?'This week':period==='month'?'This month':'By medication plan')}</button>)}</div>
         </RowGroup>
         <RowGroup title="Health records and ongoing care" hint="Choose an area to review or update." className="records-navigation-group" spread>
           <Row icon="heart" title="My health notes" hint="How you have been feeling" onClick={()=>setTab('health-notes')}/>

@@ -565,7 +565,7 @@ Object.assign(translations, {
  'Voice input uses your browser’s speech service, which may be online. Your browser asks for microphone permission the first time; audio is not saved. Review the transcript before sending.':'语音输入使用浏览器的语音服务，可能需要联网。首次使用时浏览器会询问麦克风权限；音频不会被保存。发送前请核对转写文字。',
  // --- the Today card, reminders and status words --------------------------
  'Recent history':'近期记录',
- 'not reported':'尚无自述记录',
+ 'not reported':'尚未记录服用情况',
  'reminders unavailable':'提醒不可用',
  'reminders blocked':'提醒已被阻止',
  'Your browser is blocking notifications. You can allow them in your browser settings.':'浏览器正在阻止通知，您可以在浏览器设置中允许。',
@@ -628,3 +628,16 @@ export function LanguageProvider({children}:{children:ReactNode}) {
  return <Context.Provider value={{textScale,previewTextScale,ttsProvider,setTtsProvider,speechRate,setSpeechRate,language:preferences.preferred_language,preferences,setLanguage,updatePreferences,loadPreferences,preferenceError}}>{children}</Context.Provider>;
 }
 export function useLanguage(){const context=useContext(Context);return {...context,t:(text:string)=>context.language==='zh'?(translations[text]??text):(englishLabels[text]??text)};}
+
+Object.assign(translations, {
+ 'This dose has no record of whether you took it yet.':'这次用药还没有记录服用情况。',
+ 'Medication plan history':'用药计划变更记录','A plan update does not necessarily start a new treatment course.':'计划变更不一定代表开始新疗程。',
+ 'By medication plan':'按用药计划',
+ 'Medication plan':'用药计划','Choose a medication plan':'选择用药计划','Selected medication plan':'所选用药计划',
+ 'Your reports stay linked to the medication plan used at the time.':'服药记录保留在当时对应的用药计划下。',
+ 'Active plan':'已启用计划','Previous plan':'历史计划','Plan awaiting review':'待核对计划','Effective from':'生效时间','Start date not recorded':'尚未记录生效时间','Dose':'每次用量',
+ 'A plan update does not necessarily start a new treatment course. This summary covers the selected plan only.':'计划变更不一定代表开始新疗程。这份总结仅包含所选计划。',
+ 'Describe how you feel (required)':'描述您的感受（必填）','No health notes yet. Record how you feel to keep track of changes.':'您还没有健康感受记录。可以记下现在的感受，方便之后查看变化。','Record how you feel':'记录健康感受',
+ 'No health notes yet. You can record how you feel from Health notes.':'您还没有健康感受记录。可进入“我的健康感受”记录。',
+ 'Follow-up title (required)':'跟进事项名称（必填）','Date and time (required)':'日期和时间（必填）','Your note (optional)':'备注（可选）','Choose the follow-up time in your device time zone.':'按当前设备时区选择跟进时间。',
+});
