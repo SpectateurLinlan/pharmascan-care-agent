@@ -25,24 +25,22 @@ export function MedicinesHub({medications,versions,onOpen,setupCount=null}:{medi
  const pastCount=versions.filter(row=>isPastCourse(row,today)).length;
  const badge=(row:MedicationSummary)=><VerificationBadge sourceBacked={row.source_backed} identityStatus={row.identity_status}/>;
  return <Screen
-  columns
+  className="ui-screen--medicines"
   title="My Medicines"
   lead="What you are taking, and what is known about each medicine."
   actions={<button className="primary" onClick={()=>onOpen('add-method')}>＋ {t('Add medication')}</button>}
  >
+  <nav className="medicine-shortcuts" aria-label={t('Medication management shortcuts')}>
+   <button className="medicine-shortcut" onClick={()=>onOpen('past-medicines')}><span className="ui-row__icon"><Icon name="clipboard"/></span><span className="ui-row__text"><strong className="ui-row__title">{t('Past courses')}</strong><small className="ui-row__hint">{pastCount} {t('courses')}</small></span><span className="ui-row__end"><Icon name="chevron-right"/></span></button>
+   <button className="medicine-shortcut" onClick={()=>onOpen('gallery')}><span className="ui-row__icon"><Icon name="image"/></span><span className="ui-row__text"><strong className="ui-row__title">{t('Photos and evidence')}</strong><small className="ui-row__hint">{t('Manage source photos and evidence')}</small></span><span className="ui-row__end"><Icon name="chevron-right"/></span></button>
+   <button className="medicine-shortcut" onClick={()=>onOpen('unfinished')}><span className="ui-row__icon"><Icon name="alert"/></span><span className="ui-row__text"><strong className="ui-row__title">{t('Finish medication setup')}</strong><small className="ui-row__hint">{setupCount===null?t('View saved source registrations'):`${setupCount} ${t('awaiting review')}`}</small></span><span className="ui-row__end"><Icon name="chevron-right"/></span></button>
+  </nav>
   <div className="medicines-courses"><RowGroup title="Currently taking">
    {current.length?current.map(row=><Row key={row.regimen_id} title={row.display_name} hint={summaryHint(row,t)} end={<span className="medicine-row-end">{badge(row)}<Icon name="chevron-right"/></span>} onClick={()=>onOpen('medicine-detail',row.regimen_id)}/>)
     :<EmptyState icon="pill" title="No current medication plans." text="Add a medication, review the instructions from your label or pharmacist, and activate the plan. Only a reviewed plan appears in Today."/>}
   </RowGroup>
   {upcoming.length?<RowGroup title="Upcoming courses">{upcoming.map(row=><Row key={row.regimen_id} title={row.display_name} hint={`${t('Course start date')}: ${row.course_start_date}`} end={badge(row)} onClick={()=>onOpen('medicine-detail',row.regimen_id)}/>)}</RowGroup>:null}
   </div>
-  {/* Not `spread`: these three are not interchangeable destinations, they are
-      different jobs, and a full-width row reads better than three narrow ones. */}
-  <RowGroup>
-   <Row icon="clipboard" title="Past courses" hint={`${pastCount} ${t('courses')}`} onClick={()=>onOpen('past-medicines')}/>
-   <Row icon="image" title="Photos and evidence" hint="Source photos, provenance and what they can and cannot show" onClick={()=>onOpen('gallery')}/>
-   <Row icon="alert" title="Finish medication setup" hint={setupCount===null?t('View saved source registrations'):`${setupCount} ${t('awaiting review')}`} onClick={()=>onOpen('unfinished')}/>
-  </RowGroup>
  </Screen>;
 }
 

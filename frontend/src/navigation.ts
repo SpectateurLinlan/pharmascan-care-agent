@@ -7,7 +7,7 @@ const parents: Record<string,string> = {
   'edit-medication':'medicine-detail', unfinished:'medicines', 'past-medicines':'medicines', gallery:'medicines', 'medicine-detail':'medicines',
   'health-notes':'records', 'summary-week':'records', 'summary-month':'records', 'summary-course':'records',
   profile:'me', account:'me', caregivers:'me', settings:'me', 'reminder-settings':'me',
-  'language-settings':'me', accessibility:'me', privacy:'me', about:'me', feedback:'me', help:'me',
+  'language-settings':'me', accessibility:'me', privacy:'me', conversations:'me', about:'me', feedback:'me', help:'me',
 };
 const normalize = (value:string) => value === 'history' ? 'records' : value;
 function authCallback(){return /(?:access_token|refresh_token)=/.test(window.location.hash)||new URLSearchParams(window.location.search).has('code');}

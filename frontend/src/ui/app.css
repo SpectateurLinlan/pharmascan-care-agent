@@ -1948,6 +1948,18 @@ button.danger:hover:not(:disabled) {
     grid-column: span 8;
   }
 
+  .ui-screen--medicines > .ui-screen__head {
+    grid-column: span 8;
+    grid-row: 1;
+  }
+
+  .ui-screen--medicines > .ui-actions {
+    grid-column: span 4;
+    grid-row: 1;
+    justify-self: end;
+    align-self: start;
+  }
+
   .ui-screen__lead {
     max-width: 70ch;
   }
@@ -2350,6 +2362,18 @@ button.danger:disabled {
 .landscape-columns > *,
 .ui-screen--columns > * { min-width: 0; grid-column: auto; }
 .medicines-courses { display: flex; flex-direction: column; gap: var(--s-5); }
+.ui-screen--medicines .ui-actions { justify-content: flex-end; }
+.ui-screen--medicines .ui-actions > * { flex: 0 1 auto; width: auto; }
+.medicine-shortcuts { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
+.medicine-shortcut { display: flex; align-items: center; gap: var(--s-3); width: 100%; min-width: 0; min-height: var(--tap-lg); padding: var(--s-3) var(--s-4); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); color: var(--ink); text-align: left; }
+.medicine-shortcut:hover { background: var(--brand-50); }
+.medicine-shortcut:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+.medicine-shortcut .ui-row__icon { flex: 0 0 44px; }
+.medicine-shortcut .ui-row__text { min-width: 0; }
+.medicine-shortcut .ui-row__hint { overflow-wrap: anywhere; }
+.medicine-shortcut .ui-row__end { flex: 0 0 auto; }
+@container (min-width: 38rem) { .medicine-shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (min-width: 64rem) { .medicine-shortcuts { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @container (min-width: 58rem) {
   .landscape-columns,
   .ui-screen--columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }

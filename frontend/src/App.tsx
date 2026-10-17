@@ -117,7 +117,7 @@ function CompanionApp() {
 
   const greeting=greetingAt(now,preferences.timezone);
   const name=greetingName(member,accountDisplayName(identity,preferences.display_name,t('Guest')),t('Guest'));
-  const accountPage=['me','settings','feedback','profile','account','caregivers','reminder-settings','language-settings','accessibility','privacy','about','help'].includes(tab);
+  const accountPage=['me','settings','feedback','profile','account','caregivers','reminder-settings','language-settings','accessibility','privacy','conversations','about','help'].includes(tab);
   /**
    * One Assistant instance keeps conversation state across root navigation.
    * Today promotes its compact composer into an inline entry; the other root
@@ -129,7 +129,7 @@ function CompanionApp() {
   /* A signed-out account page is a standalone sign-in surface: it is a decision
      about identity, so it renders without the tabs, the rail or the composer. */
   const standaloneSignIn=accountKind==='signed_out'&&tab==='account';
-  const launcherSurface=assistantSurface||['settings','reminder-settings','language-settings','accessibility','privacy','about','feedback','caregivers','profile'].includes(tab);
+  const launcherSurface=assistantSurface||['settings','reminder-settings','language-settings','accessibility','privacy','conversations','about','feedback','caregivers','profile'].includes(tab);
   const assistantVisible=!standaloneSignIn&&(assistantOpen||tab==='assistant'||launcherSurface);
   const dockVisible=!assistantOpen&&launcherSurface&&tab!=='today'&&!standaloneSignIn;
   const openMedicine=(page:MedicineDestination,id?:string)=>{if(id)setDetailId(id);setTab(page);};
@@ -185,7 +185,7 @@ function CompanionApp() {
       {tab==='help'?<OnboardingGuide owner={guideOwner} replay onClose={()=>setTab('me')}/>:null}
       {tab==='account'?<MeScreen standalone={standaloneSignIn} onGuest={()=>setTab('today')} onHelp={()=>setTab('help')} onSettings={()=>setTab('settings')} onFeedback={()=>setTab('feedback')} onIdentityChanged={()=>{window.localStorage.removeItem('pharmascan.agent-session');window.location.reload();}}/>:null}
       {tab==='profile'?<><ProfileScreen/><MeScreen onIdentityChanged={()=>window.location.reload()}/></>:null}
-      {tab==='privacy'||tab==='about'?<InformationScreen ownerId={guideOwner} kind={tab} onConversationCleared={()=>setConversationClearRevision(value=>value+1)} onPrivacy={()=>setTab('privacy')} onHistory={()=>setTab('records')}/>:null}
+      {tab==='privacy'||tab==='conversations'||tab==='about'?<InformationScreen ownerId={guideOwner} kind={tab} onConversationCleared={()=>setConversationClearRevision(value=>value+1)} onHistory={()=>setTab('records')}/>:null}
       {tab==='caregivers'?<CaregiversScreen/>:null}
       {tab==='settings'?<SettingsScreen/>:null}
       {tab==='reminder-settings'||tab==='language-settings'||tab==='accessibility'?<SettingsScreen section={tab==='reminder-settings'?'reminders':tab==='language-settings'?'language':'accessibility'}/>:null}

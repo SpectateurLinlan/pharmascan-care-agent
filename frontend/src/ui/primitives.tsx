@@ -17,16 +17,17 @@ export type Tone = 'ok' | 'warn' | 'danger' | 'info' | 'quiet';
 const toneClass = (base: string, tone: Tone) => (tone === 'quiet' ? base : `${base} ${base}--${tone}`);
 
 /** A screen: exactly one h1, an optional lead sentence, and one primary action. */
-export function Screen({title, lead, actions, children, columns = false}: {
+export function Screen({title, lead, actions, children, columns = false, className}: {
   title: string;
   lead?: string | undefined;
   actions?: ReactNode | undefined;
   children?: ReactNode | undefined;
   columns?: boolean;
+  className?: string | undefined;
 }) {
   const {t} = useLanguage();
   return (
-    <section className={`ui-screen${columns ? ' ui-screen--columns' : ''}`}>
+    <section className={`ui-screen${columns ? ' ui-screen--columns' : ''}${className ? ` ${className}` : ''}`}>
       <div className="ui-screen__head">
         <h1>{t(title)}</h1>
         {lead ? <p className="ui-screen__lead">{t(lead)}</p> : null}

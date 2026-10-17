@@ -1,5 +1,6 @@
 /** Real App and browser layout; synthetic authenticated HTTP only, no live writes. */
 import {test,expect,chromium,type Page} from '@playwright/test';
+import type {MedicationSummary} from '../src/api/client';
 async function mockPatientApp(page:Page,historyEnabled=true){
  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
  const token='DEMO.synthetic-session-token',owner='d00d0000-0000-4000-8000-000000000001';
@@ -14,6 +15,7 @@ async function mockPatientApp(page:Page,historyEnabled=true){
  const task={id:'DEMO-source-only',medication_id:'DEMO-med',version:1,status:'pending_information',product:{name:'DEMO source medicine',strength:'5 mg',dose_form:'tablet',formulation:null,brand:null,ingredients:[],category:'unknown',verification:'source_supplied'},source_ids:['DEMO-source'],missing:['schedule'],conflicts:[],possible_duplicate_ids:[],draft_regimen_id:null,suggested_regimen:null};
  let sourceReads=0;const writes:string[]=[];
  const prefs={display_name:'Guest',preferred_language:'en',speech_locale:'en-SG',text_size:'standard',text_scale_percent:100,voice_enabled:false,tts_autoplay:false,conversation_history_enabled:historyEnabled,reminder_lead_minutes:0,reminders_enabled:false,timezone:'Asia/Singapore'};
+ let patientMedications:MedicationSummary[]=[];
  await page.route(url=>new URL(url).pathname.startsWith('/api/'),async route=>{
   const request=route.request(),path=new URL(request.url()).pathname;
   expect(request.headers().authorization).toBe(`Bearer ${token}`);
@@ -22,7 +24,7 @@ async function mockPatientApp(page:Page,historyEnabled=true){
   if(path==='/api/health')body={status:'ok',runtime_contract:'patient-ux-reminders-v1'};
   else if(path==='/api/demo/start')body={session_id:'DEMO-session',patient_id:owner};
   else if(path==='/api/me/preferences'){if(request.method()==='PUT')Object.assign(prefs,request.postDataJSON());body=prefs;}
-  else if(path==='/api/me/medications')body={medications:[],item_count:0};
+  else if(path==='/api/me/medications')body={medications:patientMedications,item_count:patientMedications.length,note:'DEMO'};
   else if(path==='/api/evidence/tasks'){sourceReads++;body=[task];}
   else if(path===`/api/evidence/tasks/${task.id}`)body=task;
   else if(path.endsWith('/usage'))body={llm_user_turns:0,model_requests:0,limit:20,usage_date:'2026-10-17',next_reset_at:'2026-10-18T00:00:00+08:00'};
@@ -31,7 +33,7 @@ async function mockPatientApp(page:Page,historyEnabled=true){
   else if(path==='/api/speech/capabilities')body={cloud_tts_allowed:false};
   await route.fulfill({json:body});
  });
- return {errors,writes,prefs,getSourceReads:()=>sourceReads};
+ return {errors,writes,prefs,getSourceReads:()=>sourceReads,setMedications:(rows:MedicationSummary[])=>{patientMedications=rows;}};
 }
 
 test('source-only count, supplement cancellation and assistant alignment stay consistent',async({page})=>{
@@ -94,6 +96,19 @@ test('settings ownership, persisted reminder preferences and viewport launcher g
  await page.goto('/e2e/patient-feedback.html?shell=1');
  await page.locator('[data-guide="me"]').click();
  await expect(page.locator('#text-size')).toHaveCount(0);
+ await page.locator('#main-content').getByRole('button',{name:'Language and speech'}).click();
+ await expect(page.getByRole('heading',{name:'Language and speech'})).toBeVisible();
+ await expect(page.locator('#settings-language')).toBeVisible();await expect(page.locator('#text-size')).toHaveCount(0);
+ await page.locator('.back-button').click();await page.locator('#main-content').getByRole('button',{name:/Text size/}).click();
+ await expect(page.getByRole('heading',{level:1,name:'Text size'})).toBeVisible();
+ await expect(page.locator('#text-size')).toBeVisible();await expect(page.locator('#settings-language')).toHaveCount(0);
+ await page.locator('.back-button').click();await page.locator('#main-content').getByRole('button',{name:/Assistant and conversation saving/}).click();
+ await expect(page.getByRole('heading',{name:'Assistant and conversation saving'})).toBeVisible();
+ await expect(page.getByLabel('Save new conversations')).toBeVisible();
+ await page.locator('.back-button').click();await page.locator('#main-content').getByRole('button',{name:/Privacy controls/}).click();
+ await expect(page.getByRole('heading',{name:'Privacy controls'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Save new conversations'})).toHaveCount(0);
+ await page.locator('.back-button').click();
  await page.getByRole('button',{name:/Medication reminders/}).click();
  await expect(page.getByRole('heading',{name:'Medication reminders and notifications'})).toBeVisible();
  await expect(page.getByLabel('Enable medication reminders')).not.toBeChecked();
@@ -281,6 +296,42 @@ test('Today tasks reuse one conversation and root pages adapt to landscape and e
  expect(sends).toBe(1);expect(errors).toEqual([]);
 });
 
+test('Medicines shortcuts reflow and every current plan remains visible for empty and long lists',async({page})=>{
+ test.setTimeout(120000);page.setDefaultTimeout(8000);
+ const {errors,prefs,setMedications}=await mockPatientApp(page);
+ const widths=[390,430,768,1024,1280,1600,1920];let previousHeights=new Map<number,number>();
+ for(const language of ['en','zh']){
+  prefs.preferred_language=language;
+  for(const count of [0,1,2,5,10]){
+   setMedications(Array.from({length:count},(_,index):MedicationSummary=>({medication_id:`DEMO-med-${index}`,regimen_id:`DEMO-regimen-${index}`,display_name:`DEMO Medicine ${index+1}`,is_prn:false,version_no:1,identity_status:'unverified',source_backed:true,dose_amount:500,dose_unit:'mg',frequency_rule:{kind:'daily',local_times:['08:00'],days_of_week:[]},food_instruction:null,course_start_date:'2026-10-14',course_end_date:'2099-10-20'})));
+   await page.goto('/e2e/patient-feedback.html?shell=1');await page.locator('[data-guide="medicines"]').click();
+   const screen=page.locator('.ui-screen--medicines'),list=page.locator('.medicines-courses'),shortcuts=page.locator('.medicine-shortcuts');
+   await expect(screen.locator('.medicines-courses h2').first()).toBeVisible();
+   await expect(page.locator('.medicines-courses .ui-row')).toHaveCount(count);
+   if(count===0)await expect(page.locator('.medicines-courses .ui-empty')).toBeVisible();
+   else for(let index=1;index<=count;index++)await expect(page.getByRole('button',{name:new RegExp(`DEMO Medicine ${index}(?!\\d)`)})).toBeVisible();
+   await expect(shortcuts.getByRole('button')).toHaveCount(3);
+   for(const width of widths){
+    await page.setViewportSize({width,height:900});
+    const [mainBox,screenBox,listBox,shortcutBox]=await Promise.all([page.locator('.app-main').boundingBox(),screen.boundingBox(),list.boundingBox(),shortcuts.boundingBox()]);
+    expect(screenBox).not.toBeNull();expect(listBox).not.toBeNull();expect(shortcutBox).not.toBeNull();
+    expect(Math.abs(listBox!.width-screenBox!.width)).toBeLessThan(2);expect(Math.abs(shortcutBox!.width-screenBox!.width)).toBeLessThan(2);
+    const layout=await shortcuts.evaluate(el=>({columns:getComputedStyle(el).gridTemplateColumns.split(' ').length,scrollWidth:el.scrollWidth,clientWidth:el.clientWidth}));
+    const rem=await page.evaluate(()=>parseFloat(getComputedStyle(document.documentElement).fontSize));
+    expect(layout.columns).toBe(mainBox!.width>=64*rem?3:mainBox!.width>=38*rem?2:1);
+    expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    const natural=await list.evaluate(el=>({height:el.getBoundingClientRect().height,scrollHeight:el.scrollHeight,clientHeight:el.clientHeight,maxHeight:getComputedStyle(el).maxHeight,overflow:getComputedStyle(el).overflowY}));
+    expect(natural.scrollHeight).toBeLessThanOrEqual(natural.clientHeight+1);expect(natural.maxHeight).toBe('none');expect(natural.overflow).not.toBe('auto');
+    if(width>=900){const header=await screen.locator('.ui-screen__head').boundingBox(),action=await screen.locator('.ui-actions').boundingBox();expect(Math.abs(header!.y-action!.y)).toBeLessThan(2);}
+    if(width===1280){const key=language==='en'?count:count+100;previousHeights.set(key,natural.height);}
+   }
+  }
+ }
+ for(const languageOffset of [0,100])expect(previousHeights.get(languageOffset+10)!).toBeGreaterThan(previousHeights.get(languageOffset+5)!);
+ expect(errors).toEqual([]);
+});
+
 test('inline send, shared avatar, opt-in saved exchanges and explicit clear keep separate semantics',async({page})=>{
  test.setTimeout(90000);page.setDefaultTimeout(8000);
  const {errors,prefs}=await mockPatientApp(page,false);let sends=0,clears=0,newSessions=0;
@@ -308,7 +359,7 @@ test('inline send, shared avatar, opt-in saved exchanges and explicit clear keep
  await dialog.getByRole('button',{name:'Back to current conversation'}).click();await expect(dialog.getByRole('textbox')).toHaveValue('DEMO keep this draft');
  await dialog.getByRole('button',{name:'Close conversation'}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(entry.getByRole('textbox')).toBeFocused();await page.locator('[data-guide="records"]').click();await page.locator('.assistant-launcher').click();
  await expect(dialog.getByRole('textbox')).toHaveValue('DEMO keep this draft');await expect(dialog.getByText('SIMULATED answer 1')).toBeVisible();
- await dialog.getByRole('button',{name:'Close conversation'}).click();await expect(page.locator('.assistant-launcher')).toBeFocused();await page.locator('[data-guide="me"]').click();await page.getByRole('button',{name:/Privacy and data/}).click();
+ await dialog.getByRole('button',{name:'Close conversation'}).click();await expect(page.locator('.assistant-launcher')).toBeFocused();await page.locator('[data-guide="me"]').click();await page.getByRole('button',{name:/Assistant and conversation saving/}).click();
  const save=page.getByRole('checkbox',{name:/Save new conversations/});await expect(save).not.toBeChecked();const preferenceSaved=page.waitForResponse(response=>response.request().method()==='PUT'&&new URL(response.url()).pathname==='/api/me/preferences');await save.click();expect((await preferenceSaved).status()).toBe(200);await expect(save).toBeChecked();
  await page.locator('[data-guide="today"]').click();await entry.getByRole('textbox').fill('DEMO saved exchange');await entry.getByRole('button',{name:'Send',exact:true}).click();await expect(dialog.getByText('SIMULATED answer 2')).toBeVisible();expect(saved).toHaveLength(1);
  await dialog.getByRole('textbox').fill('DEMO current draft');await dialog.getByRole('button',{name:'Conversation history'}).click();
@@ -317,7 +368,7 @@ test('inline send, shared avatar, opt-in saved exchanges and explicit clear keep
  await dialog.getByRole('button',{name:'Back to current conversation'}).click();await expect(dialog.getByRole('textbox')).toHaveValue('DEMO current draft');
  await page.route(url=>new URL(url).pathname==='/api/demo/start',async route=>{expect(route.request().postDataJSON().session_id).toBeNull();newSessions++;await route.fulfill({json:{session_id:'DEMO-fresh-session',patient_id:'d00d0000-0000-4000-8000-000000000001',demo_only:true,note:'SIMULATED',seeded_medication_count:0}});});
  await dialog.getByRole('button',{name:'New conversation'}).click();await expect(dialog.locator('.turn')).toHaveCount(0);await expect(dialog.getByRole('textbox')).toHaveValue('DEMO current draft');expect(newSessions).toBe(1);expect(saved).toHaveLength(1);
- await dialog.getByRole('button',{name:'Close conversation'}).click();await page.locator('[data-guide="me"]').click();await page.getByRole('button',{name:/Privacy and data/}).click();
+ await dialog.getByRole('button',{name:'Close conversation'}).click();await page.locator('[data-guide="me"]').click();await page.getByRole('button',{name:/Assistant and conversation saving/}).click();
  await page.getByRole('button',{name:'Clear saved conversations',exact:true}).click();expect(clears).toBe(0);await page.getByRole('button',{name:'Cancel',exact:true}).click();expect(saved).toHaveLength(1);
  await page.getByRole('button',{name:'Clear saved conversations',exact:true}).click();await page.getByRole('button',{name:'Confirm clear',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);expect(clears).toBe(1);expect(saved).toHaveLength(0);
  await page.locator('[data-guide="today"]').click();await expect(entry.getByRole('textbox')).toHaveValue('DEMO current draft');await expect(page.locator('.assistant-launcher')).toHaveCount(0);
