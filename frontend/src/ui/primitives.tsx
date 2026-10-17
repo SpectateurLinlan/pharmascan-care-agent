@@ -39,7 +39,7 @@ export function Screen({title, lead, actions, children, columns = false, classNa
 }
 
 /** A grouped list of rows inside one panel. */
-export function RowGroup({title, hint, span, spread, children}: {
+export function RowGroup({title, hint, span, spread, className, children}: {
   title?: string | undefined;
   hint?: string | undefined;
   /**
@@ -57,11 +57,13 @@ export function RowGroup({title, hint, span, spread, children}: {
    * for a list of medications, where each row needs the whole width.
    */
   spread?: boolean | undefined;
+  className?: string | undefined;
   children: ReactNode;
 }) {
   const {t} = useLanguage();
+  const classes = ['card', 'entry-group', span ? `ui-span-${span}` : '', spread ? 'entry-group--spread' : '', className ?? ''].filter(Boolean).join(' ');
   return (
-    <section className={`card entry-group${span ? ` ui-span-${span}` : ''}${spread ? ' entry-group--spread' : ''}`}>
+    <section className={classes}>
       {title ? <h2 className="card__title">{t(title)}</h2> : null}
       {hint ? <p className="card__hint">{t(hint)}</p> : null}
       <div className="ui-rows">{children}</div>

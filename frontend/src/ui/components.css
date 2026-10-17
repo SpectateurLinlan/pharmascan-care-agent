@@ -158,6 +158,52 @@
   overflow-wrap: anywhere;
 }
 
+/* --- Me and Records page compositions ----------------------------------- */
+.ui-screen--me {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.ui-screen--me > .identity-card,
+.ui-screen--me > .me-category,
+.ui-screen--me > .me-app-info {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.records-navigation-group > .ui-rows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.period-actions.records-summary-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-2);
+}
+
+@container (min-width: 38rem) {
+  .records-navigation-group > .ui-rows {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--s-3);
+  }
+
+  .period-actions.records-summary-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 58rem) {
+  .ui-screen--me {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  .ui-screen--me > .me-category {
+    grid-column: span 4;
+  }
+}
+
 /* --- pill (status and verification) --------------------------------------- */
 
 .ui-pill {

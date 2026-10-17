@@ -430,6 +430,7 @@ Object.assign(translations, {
  'Me contains your account and settings categories. Open Medication reminders for reminders and device notifications, or Usage preferences for language, speech and text size. You can reopen this guide from Me → Help / User Guide.':'“我”提供账户及设置分类。进入“用药提醒”管理提醒与设备通知，进入“使用偏好”调整语言、语音与文字大小。您可从“我 → 帮助／使用指南”重新查看引导。',
  'Language, speech and text size':'语言、语音与文字大小',
  'App information':'应用信息',
+ 'Health records and ongoing care':'健康记录与持续照护','Choose an area to review or update.':'选择要查看或更新的内容。','Challenges managing medicines':'用药管理中遇到的问题','Your care follow-ups':'用药跟进事项','Information for your next review':'就诊复查准备信息',
  'Medication reminders and notifications':'用药提醒与通知',
  'Advanced information and device management':'高级信息与设备管理',
  'AI assistant':'AI 助手',

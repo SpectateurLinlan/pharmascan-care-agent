@@ -20,7 +20,7 @@ export function PatientHub({onOpen,onGuide,auth=accountAuth}:{onOpen:(page:MeDes
  const {t,preferences}=useLanguage();const [account,setAccount]=useState<Account|null>(null);
  useEffect(()=>{let live=true;const load=()=>void auth.account().then(row=>{if(live)setAccount(row);}).catch(()=>{if(live)setAccount(null);});load();window.addEventListener('focus',load);return()=>{live=false;window.removeEventListener('focus',load);};},[auth]);
  const member=account?.kind==='member';const name=accountDisplayName(account,preferences.display_name,t('Guest'));
- return <Screen columns title="Me" lead="Your account, and how this app works for you.">
+ return <Screen title="Me" lead="Your account, and how this app works for you." className="ui-screen--me">
   <section className="card identity-card">
    <button aria-label={t('Personal profile')} className="identity-entry" onClick={()=>onOpen('profile')}>
     <span className="avatar"><Icon name="user"/></span>
@@ -31,19 +31,19 @@ export function PatientHub({onOpen,onGuide,auth=accountAuth}:{onOpen:(page:MeDes
     ? <div className="guest-link"><p>{t('Link your guest account to restore your records on another device.')}</p><button className="primary" onClick={()=>onOpen('account')}>{t('Login or register')}</button></div>
     : null}
   </section>
-  <RowGroup title="Care and reminders">
+  <RowGroup title="Care and reminders" className="me-category">
    <Row icon="user" title="Caregiver contacts" hint="Private contact details" onClick={()=>onOpen('caregivers')}/>
    <Row icon="bell" title="Medication reminders" hint="In-app prompts and notifications" onClick={()=>onOpen('reminder-settings')}/>
   </RowGroup>
-  <RowGroup title="Usage preferences">
+  <RowGroup title="Usage preferences" className="me-category">
    <Row icon="languages" title="Language and speech" onClick={()=>onOpen('language-settings')}/>
    <Row icon="info" title="Text size" onClick={()=>onOpen('accessibility')}/>
   </RowGroup>
-  <RowGroup title="Privacy and data">
+  <RowGroup title="Privacy and data" className="me-category">
    <Row icon="message" title="Assistant and conversation saving" hint="Saved chats and chat history" onClick={()=>onOpen('conversations')}/>
    <Row icon="shield" title="Privacy controls" hint="Photo processing and personal records" onClick={()=>onOpen('privacy')}/>
   </RowGroup>
-  <RowGroup title="App information">
+  <RowGroup title="App information" className="me-app-info" spread>
    {onGuide?<Row icon="info" title="Help / User Guide" onClick={onGuide}/>:null}
    <Row icon="file" title="About MediThread" onClick={()=>onOpen('about')}/>
    <Row icon="message" title="Feedback" onClick={()=>onOpen('feedback')}/>

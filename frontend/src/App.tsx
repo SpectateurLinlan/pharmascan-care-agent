@@ -159,15 +159,15 @@ function CompanionApp() {
       {tab==='medication-review'?<MedicationReviewScreen/>:null}
       {tab==='health-notes'?<HealthTrackingScreen initialDescription={healthDescription} medications={medications?.medications??[]}/>:null}
       {tab.startsWith('summary-')?<ReviewSummaryScreen period={tab==='summary-week'?'week':tab==='summary-month'?'month':'course'} regimens={versions}/>:null}
-      {tab === 'records' ? <Screen columns title="Records" lead="Your own reports, and the summaries you can take to a review.">
-        <RowGroup title="Medication and health summary">
-          <div className="period-actions">{(['week','month','course'] as const).map(period=><button key={period} onClick={()=>setTab(`summary-${period}`)}>{t(period==='week'?'This week':period==='month'?'This month':'This course')}</button>)}</div>
-          <Row icon="heart" title="My health notes" hint="How you have been feeling" onClick={()=>setTab('health-notes')}/>
+      {tab === 'records' ? <Screen title="Records" lead="Your own reports, and the summaries you can take to a review.">
+        <RowGroup title="Medication and health summary" className="records-summary">
+          <div className="period-actions records-summary-actions">{(['week','month','course'] as const).map(period=><button key={period} onClick={()=>setTab(`summary-${period}`)}>{t(period==='week'?'This week':period==='month'?'This month':'This course')}</button>)}</div>
         </RowGroup>
-        <RowGroup title="Long-term medication care" hint="For preparing a professional review">
-          <Row icon="alert" title="Medication difficulties" onClick={()=>setTab('adherence-barriers')}/>
-          <Row icon="calendar" title="Medication follow-ups" onClick={()=>setTab('care-tasks')}/>
-          <Row icon="clipboard" title="Medication review preparation" onClick={()=>setTab('medication-review')}/>
+        <RowGroup title="Health records and ongoing care" hint="Choose an area to review or update." className="records-navigation-group" spread>
+          <Row icon="heart" title="My health notes" hint="How you have been feeling" onClick={()=>setTab('health-notes')}/>
+          <Row icon="alert" title="Medication difficulties" hint="Challenges managing medicines" onClick={()=>setTab('adherence-barriers')}/>
+          <Row icon="calendar" title="Medication follow-ups" hint="Your care follow-ups" onClick={()=>setTab('care-tasks')}/>
+          <Row icon="clipboard" title="Medication review preparation" hint="Information for your next review" onClick={()=>setTab('medication-review')}/>
         </RowGroup>
         <div className="screen-full"><HistoryScreen /></div>
       </Screen> : null}

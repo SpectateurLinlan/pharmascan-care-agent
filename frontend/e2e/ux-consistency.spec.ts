@@ -85,6 +85,43 @@ test('source-only count, supplement cancellation and assistant alignment stay co
  expect(getSourceReads()).toBeGreaterThan(0);expect(errors).toEqual([]);
 });
 
+test('Me categories and Records summary/actions use the intended responsive hierarchy',async({page})=>{
+ const {errors}=await mockPatientApp(page);await page.goto('/e2e/patient-feedback.html?shell=1');
+ await page.locator('[data-guide="me"]').click();
+ await expect(page.locator('.me-category')).toHaveCount(3);await expect(page.locator('.me-app-info .ui-row')).toHaveCount(3);
+ for(const width of [390,430,768,1024,1280,1600]){
+  await page.setViewportSize({width,height:900});
+  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  const cards=await page.locator('.me-category').evaluateAll(rows=>rows.map(row=>{const box=row.getBoundingClientRect();return{x:box.x,y:box.y,width:box.width,height:box.height};}));
+  expect(cards.every(card=>card.width>0&&card.height>0)).toBe(true);
+  if(width>=1280)expect(new Set(cards.map(card=>Math.round(card.y))).size).toBe(1);
+  else expect(new Set(cards.map(card=>Math.round(card.y))).size).toBe(3);
+ }
+ await page.locator('[data-guide="records"]').click();
+ await expect(page.locator('.records-summary-actions button')).toHaveCount(3);
+ await expect(page.locator('.records-navigation-group .ui-row')).toHaveCount(4);
+ for(const width of [390,430,768,1024,1280,1600]){
+  await page.setViewportSize({width,height:900});
+  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  const layout=await page.evaluate(()=>{
+   const group=document.querySelector('.records-navigation-group')!,rows=[...group.querySelectorAll('.ui-row')],buttons=[...document.querySelectorAll('.records-summary-actions button')];
+   return {wide:group.getBoundingClientRect().width>=608,rowLines:new Set(rows.map(row=>Math.round(row.getBoundingClientRect().y))).size,buttonLines:new Set(buttons.map(button=>Math.round(button.getBoundingClientRect().y))).size};
+  });
+  expect(layout.rowLines).toBe(layout.wide?2:4);expect(layout.buttonLines).toBe(layout.wide?1:3);
+ }
+ for(const [label,route] of [['This week','#summary-week'],['This month','#summary-month'],['This course','#summary-course']] as const){
+  const routePage=await page.context().newPage();await mockPatientApp(routePage);await routePage.goto('/e2e/patient-feedback.html?shell=1');
+  await routePage.locator('[data-guide="records"]').click();await routePage.getByRole('button',{name:label,exact:true}).click();
+  await expect.poll(()=>routePage.evaluate(()=>location.hash)).toBe(route);await routePage.close();
+ }
+ for(const [label,route] of [['My health notes','#health-notes'],['Medication difficulties','#adherence-barriers'],['Medication follow-ups','#care-tasks'],['Medication review preparation','#medication-review']] as const){
+  const routePage=await page.context().newPage();await mockPatientApp(routePage);await routePage.goto('/e2e/patient-feedback.html?shell=1');
+  await routePage.locator('[data-guide="records"]').click();await routePage.getByRole('button',{name:new RegExp(label)}).click();
+  await expect.poll(()=>routePage.evaluate(()=>location.hash)).toBe(route);await routePage.close();
+ }
+ expect(errors).toEqual([]);
+});
+
 test('settings ownership, persisted reminder preferences and viewport launcher geometry',async({page})=>{
  test.setTimeout(90000);page.setDefaultTimeout(8000);
  const {errors,prefs}=await mockPatientApp(page);
