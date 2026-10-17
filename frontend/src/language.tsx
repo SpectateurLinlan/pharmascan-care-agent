@@ -149,6 +149,7 @@ const translations:Record<string,string>={
  "Please retry the connection. An unavailable record is not an empty medication list.":"请重试连接，记录暂时无法读取不代表药物列表为空。","Retry loading records":"重新加载记录",
  "How this answer was made":"回答依据",
  "AI-assisted answer using verified application tools.":"AI 通过已验证的应用工具生成回答。",
+ "This answer uses application tools and available sources, without AI-generated interpretation.":"此回复来自应用工具及可用来源，未使用 AI 生成解读。",
  "Limited demo rules were used for this answer.":"此回答使用了演示规则。",
  "Selected schedule":"选定用药计划",
  "No medication selected.":"尚未选择药物。",

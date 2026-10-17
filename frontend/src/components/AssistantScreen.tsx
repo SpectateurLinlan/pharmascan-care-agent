@@ -5,6 +5,7 @@ import { useLanguage } from '../language';
 import { useEffect, useRef, useState } from 'react';
 import { api, type AgentUsage, type AgentMessageResponse, type ConversationEntry, type ChatPhotoContext } from '../api/client';
 import {photoEvidence} from '../photoEvidence';
+import {answerExplanation,toolTraceLabel} from '../assistantResponsePresentation';
 import { ErrorNotice } from './primitives';
 import { VoiceInput } from './VoiceInput';
 import {BrowserTts} from '../browserTts';
@@ -208,8 +209,8 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
         <div className="actions">
           <button className="icon-button speech-toggle" aria-label={t(speaking&&speakingIndex===index?'Stop audio':'Play response')} aria-pressed={speaking&&speakingIndex===index} onClick={()=>{if(speaking&&speakingIndex===index){stopPlayback();setSpeaking(false);}else void readAloud(turn.message,index);}} disabled={!preferences.voice_enabled}><Icon name="speaker"/></button>
         </div>
-        <details><summary>{t('How this answer was made')}</summary><p>{t(turn.mode==="gemini" ? "AI-assisted answer using verified application tools." : "This answer uses the available records and rules; AI is temporarily unavailable.")}</p>
-          <ul>{turn.tool_traces.map((trace, traceIndex) => <li key={traceIndex}>{trace.tool_name}: {trace.status}</li>)}</ul>
+        <details><summary>{t('How this answer was made')}</summary><p>{t(answerExplanation(turn.mode))}</p>
+          <ul>{turn.tool_traces.map((trace, traceIndex) => <li key={traceIndex}>{toolTraceLabel(trace)}: {trace.status}{trace.error_code?` (${trace.error_code})`:''}</li>)}</ul>
         </details>
       </li>)}
     </ul> : null}

@@ -1,5 +1,24 @@
 # External PharmaScan Stage2, Main Backend and Agent Tool Contracts
 
+## Agent response provenance and medication-education diagnostics
+
+`AgentMessageResponse.mode` remains a string. `records_only` identifies a deliberate
+application-tool/source response without model-generated interpretation; it does
+not assert that Gemini is unavailable. Existing `gemini`, `deterministic_degraded`
+and quota modes retain their behavior. Update the frontend to display the new
+value accurately; old clients remain wire-compatible but may mislabel its origin.
+
+Medication education reuses the `get_long_term_care` database audit category.
+The existing public trace `payload.action = get_medication_understanding`
+identifies the actual action; the UI displays that action for this specific pair.
+No audit enum, database constraint or persisted trace is renamed. Failed education
+fallbacks return a blocked trace with a safe error code, not raw exception details;
+authentication failures still propagate. A grouped read's `success` alone is not
+proof that a label matched: inspect its action and `general_knowledge.status`.
+
+No schema, RLS or production-data migration is required. Local tests do not prove
+the deployed runtime or an external knowledge/model provider succeeded.
+
 ## Patient message / photo evidence boundary (BUG-01)
 
 `POST /api/agent/messages` keeps `text` as the patient's natural-language input.

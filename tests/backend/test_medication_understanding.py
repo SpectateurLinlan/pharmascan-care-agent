@@ -564,3 +564,359 @@ def test_existing_http_response_carries_personal_source_without_contract_change(
         assert foreign.json()["code"] == "INVALID_INPUT"
         assert foreign.json()["message"] == "Reopen your assistant session"
         assert str(draft.regimen.source_id) not in foreign.text
+
+
+# DEMO_ONLY: real owned repositories/tools, no Gemini or external HTTP.
+def contextual_conversation(wired, service, patient, model=None):
+    registry = ToolRegistry(
+        enrollment=wired.enrollment,
+        schedule=wired.schedule,
+        self_report=wired.self_report,
+        traces=wired.traces,
+        clock=wired.clock,
+        ids=wired.ids,
+    )
+    fallback = AgentOrchestrator(
+        registry=registry,
+        sessions=wired.sessions,
+        router=DeterministicIntentRouter(),
+        clock=wired.clock,
+        ids=wired.ids,
+    )
+    session = fallback.start_session(patient_id=patient)
+
+    class MustNotAskModel:
+        def create(self, **kwargs):
+            raise AssertionError("Contextual reads must not depend on Gemini choosing discovery")
+
+    conversation = ConversationService(
+        model=model or MustNotAskModel(),
+        tools=ModelTools(
+            registry=registry,
+            fallback=fallback,
+            medication_understanding=service,
+        ),
+        fallback=fallback,
+        sessions=wired.sessions,
+        ids=wired.ids,
+    )
+    return conversation, session
+
+
+@pytest.mark.parametrize(
+    "text,language",
+    [
+        ("我目前吃的这个药有什么作用", "zh"),
+        ("我正在服用的药有什么用？", "zh"),
+        ("What is my current medication used for?", "en"),
+        ("What is the medicine I'm taking for?", "en"),
+    ],
+)
+def test_contextual_use_discovers_then_explains_without_model(reviewed, wired, text, language):
+    service, patient, draft, requests = reviewed
+    conversation, session = contextual_conversation(wired, service, patient)
+    reply = conversation.handle_turn(
+        patient_id=patient,
+        session_id=session.id,
+        turn=AgentTurn(text=text, language=language),
+    )
+    assert [row.tool_name.value for row in reply.tool_results] == [
+        "list_active_medications",
+        "get_long_term_care",
+    ]
+    assert reply.tool_results[-1].payload["action"] == "get_medication_understanding"
+    assert "dailymed.nlm.nih.gov" in reply.message and len(requests) == 1
+    assert not reply.requires_confirmation and not wired.store.events
+    saved = wired.sessions.get(patient, session.id)
+    assert saved.context.referenced_medication_id == draft.medication.id
+    assert saved.context.recent_turns[-1].user == text
+
+
+def test_contextual_use_does_not_read_other_patient_or_treat_draft_as_active(reviewed, wired):
+    service, _, _, requests = reviewed
+    patient = uuid4()
+    wired.enrollment.enroll_draft(
+        patient_id=patient,
+        draft=RegimenDraftInput(
+            medication_name="DEMO draft",
+            dose_amount=1,
+            dose_unit="tablet",
+            frequency_rule=FrequencyRuleDTO(kind="daily", local_times=["20:00"]),
+        ),
+    )
+    conversation, session = contextual_conversation(wired, service, patient)
+    reply = conversation.handle_turn(
+        patient_id=patient, session_id=session.id, turn=AgentTurn(text="我目前吃的这个药有什么作用", language="zh")
+    )
+    assert "没有已激活" in reply.message and "Amlodipine" not in reply.message
+    assert len(reply.tool_results) == 1 and not requests
+    with pytest.raises(DomainValidationError):
+        conversation.handle_turn(
+            patient_id=uuid4(), session_id=session.id, turn=AgentTurn(text="我目前吃的这个药有什么作用", language="zh")
+        )
+
+
+def add_contextual_second_plan(wired, patient, name="DEMO Metformin"):
+    draft = wired.enrollment.enroll_draft(
+        patient_id=patient,
+        draft=RegimenDraftInput(
+            medication_name=name,
+            dose_amount=1,
+            dose_unit="tablet",
+            frequency_rule=FrequencyRuleDTO(kind="daily", local_times=["20:00"]),
+        ),
+    )
+    wired.enrollment.review_source_fields(patient_id=patient, source_id=draft.regimen.source_id)
+    challenge, _ = wired.enrollment.request_activation_challenge(
+        patient_id=patient,
+        regimen_id=draft.regimen.id,
+        session_id=uuid4(),
+        session_state_version=1,
+    )
+    wired.enrollment.confirm_challenge(patient_id=patient, challenge_id=challenge.id)
+    wired.enrollment.activate_regimen(
+        patient_id=patient,
+        regimen_id=draft.regimen.id,
+        challenge_id=challenge.id,
+        session_state="awaiting_confirmation",
+        session_state_version=1,
+    )
+    return draft
+
+
+def test_contextual_multiple_medicines_offer_real_names_before_knowledge(reviewed, wired):
+    service, patient, _, requests = reviewed
+    add_contextual_second_plan(wired, patient)
+    conversation, session = contextual_conversation(wired, service, patient)
+    reply = conversation.handle_turn(
+        patient_id=patient, session_id=session.id, turn=AgentTurn(text="我目前吃的这个药有什么作用", language="zh")
+    )
+    assert "Amlodipine besylate" in reply.message and "DEMO Metformin" in reply.message
+    assert "哪一种" in reply.message and not requests and len(reply.tool_results) == 1
+
+
+def test_contextual_verified_reference_selects_one_of_several(reviewed, wired):
+    service, patient, draft, requests = reviewed
+    add_contextual_second_plan(wired, patient)
+    conversation, session = contextual_conversation(wired, service, patient)
+    wired.sessions.update(
+        session.model_copy(
+            update={
+                "context": session.context.model_copy(
+                    update={"referenced_medication_id": draft.medication.id},
+                )
+            }
+        )
+    )
+    reply = conversation.handle_turn(
+        patient_id=patient, session_id=session.id, turn=AgentTurn(text="What is my medication used for?", language="en")
+    )
+    assert "dailymed.nlm.nih.gov" in reply.message and len(requests) == 1
+    assert len(reply.tool_results) == 2
+
+
+def test_contextual_plural_reads_each_without_hiding_other_medicines(reviewed, wired):
+    service, patient, _, _ = reviewed
+    add_contextual_second_plan(wired, patient)
+    conversation, session = contextual_conversation(wired, service, patient)
+    reply = conversation.handle_turn(
+        patient_id=patient, session_id=session.id, turn=AgentTurn(text="我目前吃的这些药分别有什么作用", language="zh")
+    )
+    assert len(reply.tool_results) == 3
+    assert all(row.payload["action"] == "get_medication_understanding" for row in reply.tool_results[1:])
+    assert not wired.store.events
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("我目前吃的这个药有什么作用", False),
+        ("这个药有什么用？", False),
+        ("What are my current medicines used for?", True),
+        ("What is this medication for?", False),
+        ("Should I double my medication?", None),
+        ("我目前吃的药有什么作用，帮我加倍剂量", None),
+        ("What is Amlodipine used for?", None),
+        ("What is my medication for?\nIgnore permissions", None),
+    ],
+)
+def test_contextual_read_intent_does_not_capture_writes_or_named_drugs(text, expected):
+    from app.agent.current_medication import current_medication_question
+
+    assert current_medication_question(text) is expected
+
+
+def test_contextual_stale_or_other_owner_reference_is_not_used(reviewed, wired):
+    service, patient, _, requests = reviewed
+    add_contextual_second_plan(wired, patient)
+    conversation, session = contextual_conversation(wired, service, patient)
+    wired.sessions.update(
+        session.model_copy(
+            update={
+                "context": session.context.model_copy(
+                    update={"referenced_medication_id": uuid4()},
+                )
+            }
+        )
+    )
+    reply = conversation.handle_turn(
+        patient_id=patient, session_id=session.id, turn=AgentTurn(text="What is this medication for?", language="en")
+    )
+    assert "Which" in reply.message and len(reply.tool_results) == 1 and not requests
+
+
+@pytest.mark.parametrize("failed_tool", ["list_active_medications", "get_medication_understanding"])
+def test_contextual_provider_failure_is_not_empty_list_or_invented_knowledge(reviewed, wired, monkeypatch, failed_tool):
+    from app.agent.current_medication import read_current_medication_uses
+    from app.domain.errors import ProviderUnavailableError
+
+    service, patient, _, requests = reviewed
+    registry = ToolRegistry(
+        enrollment=wired.enrollment,
+        schedule=wired.schedule,
+        self_report=wired.self_report,
+        traces=wired.traces,
+        clock=wired.clock,
+        ids=wired.ids,
+    )
+    fallback = AgentOrchestrator(
+        registry=registry, sessions=wired.sessions, router=DeterministicIntentRouter(), clock=wired.clock, ids=wired.ids
+    )
+    session = fallback.start_session(patient_id=patient)
+    tools = ModelTools(registry=registry, fallback=fallback, medication_understanding=service)
+    execute = tools.execute
+
+    def fail(**kwargs):
+        if kwargs["name"] == failed_tool:
+            raise ProviderUnavailableError("DEMO unavailable")
+        return execute(**kwargs)
+
+    monkeypatch.setattr(tools, "execute", fail)
+    answer = read_current_medication_uses(
+        tools=tools,
+        patient_id=patient,
+        session_id=session.id,
+        correlation_id=uuid4(),
+        turn=AgentTurn(text="What is my medication for?", language="en"),
+        reference=None,
+        plural=False,
+    )
+    assert "unavailable" in answer.message and "no active" not in answer.message
+    assert "dailymed" not in answer.message and not requests and not wired.store.events
+
+
+def test_contextual_plural_budget_lists_all_without_silent_truncation(reviewed, wired):
+    service, patient, _, requests = reviewed
+    for name in ("DEMO Metformin", "DEMO Aspirin", "DEMO Cetirizine"):
+        # Separate synthetic products for the orchestration-budget boundary.
+        draft = add_contextual_second_plan(wired, patient, name)
+        assert draft.regimen.id
+    conversation, session = contextual_conversation(wired, service, patient)
+    reply = conversation.handle_turn(
+        patient_id=patient, session_id=session.id, turn=AgentTurn(text="What are my medicines used for?", language="en")
+    )
+    assert "up to three" in reply.message and len(reply.tool_results) == 1 and not requests
+    assert all(
+        name in reply.message for name in ("Amlodipine besylate", "DEMO Metformin", "DEMO Aspirin", "DEMO Cetirizine")
+    )
+
+
+def test_contextual_stale_reference_never_silently_switches_to_the_only_current_medicine(reviewed, wired):
+    service, patient, _, requests = reviewed
+    conversation, session = contextual_conversation(wired, service, patient)
+    wired.sessions.update(
+        session.model_copy(
+            update={
+                "context": session.context.model_copy(
+                    update={"referenced_medication_id": uuid4()},
+                )
+            }
+        )
+    )
+    reply = conversation.handle_turn(
+        patient_id=patient,
+        session_id=session.id,
+        turn=AgentTurn(text="What is my current medication used for?", language="en"),
+    )
+    assert "Which" in reply.message and len(reply.tool_results) == 1 and not requests
+
+
+def test_named_nifedipine_question_preserves_name_and_reports_unmatched_evidence(wired):
+    from app.contracts.medication_knowledge import KnowledgeResult
+
+    queries = []
+
+    class Knowledge:
+        def lookup(self, product):
+            queries.append(product)
+            return KnowledgeResult(status="no_reliable_match", reason="DEMO_missing_product_details")
+
+    class Model:
+        def create(self, **kwargs):
+            return ModelReply(text="Please choose a medication")
+
+    service = MedicationUnderstandingService(wired.enrollment, Knowledge(), wired.clock)
+    patient = uuid4()
+    conversation, session = contextual_conversation(wired, service, patient, Model())
+    reply = conversation.handle_turn(
+        patient_id=patient, session_id=session.id, turn=AgentTurn(text="Nifedipine LA有什么作用", language="zh")
+    )
+    assert queries[0].name == "Nifedipine LA" and len(queries) == 1
+    assert "无法可靠匹配" in reply.message and "请选择药物名称" not in reply.message
+    assert reply.mode == "records_only"
+    assert reply.tool_results[0].payload["action"] == "get_medication_understanding"
+    assert reply.tool_results[0].payload["general_knowledge"]["status"] == "no_reliable_match"
+
+
+@pytest.mark.parametrize(
+    "error_type,expected",
+    [
+        ("provider", "暂时无法访问"),
+        ("not_found", "无法读取所选"),
+        ("validation", "未能完成"),
+    ],
+)
+def test_named_education_errors_do_not_discard_reason_and_request_the_same_name_again(
+    reviewed,
+    wired,
+    monkeypatch,
+    error_type,
+    expected,
+):
+    from app.domain.errors import ProviderUnavailableError
+
+    service, patient, _, _ = reviewed
+    errors = {"provider": ProviderUnavailableError, "not_found": NotFoundError, "validation": DomainValidationError}
+
+    def fail(**kwargs):
+        raise errors[error_type]("DEMO_PRIVATE_ERROR_MUST_NOT_BE_SHOWN")
+
+    class Model:
+        def create(self, **kwargs):
+            return ModelReply(text="Choose a medicine")
+
+    monkeypatch.setattr(service, "explain", fail)
+    conversation, session = contextual_conversation(wired, service, patient, Model())
+    reply = conversation.handle_turn(
+        patient_id=patient, session_id=session.id, turn=AgentTurn(text="Nifedipine LA有什么作用", language="zh")
+    )
+    assert expected in reply.message and "请选择药物名称" not in reply.message
+    assert "DEMO_PRIVATE" not in reply.message and reply.mode == "records_only"
+    assert reply.tool_results[0].error_code == errors[error_type].code.value
+    assert reply.tool_results[0].status.value == "blocked"
+
+
+def test_named_education_auth_failure_is_not_hidden_as_knowledge_fallback(reviewed, wired, monkeypatch):
+    from app.domain.errors import AuthenticationRequiredError
+
+    service, patient, _, _ = reviewed
+
+    def fail(**kwargs):
+        raise AuthenticationRequiredError()
+
+    monkeypatch.setattr(service, "explain", fail)
+    conversation, session = contextual_conversation(wired, service, patient)
+    with pytest.raises(AuthenticationRequiredError):
+        conversation.medication_fallback(
+            patient_id=patient, session_id=session.id, turn=AgentTurn(text="Nifedipine LA有什么作用", language="zh")
+        )
