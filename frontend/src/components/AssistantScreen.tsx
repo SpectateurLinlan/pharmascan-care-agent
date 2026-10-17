@@ -1,10 +1,9 @@
 import {Icon} from './Icon';
-import {createPortal} from 'react-dom';
 import {ConversationSurface} from './ConversationSurface';
 import {ConversationHistoryBrowser} from './ConversationHistoryBrowser';
 import { useLanguage } from '../language';
 import { useEffect, useRef, useState } from 'react';
-import { api, type AgentUsage, type AgentMessageResponse } from '../api/client';
+import { api, type AgentUsage, type AgentMessageResponse, type ConversationEntry } from '../api/client';
 import { ErrorNotice } from './primitives';
 import { VoiceInput } from './VoiceInput';
 import {BrowserTts} from '../browserTts';
@@ -13,9 +12,9 @@ import {CareReviewSheet} from './CareReviewSheet';
 import type {CareReview} from '../api/care';
 import {useImageConsent} from '../imageConsent';
 
-export function AssistantScreen({ sessionId, onSession, ownerId, compact = false, todayEntry = false, launcherVisible = true, clearRevision = 0, active = true, onChanged,onVisualCheck,onHealthReview,onExpand,onClose,contextSlots={} }: {
-  onClose?:()=>void;contextSlots?:Record<string,unknown>;launcherVisible?:boolean;
-  sessionId: string | null; onSession: (id: string) => void; ownerId?:string; compact?: boolean; todayEntry?:boolean; clearRevision?:number; onExpand?:()=>void; active?:boolean; onChanged?: () => void;onVisualCheck?:(id:string|null)=>void;onHealthReview?:(description:string)=>void;
+export function AssistantScreen({ sessionId, onSession, ownerId, compact = false, workspace = false, todayEntry = false, clearRevision = 0, active = true, onChanged,onVisualCheck,onHealthReview,onExpand,onClose,contextSlots={} }: {
+  onClose?:()=>void;contextSlots?:Record<string,unknown>;
+  sessionId: string | null; onSession: (id: string) => void; ownerId?:string; compact?: boolean; workspace?:boolean; todayEntry?:boolean; clearRevision?:number; onExpand?:()=>void; active?:boolean; onChanged?: () => void;onVisualCheck?:(id:string|null)=>void;onHealthReview?:(description:string)=>void;
 }) {
   const {language,t,preferences,ttsProvider,speechRate}=useLanguage();
   const [photoConsent,setPhotoConsent]=useImageConsent(ownerId??'');
@@ -26,8 +25,9 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
   const [careProposal,setCareProposal]=useState<CareReview|null>(null);
   const [text, setText] = useState('');
   const [historyOpen,setHistoryOpen]=useState(false),[pendingText,setPendingText]=useState('');
+  const [selectedHistory,setSelectedHistory]=useState<ConversationEntry|null>(null);
   const sending=useRef(false);
-  useEffect(()=>{if(compact)setHistoryOpen(false);},[compact]);
+  useEffect(()=>{if(compact){setHistoryOpen(false);setSelectedHistory(null);}},[compact]);
   const [photo,setPhoto]=useState<File|null>(null);
   const [photoType,setPhotoType]=useState<'pharmacy_label'|'prescription'|'package'>('pharmacy_label');
   const [photoPreview,setPhotoPreview]=useState<string|null>(null);
@@ -91,7 +91,6 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
     if(photo&&!photoConsent){setError(new Error(t('Allow photo processing before sending this image.')));return;}
     if(photo&&photo.size>8_000_000){setError(new Error(t('Choose an image smaller than 8 MB.')));return;}
     sending.current=true;setHistoryOpen(false);setPendingText(text.trim()||t('Please help me understand this photo.'));
-    onExpand?.();
     setReportNotice('');
     stopPlayback();setSpeaking(false);
     const sentLanguage=language;
@@ -168,7 +167,7 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
     } catch (caught) { setError(caught); } finally { setBusy(false); }
   }
 
-  function showCurrentConversation(){setHistoryOpen(false);requestAnimationFrame(()=>messageInput.current?.focus());}
+  function showCurrentConversation(){setHistoryOpen(false);setSelectedHistory(null);requestAnimationFrame(()=>messageInput.current?.focus());}
   const workspaceLocked=busy||turns.some(row=>Boolean(row.pending_report))||careProposal!==null;
   async function newConversation(){
     if(workspaceLocked||sending.current)return;
@@ -179,28 +178,26 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
       setTurns([]);setRecent([]);setSentTexts([]);setSentPhotoNames([]);setReportStates({});setConfirmationIndex(null);setReportNotice('');
     }catch(caught){if(mounted.current)setError(caught);}finally{sending.current=false;if(mounted.current)setBusy(false);}
   }
-  if(compact&&!todayEntry)return launcherVisible?createPortal(<button type="button" className="assistant-launcher no-print" aria-label={t('Open MediThread Assistant')} title={t('Open MediThread Assistant')} onClick={onExpand}><img src="/branding/assistant-avatar-green.png" width="48" height="48" alt=""/><span>{t('AI assistant')}</span></button>,document.body):null;
-
-  return <ConversationSurface open={!compact&&Boolean(onClose)} onClose={onClose} locked={confirmationIndex!==null||careProposal!==null||busy} actions={<><button className="icon-button" aria-label={t('Conversation history')} title={t('Conversation history')} aria-pressed={historyOpen} disabled={workspaceLocked} onClick={()=>{if(historyOpen)showCurrentConversation();else setHistoryOpen(true);}}><Icon name="clock"/></button><button className="icon-button" aria-label={t('New conversation')} title={t('New conversation')} disabled={workspaceLocked} onClick={()=>void newConversation()}><Icon name="plus"/></button></>}><section className={compact ? `companion-composer${todayEntry?' today-assistant card':''}` : 'assistant-view'} aria-label="Medication companion">
+  return <ConversationSurface open={false} workspace={workspace} navigation={workspace&&historyOpen?<ConversationHistoryBrowser revision={historyRevision} onSelect={entry=>{setSelectedHistory(entry);setHistoryOpen(false);}} onCurrent={showCurrentConversation} selectedId={selectedHistory?.id??null}/>:undefined} onClose={onClose} locked={confirmationIndex!==null||careProposal!==null||busy} actions={<><button className="icon-button" aria-label={t('Conversation history')} title={t('Conversation history')} aria-pressed={historyOpen} disabled={workspaceLocked} onClick={()=>{if(historyOpen)showCurrentConversation();else{setSelectedHistory(null);setHistoryOpen(true);}}}><Icon name="clock"/></button><button className="icon-button" aria-label={t('New conversation')} title={t('New conversation')} disabled={workspaceLocked} onClick={()=>void newConversation()}><Icon name="plus"/></button></>}><section className={compact ? `companion-composer${todayEntry?' today-assistant card':''}` : 'assistant-view'} aria-label="Medication companion">
     {compact&&todayEntry?<>
-      <div className="today-assistant__heading"><Icon name="message"/><h2>MediThread Assistant</h2><button className="icon-button" aria-label={t('Open conversation')} title={t('Open conversation')} onClick={onExpand}><Icon name="chevron-right"/></button></div>
+      <div className="today-assistant__heading"><Icon name="message"/><h2>MediThread Assistant</h2><button type="button" className="today-assistant__expand" onClick={onExpand}>{t('Open full chat')}<Icon name="chevron-right"/></button></div>
       <p className="card__hint">{t('Understand your medicines, review your records or prepare for a visit.')}</p>
       <div className="assistant-tasks" aria-label={t('Assistant tasks')}>
         {([
           ['Understand medicines','What are my current medications used for? Explain general uses separately from my reviewed instructions.'],
           ['Review my records','Summarise my recorded doses and health observations from the past 7 days. Distinguish unrecorded doses from reported not taken.'],
           ['Prepare for a visit','Help me prepare questions for a pharmacist or doctor using my saved medication and health records.'],
-        ] as const).map(([label,prompt])=><button type="button" key={label} disabled={busy||Boolean(text.trim())||Boolean(photo)} onClick={()=>{setText(t(prompt));onExpand?.();}}>{t(label)}</button>)}
+        ] as const).map(([label,prompt])=><button type="button" key={label} disabled={busy||Boolean(text.trim())||Boolean(photo)} onClick={()=>{setText(t(prompt));requestAnimationFrame(()=>messageInput.current?.focus());}}>{t(label)}</button>)}
       </div>
     </>:null}
-    {!compact&&historyOpen?<ConversationHistoryBrowser revision={historyRevision} onBack={showCurrentConversation}/>:null}
-    <div className="conversation-scroll" hidden={!compact&&historyOpen}>
-    {!compact&&!recent.length&&!turns.length&&!pendingText?<p className="notice">{t('Ask a question about your medicines or records.')}</p>:null}
-    {!compact&&recent.length?<details className="recent-chat" open={!compact}><summary>{t('Recent conversation')} · {recent.length} / 6</summary>{recent.map((row,index)=><article key={index}><p className="user-message">{row.user}</p><p>{patientMessage(row.assistant)}</p></article>)}</details>:null}
+    <div className="conversation-scroll" hidden={workspace&&historyOpen}>
+    {workspace&&selectedHistory?<article className="selected-history"><button type="button" className="text-button" onClick={showCurrentConversation}>{t('Back to current conversation')}</button><p className="user-message">{selectedHistory.user_text}</p><p className="history-message">{patientMessage(selectedHistory.assistant_text)}</p></article>:null}
+    {workspace&&!selectedHistory&&!recent.length&&!turns.length&&!pendingText?<p className="notice">{t('Ask a question about your medicines or records.')}</p>:null}
+    {!compact&&!selectedHistory&&recent.length?<details className="recent-chat" open><summary>{t('Recent conversation')} · {recent.length} / 6</summary>{recent.map((row,index)=><article key={index}><p className="user-message">{row.user}</p><p>{patientMessage(row.assistant)}</p></article>)}</details>:null}
     {/* Conversation reads top to bottom with the composer at the bottom, as
         every chat surface does. The input used to sit above the transcript, so
         the newest reply appeared *below* the field you type into. */}
-    {!compact&&turns.length ? <ul className="transcript" aria-live="polite" aria-hidden={confirmationIndex!==null}>
+    {!selectedHistory&&turns.length ? <ul className="transcript" aria-live="polite" aria-hidden={confirmationIndex!==null}>
       {turns.map((turn, index) => <li className="turn" key={index}>
         <p className="user-message">{sentPhotoNames[index]?<span className="chat-photo-note">{t('Photo attached')}: {sentPhotoNames[index]}<br/></span>:null}{sentTexts[index]}</p>
         <p>{patientMessage(turn.message)}</p>
@@ -227,16 +224,16 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
     {/* The busy line and the saved-report notice belong to the open
         conversation, where the patient is actually talking to the assistant;
         repeated on four screens they are noise above the page title. */}
-    {!compact&&pendingText?<div className="turn pending-message"><p className="user-message">{pendingText}</p><p role="status">{t('Checking your records...')}</p></div>:null}
-    {!compact&&busy&&!pendingText?<p role="status">{t('Starting a new conversation?')}</p>:null}
+    {pendingText?<div className="turn pending-message"><p className="user-message">{pendingText}</p>{busy?<p role="status">{t('Checking your records...')}</p>:null}</div>:null}
+    {workspace&&busy&&!pendingText?<p role="status">{t('Starting a new conversation?')}</p>:null}
     {error ? <ErrorNotice error={error} /> : null}
-    {!compact&&reportNotice ? <p role="status">{t(reportNotice)}</p> : null}
+    {workspace&&reportNotice ? <p role="status">{t(reportNotice)}</p> : null}
         {confirmationIndex!==null&&turns[confirmationIndex]?.pending_report ? (()=>{const index=confirmationIndex,turn=turns[index]!;const cancel=()=>{setTurns(previous=>previous.map((row,at)=>at===index?{...row,pending_report:null}:row));setReportStates(previous=>({...previous,[index]:'Report cancelled'}));setConfirmationIndex(null);};return <ConfirmReportSheet title="Just to confirm" summary={turn.pending_report!.summary} busy={busy} onConfirm={()=>void confirmReport(index)} onCancel={cancel}>
         <button onClick={()=>void readAloud(turn.message,index)} disabled={!preferences.voice_enabled}>{t('Play response')}</button>{speaking?<button onClick={()=>{stopPlayback();setSpeaking(false);}}>{t('Stop audio')}</button>:null}</ConfirmReportSheet>;})() : null}
     {careProposal?<CareReviewSheet proposal={careProposal} onCancel={()=>setCareProposal(null)} onSaved={()=>{setCareProposal(null);setReportNotice('Your medication-care record was saved.');onChanged?.();window.dispatchEvent(new Event('pharmascan:reminder-refresh'));}}/>:null}
 
     </div>
-    {photo?<div hidden={!compact&&historyOpen} className="photo-attachment" aria-label={t('Photo attachment')}>
+    {photo?<div hidden={(workspace&&historyOpen)||Boolean(selectedHistory)} className="photo-attachment" aria-label={t('Photo attachment')}>
       {photoPreview?<img src={photoPreview} alt={t('Selected photo preview')}/>:null}
       <div className="photo-attachment__details"><strong>{photo.name}</strong>
         <label>{t('Photo type')} <select value={photoType} onChange={event=>setPhotoType(event.target.value as typeof photoType)}>
@@ -246,7 +243,7 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
       </div>
       <button type="button" className="icon-button" aria-label={t('Remove photo')} onClick={()=>setPhoto(null)}><Icon name="close"/></button>
     </div>:null}
-    <div className="composer-row" hidden={!compact&&historyOpen}>
+    <div className="composer-row" hidden={(workspace&&historyOpen)||Boolean(selectedHistory)}>
       <input ref={photoInput} className="sr-only" type="file" accept="image/png,image/jpeg" aria-label={t('Choose a photo')} onChange={event=>{const selected=event.currentTarget.files?.[0]??null;setPhoto(selected);event.currentTarget.value='';}}/>
       <button className="photo-button" type="button" aria-label={t('Add a photo to chat')} onClick={()=>photoInput.current?.click()}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1"/><path d="m4 18 5-5 4 3 4-5 4 6"/></svg></button>
       <input ref={messageInput} aria-label={t("Review your message before sending")} value={text} disabled={busy}

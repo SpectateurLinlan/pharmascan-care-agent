@@ -433,6 +433,7 @@ Object.assign(translations, {
  'Medication reminders and notifications':'用药提醒与通知',
  'Advanced information and device management':'高级信息与设备管理',
  'AI assistant':'AI 助手',
+ 'Open full chat':'打开完整聊天','Back to current conversation':'返回当前对话','Saved questions and answers are grouped by date.':'已保存的问题与回答按日期显示。',
  'No upcoming timed reminders. Review your plan and confirm specific times in Medicines.':'暂无近期定时提醒，请到药物页面核对计划并确认具体时间。',
  'In-app reminders work while open or reopened. Background push also needs server configuration, a running scheduler and an authorized device.':'应用打开或重新进入时可显示提醒。后台推送还需要服务器配置、运行中的调度器及已授权设备。',
  'Notification permission':'通知权限','Unsupported':'不支持','granted':'已允许','denied':'已拒绝','default':'尚未授权',

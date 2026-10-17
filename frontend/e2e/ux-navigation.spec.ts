@@ -29,10 +29,10 @@ test('persistent controlled guide, four tabs, task back, drafts and calendar set
  for(let i=0;i<20;i++){await page.locator(`[data-guide="${['medicines','records','me','today'][i%4]}"]`).click();await expect(page.getByRole('button',{name:'Back',exact:true})).toHaveCount(0);}
  expect(await page.evaluate(()=>history.length)).toBe(initialLength);
  await expect(page.locator('.greeting')).toContainText('Guest!');
- const input=page.getByLabel('Review your message before sending');await page.getByRole('button',{name:'Open conversation'}).click();await input.fill('DEMO unfinished chat');
+ const input=page.getByLabel('Review your message before sending');await page.getByRole('button',{name:'Open full chat'}).click();await input.fill('DEMO unfinished chat');
 await expect(input).toHaveValue('DEMO unfinished chat');
- await page.getByRole('button',{name:'Close conversation'}).click();await expect(page.locator('[data-guide="today"]')).toHaveAttribute('aria-current','page');await expect(input).toHaveValue('DEMO unfinished chat');
- await page.locator('[data-guide="medicines"]').click();await page.getByRole('button',{name:'Ask your assistant'}).click();await expect(input).toHaveValue('DEMO unfinished chat');await page.getByRole('button',{name:'Close conversation'}).click();await expect(page.getByRole('heading',{name:'My Medicines',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Back'}).click();await expect(page.locator('[data-guide="today"]')).toHaveAttribute('aria-current','page');await expect(input).toHaveValue('DEMO unfinished chat');
+ await page.locator('[data-guide="medicines"]').click();await page.getByRole('button',{name:'Ask your assistant'}).click();await expect(input).toHaveValue('DEMO unfinished chat');await page.getByRole('button',{name:'Back'}).click();await expect(page.getByRole('heading',{name:'My Medicines',exact:true})).toBeVisible();
  await page.getByRole('button',{name:/Add medication/}).click();await page.getByRole('button',{name:/Add manually/}).click();await page.getByLabel('Medication name',{exact:true}).fill('DEMO UX draft');
  await page.getByRole('button',{name:'Back',exact:true}).click();await page.getByRole('button',{name:/Add manually/}).click();await expect(page.getByLabel('Medication name',{exact:true})).toHaveValue('DEMO UX draft');
  await page.locator('[data-guide="me"]').click();await page.getByRole('button',{name:/Help \/ User Guide/}).click();await page.getByRole('button',{name:'Quick start guide',exact:true}).click();await expect(guide).toBeVisible();

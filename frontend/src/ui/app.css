@@ -2341,9 +2341,14 @@ button.danger:disabled {
 .today-assistant__heading { display: flex; align-items: center; gap: var(--s-3); }
 .today-assistant__heading h2 { font-size: var(--fs-h2); }
 .today-assistant__heading h2 { flex: 1; min-width: 0; }
+.today-assistant__expand { display: inline-flex; align-items: center; gap: var(--s-1); width: auto; min-height: var(--tap); padding: var(--s-2) var(--s-3); white-space: nowrap; }
 .assistant-tasks { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .assistant-tasks button { width: auto; min-height: var(--tap); padding: var(--s-2) var(--s-3); font-size: var(--fs-small); }
 .today-assistant .conversation-scroll:empty { display: none; }
+.today-assistant .conversation-scroll { max-height: min(34rem, 52vh); overflow-y: auto; overscroll-behavior: contain; }
+.today-assistant .transcript { margin: 0; padding-inline-start: 0; list-style: none; }
+.today-assistant .turn { margin-block: var(--s-2); }
+.today-assistant .ai-allowance { margin: 0; font-size: var(--fs-caption); color: var(--ink-2); }
 .today-assistant .composer-row {
   position: relative;
   left: auto;
@@ -2401,38 +2406,38 @@ button.danger:disabled {
 .conversation-panel .transcript { margin: 0; }
 .conversation-panel .turn p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .today-assistant .photo-attachment { position: relative; left: auto; right: auto; bottom: auto; width: 100%; max-width: none; transform: none; margin: 0; }
-/* Portaled to body: fixed to the viewport, independent of content containers.
-   Measured bottom navigation already includes its safe-area padding. */
 .today-panels { display: flex; flex-direction: column; gap: var(--s-5); }
-.assistant-launcher {
-  position: fixed;
-  right: max(16px, env(safe-area-inset-right));
-  bottom: calc(var(--bottom-nav-height, 4.5rem) + 16px);
-  z-index: 30;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 56px;
-  height: 56px;
-  min-height: 56px;
-  padding: 4px;
-  border-radius: 999px;
-  border: 1px solid var(--line-strong);
-  background: var(--surface);
-  color: var(--brand);
-}
-.assistant-launcher img { display: block; flex: 0 0 48px; width: 48px; height: 48px; object-fit: contain; }
-.assistant-launcher span { display: none; }
-.assistant-launcher:hover { background: var(--surface-alt); }
-.assistant-launcher:focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; }
-@media (min-width: 1024px), (min-width: 700px) and (orientation: landscape) and (max-height: 520px) {
-  .assistant-launcher { right: max(24px, env(safe-area-inset-right)); bottom: max(24px, env(safe-area-inset-bottom)); width: auto; min-width: 136px; height: 60px; padding: 5px 12px 5px 5px; }
-  .assistant-launcher span { display: inline; font-size: var(--fs-caption); font-weight: var(--fw-strong); }
-}
+.conversation-workspace { display: flex; flex-direction: column; min-width: 0; height: min(72dvh, 56rem); min-height: 28rem; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); overflow: hidden; }
+.conversation-workspace .conversation-toolbar { flex: 0 0 auto; }
+.conversation-workspace .conversation-toolbar strong { font-size: var(--fs-h2); }
+.conversation-workspace__body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
+.conversation-workspace__body--with-history { grid-template-columns: minmax(13rem, 0.32fr) minmax(0, 1fr); }
+.conversation-workspace .assistant-view { display: flex; flex-direction: column; min-height: 0; padding: var(--s-4); }
+.conversation-workspace .conversation-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.conversation-workspace .composer-row { position: relative; inset: auto; transform: none; width: 100%; max-width: none; margin-top: var(--s-3); box-shadow: none; border-radius: var(--r-md); }
+.conversation-workspace .photo-attachment { position: relative; inset: auto; width: 100%; max-width: none; transform: none; margin-top: var(--s-3); }
+.conversation-workspace__body--with-history .conversation-history-browser { border-inline-end: 1px solid var(--line); padding: var(--s-4); }
+.conversation-workspace .history-current { width: 100%; text-align: left; }
+.conversation-workspace .history-date-group h3 { margin: 0; font-size: var(--fs-small); color: var(--ink-2); }
+.conversation-workspace .history-entry { width: 100%; }
+.conversation-workspace .history-entry[aria-pressed="true"] { background: var(--brand-50); color: var(--brand); }
+.conversation-workspace .selected-history { display: flex; flex-direction: column; gap: var(--s-4); max-width: 48rem; margin: var(--s-4) auto; }
+.conversation-workspace .selected-history .user-message { align-self: flex-end; max-width: 85%; }
+.conversation-workspace .selected-history .history-message { max-width: 90%; }
+.assistant-header-shortcut { display: none !important; }
+.nav-assistant { margin-top: var(--s-4); padding-top: var(--s-3) !important; border-top: 1px solid var(--line) !important; }
+.nav-assistant__avatar { width: 1.75rem; height: 1.75rem; flex: 0 0 auto; object-fit: contain; }
 @media (max-width: 1023px) {
+  .assistant-header-shortcut { display: inline-flex !important; width: auto !important; min-width: var(--tap) !important; gap: var(--s-1); padding-inline: var(--s-2) !important; color: var(--brand) !important; font-size: var(--fs-caption); white-space: nowrap; }
+  .assistant-header-shortcut img { width: 2rem; height: 2rem; object-fit: contain; }
+  .assistant-header-shortcut span { display: inline; font-size: var(--fs-caption); }
+  .patient-nav .nav-assistant { display: none; }
   .conversation-backdrop { padding: 0; align-items: stretch; }
   .conversation-panel { width: 100%; height: var(--conversation-height, 100dvh); max-height: var(--conversation-height, 100dvh); border-radius: 0; }
+  .conversation-workspace { height: calc(100dvh - var(--app-header-height, 4.5rem) - var(--bottom-nav-height, 4.5rem) - var(--s-12)); min-height: 15rem; }
+  .conversation-workspace__body--history-open .assistant-view { display: none; }
+  .conversation-workspace__body--history-open { grid-template-columns: minmax(0, 1fr); }
+  .conversation-workspace__body--with-history .conversation-history-browser { border-inline-end: 0; }
 }
 @media (min-width: 1024px) {
   .conversation-backdrop { padding: 0; justify-content: flex-end; align-items: stretch; }

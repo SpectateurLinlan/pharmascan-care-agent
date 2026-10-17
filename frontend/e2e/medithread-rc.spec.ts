@@ -39,7 +39,7 @@ test('current enrollment contract, independent confirmation, saved chat and resp
  await page.locator('[data-guide="today"]').click();
  await expect(page.getByText('DEMO Metformin 500 mg tablet').first()).toBeVisible();
  await page.getByLabel('Review your message before sending').focus();
- const assistant=page.getByRole('dialog',{name:'Medication assistant'});await expect(assistant).toBeVisible();
+ const assistant=page.locator('.conversation-workspace');await expect(assistant).toBeVisible();
  await assistant.getByText('Saved conversations',{exact:true}).click();
  const toggle=assistant.getByRole('checkbox',{name:'Save new conversations on this account'});
  const preference=page.waitForResponse(response=>response.request().method()==='PUT'&&response.url().includes('/api/me/preferences'));
@@ -52,7 +52,7 @@ test('current enrollment contract, independent confirmation, saved chat and resp
  await assistant.getByText('Saved conversations',{exact:true}).click();await expect(toggle).toBeChecked();
  await expect(assistant.locator('.conversation-history').getByText('DEMO show my medication plan',{exact:true})).toBeVisible();
  await page.screenshot({path:`${artifacts}/saved-history-390.png`});
- await assistant.getByRole('button',{name:'Close conversation'}).click();
+ await assistant.getByRole('button',{name:'Back'}).click();
  for(const width of [390,430,768,1280]){
   await page.setViewportSize({width,height:1000});
   for(const tab of ['today','medicines','records','me']){

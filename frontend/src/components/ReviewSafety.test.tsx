@@ -73,11 +73,11 @@ it('does not attach an old saved-dose status to a different turn after the six-t
 it('releases the assistant close lock when an unconfirmed B14 summary expires',async()=>{
  vi.useFakeTimers();const close=vi.fn();
  vi.mocked(api.sendMessage).mockResolvedValue({message:'DEMO expiry',session_id:'DEMO-session',intent:'self_report',session_state:'awaiting_confirmation',requires_confirmation:true,mode:'deterministic_degraded',tool_traces:[],pending_report:{challenge_id:'DEMO-expire',occurrence_id:'DEMO-o',regimen_id:'DEMO-r',idempotency_key:'DEMO-key',expires_at:new Date(Date.now()+35000).toISOString(),summary:{medication_display_name:'DEMO first',dose_amount:1,dose_unit:'tablet',regimen_version_no:1,occurrence_due_at:null,local_due_time:'08:00',local_timezone:'Asia/Singapore',intake_status:'reported_taken',intake_status_label:'Patient reported taken',safety_notice:'Self-report only',ingestion_proven:false,visual_status:'not_checked'}}});
- render(<AssistantScreen sessionId="DEMO-session" onSession={vi.fn()} onClose={close}/>);
+ render(<AssistantScreen sessionId="DEMO-session" onSession={vi.fn()} workspace onClose={close}/>);
  await act(async()=>{fireEvent.change(screen.getByLabelText('Review your message before sending'),{target:{value:'DEMO report'}});fireEvent.click(screen.getByRole('button',{name:'Send'}));});
- expect(screen.getByRole('button',{name:'Confirm record'})).toBeTruthy();expect(screen.getByRole('button',{name:'Close conversation'})).toHaveProperty('disabled',true);
+ expect(screen.getByRole('button',{name:'Confirm record'})).toBeTruthy();expect(screen.getByRole('button',{name:'Back'})).toHaveProperty('disabled',true);
  expect(screen.getByRole('button',{name:'New conversation'})).toHaveProperty('disabled',true);expect(screen.getByRole('button',{name:'Conversation history'})).toHaveProperty('disabled',true);
  await act(async()=>{await vi.advanceTimersByTimeAsync(60000);});
- expect(screen.queryByRole('button',{name:'Confirm record'})).toBeNull();expect(screen.getByRole('button',{name:'Close conversation'})).toHaveProperty('disabled',false);
- fireEvent.click(screen.getByRole('button',{name:'Close conversation'}));expect(close).toHaveBeenCalledOnce();expect(api.submitReport).not.toHaveBeenCalled();expect(api.submitPrnReport).not.toHaveBeenCalled();
+ expect(screen.queryByRole('button',{name:'Confirm record'})).toBeNull();expect(screen.getByRole('button',{name:'Back'})).toHaveProperty('disabled',false);
+ fireEvent.click(screen.getByRole('button',{name:'Back'}));expect(close).toHaveBeenCalledOnce();expect(api.submitReport).not.toHaveBeenCalled();expect(api.submitPrnReport).not.toHaveBeenCalled();
 });

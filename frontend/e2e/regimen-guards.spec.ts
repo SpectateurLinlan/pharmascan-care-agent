@@ -28,7 +28,7 @@ test('history opt-in, overlap conflict, explicit stop and understandable legacy 
  await page.goto('/');
  const skip=page.getByRole('button',{name:'Skip for now'});if(await skip.isVisible())await skip.click();
  await page.getByLabel('Review your message before sending').focus();
- const dialog=page.getByRole('dialog',{name:'Medication assistant'});await expect(dialog).toBeVisible();
+ const dialog=page.locator('.conversation-workspace');await expect(dialog).toBeVisible();
  await dialog.getByText('Saved conversations',{exact:true}).click();
  const toggle=dialog.getByRole('checkbox',{name:'Save new conversations on this account'});
  const saved=page.waitForResponse(response=>response.request().method()==='PUT'&&response.url().includes('/api/me/preferences'));
@@ -46,7 +46,7 @@ test('history opt-in, overlap conflict, explicit stop and understandable legacy 
  await expect(dialog.locator('.conversation-history').getByText('DEMO show my medication plan',{exact:true})).toBeVisible();
  await toggle.scrollIntoViewIfNeeded();
  await page.screenshot({path:'../outputs/regimen-fix/history-saving-390.png',fullPage:true});
- await dialog.getByRole('button',{name:'Close conversation'}).click();
+ await dialog.getByRole('button',{name:'Back'}).click();
 
  // Explicit UI-only mock for legacy duplicate records. New API writes above
  // cannot create this state; no database rows are inserted to manufacture it.

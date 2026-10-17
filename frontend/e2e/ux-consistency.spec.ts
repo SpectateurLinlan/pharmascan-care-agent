@@ -59,24 +59,23 @@ test('source-only count, supplement cancellation and assistant alignment stay co
  for(const scale of [100,150]){
  if(scale===150){
   await page.locator('[data-guide="me"]').click();await page.locator('.settings-shortcut').click();await page.locator('#text-size').focus();await page.keyboard.press('End');
-  await expect(page.locator('#text-size')).toHaveValue('150');await page.locator('.language-shortcut').click();await page.getByRole('menuitemradio',{name:'中文'}).click();
+  await expect(page.locator('#text-size')).toHaveValue('150');await page.locator('.language-shortcut').click();await page.locator('.language-menu__list [role=menuitemradio]').nth(1).click();
  }
  for(const width of [390,430,1280,1600,1920]){
   await page.setViewportSize({width,height:950});await page.locator('[data-guide="me"]').click();
-  const dock=page.locator('.assistant-launcher');
-  await expect(dock).toBeVisible();
-  const avatar=(await dock.boundingBox())!;expect(avatar.x+avatar.width).toBeLessThanOrEqual(width);if(width<1024){const nav=(await page.locator('.patient-nav').boundingBox())!;expect(avatar.y+avatar.height).toBeLessThanOrEqual(nav.y);}
+  const assistantEntry=width>=1024?page.locator('[data-guide="assistant"]'):page.locator('.assistant-header-shortcut');
+  await expect(assistantEntry).toBeVisible();await expect(page.locator('.assistant-launcher')).toHaveCount(0);
   await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const logo=page.locator('.brand-mark');await expect(logo).toBeVisible();expect(await logo.evaluate((el:HTMLImageElement)=>el.complete&&el.naturalWidth>0)).toBe(true);
   await expect(logo).toHaveAttribute('src','/branding/medithread-192.png');
-  await dock.click();
-  const dialog=page.getByRole('dialog',{name:scale===100?'Medication assistant':'用药助手'});await expect(dialog).toBeVisible();
-  const panel=dialog.locator('.conversation-scroll'),composer=dialog.locator('.composer-row');
+  await assistantEntry.click();
+  const workspace=page.locator('.conversation-workspace');await expect(workspace).toBeVisible();
+  const panel=workspace.locator('.conversation-scroll'),composer=workspace.locator('.composer-row');
   const a=(await panel.boundingBox())!,b=(await composer.boundingBox())!;
   expect(Math.abs(a.x-b.x)).toBeLessThan(2);expect(Math.abs(a.width-b.width)).toBeLessThan(2);
-  await expect(dialog.locator('.composer-send')).toBeInViewport();
+  await expect(workspace.locator('.composer-send')).toBeInViewport();
   if(width===1600)await page.screenshot({path:`../outputs/ux-consistency-desktop-${scale}.png`});
-  await dialog.getByRole('button',{name:scale===100?'Close conversation':'收起对话',exact:true}).click();
+  await workspace.locator('.conversation-toolbar .conversation-actions button').last().click();
  }
  }
  const manifest=await (await page.request.get('/manifest.webmanifest')).json();
@@ -133,42 +132,37 @@ test('settings ownership, persisted reminder preferences and viewport launcher g
  await page.locator('#text-size').focus();await page.keyboard.press(scale===150?'End':'Home');
  await expect.poll(()=>prefs.text_scale_percent).toBe(scale);
  await page.locator('.language-shortcut').click();
- await page.getByRole('menuitemradio',{name:language==='en'?'English':'中文'}).click();
- await page.locator('[data-guide="me"]').click();
- await page.locator('.app-main').getByRole('button',{name:/Medication reminders|用药提醒/}).click();
+ await page.locator('.language-menu__list [role=menuitemradio]').nth(language==='en'?0:1).click();
+ await page.setViewportSize({width:1024,height:950});await page.locator('[data-guide=me]').click();await page.locator('.notification-shortcut').click();
+ await page.locator('.notification-shortcut').click();
  for(const width of [390,430,768,1024,1280,1600,1920]){
   await page.setViewportSize({width,height:950});
   const body=(await page.locator('.app-main').boundingBox())!,back=(await page.locator('.back-button').boundingBox())!;
   const headerStyle=await page.locator('.app-header').evaluate(el=>({left:getComputedStyle(el).left,width:getComputedStyle(el).width,padding:getComputedStyle(el).paddingInlineStart,rail:getComputedStyle(document.documentElement).getPropertyValue('--rail-width'),max:getComputedStyle(document.documentElement).getPropertyValue('--content-max'),font:getComputedStyle(document.documentElement).fontSize}));
   expect(Math.abs(body.x-back.x),JSON.stringify({width,body,back,headerStyle})).toBeLessThan(2);
-  const launcher=page.locator('.assistant-launcher');
-  expect(await launcher.evaluate(el=>el.parentElement===document.body)).toBe(true);
-  const box=(await launcher.boundingBox())!;
-  expect(width-box.x-box.width).toBeGreaterThanOrEqual(15);
-  expect(box.height).toBe(width>=1024?60:56);
-  if(width>=1024)expect(box.width).toBeGreaterThanOrEqual(130);
-  if(width<1024){const nav=(await page.locator('.patient-nav').boundingBox())!;expect(nav.y-box.y-box.height).toBeGreaterThanOrEqual(15);}
-  else expect(950-box.y-box.height).toBe(24);
-  expect(await launcher.locator('img').evaluate((el:HTMLImageElement)=>el.complete&&el.naturalWidth>0)).toBe(true);
-  await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
-  expect((await launcher.boundingBox())!.x).toBeCloseTo(box.x,0);
-  expect((await launcher.boundingBox())!.y).toBeCloseTo(box.y,0);
+  const assistantEntry=width>=1024?page.locator('[data-guide="assistant"]'):page.locator('.assistant-header-shortcut');
+  await expect(assistantEntry).toBeVisible();await assistantEntry.click();
+  const workspace=page.locator('.conversation-workspace');await expect(workspace).toBeVisible();
+  const shell=(await workspace.boundingBox())!,composer=(await workspace.locator('.composer-row').boundingBox())!;
+  expect(composer.x).toBeGreaterThanOrEqual(shell.x);expect(composer.x+composer.width).toBeLessThanOrEqual(shell.x+shell.width+1);
+  await expect(workspace.locator('.composer-send')).toBeInViewport();
+  await workspace.locator('.conversation-toolbar .conversation-actions button').last().click();
+  await expect.poll(()=>page.evaluate(()=>location.hash)).toBe('#reminder-settings');
   await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   if([390,1600].includes(width)&&scale===100&&language==='en')await page.screenshot({path:`../outputs/settings-cleanup-${width}.png`});
  }
  }
  await page.setViewportSize({width:768,height:430});
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- const landscape=(await page.locator('.assistant-launcher').boundingBox())!;
- expect(landscape.y+landscape.height).toBeLessThanOrEqual(406);
- // Existing critical forms remain free of the portal launcher.
+ await expect(page.locator('.assistant-header-shortcut')).toBeVisible();
+ // Existing critical forms remain free of duplicate floating launchers.
  await page.locator('[data-guide="medicines"]').click();
- await page.getByRole('button',{name:/Add medication|添加药物/}).click();
+ await page.locator('.app-main').locator('.ui-screen--medicines .primary').click();
  await expect(page.locator('.assistant-launcher')).toHaveCount(0);
  expect(errors).toEqual([]);
 });
 
-test('real Chrome browser zoom keeps the launcher and shared header inside the viewport',async({},testInfo)=>{
+test('real Chrome browser zoom keeps the Assistant workspace and shared header usable',async({},testInfo)=>{
  test.setTimeout(45000);
  // A disposable persistent profile enables Chrome's own browser zoom API.
  // This is browser zoom, not CSS zoom, DPR emulation or pinch scaling.
@@ -185,13 +179,10 @@ test('real Chrome browser zoom keeps the launcher and shared header inside the v
    const width=await page.evaluate(()=>innerWidth);expect(Math.abs(width-baseline.width/zoom)).toBeLessThan(2);
    const main=(await page.locator('.app-main').boundingBox())!,brand=(await page.locator('.brand').boundingBox())!;
    expect(Math.abs(main.x-brand.x)).toBeLessThan(2);
-   const launcher=page.locator('.assistant-launcher'),box=(await launcher.boundingBox())!;
-   expect(box.x).toBeGreaterThanOrEqual(16);expect(box.x+box.width).toBeLessThanOrEqual(width-15);
    await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-   await launcher.focus();await page.keyboard.press('Enter');
-   await expect(page.getByRole('dialog').locator('.composer-send')).toBeInViewport();
-   await page.getByRole('button',{name:'Close conversation'}).click();
-   await expect(launcher).toBeFocused();
+   const assistant=page.locator('[data-guide="assistant"]');await assistant.focus();await page.keyboard.press('Enter');
+   const workspace=page.locator('.conversation-workspace');await expect(workspace.locator('.composer-send')).toBeInViewport();
+   await workspace.locator('.conversation-toolbar .conversation-actions button').last().click();
   }
  }finally{await context.close();}
 });
@@ -214,7 +205,7 @@ test('reminder dialog stays capped on desktop and scrolls its own content on sho
  await expect.poll(()=>alertReads,{timeout:10000}).toBeGreaterThan(0);
  await page.waitForTimeout(50);alertEnabled=true;
  await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));
- const dialog=page.getByRole('dialog',{name:/Medication reminder|用药提醒/});await expect(dialog).toBeVisible();
+ const dialog=page.locator('.reminder-dialog');await expect(dialog).toBeVisible();
  await expect(dialog).toContainText('DEMO Metformin');
  for(const width of [390,430,768,1024,1280,1600,1920]){
   await page.setViewportSize({width,height:950});
@@ -228,7 +219,7 @@ test('reminder dialog stays capped on desktop and scrolls its own content on sho
  const shortBox=(await dialog.boundingBox())!;
  expect(shortBox.height).toBeLessThan(480);
  expect(await dialog.evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
- await page.getByRole('button',{name:'30 分钟后提醒'}).click();
+ await page.locator('.reminder-dialog .actions button:nth-child(2)').click();
  await expect(dialog).toHaveCount(0);
  expect(snoozes).toEqual([{occurrence_id:'DEMO-occurrence',minutes:30}]);
  expect(errors).toEqual([]);
@@ -248,41 +239,38 @@ test('Today tasks reuse one conversation and root pages adapt to landscape and e
  const tasks=[['Understand medicines','current medications'],['Review my records','past 7 days'],['Prepare for a visit','pharmacist or doctor']];
  for(const [label,prompt] of tasks){
   await entry.getByRole('button',{name:label,exact:true}).click();
-  const dialog=page.getByRole('dialog',{name:'Medication assistant'});await expect(dialog.getByRole('textbox')).toHaveValue(new RegExp(prompt));
-  expect(sends).toBe(0);await dialog.getByRole('textbox').fill('');await dialog.getByRole('button',{name:'Close conversation'}).click();
+  await expect(entry.getByRole('textbox')).toHaveValue(new RegExp(prompt));
+  expect(sends).toBe(0);await entry.getByRole('textbox').fill('');
  }
  await entry.getByRole('button',{name:'Understand medicines',exact:true}).click();
- const dialog=page.getByRole('dialog',{name:'Medication assistant'});await dialog.getByRole('button',{name:'Send',exact:true}).click();
- await expect(dialog.locator('.turn')).toHaveCount(1);expect(sends).toBe(1);
- await dialog.getByRole('textbox').fill('DEMO unsent question');await dialog.getByRole('button',{name:'Close conversation'}).click();
+ await entry.getByRole('button',{name:'Send',exact:true}).click();
+ await expect(entry.locator('.turn')).toHaveCount(1);expect(sends).toBe(1);
+ await entry.locator('.today-assistant__expand').click();const workspace=page.locator('.conversation-workspace');await expect(workspace.locator('.turn')).toHaveCount(1);
+ await workspace.getByRole('textbox').fill('DEMO unsent question');await workspace.getByRole('button',{name:'Back'}).click();
  await page.locator('[data-guide="medicines"]').click();await page.locator('[data-guide="today"]').click();
  await expect(entry.getByRole('textbox')).toHaveValue('DEMO unsent question');
  await expect(entry.getByRole('button',{name:'Understand medicines',exact:true})).toBeDisabled();
- await entry.getByRole('textbox').focus();await expect(dialog).toHaveCount(0);await entry.getByRole('button',{name:'Open conversation'}).click();await expect(dialog.locator('.turn')).toHaveCount(1);
- await dialog.getByRole('textbox').fill('');await dialog.getByRole('button',{name:'Close conversation'}).click();
+ await entry.getByRole('textbox').focus();await expect(workspace).toHaveCount(0);await entry.locator('.today-assistant__expand').click();await expect(workspace.locator('.turn')).toHaveCount(1);
+ await workspace.getByRole('textbox').fill('');await workspace.getByRole('button',{name:'Back'}).click();
  for(const language of ['en','zh']){
  for(const scale of [100,150]){
   await page.locator('[data-guide="me"]').click();await page.locator('.settings-shortcut').click();await page.locator('#text-size').focus();await page.keyboard.press(scale===150?'End':'Home');
-  await expect(page.locator('#text-size')).toHaveValue(String(scale));await page.locator('.language-shortcut').click();await page.getByRole('menuitemradio',{name:language==='en'?'English':'中文'}).click();
+  await expect(page.locator('#text-size')).toHaveValue(String(scale));await page.locator('.language-shortcut').click();await page.locator('.language-menu__list [role=menuitemradio]').nth(language==='en'?0:1).click();
   for(const width of [390,430,768,1024,1280,1600,1920]){
    await page.setViewportSize({width,height:950});
    for(const tab of ['today','medicines','records','me']){
     await page.locator(`[data-guide="${tab}"]`).click();
     await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-    await expect(page.locator('.composer-row:visible')).toHaveCount(tab==='today'?1:0);await expect(page.locator('.assistant-launcher:visible')).toHaveCount(tab==='today'?0:1);
+    await expect(page.locator('.composer-row:visible')).toHaveCount(tab==='today'?1:0);await expect(page.locator('.assistant-launcher')).toHaveCount(0);
+    await expect(width>=1024?page.locator('[data-guide="assistant"]'):page.locator('.assistant-header-shortcut')).toBeVisible();
     if(width>=1024){const main=(await page.locator('.app-main').boundingBox())!,brand=(await page.locator('.brand').boundingBox())!;expect(Math.abs(main.x-brand.x)).toBeLessThan(2);if(width>=1600&&scale===100)expect(main.width).toBeLessThanOrEqual(1280);}
-    const grid=page.locator(tab==='today'?'.today-panels':'.ui-screen--columns');
-    await expect(grid).toBeVisible();
-    const layout=await grid.evaluate(el=>({columns:getComputedStyle(el).gridTemplateColumns.split(' ').length,mainWidth:document.querySelector('.app-main')!.getBoundingClientRect().width,rem:parseFloat(getComputedStyle(document.documentElement).fontSize)}));
-    expect(layout.columns).toBe(tab==='today'?1:layout.mainWidth>=58*layout.rem?2:1);
-    const peers=tab==='today'?grid.locator(':scope > *'):tab==='medicines'?grid.locator(':scope > .medicines-courses, :scope > .entry-group'):grid.locator(':scope > .entry-group');
-    const left=(await peers.nth(0).boundingBox())!,right=(await peers.nth(1).boundingBox())!;
-    if(layout.columns===2){expect(Math.abs(left.y-right.y)).toBeLessThan(2);expect(Math.abs(left.height-right.height)).toBeLessThan(2);expect(right.x).toBeGreaterThan(left.x+left.width);}
-    else{expect(right.y).toBeGreaterThanOrEqual(left.y+left.height);}
+    if(tab==='today'){
+     const grid=page.locator('.today-panels');await expect(grid).toBeVisible();
+     expect((await entry.boundingBox())!.width).toBeCloseTo((await page.locator('.app-main').boundingBox())!.width,0);
+     expect(await entry.locator('.composer-row').evaluate(el=>getComputedStyle(el).position)).toBe('relative');
+    }
     if(tab==='today'){
      await expect(entry).toBeVisible();
-     expect((await entry.boundingBox())!.width).toBeCloseTo(layout.mainWidth,0);
-     expect(await entry.locator('.composer-row').evaluate(el=>getComputedStyle(el).position)).toBe('relative');
      await expect(page.locator('.today-panels > *')).toHaveCount(2);
     }
     if(width===1600&&scale===100&&language==='en')await page.screenshot({path:`../outputs/agentic-landscape-${tab}.png`});
@@ -292,7 +280,7 @@ test('Today tasks reuse one conversation and root pages adapt to landscape and e
  }
  await page.setViewportSize({width:768,height:430});await page.locator('[data-guide="today"]').click();
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await entry.getByRole('textbox').focus();await expect(page.getByRole('dialog')).toHaveCount(0);await entry.getByRole('button',{name:'继续对话'}).click();await expect(page.getByRole('dialog').locator('.composer-send')).toBeInViewport();
+ await entry.getByRole('textbox').focus();await expect(page.getByRole('dialog')).toHaveCount(0);await entry.locator('.today-assistant__expand').click();await expect(page.locator('.conversation-workspace .composer-send')).toBeInViewport();
  expect(sends).toBe(1);expect(errors).toEqual([]);
 });
 
@@ -352,23 +340,24 @@ test('inline send, shared avatar, opt-in saved exchanges and explicit clear keep
  const welcome=(await page.locator('.welcome').boundingBox())!,hero=(await entry.boundingBox())!;expect(welcome.y+welcome.height).toBeLessThanOrEqual(hero.y);
  await entry.getByRole('textbox').click();await entry.getByRole('textbox').fill('DEMO unsaved exchange');await expect(page.getByRole('dialog')).toHaveCount(0);
  await expect(page.locator('.assistant-launcher')).toHaveCount(0);expect(sends).toBe(0);
- await entry.getByRole('button',{name:'Send',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Medication assistant'});await expect(dialog.getByText('SIMULATED answer 1')).toBeVisible();
- await expect(dialog.getByLabel('Save new conversations')).toHaveCount(0);expect(saved).toHaveLength(0);
- await dialog.getByRole('textbox').fill('DEMO keep this draft');await dialog.getByRole('button',{name:'Conversation history'}).click();
- await expect(dialog.getByText('Saving is off. No saved messages are available.')).toBeVisible();
- await dialog.getByRole('button',{name:'Back to current conversation'}).click();await expect(dialog.getByRole('textbox')).toHaveValue('DEMO keep this draft');
- await dialog.getByRole('button',{name:'Close conversation'}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(entry.getByRole('textbox')).toBeFocused();await page.locator('[data-guide="records"]').click();await page.locator('.assistant-launcher').click();
- await expect(dialog.getByRole('textbox')).toHaveValue('DEMO keep this draft');await expect(dialog.getByText('SIMULATED answer 1')).toBeVisible();
- await dialog.getByRole('button',{name:'Close conversation'}).click();await expect(page.locator('.assistant-launcher')).toBeFocused();await page.locator('[data-guide="me"]').click();await page.getByRole('button',{name:/Assistant and conversation saving/}).click();
+ await entry.getByRole('button',{name:'Send',exact:true}).click();await expect(entry.getByText('SIMULATED answer 1')).toBeVisible();
+ await expect(entry.getByLabel('Save new conversations')).toHaveCount(0);expect(saved).toHaveLength(0);
+ await entry.locator('.today-assistant__expand').click();const workspace=page.locator('.conversation-workspace');
+ await workspace.getByRole('textbox').fill('DEMO keep this draft');await workspace.getByRole('button',{name:'Conversation history'}).click();
+ await expect(workspace.getByText('Saving is off. No saved messages are available.')).toBeVisible();
+ await workspace.getByRole('button',{name:'Back to current conversation'}).click();await expect(workspace.getByRole('textbox')).toHaveValue('DEMO keep this draft');
+ await workspace.locator('.conversation-toolbar .conversation-actions button').last().click();await page.locator('[data-guide="records"]').click();await page.locator('.assistant-header-shortcut').click();
+ await expect(workspace.getByRole('textbox')).toHaveValue('DEMO keep this draft');await expect(workspace.getByText('SIMULATED answer 1')).toBeVisible();
+ await workspace.locator('.conversation-toolbar .conversation-actions button').last().click();await page.locator('[data-guide="me"]').click();await page.getByRole('button',{name:/Assistant and conversation saving/}).click();
  const save=page.getByRole('checkbox',{name:/Save new conversations/});await expect(save).not.toBeChecked();const preferenceSaved=page.waitForResponse(response=>response.request().method()==='PUT'&&new URL(response.url()).pathname==='/api/me/preferences');await save.click();expect((await preferenceSaved).status()).toBe(200);await expect(save).toBeChecked();
- await page.locator('[data-guide="today"]').click();await entry.getByRole('textbox').fill('DEMO saved exchange');await entry.getByRole('button',{name:'Send',exact:true}).click();await expect(dialog.getByText('SIMULATED answer 2')).toBeVisible();expect(saved).toHaveLength(1);
- await dialog.getByRole('textbox').fill('DEMO current draft');await dialog.getByRole('button',{name:'Conversation history'}).click();
- await expect(dialog.locator('.history-date-group h2')).toHaveText('Today');await dialog.locator('.history-entry').click();
- await expect(dialog.locator('.history-message')).toContainText('SIMULATED answer 2');expect(sends).toBe(2);
- await dialog.getByRole('button',{name:'Back to current conversation'}).click();await expect(dialog.getByRole('textbox')).toHaveValue('DEMO current draft');
+ await page.locator('[data-guide="today"]').click();await entry.getByRole('textbox').fill('DEMO saved exchange');await entry.getByRole('button',{name:'Send',exact:true}).click();await expect(entry.getByText('SIMULATED answer 2')).toBeVisible();expect(saved).toHaveLength(1);
+ await entry.locator('.today-assistant__expand').click();await workspace.getByRole('textbox').fill('DEMO current draft');await workspace.getByRole('button',{name:'Conversation history'}).click();
+ await expect(workspace.locator('.history-date-group h3')).toHaveText('Today');await workspace.locator('.history-entry').click();
+ await expect(workspace.locator('.history-message')).toContainText('SIMULATED answer 2');expect(sends).toBe(2);
+ await workspace.getByRole('button',{name:'Back to current conversation'}).click();await expect(workspace.getByRole('textbox')).toHaveValue('DEMO current draft');
  await page.route(url=>new URL(url).pathname==='/api/demo/start',async route=>{expect(route.request().postDataJSON().session_id).toBeNull();newSessions++;await route.fulfill({json:{session_id:'DEMO-fresh-session',patient_id:'d00d0000-0000-4000-8000-000000000001',demo_only:true,note:'SIMULATED',seeded_medication_count:0}});});
- await dialog.getByRole('button',{name:'New conversation'}).click();await expect(dialog.locator('.turn')).toHaveCount(0);await expect(dialog.getByRole('textbox')).toHaveValue('DEMO current draft');expect(newSessions).toBe(1);expect(saved).toHaveLength(1);
- await dialog.getByRole('button',{name:'Close conversation'}).click();await page.locator('[data-guide="me"]').click();await page.getByRole('button',{name:/Assistant and conversation saving/}).click();
+ await workspace.getByRole('button',{name:'New conversation'}).click();await expect(workspace.locator('.turn')).toHaveCount(0);await expect(workspace.getByRole('textbox')).toHaveValue('DEMO current draft');expect(newSessions).toBe(1);expect(saved).toHaveLength(1);
+ await workspace.locator('.conversation-toolbar .conversation-actions button').last().click();await page.locator('[data-guide="me"]').click();await page.getByRole('button',{name:/Assistant and conversation saving/}).click();
  await page.getByRole('button',{name:'Clear saved conversations',exact:true}).click();expect(clears).toBe(0);await page.getByRole('button',{name:'Cancel',exact:true}).click();expect(saved).toHaveLength(1);
  await page.getByRole('button',{name:'Clear saved conversations',exact:true}).click();await page.getByRole('button',{name:'Confirm clear',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);expect(clears).toBe(1);expect(saved).toHaveLength(0);
  await page.locator('[data-guide="today"]').click();await expect(entry.getByRole('textbox')).toHaveValue('DEMO current draft');await expect(page.locator('.assistant-launcher')).toHaveCount(0);

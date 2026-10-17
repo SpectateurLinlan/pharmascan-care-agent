@@ -16,10 +16,10 @@ test('controlled tour, in-place conversation, four roots and responsive patient 
  const history=await page.evaluate(()=>window.history.length);
  for(let i=0;i<20;i++)await page.locator(`[data-guide="${['medicines','records','me','today'][i%4]}"]`).click();
  expect(await page.evaluate(()=>window.history.length)).toBe(history);await expect(page.getByRole('button',{name:'Back',exact:true})).toHaveCount(0);
- const input=page.getByLabel('Review your message before sending');const before=page.url();await page.getByRole('button',{name:'Open conversation'}).click();await input.fill('DEMO retained draft');
- const dialog=page.getByRole('dialog',{name:'Medication assistant'});await expect(dialog).toBeVisible();expect(page.url()).toBe(before);await expect(input).toHaveValue('DEMO retained draft');expect(await page.locator('[data-app-content]').evaluate(el=>(el as HTMLElement).inert)).toBe(true);
- await page.screenshot({path:`${artifacts}/assistant-390.png`});await dialog.getByRole('button',{name:'Close conversation'}).click();await expect(input).toHaveValue('DEMO retained draft');
- await page.locator('[data-guide="medicines"]').click();await page.getByRole('button',{name:'Ask your assistant'}).click();await expect(input).toHaveValue('DEMO retained draft');await page.getByRole('button',{name:'Close conversation'}).click();await expect(page.getByRole('heading',{name:'My Medicines',exact:true})).toBeVisible();
+ const input=page.getByLabel('Review your message before sending');await page.getByRole('button',{name:'Open full chat'}).click();await input.fill('DEMO retained draft');
+ const workspace=page.locator('.conversation-workspace');await expect(workspace).toBeVisible();await expect.poll(()=>page.evaluate(()=>location.hash)).toBe('#assistant');await expect(input).toHaveValue('DEMO retained draft');expect(await page.locator('[data-app-content]').evaluate(el=>(el as HTMLElement).inert)).toBe(false);
+ await page.screenshot({path:`${artifacts}/assistant-390.png`});await workspace.getByRole('button',{name:'Back'}).click();await expect.poll(()=>page.evaluate(()=>location.hash)).toBe('#today');await expect(input).toHaveValue('DEMO retained draft');
+ await page.locator('[data-guide="medicines"]').click();await page.getByRole('button',{name:'Ask your assistant'}).click();await expect(input).toHaveValue('DEMO retained draft');await page.getByRole('button',{name:'Back'}).click();await expect(page.getByRole('heading',{name:'My Medicines',exact:true})).toBeVisible();
  for(const width of [390,430,768,1280]){
   await page.setViewportSize({width,height:900});
   for(const root of ['today','me']){await page.locator(`[data-guide="${root}"]`).click();await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:`${artifacts}/${root}-${width}.png`});}
@@ -27,7 +27,7 @@ test('controlled tour, in-place conversation, four roots and responsive patient 
  await page.locator('.entry-group').getByRole('button',{name:/Language and speech/}).click();await page.getByLabel('Settings language').selectOption('zh');await page.locator('[data-guide="me"]').click();
  await page.getByRole('button',{name:/无障碍设置|无障碍/}).click();const slider=page.getByRole('slider');await slider.fill('150');await slider.dispatchEvent('pointerup');
  for(const width of [390,430,768,1280]){await page.setViewportSize({width,height:900});await page.locator('[data-guide="today"]').click();await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:`${artifacts}/today-zh-150-${width}.png`});}
- await page.getByRole('button',{name:'展开助手对话'}).click();await page.setViewportSize({width:390,height:480});await expect(page.getByRole('button',{name:'发送',exact:true})).toBeInViewport();await page.screenshot({path:`${artifacts}/assistant-zh-150-resize.png`});
+ await page.getByRole('button',{name:'打开完整聊天'}).click();await page.setViewportSize({width:390,height:480});await expect(page.getByRole('button',{name:'发送',exact:true})).toBeInViewport();await page.screenshot({path:`${artifacts}/assistant-zh-150-resize.png`});
  expect(errors).toEqual([]);
 });
 
@@ -39,10 +39,10 @@ test('source-based count display and opt-in chat survive refresh without changin
  await page.getByLabel('I checked the strength, form and count against my original instructions.').check();await page.getByRole('button',{name:'Show total from these details'}).click();await expect(page.getByRole('status').filter({hasText:'Total per dose: 500 mg'})).toBeVisible();
  await page.getByRole('button',{name:'Create draft',exact:true}).click();await page.getByRole('button',{name:'I have reviewed these details'}).click();await page.getByRole('button',{name:'Show me the summary to confirm'}).click();await page.getByRole('button',{name:'Yes, save this medication'}).click();await page.locator('[data-guide="today"]').click();
  await page.reload();await expect(page.getByText('DEMO Long-name Metformin extended-release reference',{exact:true}).first()).toBeVisible();await expect(page.getByText('Loading your reviewed schedule...', {exact:true})).toHaveCount(0);await page.screenshot({path:`${artifacts}/reviewed-count-plan-390.png`});
- await page.getByRole('button',{name:'Open conversation'}).click();await page.getByText('Saved conversations',{exact:true}).click();
+ await page.getByRole('button',{name:'Open full chat'}).click();await page.getByText('Saved conversations',{exact:true}).click();
  const opted=page.waitForResponse(response=>response.url().includes('/preferences')&&response.request().method()==='PUT');await page.getByLabel('Save conversations on this account').click();expect((await opted).ok()).toBe(true);await expect(page.getByLabel('Save conversations on this account')).toBeChecked();
  const input=page.getByLabel('Review your message before sending');await input.fill('Do I need medicine today?');const answer=page.waitForResponse(response=>response.url().includes('/agent/messages'));await page.getByRole('button',{name:'Send',exact:true}).click();expect((await answer).ok()).toBe(true);
- await page.reload();await page.getByRole('button',{name:'Open conversation'}).click();await page.getByText('Saved conversations',{exact:true}).click();await expect(page.locator('.history-message')).toContainText('Do I need medicine today?');await page.locator('.history-message').scrollIntoViewIfNeeded();await page.screenshot({path:`${artifacts}/saved-history-390.png`});
+ await page.reload();await page.getByRole('button',{name:'Open full chat'}).click();await page.getByText('Saved conversations',{exact:true}).click();await expect(page.locator('.history-message')).toContainText('Do I need medicine today?');await page.locator('.history-message').scrollIntoViewIfNeeded();await page.screenshot({path:`${artifacts}/saved-history-390.png`});
  await page.getByRole('button',{name:'Clear saved conversations',exact:true}).click();await page.getByRole('button',{name:'Confirm clear',exact:true}).click();await expect(page.locator('.history-message')).toHaveCount(0);
- await page.getByRole('button',{name:'Close conversation'}).click();await expect(page.getByText('DEMO Long-name Metformin extended-release reference',{exact:true}).first()).toBeVisible();
+ await page.getByRole('button',{name:'Back'}).click();await expect(page.getByText('DEMO Long-name Metformin extended-release reference',{exact:true}).first()).toBeVisible();
 });

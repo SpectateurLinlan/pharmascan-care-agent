@@ -18,7 +18,7 @@ function Fixture(){
  {page==='login'?<MeScreen onIdentityChanged={()=>undefined}/>:null}
  {page==='privacy'?<InformationScreen ownerId="DEMO-fixture" kind="privacy" onHistory={()=>undefined}/>:null}
  {page==='read'?<EvidenceEnrollmentScreen sessionId="DEMO-session" ownerId="DEMO-fixture" onChanged={()=>undefined}/>:null}
- <div hidden={!chat}><AssistantScreen ownerId="DEMO-fixture" compact={!chat} onExpand={()=>setChat(true)} active={chat} sessionId="DEMO-session" onSession={()=>undefined} onClose={()=>setChat(false)}/></div>
+ <div hidden={!chat}><AssistantScreen ownerId="DEMO-fixture" compact={!chat} workspace={chat} onExpand={()=>setChat(true)} active={chat} sessionId="DEMO-session" onSession={()=>undefined} onClose={()=>setChat(false)}/></div>
  </main>;
 }
 createRoot(document.getElementById('root')!).render(new URLSearchParams(location.search).has('shell')?<App/>:<LanguageProvider><Fixture/></LanguageProvider>);
