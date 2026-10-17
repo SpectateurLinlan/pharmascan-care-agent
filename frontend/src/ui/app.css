@@ -2273,14 +2273,23 @@ button.danger:disabled {
 .conversation-panel .assistant-view { flex: 1; min-height: 0; overflow-y: auto; }
 .conversation-panel .transcript { flex: 1 0 auto; }
 .conversation-panel .composer-row { order: 50; flex-shrink: 0; margin-top: auto; border-radius: var(--r-md); }
-.companion-composer .composer-row { width: min(calc(100% - var(--s-8)), calc(var(--content-max) - var(--s-8))); }
+/* Use the measured content column, including the rail and scrollbar offset. */
+.companion-composer .composer-row,
+.companion-composer .photo-attachment {
+  left: var(--patient-content-left, var(--s-4));
+  right: auto;
+  transform: none;
+  width: var(--patient-content-width, calc(100% - var(--s-8)));
+  max-width: none;
+  margin-inline: 0;
+}
 .extracted-preview { margin-top: var(--s-4); }
 
 .conversation-panel .conversation-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
 .conversation-panel .conversation-toolbar button { width: auto; flex: 0 0 auto; }
 .conversation-panel .assistant-view { overflow: hidden; }
 .conversation-panel .conversation-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-.conversation-panel .composer-row { position: relative; bottom: auto; order: initial; margin: 0; }
+.conversation-panel .composer-row { position: relative; left: auto; right: auto; bottom: auto; width: 100%; max-width: none; transform: none; order: initial; margin: 0; align-self: stretch; }
 .conversation-panel .photo-attachment {
   position: relative;
   left: auto;

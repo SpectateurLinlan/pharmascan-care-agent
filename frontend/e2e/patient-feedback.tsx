@@ -1,6 +1,7 @@
 // Local test entry: real components, explicitly simulated identity and HTTP.
 import {useEffect,useState} from 'react';
 import {createRoot} from 'react-dom/client';
+import {App} from '../src/App';
 import {LanguageProvider,useLanguage} from '../src/language';
 import {PatientHub,ProfileScreen,InformationScreen} from '../src/components/PatientHub';
 import {MeScreen} from '../src/components/MeScreen';
@@ -20,4 +21,4 @@ function Fixture(){
  <div hidden={!chat}><AssistantScreen ownerId="DEMO-fixture" compact={!chat} onExpand={()=>setChat(true)} active={chat} sessionId="DEMO-session" onSession={()=>undefined} onClose={()=>setChat(false)}/></div>
  </main>;
 }
-createRoot(document.getElementById('root')!).render(<LanguageProvider><Fixture/></LanguageProvider>);
+createRoot(document.getElementById('root')!).render(new URLSearchParams(location.search).has('shell')?<App/>:<LanguageProvider><Fixture/></LanguageProvider>);

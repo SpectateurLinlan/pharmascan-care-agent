@@ -7,7 +7,7 @@ self.addEventListener('push', event => {
   let test = false;
   try {const data = event.data?.json();chinese=data?.language==='zh';test=data?.purpose==='test';if(typeof data?.tag === 'string' && /^[a-f0-9]{32}$/.test(data.tag))tag=data.tag;} catch { /* Fixed private message also handles malformed payloads. */ }
   event.waitUntil(self.registration.showNotification('MediThread', {
-    body: test?(chinese?'这是一条测试通知。':'This is a test notification.'):(chinese?'请查看您的用药计划。':"It's time to check your medication plan."), tag, icon:'/icon.svg', data:{url:'/#today'},
+    body: test?(chinese?'这是一条测试通知。':'This is a test notification.'):(chinese?'请查看您的用药计划。':"It's time to check your medication plan."), tag, icon:'/branding/medithread-192.png', data:{url:'/#today'},
   }));
 });
 self.addEventListener('notificationclick', event => {

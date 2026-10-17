@@ -6,6 +6,7 @@ import {api,type EvidenceTask,type GalleryEntry,type GalleryImage} from '../api/
 import {EvidenceEnrollmentScreen} from './EvidenceEnrollmentScreen';
 import {PersonalGalleryScreen} from './PersonalGalleryScreen';
 import {MedicinesHub} from './MedicinesHub';
+import {medicationSetupEntries} from '../medicationSetup';
 vi.mock('../api/client',()=>({ApiError:class extends Error{},api:{sourcePreview:vi.fn(),checkInput:vi.fn(),personalGallery:vi.fn(),referencePhoto:vi.fn(),addReference:vi.fn(),retireReference:vi.fn(),evidenceTasks:vi.fn(),evidenceTask:vi.fn(),evidenceSources:vi.fn(),attachEvidence:vi.fn(),reviewEvidence:vi.fn(),requestChallenge:vi.fn(),activate:vi.fn(),sendMessage:vi.fn()}}));
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.resetAllMocks();});
 const task:EvidenceTask={id:'DEMO-task',medication_id:'DEMO-med',version:2,status:'pending_information',product:{name:'DEMO Metformin',strength:'500 mg',dose_form:'tablet',formulation:null,brand:null,ingredients:[],category:'unknown',verification:'source_supplied'},source_ids:['DEMO-source'],missing:['dose_amount','schedule'],conflicts:[],possible_duplicate_ids:[],draft_regimen_id:null,suggested_regimen:null};
@@ -40,7 +41,7 @@ it('does not attach the old photo to a new registration when type detection comp
  fireEvent.click(screen.getByLabelText('I allow this photo to be sent to the recognition service to read medication information. I can change this in Privacy and data.'));
  fireEvent.click(screen.getByRole('button',{name:'Read photo'}));
  await waitFor(()=>expect(api.checkInput).toHaveBeenCalledOnce());
- fireEvent.click(screen.getByRole('button',{name:'Save draft and close'}));
+ fireEvent.click(screen.getByRole('button',{name:'Cancel supplement'}));
  await act(async()=>resolveRoute({image_type:'package',checked:true,abstained:true,suggested_workflow:'source_review',message:'DEMO routing'}));
  expect(api.attachEvidence).not.toHaveBeenCalled();expect(api.sendMessage).not.toHaveBeenCalled();
  expect(screen.queryByRole('heading',{name:'DEMO Metformin'})).toBeNull();
@@ -57,7 +58,7 @@ it('keeps a new registration selected when a previously submitted upload returns
  fireEvent.click(screen.getByLabelText('I allow this photo to be sent to the recognition service to read medication information. I can change this in Privacy and data.'));
  fireEvent.click(screen.getByRole('button',{name:'Read photo'}));
  await screen.findByRole('button',{name:'Save source and set up plan'});fireEvent.click(screen.getByRole('button',{name:'Save source and set up plan'}));await waitFor(()=>expect(api.attachEvidence).toHaveBeenCalledWith(task.id,expect.any(File),'package',undefined,true));
- fireEvent.click(screen.getByRole('button',{name:'Save draft and close'}));
+ fireEvent.click(screen.getByRole('button',{name:'Cancel supplement'}));
  await act(async()=>resolveUpload(task));
  expect(screen.queryByRole('heading',{name:'DEMO Metformin'})).toBeNull();
  expect(localStorage.getItem(key)).toBeNull();expect(api.sendMessage).not.toHaveBeenCalled();
@@ -66,7 +67,7 @@ it('does not restore an earlier navigation target after explicitly starting a ne
  mocks();vi.mocked(api.evidenceTask).mockResolvedValue(task);const fresh=vi.fn();
  const view=render(<EvidenceEnrollmentScreen initialTaskId={task.id} sessionId="DEMO-session" onChanged={vi.fn()} onNewRegistration={fresh}/>);
  await screen.findByRole('heading',{name:'DEMO Metformin'});
- fireEvent.click(screen.getByRole('button',{name:'Save draft and close'}));expect(fresh).toHaveBeenCalledOnce();
+ fireEvent.click(screen.getByRole('button',{name:'Cancel supplement'}));expect(fresh).toHaveBeenCalledOnce();
  view.rerender(<EvidenceEnrollmentScreen initialTaskId={null} active={false} sessionId="DEMO-session" onChanged={vi.fn()} onNewRegistration={fresh}/>);
  view.rerender(<EvidenceEnrollmentScreen initialTaskId={null} active sessionId="DEMO-session" onChanged={vi.fn()} onNewRegistration={fresh}/>);
  await act(async()=>{});expect(screen.queryByRole('heading',{name:'DEMO Metformin'})).toBeNull();expect(api.evidenceTask).toHaveBeenCalledOnce();
@@ -113,6 +114,6 @@ it('retiring a reference refreshes its status without deleting its private photo
 
 it('unfinished registration count includes identity-only source tasks, not just regimen drafts',async()=>{
  mocks();vi.mocked(api.evidenceTasks).mockResolvedValue([task,{...task,id:'DEMO-finished',status:'draft_created'}]);
- render(<MedicinesHub medications={[]} drafts={[]} versions={[]} onOpen={vi.fn()}/>);
+ render(<MedicinesHub medications={[]} drafts={[]} setupCount={medicationSetupEntries([task,{...task,id:'DEMO-finished',status:'draft_created'}],[]).length} versions={[]} onOpen={vi.fn()}/>);
  await screen.findByText('1 awaiting review');expect(screen.getByRole('button',{name:/Finish medication setup/})).toBeTruthy();
 });

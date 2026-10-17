@@ -1,10 +1,15 @@
-import {useEffect,useState} from 'react';
-import {api,type EvidenceTask} from '../api/client';
+import type {MedicationSetupEntry} from '../medicationSetup';
 import {useLanguage} from '../language';
 import {Card,ErrorNotice} from './primitives';
 
-export function PendingEvidenceTasks({onContinue}:{onContinue:(id:string)=>void}){
- const {t}=useLanguage();const [tasks,setTasks]=useState<EvidenceTask[]>([]),[error,setError]=useState<unknown>(null);
- useEffect(()=>{let live=true;if(api.evidenceTasks)void api.evidenceTasks().then(rows=>{if(live)setTasks(rows.filter(row=>row.status!=='draft_created'));}).catch(caught=>{if(live)setError(caught);});return()=>{live=false;};},[]);
- return <Card title="Source registrations to complete">{error?<ErrorNotice error={error}/>:null}{tasks.map(row=><button key={row.id} onClick={()=>onContinue(row.id)}>{row.product.name} {row.product.strength??''} · {t(row.conflicts.length?'Sources need clarification':'Information still needed')}</button>)}{!tasks.length&&!error?<p>{t('No pending source registrations.')}</p>:null}</Card>;
+export function PendingEvidenceTasks({entries,error,onRetry,onContinue,onResume}:{entries:MedicationSetupEntry[]|null;error:unknown;onRetry:()=>void;onContinue:(id:string)=>void;onResume:(id:string)=>void}){
+ const {t}=useLanguage();
+ return <Card title="Finish medication setup">
+  {error?<><ErrorNotice error={error}/><button onClick={onRetry}>{t('Retry loading records')}</button></>:null}
+  {entries===null&&!error?<p role="status">{t('Loading saved registrations…')}</p>:null}
+  {entries?.map(row=><button key={`${row.kind}-${row.id}`} onClick={()=>row.kind==='source'?onContinue(row.id):onResume(row.id)}>
+   {row.name} · {t(row.kind==='draft'?'Review the saved plan':row.conflicting?'Sources need clarification':'Supplement medication information')}
+  </button>)}
+  {entries?.length===0&&!error?<p>{t('No unfinished medication setup.')}</p>:null}
+ </Card>;
 }

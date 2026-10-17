@@ -53,4 +53,9 @@ export const experienceCopy:Record<string,string>={
  'Your daily AI allowance':'每日 AI 助手额度',
  'Please reopen the assistant before continuing.':'请重新打开助手后继续。',
  'Do not wait for the app.':'请不要等待应用回复。',
+ 'Supplement medication information':'补充药物资料',
+ 'Loading saved registrations…':'正在加载已保存的登记…',
+ 'Review the saved plan':'核对已保存的计划',
+ 'View saved source registrations':'查看已保存的药物登记',
+ 'Cancel supplement':'取消本次补充',
 };

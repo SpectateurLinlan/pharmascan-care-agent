@@ -17,15 +17,12 @@ function summaryHint(row:MedicationSummary,t:(value:string)=>string){
  return `${row.dose_amount??t('Not specified')} ${t(row.dose_unit??'')} · ${row.is_prn?t('As needed'):row.frequency_rule?.local_times.join(', ')??t('Not specified')}`;
 }
 
-export function MedicinesHub({medications,drafts,versions,onOpen}:{medications:MedicationSummary[];drafts:RegimenHistoryItem[];versions:RegimenHistoryItem[];onOpen:(page:MedicineDestination,regimenId?:string)=>void}){
+export function MedicinesHub({medications,versions,onOpen,setupCount=null}:{medications:MedicationSummary[];drafts:RegimenHistoryItem[];setupCount?:number|null;versions:RegimenHistoryItem[];onOpen:(page:MedicineDestination,regimenId?:string)=>void}){
  const {t,preferences}=useLanguage();
- const [pendingSources,setPendingSources]=useState<number|null>(null);
- useEffect(()=>{let live=true;if(api.evidenceTasks)void api.evidenceTasks().then(rows=>{if(live)setPendingSources(rows.filter(row=>row.status!=='draft_created').length);}).catch(()=>{if(live)setPendingSources(null);});return()=>{live=false;};},[]);
  const today=new Intl.DateTimeFormat('en-CA',{timeZone:preferences.timezone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
  const current=medications.filter(row=>!isPastCourse(row,today)&&(!row.course_start_date||row.course_start_date<=today));
  const upcoming=medications.filter(row=>!isPastCourse(row,today)&&row.course_start_date&&row.course_start_date>today);
  const pastCount=versions.filter(row=>isPastCourse(row,today)).length;
- const awaiting=drafts.length+(pendingSources??0);
  const badge=(row:MedicationSummary)=><VerificationBadge sourceBacked={row.source_backed} identityStatus={row.identity_status}/>;
  return <Screen
   title="My Medicines"
@@ -42,7 +39,7 @@ export function MedicinesHub({medications,drafts,versions,onOpen}:{medications:M
   <RowGroup>
    <Row icon="clipboard" title="Past courses" hint={`${pastCount} ${t('courses')}`} onClick={()=>onOpen('past-medicines')}/>
    <Row icon="image" title="Photos and evidence" hint="Source photos, provenance and what they can and cannot show" onClick={()=>onOpen('gallery')}/>
-   <Row icon="alert" title="Finish medication setup" hint={pendingSources===null?t('View saved source registrations'):`${awaiting} ${t('awaiting review')}`} onClick={()=>onOpen('unfinished')}/>
+   <Row icon="alert" title="Finish medication setup" hint={setupCount===null?t('View saved source registrations'):`${setupCount} ${t('awaiting review')}`} onClick={()=>onOpen('unfinished')}/>
   </RowGroup>
  </Screen>;
 }

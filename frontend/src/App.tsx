@@ -4,7 +4,8 @@ import {LanguageMenu} from './components/LanguageMenu';
 import {NotificationInvitation} from './components/NotificationInvitation';
 import { LanguageProvider, useLanguage } from './language';
 import { useCallback, useEffect, useState, useRef } from 'react';
-import { api, type HealthResponse, type RegimenHistoryItem, type SourcePreview, type MedicationListResponse } from './api/client';
+import { api, type EvidenceTask, type HealthResponse, type RegimenHistoryItem, type SourcePreview, type MedicationListResponse } from './api/client';
+import {medicationSetupEntries} from './medicationSetup';
 import { AssistantScreen } from './components/AssistantScreen';
 import { EnrollScreen } from './components/EnrollScreen';
 import { HistoryScreen } from './components/HistoryScreen';
@@ -43,15 +44,17 @@ const tabs: { id: Tab; label: string; symbol: IconName }[] = [
 export function App() { return <LanguageProvider><CompanionApp /></LanguageProvider>; }
 
 function CompanionApp() {
-  const headerRef=useRef<HTMLElement>(null),navRef=useRef<HTMLElement>(null);
+  const headerRef=useRef<HTMLElement>(null),navRef=useRef<HTMLElement>(null),mainRef=useRef<HTMLElement>(null);
   useEffect(()=>{
     /* Written on the document root: the shell that reserves this space is an
        ancestor of the header and the nav, so a variable set on a sibling would
        never be read and the fallbacks would always win. */
     const update=()=>{const root=document.documentElement;root.style.setProperty('--app-header-height',`${headerRef.current?.getBoundingClientRect().height??72}px`);root.style.setProperty('--bottom-nav-height',`${navRef.current?.getBoundingClientRect().height??72}px`);};
-    update();const observer=typeof ResizeObserver==='undefined'?null:new ResizeObserver(update);
+    const measure=()=>{update();const rect=mainRef.current?.getBoundingClientRect();if(rect){document.documentElement.style.setProperty('--patient-content-left',`${rect.left}px`);document.documentElement.style.setProperty('--patient-content-width',`${rect.width}px`);}};
+    measure();const observer=typeof ResizeObserver==='undefined'?null:new ResizeObserver(measure);
     if(headerRef.current)observer?.observe(headerRef.current);if(navRef.current)observer?.observe(navRef.current);
-    window.addEventListener('resize',update);return()=>{observer?.disconnect();window.removeEventListener('resize',update);};
+    if(mainRef.current)observer?.observe(mainRef.current);
+    window.addEventListener('resize',measure);return()=>{observer?.disconnect();window.removeEventListener('resize',measure);};
   },[]);
   const {t,preferences,loadPreferences,preferenceError}=useLanguage();
   const [evidenceTaskId,setEvidenceTaskId]=useState<string|null>(null);
@@ -65,6 +68,9 @@ function CompanionApp() {
   const [editTarget,setEditTarget]=useState<RegimenHistoryItem|null>(null);
   const [detailId,setDetailId]=useState<string|null>(null);
   const [drafts, setDrafts] = useState<RegimenHistoryItem[]>([]);
+  const [sourceTasks,setSourceTasks]=useState<EvidenceTask[]|null>(null),[setupError,setSetupError]=useState<unknown>(null);
+  const setupRequest=useRef(0);
+  const loadSourceTasks=useCallback(async()=>{const version=++setupRequest.current;try{const rows=await api.evidenceTasks();if(version===setupRequest.current){setSourceTasks(rows);setSetupError(null);}}catch(caught){if(version===setupRequest.current){setSourceTasks(null);setSetupError(caught);}}},[]);
   const [resumeId, setResumeId] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -86,8 +92,8 @@ function CompanionApp() {
   const openGuide=()=>{setTab('today');setGuideReplay(true);setGuideOpen(true);};
   useEffect(()=>accountAuth.watchIdentity?.(()=>{window.localStorage.removeItem('pharmascan.agent-session');window.location.reload();}),[]);
   const refreshMedications = useCallback(async () => {
-    try { const [active, versions] = await Promise.all([api.listMedications(), api.regimenHistory()]); setMedications(active); setVersions(versions); setDrafts(versions.filter(row => row.state === 'draft' || row.state === 'pending_clarification')); setFatal(null); } catch (caught) { setFatal(caught); }
-  }, []);
+    try { const [active, versions] = await Promise.all([api.listMedications(), api.regimenHistory(),loadSourceTasks()]); setMedications(active); setVersions(versions); setDrafts(versions.filter(row => row.state === 'draft' || row.state === 'pending_clarification')); setFatal(null); } catch (caught) { setFatal(caught); }
+  }, [loadSourceTasks]);
   const bootstrap=useRef<Promise<{state:HealthResponse;session:Awaited<ReturnType<typeof api.startDemo>>;active:MedicationListResponse;versions:RegimenHistoryItem[]}>|null>(null);
   useEffect(()=>{
     let live=true;
@@ -95,7 +101,7 @@ function CompanionApp() {
       const state=await api.health();
       if(state.runtime_contract!=="patient-ux-reminders-v1")throw new Error("The app connection needs a restart. Please restart the development servers.");
       const session=await api.startDemo();
-      const [active,versions]=await Promise.all([api.listMedications(),api.regimenHistory(),loadPreferences()]);
+      const [active,versions]=await Promise.all([api.listMedications(),api.regimenHistory(),loadPreferences(),loadSourceTasks()]);
       return {state,session,active,versions};
     })();
     void bootstrap.current.then(({state,session,active,versions})=>{
@@ -105,7 +111,8 @@ function CompanionApp() {
       setMedications(active);setVersions(versions);setDrafts(versions.filter(row=>row.state==='draft'||row.state==='pending_clarification'));setFatal(null);
     }).catch(caught=>{bootstrap.current=null;if(live)setFatal(caught);}).finally(()=>{if(live)setLoading(false);});
     return()=>{live=false;};
-  },[loadPreferences,setTab]);
+  },[loadPreferences,setTab,loadSourceTasks]);
+  const setupEntries=sourceTasks===null?null:medicationSetupEntries(sourceTasks,versions);
 
   const greeting=greetingAt(now,preferences.timezone);
   const name=greetingName(member,accountDisplayName(identity,preferences.display_name,t('Guest')),t('Guest'));
@@ -132,10 +139,10 @@ function CompanionApp() {
   const guideVisible=guideOpen&&!loading&&!fatal&&Boolean(medications)&&tab==='today';
   return <div className={dockVisible?'app companion has-dock':standaloneSignIn?'app companion signin-shell':'app companion'}><div ref={contentRef} data-app-content>
     <a className="skip-link" href="#main-content">{t('Skip to content')}</a>
-    {!standaloneSignIn?<header ref={headerRef} className="companion-header app-header">{!isRoot?<button className="back-button" aria-label={t('Back')} onClick={goBack}><Icon name="chevron-left"/></button>:null}<div className="brand"><img className="brand-mark" src="/icon.svg" alt=""/><span>MediThread</span></div><LanguageMenu/><button className="notification-shortcut" aria-label={t('Medication reminders')} onClick={()=>setTab('reminder-settings')}><Icon name="bell"/></button><button className="settings-shortcut" aria-label={t('Settings')} onClick={()=>setTab('settings')}><Icon name="settings"/></button></header>:null}
+    {!standaloneSignIn?<header ref={headerRef} className="companion-header app-header">{!isRoot?<button className="back-button" aria-label={t('Back')} onClick={goBack}><Icon name="chevron-left"/></button>:null}<div className="brand"><img className="brand-mark" src="/branding/medithread-192.png" width="28" height="28" alt=""/><span>MediThread</span></div><LanguageMenu/><button className="notification-shortcut" aria-label={t('Medication reminders')} onClick={()=>setTab('reminder-settings')}><Icon name="bell"/></button><button className="settings-shortcut" aria-label={t('Settings')} onClick={()=>setTab('settings')}><Icon name="settings"/></button></header>:null}
     {preferenceError ? <p role="alert">{preferenceError}</p> : null}
     {fatal ? <ErrorNotice error={fatal} /> : null}
-    <main id="main-content" className="app-main">
+    <main ref={mainRef} id="main-content" className="app-main">
     {!guideOpen?<NotificationInvitation ownerId={guideOwner} onSettings={()=>setTab('reminder-settings')}/>:null}
     {loading&&!accountPage ? <Card title="Getting your records ready"><p role="status">{t('Starting your private demo session…')}</p></Card> : !medications&&!accountPage ? <Card title="Your records could not be loaded"><p>{t('Please retry the connection. An unavailable record is not an empty medication list.')}</p><button onClick={() => { if (health && sessionId) void refreshMedications(); else window.location.reload(); }}>{t('Retry loading records')}</button></Card> : <>
       {tab === 'check'||tab==='check-result' ? <VisualCheckScreen ownerId={guideOwner} initialFile={routedPhoto} showResult={tab==='check-result'} onResult={()=>setTab('check-result')} showBack={false} regimenId={visualRegimen} onBack={goBack} onAddSource={()=>setTab('label')}/> : null}
@@ -143,12 +150,12 @@ function CompanionApp() {
         <section className="welcome"><h1 className="greeting">{t(greeting)}{preferences.preferred_language==='zh'?'，':', '}{name}!</h1><p>{t('Your medication and self-care companion')}</p></section>
         {currentMedications.length?<TodayMedicationCarousel medications={currentMedications} focusRegimenId={focusRegimen}>{medication=><TodayScreen key={medication.regimen_id} showTitle={false} focusRegimenId={focusRegimen} onFeeling={()=>{setHealthDescription('');setTab('health-notes');}} onVisualCheck={id=>{setVisualRegimen(id);setTab('check');}} compact medications={[medication]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')}/>}</TodayMedicationCarousel>:<TodayScreen compact medications={[]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')} onVisualCheck={()=>{setVisualRegimen(null);setTab('check');}}/>}
       </> : null}
-      {tab==='medicines'?<MedicinesHub medications={medications?.medications??[]} drafts={drafts} versions={versions} onOpen={openMedicine}/>:null}
+      {tab==='medicines'?<MedicinesHub medications={medications?.medications??[]} drafts={drafts} setupCount={setupEntries?.length??null} versions={versions} onOpen={openMedicine}/>:null}
       {tab==='add-method'?<AddMethodScreen onOpen={setTab}/>:null}
-      <div data-testid="evidence-workspace" hidden={tab!=='label'}><EvidenceEnrollmentScreen active={tab==='label'} ownerId={guideOwner} onPill={file=>{setRoutedPhoto(file);setVisualRegimen(null);setTab('check');}} onNewRegistration={()=>setEvidenceTaskId(null)} initialTaskId={evidenceTaskId} sessionId={sessionId} onChanged={refreshMedications}/></div>
+      <div data-testid="evidence-workspace" hidden={tab!=='label'}><EvidenceEnrollmentScreen active={tab==='label'} ownerId={guideOwner} onPill={file=>{setRoutedPhoto(file);setVisualRegimen(null);setTab('check');}} onNewRegistration={()=>setEvidenceTaskId(null)} onCancel={()=>{void refreshMedications();setTab('unfinished');}} initialTaskId={evidenceTaskId} sessionId={sessionId} onChanged={refreshMedications}/></div>
       <div hidden={tab!=='manual'}><EnrollScreen resumeRegimenId={resumeId} resumeRow={versions.find(row=>row.regimen_id===resumeId)??null} sourceSelection={sourceSelection} sessionId={sessionId} medications={medications} onChanged={refreshMedications}/></div>
       <div data-page="edit-medication" hidden={tab!=='edit-medication'}>{editTarget?<EnrollScreen onActivated={id=>{setDetailId(id);goBack();}} editFrom={editTarget} sessionId={sessionId} medications={medications} onChanged={refreshMedications}/>:tab==='edit-medication'?<Card title="Choose a medication"><button onClick={()=>setTab('medicines')}>{t('Medicines')}</button></Card>:null}</div>
-      {tab==='unfinished'?<><PendingEvidenceTasks onContinue={id=>{setEvidenceTaskId(id);setTab('label');}}/><Card title="Finish medication setup">{drafts.length?drafts.map(row=><Entry key={row.regimen_id} title={row.display_name} hint="This medication needs review before its schedule is enabled." onClick={()=>{setResumeId(row.regimen_id);setTab('manual');}}/>):<p>{t('No unfinished medication setup.')}</p>}</Card></>:null}
+      {tab==='unfinished'?<PendingEvidenceTasks entries={setupEntries} error={setupError} onRetry={()=>void refreshMedications()} onContinue={id=>{setEvidenceTaskId(id);setTab('label');}} onResume={id=>{setResumeId(id);setTab('manual');}}/>:null}
       {tab==='past-medicines'?<Card title="Past courses">{versions.filter(row=>isPastCourse(row,calendarDate)).map(row=><Entry key={row.regimen_id} title={row.display_name} hint={`${row.course_start_date??t('Not specified')} → ${row.course_end_date??t('Not specified')}`} onClick={()=>openMedicine('medicine-detail',row.regimen_id)}/>)}{!versions.some(row=>isPastCourse(row,calendarDate))?<p>{t('No past courses yet.')}</p>:null}</Card>:null}
       {tab==='medicine-detail'&&!detail?<Card title="Choose a medication"><button onClick={()=>setTab('medicines')}>{t('Medicines')}</button></Card>:null}
       {tab==='medicine-detail'&&detail?<MedicationDetail versions={versions} summary={medications?.medications.find(row=>row.regimen_id===detail.regimen_id)} onAssistant={openAssistant} onChanged={refreshMedications} onEdit={()=>{setEditTarget(detail);setTab('edit-medication');}} row={detail} onHistory={()=>setTab('records')} onGallery={()=>setTab('gallery')} onCheck={()=>{setVisualRegimen(detail.regimen_id);setTab('check');}}/>:null}
