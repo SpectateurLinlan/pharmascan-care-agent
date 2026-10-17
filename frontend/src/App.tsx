@@ -118,10 +118,9 @@ function CompanionApp() {
   const name=greetingName(member,accountDisplayName(identity,preferences.display_name,t('Guest')),t('Guest'));
   const accountPage=['me','settings','feedback','profile','account','caregivers','reminder-settings','language-settings','accessibility','privacy','about','help'].includes(tab);
   /**
-   * The assistant has exactly two presentations and one rule for each:
-   *  - a docked composer on the four main screens, so help is always one tap
-   *    away in the same place;
-   *  - the full conversation surface when the patient opens it.
+   * One Assistant instance keeps conversation state across root navigation.
+   * Today promotes its compact composer into an inline entry; the other root
+   * screens dock the same composer. Both open the existing conversation layer.
    * It is deliberately absent from forms and detail screens, where a floating
    * composer would compete with the action that screen exists for.
    */
@@ -130,14 +129,14 @@ function CompanionApp() {
      about identity, so it renders without the tabs, the rail or the composer. */
   const standaloneSignIn=accountKind==='signed_out'&&tab==='account';
   const assistantVisible=!standaloneSignIn&&(assistantOpen||tab==='assistant'||assistantSurface);
-  const dockVisible=!assistantOpen&&assistantSurface&&!standaloneSignIn;
+  const dockVisible=!assistantOpen&&assistantSurface&&tab!=='today'&&!standaloneSignIn;
   const openMedicine=(page:MedicineDestination,id?:string)=>{if(id)setDetailId(id);setTab(page);};
   const detail=versions.find(row=>row.regimen_id===detailId);
   const openAssistant=()=>{setAssistantSlots(tab==='medicine-detail'&&detail?{regimen_id:detail.regimen_id,medication_id:detail.medication_id}:{});setAssistantOpen(true);};
   const calendarDate=new Intl.DateTimeFormat('en-CA',{timeZone:preferences.timezone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
   const currentMedications=medications?.medications.filter(row=>!isPastCourse(row,calendarDate)&&(!row.course_start_date||row.course_start_date<=calendarDate))??[];
   const guideVisible=guideOpen&&!loading&&!fatal&&Boolean(medications)&&tab==='today';
-  return <div className={dockVisible?'app companion has-dock':standaloneSignIn?'app companion signin-shell':'app companion'}><div ref={contentRef} data-app-content>
+  return <div className={dockVisible?'app companion has-dock':standaloneSignIn?'app companion signin-shell':'app companion'} data-root-surface={assistantSurface?'true':undefined}><div ref={contentRef} data-app-content>
     <a className="skip-link" href="#main-content">{t('Skip to content')}</a>
     {!standaloneSignIn?<header ref={headerRef} className="companion-header app-header">{!isRoot?<button className="back-button" aria-label={t('Back')} onClick={goBack}><Icon name="chevron-left"/></button>:null}<div className="brand"><img className="brand-mark" src="/branding/medithread-192.png" width="28" height="28" alt=""/><span>MediThread</span></div><LanguageMenu/><button className="notification-shortcut" aria-label={t('Medication reminders')} onClick={()=>setTab('reminder-settings')}><Icon name="bell"/></button><button className="settings-shortcut" aria-label={t('Settings')} onClick={()=>setTab('settings')}><Icon name="settings"/></button></header>:null}
     {preferenceError ? <p role="alert">{preferenceError}</p> : null}
@@ -145,10 +144,12 @@ function CompanionApp() {
     <main ref={mainRef} id="main-content" className="app-main">
     {!guideOpen?<NotificationInvitation ownerId={guideOwner} onSettings={()=>setTab('reminder-settings')}/>:null}
     {loading&&!accountPage ? <Card title="Getting your records ready"><p role="status">{t('Starting your private demo session…')}</p></Card> : !medications&&!accountPage ? <Card title="Your records could not be loaded"><p>{t('Please retry the connection. An unavailable record is not an empty medication list.')}</p><button onClick={() => { if (health && sessionId) void refreshMedications(); else window.location.reload(); }}>{t('Retry loading records')}</button></Card> : <>
+      <div hidden={!assistantVisible}><AssistantScreen ownerId={guideOwner} onClose={()=>{setAssistantOpen(false);if(tab==='assistant')goBack();}} contextSlots={assistantSlots} onExpand={openAssistant} active={assistantOpen||tab==='today'||tab==='assistant'} onHealthReview={description=>{setAssistantOpen(false);setHealthDescription(description);setTab('health-notes');}} onVisualCheck={id=>{setAssistantOpen(false);setVisualRegimen(id);setTab('check');}} sessionId={sessionId} onSession={setSessionId} todayEntry={tab==='today'} compact={!assistantOpen&&tab!=='assistant'} onChanged={refreshMedications}/></div>
       {tab === 'check'||tab==='check-result' ? <VisualCheckScreen ownerId={guideOwner} initialFile={routedPhoto} showResult={tab==='check-result'} onResult={()=>setTab('check-result')} showBack={false} regimenId={visualRegimen} onBack={goBack} onAddSource={()=>setTab('label')}/> : null}
       {tab === 'today' ? <>
         <section className="welcome"><h1 className="greeting">{t(greeting)}{preferences.preferred_language==='zh'?'，':', '}{name}!</h1><p>{t('Your medication and self-care companion')}</p></section>
-        {currentMedications.length?<TodayMedicationCarousel medications={currentMedications} focusRegimenId={focusRegimen}>{medication=><TodayScreen key={medication.regimen_id} showTitle={false} focusRegimenId={focusRegimen} onFeeling={()=>{setHealthDescription('');setTab('health-notes');}} onVisualCheck={id=>{setVisualRegimen(id);setTab('check');}} compact medications={[medication]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')}/>}</TodayMedicationCarousel>:<TodayScreen compact medications={[]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')} onVisualCheck={()=>{setVisualRegimen(null);setTab('check');}}/>}
+        <div className="landscape-columns today-panels">{currentMedications.length?<TodayMedicationCarousel medications={currentMedications} focusRegimenId={focusRegimen}>{medication=><TodayScreen key={medication.regimen_id} showTitle={false} focusRegimenId={focusRegimen} onFeeling={()=>{setHealthDescription('');setTab('health-notes');}} onVisualCheck={id=>{setVisualRegimen(id);setTab('check');}} compact medications={[medication]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')}/>}</TodayMedicationCarousel>:<TodayScreen compact medications={[]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')} onVisualCheck={()=>{setVisualRegimen(null);setTab('check');}}/>}
+        <CareTaskSummary medications={medications?.medications??[]} onOpen={()=>setTab('care-tasks')}/></div>
       </> : null}
       {tab==='medicines'?<MedicinesHub medications={medications?.medications??[]} drafts={drafts} setupCount={setupEntries?.length??null} versions={versions} onOpen={openMedicine}/>:null}
       {tab==='add-method'?<AddMethodScreen onOpen={setTab}/>:null}
@@ -160,13 +161,12 @@ function CompanionApp() {
       {tab==='medicine-detail'&&!detail?<Card title="Choose a medication"><button onClick={()=>setTab('medicines')}>{t('Medicines')}</button></Card>:null}
       {tab==='medicine-detail'&&detail?<MedicationDetail versions={versions} summary={medications?.medications.find(row=>row.regimen_id===detail.regimen_id)} onAssistant={openAssistant} onChanged={refreshMedications} onEdit={()=>{setEditTarget(detail);setTab('edit-medication');}} row={detail} onHistory={()=>setTab('records')} onGallery={()=>setTab('gallery')} onCheck={()=>{setVisualRegimen(detail.regimen_id);setTab('check');}}/>:null}
       {tab==='gallery'?<PersonalGalleryScreen onSources={id=>{setEvidenceTaskId(id);setTab('label');}} onCheck={id=>{setVisualRegimen(id);setTab('check');}}/>:null}
-      {tab==='today'?<CareTaskSummary medications={medications?.medications??[]} onOpen={()=>setTab('care-tasks')}/>:null}
       {tab==='care-tasks'?<CareTasksScreen regimens={versions}/>:null}
       {tab==='adherence-barriers'?<AdherenceBarriersScreen regimens={versions}/>:null}
       {tab==='medication-review'?<MedicationReviewScreen/>:null}
       {tab==='health-notes'?<HealthTrackingScreen initialDescription={healthDescription} medications={medications?.medications??[]}/>:null}
       {tab.startsWith('summary-')?<ReviewSummaryScreen period={tab==='summary-week'?'week':tab==='summary-month'?'month':'course'} regimens={versions}/>:null}
-      {tab === 'records' ? <Screen title="Records" lead="Your own reports, and the summaries you can take to a review.">
+      {tab === 'records' ? <Screen columns title="Records" lead="Your own reports, and the summaries you can take to a review.">
         <RowGroup title="Medication and health summary">
           <div className="period-actions">{(['week','month','course'] as const).map(period=><button key={period} onClick={()=>setTab(`summary-${period}`)}>{t(period==='week'?'This week':period==='month'?'This month':'This course')}</button>)}</div>
           <Row icon="heart" title="My health notes" hint="How you have been feeling" onClick={()=>setTab('health-notes')}/>
@@ -176,7 +176,7 @@ function CompanionApp() {
           <Row icon="calendar" title="Medication follow-ups" onClick={()=>setTab('care-tasks')}/>
           <Row icon="clipboard" title="Medication review preparation" onClick={()=>setTab('medication-review')}/>
         </RowGroup>
-        <HistoryScreen />
+        <div className="screen-full"><HistoryScreen /></div>
       </Screen> : null}
       {tab==='me'?<PatientHub onOpen={setTab} onGuide={openGuide}/>:null}
       {tab==='help'?<OnboardingGuide owner={guideOwner} replay onClose={()=>setTab('me')}/>:null}
@@ -187,7 +187,7 @@ function CompanionApp() {
       {tab==='settings'?<SettingsScreen/>:null}
       {tab==='reminder-settings'||tab==='language-settings'||tab==='accessibility'?<SettingsScreen section={tab==='reminder-settings'?'reminders':tab==='language-settings'?'language':'accessibility'}/>:null}
       {tab==='feedback'?<FeedbackScreen/>:null}
-      <div hidden={!assistantVisible}><AssistantScreen ownerId={guideOwner} onClose={()=>{setAssistantOpen(false);if(tab==='assistant')goBack();}} contextSlots={assistantSlots} onExpand={openAssistant} active={assistantOpen||tab==='today'||tab==='assistant'} onHealthReview={description=>{setAssistantOpen(false);setHealthDescription(description);setTab('health-notes');}} onVisualCheck={id=>{setAssistantOpen(false);setVisualRegimen(id);setTab('check');}} sessionId={sessionId} onSession={setSessionId} compact={!assistantOpen&&tab!=='assistant'} onChanged={refreshMedications}/></div>
+
     </>}
     </main>
     {!standaloneSignIn?<ReminderMonitor enabled={!loading&&!fatal&&!guideVisible} onReview={id=>{setFocusRegimen(id);setTab('today');}}/>:null}

@@ -20,7 +20,7 @@ export function PatientHub({onOpen,onGuide,auth=accountAuth}:{onOpen:(page:MeDes
  const {t,preferences}=useLanguage();const [account,setAccount]=useState<Account|null>(null);
  useEffect(()=>{let live=true;const load=()=>void auth.account().then(row=>{if(live)setAccount(row);}).catch(()=>{if(live)setAccount(null);});load();window.addEventListener('focus',load);return()=>{live=false;window.removeEventListener('focus',load);};},[auth]);
  const member=account?.kind==='member';const name=accountDisplayName(account,preferences.display_name,t('Guest'));
- return <Screen title="Me" lead="Your account, and how this app works for you.">
+ return <Screen columns title="Me" lead="Your account, and how this app works for you.">
   <section className="card identity-card">
    <button aria-label={t('Personal profile')} className="identity-entry" onClick={()=>onOpen('profile')}>
     <span className="avatar"><Icon name="user"/></span>

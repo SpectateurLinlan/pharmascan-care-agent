@@ -1,7 +1,6 @@
 /** Real App and browser layout; synthetic authenticated HTTP only, no live writes. */
-import {test,expect} from '@playwright/test';
-test('source-only count, supplement cancellation and assistant alignment stay consistent',async({page})=>{
- test.setTimeout(90000);page.setDefaultTimeout(8000);
+import {test,expect,type Page} from '@playwright/test';
+async function mockPatientApp(page:Page){
  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
  const token='DEMO.synthetic-session-token',owner='d00d0000-0000-4000-8000-000000000001';
  const user={id:owner,aud:'authenticated',role:'authenticated',email:null,phone:'',app_metadata:{provider:'anonymous',providers:['anonymous']},user_metadata:{demo_only:true},is_anonymous:true,created_at:'2026-10-16T00:00:00Z'};
@@ -30,6 +29,12 @@ test('source-only count, supplement cancellation and assistant alignment stay co
   else if(path.endsWith('/history'))body={entries:[],next_before:null};
   await route.fulfill({json:body});
  });
+ return {errors,writes,getSourceReads:()=>sourceReads};
+}
+
+test('source-only count, supplement cancellation and assistant alignment stay consistent',async({page})=>{
+ test.setTimeout(90000);page.setDefaultTimeout(8000);
+ const {errors,writes,getSourceReads}=await mockPatientApp(page);
  await page.goto('/e2e/patient-feedback.html?shell=1');
  await page.locator('[data-guide="medicines"]').click();
  await expect(page.getByRole('button',{name:/Finish medication setup/})).toContainText('1 awaiting review');
@@ -74,5 +79,67 @@ test('source-only count, supplement cancellation and assistant alignment stay co
  for(const icon of manifest.icons){const response=await page.request.get(icon.src);expect(response.status()).toBe(200);expect(response.headers()['content-type']).toContain('image/png');}
  expect((await page.request.get('/branding/medithread-32.png')).status()).toBe(200);
  expect((await page.request.get('/branding/medithread-180.png')).status()).toBe(200);
- expect(sourceReads).toBeGreaterThan(0);expect(errors).toEqual([]);
+ expect(getSourceReads()).toBeGreaterThan(0);expect(errors).toEqual([]);
+});
+
+test('Today tasks reuse one conversation and root pages adapt to landscape and enlarged text',async({page})=>{
+ test.setTimeout(90000);page.setDefaultTimeout(8000);
+ const {errors}=await mockPatientApp(page);let sends=0;
+ await page.route(url=>new URL(url).pathname==='/api/agent/messages',async route=>{
+  expect(route.request().headers().authorization).toBe('Bearer DEMO.synthetic-session-token');
+  expect(route.request().postDataJSON().text).toContain('current medications');sends++;
+  await route.fulfill({json:{message:'SIMULATED patient record response',intent:'clarification',session_id:'DEMO-session',session_state:'idle',requires_confirmation:false,tool_traces:[],mode:'rules'}});
+ });
+ await page.goto('/e2e/patient-feedback.html?shell=1');
+ const entry=page.locator('.today-assistant');await expect(entry.getByRole('heading',{name:'MediThread Assistant'})).toBeVisible();
+ await expect(entry.getByRole('button',{name:/Understand medicines|Review my records|Prepare for a visit/})).toHaveCount(3);
+ const tasks=[['Understand medicines','current medications'],['Review my records','past 7 days'],['Prepare for a visit','pharmacist or doctor']];
+ for(const [label,prompt] of tasks){
+  await entry.getByRole('button',{name:label,exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'Medication assistant'});await expect(dialog.getByRole('textbox')).toHaveValue(new RegExp(prompt));
+  expect(sends).toBe(0);await dialog.getByRole('textbox').fill('');await dialog.getByRole('button',{name:'Close conversation'}).click();
+ }
+ await entry.getByRole('button',{name:'Understand medicines',exact:true}).click();
+ const dialog=page.getByRole('dialog',{name:'Medication assistant'});await dialog.getByRole('button',{name:'Send',exact:true}).click();
+ await expect(dialog.locator('.turn')).toHaveCount(1);expect(sends).toBe(1);
+ await dialog.getByRole('textbox').fill('DEMO unsent question');await dialog.getByRole('button',{name:'Close conversation'}).click();
+ await page.locator('[data-guide="medicines"]').click();await page.locator('[data-guide="today"]').click();
+ await expect(entry.getByRole('textbox')).toHaveValue('DEMO unsent question');
+ await expect(entry.getByRole('button',{name:'Understand medicines',exact:true})).toBeDisabled();
+ await entry.getByRole('textbox').focus();await expect(dialog.locator('.turn')).toHaveCount(1);
+ await dialog.getByRole('textbox').fill('');await dialog.getByRole('button',{name:'Close conversation'}).click();
+ for(const language of ['en','zh']){
+ for(const scale of [100,150]){
+  await page.locator('[data-guide="me"]').click();await page.getByRole('slider').focus();await page.keyboard.press(scale===150?'End':'Home');
+  await expect(page.getByRole('slider')).toHaveValue(String(scale));await page.locator('.language-shortcut').click();await page.getByRole('menuitemradio',{name:language==='en'?'English':'中文'}).click();
+  for(const width of [390,430,768,1280,1600,1920]){
+   await page.setViewportSize({width,height:950});
+   for(const tab of ['today','medicines','records','me']){
+    await page.locator(`[data-guide="${tab}"]`).click();
+    await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await expect(page.locator('.composer-row:visible')).toHaveCount(1);
+    if(width>=1024){const main=(await page.locator('.app-main').boundingBox())!,brand=(await page.locator('.brand').boundingBox())!;expect(Math.abs(main.x-brand.x)).toBeLessThan(2);}
+    const grid=page.locator(tab==='today'?'.today-panels':'.ui-screen--columns');
+    await expect(grid).toBeVisible();
+    const layout=await grid.evaluate(el=>({columns:getComputedStyle(el).gridTemplateColumns.split(' ').length,mainWidth:document.querySelector('.app-main')!.getBoundingClientRect().width,rem:parseFloat(getComputedStyle(document.documentElement).fontSize)}));
+    expect(layout.columns).toBe(layout.mainWidth>=58*layout.rem?2:1);
+    const peers=tab==='today'?grid.locator(':scope > *'):tab==='medicines'?grid.locator(':scope > .medicines-courses, :scope > .entry-group'):grid.locator(':scope > .entry-group');
+    const left=(await peers.nth(0).boundingBox())!,right=(await peers.nth(1).boundingBox())!;
+    if(layout.columns===2){expect(Math.abs(left.y-right.y)).toBeLessThan(2);expect(right.x).toBeGreaterThan(left.x+left.width);}
+    else{expect(right.y).toBeGreaterThanOrEqual(left.y+left.height);}
+    if(tab==='today'){
+     await expect(entry).toBeVisible();
+     expect((await entry.boundingBox())!.width).toBeCloseTo(layout.mainWidth,0);
+     expect(await entry.locator('.composer-row').evaluate(el=>getComputedStyle(el).position)).toBe('relative');
+     await expect(page.locator('.today-panels > *')).toHaveCount(2);
+    }
+    if(width===1600&&scale===100&&language==='en')await page.screenshot({path:`../outputs/agentic-landscape-${tab}.png`});
+   }
+  }
+ }
+ }
+ await page.setViewportSize({width:768,height:430});await page.locator('[data-guide="today"]').click();
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ await entry.getByRole('textbox').focus();await expect(page.getByRole('dialog').locator('.composer-send')).toBeInViewport();
+ expect(sends).toBe(1);expect(errors).toEqual([]);
 });

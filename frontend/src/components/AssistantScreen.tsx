@@ -12,9 +12,9 @@ import {CareReviewSheet} from './CareReviewSheet';
 import type {CareReview} from '../api/care';
 import {useImageConsent} from '../imageConsent';
 
-export function AssistantScreen({ sessionId, onSession, ownerId, compact = false, active = true, onChanged,onVisualCheck,onHealthReview,onExpand,onClose,contextSlots={} }: {
+export function AssistantScreen({ sessionId, onSession, ownerId, compact = false, todayEntry = false, active = true, onChanged,onVisualCheck,onHealthReview,onExpand,onClose,contextSlots={} }: {
   onClose?:()=>void;contextSlots?:Record<string,unknown>;
-  sessionId: string | null; onSession: (id: string) => void; ownerId?:string; compact?: boolean; onExpand?:()=>void; active?:boolean; onChanged?: () => void;onVisualCheck?:(id:string|null)=>void;onHealthReview?:(description:string)=>void;
+  sessionId: string | null; onSession: (id: string) => void; ownerId?:string; compact?: boolean; todayEntry?:boolean; onExpand?:()=>void; active?:boolean; onChanged?: () => void;onVisualCheck?:(id:string|null)=>void;onHealthReview?:(description:string)=>void;
 }) {
   const {language,t,preferences,ttsProvider,speechRate}=useLanguage();
   const [photoConsent,setPhotoConsent]=useImageConsent(ownerId??'');
@@ -160,7 +160,18 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
     } catch (caught) { setError(caught); } finally { setBusy(false); }
   }
 
-  return <ConversationSurface open={!compact&&Boolean(onClose)} onClose={onClose} locked={confirmationIndex!==null||careProposal!==null||busy}><section className={compact ? 'companion-composer' : 'assistant-view'} aria-label="Medication companion">
+  return <ConversationSurface open={!compact&&Boolean(onClose)} onClose={onClose} locked={confirmationIndex!==null||careProposal!==null||busy}><section className={compact ? `companion-composer${todayEntry?' today-assistant card':''}` : 'assistant-view'} aria-label="Medication companion">
+    {compact&&todayEntry?<>
+      <div className="today-assistant__heading"><Icon name="message"/><h2>MediThread Assistant</h2></div>
+      <p className="card__hint">{t('Understand your medicines, review your records or prepare for a visit.')}</p>
+      <div className="assistant-tasks" aria-label={t('Assistant tasks')}>
+        {([
+          ['Understand medicines','What are my current medications used for? Explain general uses separately from my reviewed instructions.'],
+          ['Review my records','Summarise my recorded doses and health observations from the past 7 days. Distinguish unrecorded doses from reported not taken.'],
+          ['Prepare for a visit','Help me prepare questions for a pharmacist or doctor using my saved medication and health records.'],
+        ] as const).map(([label,prompt])=><button type="button" key={label} disabled={busy||Boolean(text.trim())||Boolean(photo)} onClick={()=>{setText(t(prompt));onExpand?.();}}>{t(label)}</button>)}
+      </div>
+    </>:null}
     <div className="conversation-scroll">
     {!compact ? <h1>{t('Your companion')}</h1> : null}
     {!compact&&recent.length?<details className="recent-chat" open={!compact}><summary>{t('Recent conversation')} · {recent.length} / 6</summary>{recent.map((row,index)=><article key={index}><p className="user-message">{row.user}</p><p>{patientMessage(row.assistant)}</p></article>)}</details>:null}

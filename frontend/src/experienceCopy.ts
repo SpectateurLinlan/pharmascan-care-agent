@@ -58,4 +58,12 @@ export const experienceCopy:Record<string,string>={
  'Review the saved plan':'核对已保存的计划',
  'View saved source registrations':'查看已保存的药物登记',
  'Cancel supplement':'取消本次补充',
+ 'Understand your medicines, review your records or prepare for a visit.':'了解药物、回顾记录，或准备就诊要讨论的问题。',
+ 'Assistant tasks':'助手快捷任务',
+ 'Understand medicines':'了解药物',
+ 'Review my records':'查看我的记录',
+ 'Prepare for a visit':'准备就诊',
+ 'What are my current medications used for? Explain general uses separately from my reviewed instructions.':'我目前的药物通常有什么用途？请区分一般用途和我已核对的服药说明。',
+ 'Summarise my recorded doses and health observations from the past 7 days. Distinguish unrecorded doses from reported not taken.':'请回顾我过去七天的服药自述和健康观察，区分尚未记录与自述未服用的情况。',
+ 'Help me prepare questions for a pharmacist or doctor using my saved medication and health records.':'请根据我已保存的用药和健康记录，帮我准备向医生或药剂师提出的问题。',
 };
