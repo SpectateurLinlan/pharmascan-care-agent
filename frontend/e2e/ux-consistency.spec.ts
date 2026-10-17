@@ -124,12 +124,14 @@ test('settings ownership, persisted reminder preferences and viewport launcher g
  for(const width of [390,430,768,1024,1280,1600,1920]){
   await page.setViewportSize({width,height:950});
   const body=(await page.locator('.app-main').boundingBox())!,back=(await page.locator('.back-button').boundingBox())!;
-  expect(Math.abs(body.x-back.x),JSON.stringify({width,body,back})).toBeLessThan(2);
+  const headerStyle=await page.locator('.app-header').evaluate(el=>({left:getComputedStyle(el).left,width:getComputedStyle(el).width,padding:getComputedStyle(el).paddingInlineStart,rail:getComputedStyle(document.documentElement).getPropertyValue('--rail-width'),max:getComputedStyle(document.documentElement).getPropertyValue('--content-max'),font:getComputedStyle(document.documentElement).fontSize}));
+  expect(Math.abs(body.x-back.x),JSON.stringify({width,body,back,headerStyle})).toBeLessThan(2);
   const launcher=page.locator('.assistant-launcher');
   expect(await launcher.evaluate(el=>el.parentElement===document.body)).toBe(true);
   const box=(await launcher.boundingBox())!;
   expect(width-box.x-box.width).toBeGreaterThanOrEqual(15);
   expect(box.height).toBe(width>=1024?60:56);
+  if(width>=1024)expect(box.width).toBeGreaterThanOrEqual(130);
   if(width<1024){const nav=(await page.locator('.patient-nav').boundingBox())!;expect(nav.y-box.y-box.height).toBeGreaterThanOrEqual(15);}
   else expect(950-box.y-box.height).toBe(24);
   expect(await launcher.locator('img').evaluate((el:HTMLImageElement)=>el.complete&&el.naturalWidth>0)).toBe(true);
@@ -179,6 +181,44 @@ test('real Chrome browser zoom keeps the launcher and shared header inside the v
  }finally{await context.close();}
 });
 
+test('reminder dialog stays capped on desktop and scrolls its own content on short screens',async({page})=>{
+ test.setTimeout(45000);page.setDefaultTimeout(8000);
+ const {errors,prefs}=await mockPatientApp(page);
+ prefs.text_scale_percent=150;prefs.preferred_language='zh';
+ let alertEnabled=false,alertReads=0;const snoozes:Array<{occurrence_id:string;minutes:number}>=[];
+ await page.route(url=>new URL(url).pathname==='/api/reminders/alerts',async route=>{
+  alertReads++;
+  await route.fulfill({json:alertEnabled?[{key:'DEMO-reminder-key',occurrence_id:'DEMO-occurrence',regimen_id:'DEMO-regimen',medication_name:'DEMO Metformin',dose_amount:500,dose_unit:'mg',food_instruction:'after food',due_at:'2026-10-17T08:00:00Z',remind_at:'2026-10-17T08:00:00Z'}]:[]});
+ });
+ await page.route(url=>new URL(url).pathname==='/api/reminders',async route=>{
+  if(route.request().method()!=='POST'){await route.fallback();return;}
+  const body=route.request().postDataJSON() as {occurrence_id:string;minutes:number};snoozes.push(body);
+  await route.fulfill({json:{occurrence_id:body.occurrence_id,patient_id:'DEMO-patient',remind_at:'2026-10-17T08:30:00Z',demo_only:true}});
+ });
+ await page.goto('/e2e/patient-feedback.html?shell=1');
+ await expect.poll(()=>alertReads,{timeout:10000}).toBeGreaterThan(0);
+ await page.waitForTimeout(50);alertEnabled=true;
+ await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));
+ const dialog=page.getByRole('dialog',{name:/Medication reminder|用药提醒/});await expect(dialog).toBeVisible();
+ await expect(dialog).toContainText('DEMO Metformin');
+ for(const width of [390,430,768,1024,1280,1600,1920]){
+  await page.setViewportSize({width,height:950});
+  const box=(await dialog.boundingBox())!;
+  expect(box.width).toBeLessThanOrEqual(600);
+  expect(box.x).toBeGreaterThanOrEqual(0);expect(box.x+box.width).toBeLessThanOrEqual(width);
+  if(width<700)expect(box.width).toBeGreaterThan(width-64);
+  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ }
+ await page.setViewportSize({width:390,height:480});
+ const shortBox=(await dialog.boundingBox())!;
+ expect(shortBox.height).toBeLessThan(480);
+ expect(await dialog.evaluate(el=>el.scrollHeight>el.clientHeight)).toBe(true);
+ await page.getByRole('button',{name:'30 分钟后提醒'}).click();
+ await expect(dialog).toHaveCount(0);
+ expect(snoozes).toEqual([{occurrence_id:'DEMO-occurrence',minutes:30}]);
+ expect(errors).toEqual([]);
+});
+
 test('Today tasks reuse one conversation and root pages adapt to landscape and enlarged text',async({page})=>{
  test.setTimeout(90000);page.setDefaultTimeout(8000);
  const {errors}=await mockPatientApp(page);let sends=0;
@@ -215,7 +255,7 @@ test('Today tasks reuse one conversation and root pages adapt to landscape and e
     await page.locator(`[data-guide="${tab}"]`).click();
     await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await expect(page.locator('.composer-row:visible')).toHaveCount(tab==='today'?1:0);await expect(page.locator('.assistant-launcher:visible')).toHaveCount(tab==='today'?0:1);
-    if(width>=1024){const main=(await page.locator('.app-main').boundingBox())!,brand=(await page.locator('.brand').boundingBox())!;expect(Math.abs(main.x-brand.x)).toBeLessThan(2);}
+    if(width>=1024){const main=(await page.locator('.app-main').boundingBox())!,brand=(await page.locator('.brand').boundingBox())!;expect(Math.abs(main.x-brand.x)).toBeLessThan(2);if(width>=1600&&scale===100)expect(main.width).toBeLessThanOrEqual(1280);}
     const grid=page.locator(tab==='today'?'.today-panels':'.ui-screen--columns');
     await expect(grid).toBeVisible();
     const layout=await grid.evaluate(el=>({columns:getComputedStyle(el).gridTemplateColumns.split(' ').length,mainWidth:document.querySelector('.app-main')!.getBoundingClientRect().width,rem:parseFloat(getComputedStyle(document.documentElement).fontSize)}));

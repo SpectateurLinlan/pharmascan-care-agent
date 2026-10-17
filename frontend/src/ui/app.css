@@ -1646,6 +1646,11 @@ button.danger:hover:not(:disabled) {
 }
 
 .reminder-dialog {
+  width: min(100%, 600px);
+  max-width: 600px;
+  max-height: calc(100dvh - max(var(--s-8), env(safe-area-inset-top) + env(safe-area-inset-bottom)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--s-6);
   border-radius: var(--r-lg);
 }
@@ -1989,6 +1994,7 @@ button.danger:hover:not(:disabled) {
     transform: none;
     width: auto;
     /* Keep the brand and the shortcuts on the content column, not the viewport. */
+    /* Percentages use the viewport width; reserve the rail before centering. */
     padding-inline: max(var(--s-8), calc((100% - var(--rail-width) - var(--content-max)) / 2));
   }
 
@@ -2351,10 +2357,7 @@ button.danger:disabled {
   .ui-screen--columns > .screen-full { grid-column: 1 / -1; }
 }
 @media (min-width: 1024px) {
-  .companion[data-root-surface="true"] { --content-max: 82rem; }
-  .companion[data-root-surface="true"] .app-header {
-    padding-inline: max(var(--s-8), calc((100% - var(--rail-width) - var(--content-max)) / 2));
-  }
+  .companion[data-root-surface="true"] { --content-max: 80rem; }
 }
 .conversation-panel .conversation-toolbar strong { min-width: 0; flex: 1; }
 
@@ -2398,7 +2401,7 @@ button.danger:disabled {
 .assistant-launcher:hover { background: var(--surface-alt); }
 .assistant-launcher:focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; }
 @media (min-width: 1024px), (min-width: 700px) and (orientation: landscape) and (max-height: 520px) {
-  .assistant-launcher { right: max(24px, env(safe-area-inset-right)); bottom: max(24px, env(safe-area-inset-bottom)); width: auto; min-width: 120px; height: 60px; padding: 5px 12px 5px 5px; }
+  .assistant-launcher { right: max(24px, env(safe-area-inset-right)); bottom: max(24px, env(safe-area-inset-bottom)); width: auto; min-width: 136px; height: 60px; padding: 5px 12px 5px 5px; }
   .assistant-launcher span { display: inline; font-size: var(--fs-caption); font-weight: var(--fw-strong); }
 }
 @media (max-width: 1023px) {
