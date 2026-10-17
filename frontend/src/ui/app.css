@@ -2344,7 +2344,9 @@ button.danger:disabled {
   z-index: auto;
 }
 .landscape-columns,
-.ui-screen--columns { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-5); align-items: start; }
+.ui-screen--columns { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-5); }
+.landscape-columns { align-items: start; }
+.ui-screen--columns { align-items: stretch; }
 .landscape-columns > *,
 .ui-screen--columns > * { min-width: 0; grid-column: auto; }
 .medicines-courses { display: flex; flex-direction: column; gap: var(--s-5); }

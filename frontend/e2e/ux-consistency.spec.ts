@@ -262,7 +262,7 @@ test('Today tasks reuse one conversation and root pages adapt to landscape and e
     expect(layout.columns).toBe(tab==='today'?1:layout.mainWidth>=58*layout.rem?2:1);
     const peers=tab==='today'?grid.locator(':scope > *'):tab==='medicines'?grid.locator(':scope > .medicines-courses, :scope > .entry-group'):grid.locator(':scope > .entry-group');
     const left=(await peers.nth(0).boundingBox())!,right=(await peers.nth(1).boundingBox())!;
-    if(layout.columns===2){expect(Math.abs(left.y-right.y)).toBeLessThan(2);expect(right.x).toBeGreaterThan(left.x+left.width);}
+    if(layout.columns===2){expect(Math.abs(left.y-right.y)).toBeLessThan(2);expect(Math.abs(left.height-right.height)).toBeLessThan(2);expect(right.x).toBeGreaterThan(left.x+left.width);}
     else{expect(right.y).toBeGreaterThanOrEqual(left.y+left.height);}
     if(tab==='today'){
      await expect(entry).toBeVisible();
