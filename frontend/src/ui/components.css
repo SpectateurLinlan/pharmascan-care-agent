@@ -172,7 +172,7 @@
   min-width: 0;
 }
 
-.records-navigation-group > .ui-rows {
+.records-navigation-group.entry-group > .ui-rows {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
 }
@@ -184,7 +184,7 @@
 }
 
 @container (min-width: 38rem) {
-  .records-navigation-group > .ui-rows {
+  .records-navigation-group.entry-group > .ui-rows {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: var(--s-3);
   }
@@ -385,3 +385,14 @@
 .record-plan-description { overflow-wrap: anywhere; color: var(--muted); font-size: var(--fs-small); }
 .health-details { min-inline-size: 0; margin: var(--s-4) 0; padding: 0; border: 0; }
 .health-details legend { margin-bottom: var(--s-3); font-weight: var(--fw-strong); }
+
+/* Page-owned navigation grids must not inherit the generic auto-fit layout. */
+.me-app-info.entry-group > .ui-rows { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
+.me-app-info .ui-row, .records-navigation-group .ui-row { border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--s-3); }
+.records-navigation-group.entry-group > .ui-rows { gap: var(--s-3); align-items: start; }
+.me-category .ui-row { gap: var(--s-3); }
+.record-form { width: 100%; max-width: 48rem; min-width: 0; }
+.record-form .field { min-width: 0; }
+@container (min-width: 48rem) {
+  .me-app-info.entry-group > .ui-rows { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
+}

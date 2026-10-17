@@ -34,6 +34,7 @@ it('selects the same stable plan IDs across versions and distinct course dates',
 it('makes follow-up creation visible, cancellable and still confirmation gated',async()=>{
  vi.mocked(api.careTasks).mockResolvedValue([]);render(<CareTasksScreen regimens={[plan]}/>);
  await screen.findByText('No medication follow-ups recorded.');fireEvent.click(screen.getByRole('button',{name:'Add medication follow-up'}));
+ expect(screen.getByLabelText('Follow-up title (required)').hasAttribute('required')).toBe(true);
  fireEvent.change(screen.getByLabelText('Follow-up title (required)'),{target:{value:'DEMO review'}});
  fireEvent.change(screen.getByLabelText('Date and time (required)'),{target:{value:'2026-10-20T08:00'}});
  fireEvent.click(screen.getByRole('button',{name:'Review follow-up'}));expect(api.createCareTask).not.toHaveBeenCalled();
@@ -56,5 +57,5 @@ it('keeps the health form visible and offers a focusable empty-state action',asy
  vi.mocked(api.observations).mockResolvedValue([]);render(<HealthTrackingScreen medications={[]}/>);
  fireEvent.click(await screen.findByRole('button',{name:'Record how you feel'}));
  expect(document.activeElement).toBe(screen.getByLabelText('Describe how you feel (required)'));
- expect(screen.getByLabelText('Severity').closest('details')).toBeNull();expect(api.saveObservation).not.toHaveBeenCalled();
+ expect(screen.getByLabelText('Severity (optional)').closest('details')).toBeNull();expect(api.saveObservation).not.toHaveBeenCalled();
 });

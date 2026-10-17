@@ -19,6 +19,7 @@
  */
 
 .app {
+  min-height: 100dvh;
   margin: 0;
   padding: 0;
   display: flex;
@@ -2377,8 +2378,14 @@ button.danger:disabled {
 .medicine-shortcut .ui-row__text { min-width: 0; }
 .medicine-shortcut .ui-row__hint { overflow-wrap: anywhere; }
 .medicine-shortcut .ui-row__end { flex: 0 0 auto; }
-@container (min-width: 38rem) { .medicine-shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@container (min-width: 64rem) { .medicine-shortcuts { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container (min-width: 38rem) {
+  .medicine-shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .medicine-shortcut:last-child { grid-column: 1 / -1; }
+}
+@container (min-width: 64rem) {
+  .medicine-shortcuts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .medicine-shortcut:last-child { grid-column: auto; }
+}
 @container (min-width: 58rem) {
   .landscape-columns,
   .ui-screen--columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -166,3 +166,13 @@
 
 - **BUG-01：建议下一步审查本地修复与只读生产影响核查方案。** 本地分离、当轮模型边界、后续上下文、只读工具保护和基础测试已就绪；没有数据库迁移。尚缺生产 Live 版本／真实模型及旧历史范围证据。预计是变更审查与获准的只读聚合核查，不需要历史数据写入；隐私风险高，不输出消息正文。Git／部署及任何存量处置仍单独授权。
 - **DB-05：不建议重复开发来源持久化。** 相关字段与保存路径已存在；保留分类可靠性和生产追溯验收即可。若仅做只读核查，不需要新增 API／数据库／权限；分类真机与线上验证仍须分开记录。
+
+
+## UX Polish A local review ? 2026-10-17
+
+- Repository inspection now shows BUG-01 committed locally as `1ea994b`; this supersedes the earlier uncommitted description, without asserting deployment or production-history remediation. Its source and tests remain unchanged by UX Polish A.
+- Presentation-only refinement: Me navigation hints, explicit Records grid ownership, Medicines medium-width shortcut span, readable form width and accessible required/optional labels. Summary actions remain separate existing routes; no segmented-control semantic change.
+- No deferred implementation gate is lifted: DB-05 historical backfill, AG-06 full session restoration, production history changes and production operations remain separately approved work.
+- Local validation results are recorded in this round's handoff. No new backend/API/schema work, no staging, commit, push or deployment. No new evidence-backed deferred defect identified in this limited scope.
+
+- UX Polish A verification: TypeScript, ESLint, production build and diff checks passed; focused Vitest 21 passed; new browser grid/form checks 2 passed (form selector corrected to accessible role), existing related browser regression 5 passed. Synthetic authenticated HTTP only; seven widths 390?1920, EN/ZH and 100%/150% application text covered. Existing >500 kB bundle warning remains.

@@ -32,16 +32,16 @@ export function PatientHub({onOpen,onGuide,auth=accountAuth}:{onOpen:(page:MeDes
     : null}
   </section>
   <RowGroup title="Care and reminders" className="me-category">
-   <Row icon="user" title="Caregiver contacts" hint="Private contact details" onClick={()=>onOpen('caregivers')}/>
-   <Row icon="bell" title="Medication reminders" hint="In-app prompts and notifications" onClick={()=>onOpen('reminder-settings')}/>
+   <Row icon="user" title="Caregiver contacts" onClick={()=>onOpen('caregivers')}/>
+   <Row icon="bell" title="Medication reminders" onClick={()=>onOpen('reminder-settings')}/>
   </RowGroup>
   <RowGroup title="Usage preferences" className="me-category">
    <Row icon="languages" title="Language and speech" onClick={()=>onOpen('language-settings')}/>
    <Row icon="info" title="Text size" onClick={()=>onOpen('accessibility')}/>
   </RowGroup>
   <RowGroup title="Privacy and data" className="me-category">
-   <Row icon="message" title="Assistant and conversation saving" hint="Saved chats and chat history" onClick={()=>onOpen('conversations')}/>
-   <Row icon="shield" title="Privacy controls" hint="Photo processing and personal records" onClick={()=>onOpen('privacy')}/>
+   <Row icon="message" title="Assistant and conversation saving" onClick={()=>onOpen('conversations')}/>
+   <Row icon="shield" title="Privacy controls" onClick={()=>onOpen('privacy')}/>
   </RowGroup>
   <RowGroup title="App information" className="me-app-info" spread>
    {onGuide?<Row icon="info" title="Help / User Guide" onClick={onGuide}/>:null}
