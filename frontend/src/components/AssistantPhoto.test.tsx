@@ -31,9 +31,37 @@ it('routes an attached label photo through source review and keeps the patient q
  await screen.findByText('I can help review this source.');
  expect(api.checkInput).toHaveBeenCalledOnce();
  expect(api.sourcePreview).toHaveBeenCalledWith(expect.any(File),'pharmacy_label');
- expect(api.sendMessage).toHaveBeenCalledWith(expect.objectContaining({text:expect.stringContaining('unverified evidence')}));
+ expect(api.sendMessage).toHaveBeenCalledWith(expect.objectContaining({text:'What does this label say?'}));
+ const request=vi.mocked(api.sendMessage).mock.calls[0]![0];
+ expect(request.photo_context?.products[0]?.printed_directions).toBe('Take once daily');
+ expect(request.text).not.toContain('Take once daily');expect(request.text).not.toContain('JSON');
  expect(api.sendMessage).toHaveBeenCalledWith(expect.objectContaining({text:expect.stringContaining('What does this label say?')}));
  expect(screen.getByText('Photo attached: DEMO-label.png')).toBeTruthy();
+});
+
+it.each(['package','prescription','pharmacy_label'] as const)('preserves %s routing and patient words without technical context',async kind=>{
+ vi.mocked(api.checkInput).mockResolvedValue({image_type:'document',checked:true,abstained:false,suggested_workflow:'source_review',message:'DEMO private technical route'});
+ vi.mocked(api.sourcePreview).mockResolvedValue({source_document_id:'DEMO-source',source_kind:kind,provider:'SIMULATED',extraction_model:'SIMULATED',review_required:true,note:'DEMO technical note',candidates:[]});
+ localStorage.setItem('pharmascan.image-processing.v1.DEMO-owner','allowed');
+ render(<AssistantScreen ownerId="DEMO-owner" sessionId={null} onSession={vi.fn()} compact={false}/>);
+ attachPhoto();fireEvent.change(screen.getByLabelText('Photo type'),{target:{value:kind}});
+ const words=kind==='prescription'?'请帮我看一下这张处方。':'What does this photo show?';
+ fireEvent.change(screen.getByLabelText('Review your message before sending'),{target:{value:words}});
+ fireEvent.click(screen.getByRole('button',{name:'Send'}));await screen.findByText('I can help review this source.');
+ expect(api.sourcePreview).toHaveBeenCalledWith(expect.any(File),kind);
+ expect(api.sendMessage).toHaveBeenCalledWith(expect.objectContaining({text:words,photo_context:expect.objectContaining({source_kind:kind,provider:'SIMULATED'})}));
+ expect(document.querySelector('.user-message')?.textContent).toContain(words);
+ expect(document.querySelector('.user-message')?.textContent).not.toContain('SIMULATED');
+});
+
+it('does not analyze an unconsented photo and keeps uncertain routing separate',async()=>{
+ vi.mocked(api.checkInput).mockResolvedValue({image_type:'unchecked',checked:true,abstained:true,suggested_workflow:'ask_patient',message:'DEMO technical route'});
+ render(<AssistantScreen ownerId="DEMO-owner" sessionId={null} onSession={vi.fn()} compact={false}/>);attachPhoto();
+ fireEvent.click(screen.getByRole('button',{name:'Send'}));expect(api.checkInput).not.toHaveBeenCalled();expect(api.sendMessage).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('checkbox',{name:'Allow photo processing. The image is not saved; extracted details may appear in saved chats.'}));
+ fireEvent.click(screen.getByRole('button',{name:'Send'}));await screen.findByText('I can help review this source.');
+ expect(api.sourcePreview).not.toHaveBeenCalled();expect(api.visualCheck).not.toHaveBeenCalled();
+ expect(api.sendMessage).toHaveBeenCalledWith(expect.objectContaining({text:'',photo_context:expect.objectContaining({workflow:'ask_patient',products:[]})}));
 });
 
 it('uses the visual evidence API for pill images instead of opening medication enrollment',async()=>{
@@ -45,5 +73,5 @@ it('uses the visual evidence API for pill images instead of opening medication e
  await screen.findByText('I can help review this source.');
  expect(api.visualCheck).toHaveBeenCalledWith(expect.any(File),null);
  expect(api.sourcePreview).not.toHaveBeenCalled();
- expect(api.sendMessage).toHaveBeenCalledWith(expect.objectContaining({text:expect.stringContaining('No reviewed personal reference')}));
+ expect(api.sendMessage).toHaveBeenCalledWith(expect.objectContaining({text:'',photo_context:expect.objectContaining({visual:expect.objectContaining({reason:'No reviewed personal reference'})})}));
 });

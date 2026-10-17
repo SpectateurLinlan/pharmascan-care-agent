@@ -81,6 +81,7 @@ def send_message(
         if container.preferences
         else payload.language,
         slots={**payload.slots, "client_turn_id": payload.client_turn_id},
+        photo_context=payload.photo_context,
     )
     handler = container.ai_agent or container.orchestrator
     reply = handler.handle_turn(patient_id=patient_id, session_id=session_id, turn=turn)
@@ -88,7 +89,7 @@ def send_message(
     if container.conversation_history and container.preferences.get(patient_id).conversation_history_enabled:
         try:
             container.conversation_history.append(
-                patient_id, reply.session_id, payload.client_turn_id, payload.text, reply.message
+                patient_id, reply.session_id, payload.client_turn_id, turn.patient_text, reply.message
             )
             history_saved = True
         except DomainError as error:

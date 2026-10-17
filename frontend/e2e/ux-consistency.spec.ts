@@ -153,6 +153,34 @@ test('patient record labels preserve plan identity and remain usable across lang
  }
 });
 
+test('photo evidence stays separate from patient bubbles and persisted history in EN and ZH',async({context})=>{
+ for(const language of ['en','zh'] as const){
+  const page=await context.newPage();const {prefs,errors}=await mockPatientApp(page);prefs.preferred_language=language;
+  const question=language==='zh'?'请帮我核对这张药房标签。':'Please review this pharmacy label.';
+  let stored='';
+  await page.route(url=>new URL(url).pathname==='/api/sources/check-input',route=>route.fulfill({json:{image_type:'printed',checked:true,abstained:false,suggested_workflow:'source_review',message:'DEMO internal route'}}));
+  await page.route(url=>new URL(url).pathname==='/api/sources/preview',route=>route.fulfill({json:{source_document_id:'DEMO-preview',source_kind:'pharmacy_label',provider:'SIMULATED',extraction_model:'SIMULATED',review_required:true,note:'DEMO only',candidates:[{product:{name:'DEMO source medicine',strength:'5 mg',source_lines:['DEMO_PRIVATE_OCR_MARKER']},regimen_evidence:{directions:{value:'DEMO only',line:'DEMO_PRIVATE_OCR_MARKER'},dose_amount:null,frequency:null,administration_times:null,duration:null},review_status:'extracted',can_activate_regimen:false}]}}));
+  await page.route(url=>new URL(url).pathname==='/api/agent/messages',async route=>{
+   expect(route.request().headers().authorization).toBe('Bearer DEMO.synthetic-session-token');
+   const payload=route.request().postDataJSON();expect(payload.text).toBe(question);
+   expect(payload.photo_context.products[0].printed_directions).toBe('DEMO_PRIVATE_OCR_MARKER');
+   stored=question+'\n'+(language==='zh'?'已发送照片':'Photo attached');
+   await route.fulfill({json:{message:'DEMO source review response',intent:'clarification',mode:'gemini',session_id:'DEMO-session',session_state:'idle',requires_confirmation:false,tool_traces:[],history_saved:true}});
+  });
+  await page.route(url=>new URL(url).pathname==='/api/agent/history',route=>route.fulfill({json:{entries:stored?[{id:'DEMO-history-photo',user_text:stored,assistant_text:'DEMO source review response',created_at:'2026-10-17T08:00:00Z'}]:[],next_before:null}}));
+  await page.goto('/e2e/patient-feedback.html?shell=1');
+  await page.getByRole('textbox').fill(question);
+  await page.getByLabel(language==='zh'?'选择照片':'Choose a photo',{exact:true}).setInputFiles({name:'DEMO-photo.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6Fo8AAAAASUVORK5CYII=','base64')});
+  await page.locator('.photo-consent input').check();await page.locator('.composer-send').click();
+  await expect(page.locator('.turn .user-message')).toContainText(question);await expect(page.locator('.turn .user-message')).not.toContainText('DEMO_PRIVATE_OCR_MARKER');
+  await page.locator('.assistant-header-shortcut').click();
+  await page.locator('.conversation-actions button').first().click();
+  await expect(page.locator('.history-entry')).toContainText(question);await expect(page.locator('.history-entry')).not.toContainText('DEMO_PRIVATE_OCR_MARKER');
+  await page.locator('.history-entry').click();await expect(page.locator('.selected-history .user-message')).toHaveText(stored);
+  expect(errors).toEqual([]);await page.close();
+ }
+});
+
 test('settings ownership, persisted reminder preferences and viewport launcher geometry',async({page})=>{
  test.setTimeout(90000);page.setDefaultTimeout(8000);
  const {errors,prefs}=await mockPatientApp(page);

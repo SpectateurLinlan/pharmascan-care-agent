@@ -304,6 +304,14 @@ export interface AgentMessageResponse {
     idempotency_key: string; expires_at: string; summary: ReportChallengeResponse['summary'] } | null;
 }
 
+/** Client-relayed, unverified evidence. Not patient speech or owned record references. */
+export interface ChatPhotoContext {
+  image_type:ImageRoute['image_type'];workflow:ImageRoute['suggested_workflow'];checked:boolean;abstained:boolean;
+  source_kind:'package'|'pharmacy_label'|'prescription';provider?:string;extraction_model?:string;
+  products:Array<{name:string;strength:string|null;printed_lines:string[];printed_directions:string|null;printed_indication?:string|null;printed_cautions?:string[];instructions?:PrintedInstructions|null}>;
+  visual?:{decision:VisualCheckResult['decision'];reason:string;candidates:VisualCheckResult['candidates'];count_reliable:boolean;ingestion_proven:false;safe_to_take_confirmed:false};
+}
+
 // --- client -----------------------------------------------------------------
 
 export interface DraftInput {
@@ -480,6 +488,7 @@ export const api = {
     ),
 
   sendMessage: (payload: {
+    photo_context?:ChatPhotoContext;
     text: string;
     language?: 'en' | 'zh';
     session_id: string | null;

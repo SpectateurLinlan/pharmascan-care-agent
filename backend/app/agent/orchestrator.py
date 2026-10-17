@@ -19,6 +19,7 @@ from typing import Any, Literal, Protocol
 from uuid import UUID
 
 from ..contracts.agent_context import CandidateReference, ClarificationContext
+from ..contracts.chat_photo import ChatPhotoContext
 from ..contracts.dto import AgentSessionDTO, PendingSelfReportDTO
 from ..contracts.enums import AgentIntent, ToolName, ToolStatus
 from ..contracts.long_term import CareReview
@@ -77,6 +78,14 @@ class AgentTurn:
     text: str
     language: Literal["en", "zh"] = "en"
     slots: dict[str, Any] = field(default_factory=dict)
+    photo_context: ChatPhotoContext | None = None
+
+    @property
+    def patient_text(self) -> str:
+        """Only the patient's words plus a fixed, readable attachment caption."""
+        return "\n".join(
+            filter(None, [self.text, self.photo_context.caption(self.language) if self.photo_context else None])
+        )
 
 
 @dataclass(frozen=True)
@@ -331,11 +340,26 @@ class AgentOrchestrator:
                 session_state="expired",
             )
 
+        if turn.photo_context is not None and not needs_urgent_help_notice(turn.text):
+            message = turn.photo_context.patient_summary(turn.language)
+            context = record_context(
+                session.context,
+                text=turn.patient_text,
+                message=message,
+                intent=AgentIntent.CLARIFICATION.value,
+                language=turn.language,
+                results=[],
+            )
+            self._sessions.update(session.model_copy(update={"context": context}))
+            return AgentReply(
+                message=message, intent=AgentIntent.CLARIFICATION, session_id=session_id, session_state=session.state
+            )
+
         if needs_urgent_help_notice(turn.text):
             message = urgent_help_notice(turn.language)
             context = record_context(
                 session.context,
-                text=turn.text,
+                text=turn.patient_text,
                 message=message,
                 intent="health_safety",
                 language=turn.language,
@@ -487,7 +511,7 @@ class AgentOrchestrator:
         session = self._sessions.get(patient_id, session.id) or session
         context = record_context(
             session.context,
-            text=turn.text,
+            text=turn.patient_text,
             message=message,
             intent=intent.value,
             language=turn.language,

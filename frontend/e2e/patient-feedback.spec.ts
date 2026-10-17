@@ -45,7 +45,7 @@ test('account, preview consent, inline review and pinned conversation work at pa
   else if(path.endsWith('/usage'))body={llm_user_turns:0,model_requests:0,limit:20,usage_date:'2026-10-16',next_reset_at:'2026-10-17T00:00:00+08:00'};
   else if(path.endsWith('/recent-turns'))body=[];
   else if(path.endsWith('/history'))body={entries:[],next_before:null};
-  else if(path.endsWith('/messages')){if(String(request.postDataJSON()?.text??'').includes('Patient attached a medication photo.'))photoChatMessages++;body={message:'This is a SIMULATED sourced response. '.repeat(25),intent:'clarification',session_id:'DEMO-session',session_state:'idle',requires_confirmation:false,tool_traces:[],mode:'gemini'};}
+  else if(path.endsWith('/messages')){if(request.postDataJSON()?.photo_context){expect(request.postDataJSON().text).not.toContain('Patient attached a medication photo.');expect(request.postDataJSON().text).not.toContain('JSON');photoChatMessages++};body={message:'This is a SIMULATED sourced response. '.repeat(25),intent:'clarification',session_id:'DEMO-session',session_state:'idle',requires_confirmation:false,tool_traces:[],mode:'gemini'};}
   await route.fulfill({json:body});
  });
  await page.goto('/e2e/patient-feedback.html');console.log('Fixture loaded');

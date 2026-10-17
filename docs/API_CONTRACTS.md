@@ -1,5 +1,38 @@
 # External PharmaScan Stage2, Main Backend and Agent Tool Contracts
 
+## Patient message / photo evidence boundary (BUG-01)
+
+`POST /api/agent/messages` keeps `text` as the patient's natural-language input.
+An additive optional `photo_context` carries a bounded projection of the existing
+image routing, source extraction or visual-check results. It contains no image
+bytes, patient/regimen ownership IDs, confirmation tokens or executable actions.
+Existing text-only clients need not send it; the response contract is unchanged.
+
+The photo DTO is client-relayed **unverified external data**, not proof of provider
+authenticity, patient statements, reviewed identity, dosage or ingestion. The server
+marks that trust boundary itself, exposes only read tools on photo turns, and also
+rejects non-read tool execution regardless of the model's requested action. The
+normal explicit text/confirmation workflow remains available separately.
+
+The existing consented PNG/JPEG routing/source/visual endpoints are unchanged.
+Structured evidence is available to the model for the current turn only, outside
+`current_input`; it never becomes a user message or verified patient reference.
+Future turns must re-read an owned source or request the photo again when needed.
+Recent user turns and opt-in history contain the patient's text plus a fixed,
+localized photo caption. Assistant replies may show clearly unconfirmed,
+patient-readable image clues, not technical JSON or processing instructions.
+
+Limits include at most five products/candidates, bounded strings/printed lines,
+finite visual scores and a 24,000-character serialized evidence limit. No partial
+JSON truncation or raw image upload is added to the message endpoint.
+
+No database migration or historical record rewrite is part of this change. Deploy
+the backward-compatible backend before the new frontend; older backends reject the
+new optional field. Older frontends can still submit the legacy mixed text until
+upgraded. Existing saved mixed-text records may remain: impact assessment and any
+production data correction require separate authorization. Do not regex-strip
+patient text or silently migrate existing history as a compatibility workaround.
+
 **Current external integration: v0.10.0.** Canonical snapshot: `docs/external/pharmascan-api-openapi-0.10.0.json`;0.8/0.4 snapshots remain historical. The upgrade's actual field mapping and live synthetic evidence are recorded in [STAGE2_V010_UPGRADE.md](STAGE2_V010_UPGRADE.md). API version and embedding model/space/preprocessing are separate compatibility checks. This long-term-care round does not modify external contracts or invoke Stage2. Earlier design sections remain historical where superseded by current implemented contracts below and the coverage matrix.
 
 ## A. Prior external endpoints vs app-level ownership (historical table; see current v0.8.0 section G)

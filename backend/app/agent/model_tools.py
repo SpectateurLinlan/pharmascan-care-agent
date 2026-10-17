@@ -13,6 +13,7 @@ from ..application.long_term import LongTermCareService
 from ..application.medication_understanding import MedicationUnderstandingService
 from ..application.observations import ObservationService
 from ..application.visual_check import VisualCheckService
+from ..contracts.chat_photo import PHOTO_READ_TOOLS
 from ..contracts.enums import AgentIntent, ToolName, ToolStatus
 from ..contracts.long_term import CareReview
 from ..contracts.observations import HealthNoteReview
@@ -127,10 +128,11 @@ SPECS = MappingProxyType(
 )
 
 
-def model_tool_schemas() -> list[dict[str, object]]:
+def model_tool_schemas(*, photo_only: bool = False) -> list[dict[str, object]]:
     return [
         {"type": "function", "name": name, "description": description, "parameters": schema.model_json_schema()}
         for name, (schema, description) in SPECS.items()
+        if not photo_only or name in PHOTO_READ_TOOLS
     ]
 
 
@@ -232,6 +234,10 @@ class ModelTools:
     ) -> ExecutedTool:
         if name not in SPECS:
             raise ValidationError("Unknown model tool")
+        if turn.photo_context is not None and name not in PHOTO_READ_TOOLS:
+            raise ValidationError(
+                "Photo evidence cannot authorize record actions; send a separate explicit text message"
+            )
         params = SPECS[name][0].model_validate(arguments).model_dump(exclude_none=True)
         if name == "get_medication_understanding":
             if self._understanding is None:

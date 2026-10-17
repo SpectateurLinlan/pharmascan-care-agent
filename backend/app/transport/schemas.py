@@ -15,6 +15,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from ..contracts.chat_photo import ChatPhotoContext
 from ..contracts.dose_display import DoseBasis
 from ..contracts.dto import IDEMPOTENCY_KEY_PATTERN, PendingSelfReportDTO
 from ..contracts.long_term import CareReview
@@ -64,6 +65,7 @@ class DemoStartResponse(BaseModel):
 
 
 class AgentMessageRequest(Request):
+    photo_context: ChatPhotoContext | None = None
     language: Literal["en", "zh"] = "en"
     text: str = Field(default="", max_length=2000)
     session_id: UUID | None = None
