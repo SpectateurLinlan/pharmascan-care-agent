@@ -76,6 +76,7 @@ it('releases the assistant close lock when an unconfirmed B14 summary expires',a
  render(<AssistantScreen sessionId="DEMO-session" onSession={vi.fn()} onClose={close}/>);
  await act(async()=>{fireEvent.change(screen.getByLabelText('Review your message before sending'),{target:{value:'DEMO report'}});fireEvent.click(screen.getByRole('button',{name:'Send'}));});
  expect(screen.getByRole('button',{name:'Confirm record'})).toBeTruthy();expect(screen.getByRole('button',{name:'Close conversation'})).toHaveProperty('disabled',true);
+ expect(screen.getByRole('button',{name:'New conversation'})).toHaveProperty('disabled',true);expect(screen.getByRole('button',{name:'Conversation history'})).toHaveProperty('disabled',true);
  await act(async()=>{await vi.advanceTimersByTimeAsync(60000);});
  expect(screen.queryByRole('button',{name:'Confirm record'})).toBeNull();expect(screen.getByRole('button',{name:'Close conversation'})).toHaveProperty('disabled',false);
  fireEvent.click(screen.getByRole('button',{name:'Close conversation'}));expect(close).toHaveBeenCalledOnce();expect(api.submitReport).not.toHaveBeenCalled();expect(api.submitPrnReport).not.toHaveBeenCalled();

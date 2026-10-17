@@ -1,6 +1,6 @@
 import {Icon} from './Icon';
 import {ConversationSurface} from './ConversationSurface';
-import {ConversationHistory} from './ConversationHistory';
+import {ConversationHistoryBrowser} from './ConversationHistoryBrowser';
 import { useLanguage } from '../language';
 import { useEffect, useRef, useState } from 'react';
 import { api, type AgentUsage, type AgentMessageResponse } from '../api/client';
@@ -12,9 +12,9 @@ import {CareReviewSheet} from './CareReviewSheet';
 import type {CareReview} from '../api/care';
 import {useImageConsent} from '../imageConsent';
 
-export function AssistantScreen({ sessionId, onSession, ownerId, compact = false, todayEntry = false, active = true, onChanged,onVisualCheck,onHealthReview,onExpand,onClose,contextSlots={} }: {
+export function AssistantScreen({ sessionId, onSession, ownerId, compact = false, todayEntry = false, clearRevision = 0, active = true, onChanged,onVisualCheck,onHealthReview,onExpand,onClose,contextSlots={} }: {
   onClose?:()=>void;contextSlots?:Record<string,unknown>;
-  sessionId: string | null; onSession: (id: string) => void; ownerId?:string; compact?: boolean; todayEntry?:boolean; onExpand?:()=>void; active?:boolean; onChanged?: () => void;onVisualCheck?:(id:string|null)=>void;onHealthReview?:(description:string)=>void;
+  sessionId: string | null; onSession: (id: string) => void; ownerId?:string; compact?: boolean; todayEntry?:boolean; clearRevision?:number; onExpand?:()=>void; active?:boolean; onChanged?: () => void;onVisualCheck?:(id:string|null)=>void;onHealthReview?:(description:string)=>void;
 }) {
   const {language,t,preferences,ttsProvider,speechRate}=useLanguage();
   const [photoConsent,setPhotoConsent]=useImageConsent(ownerId??'');
@@ -24,15 +24,19 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
   const remaining=Math.max(0,(usage?.limit??0)-(usage?.llm_user_turns??0));
   const [careProposal,setCareProposal]=useState<CareReview|null>(null);
   const [text, setText] = useState('');
+  const [historyOpen,setHistoryOpen]=useState(false),[pendingText,setPendingText]=useState('');
+  const sending=useRef(false);
+  useEffect(()=>{if(compact)setHistoryOpen(false);},[compact]);
   const [photo,setPhoto]=useState<File|null>(null);
   const [photoType,setPhotoType]=useState<'pharmacy_label'|'prescription'|'package'>('pharmacy_label');
   const [photoPreview,setPhotoPreview]=useState<string|null>(null);
   const [sentPhotoNames,setSentPhotoNames]=useState<string[]>([]);
-  const photoInput=useRef<HTMLInputElement>(null);
+  const photoInput=useRef<HTMLInputElement>(null),messageInput=useRef<HTMLInputElement>(null);
   const [turns, setTurns] = useState<AgentMessageResponse[]>([]);
   const [recent,setRecent]=useState<Array<{user:string;assistant:string}>>([]);
   const [sentTexts,setSentTexts]=useState<string[]>([]);
   const loadedSession=useRef<string|null>(null);
+  const recentLoad=useRef(0);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [speaking, setSpeaking] = useState(false);
@@ -75,14 +79,17 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
       setConfirmationIndex(null);
     }
   },[turns,confirmationIndex]);
-  useEffect(()=>{if(!sessionId||loadedSession.current===sessionId||!api.recentTurns)return;let live=true;void api.recentTurns(sessionId).then(rows=>{if(live&&loadedSession.current!==sessionId){loadedSession.current=sessionId;setRecent(rows);}}).catch(()=>{if(live)setError(new Error('Could not restore recent conversation. Your medication records have not changed.'));});return()=>{live=false;};},[sessionId]);
+  const handledClear=useRef(0);
+  useEffect(()=>{if(clearRevision===handledClear.current)return;handledClear.current=clearRevision;recentLoad.current+=1;loadedSession.current=sessionId;setRecent([]);setTurns([]);setSentTexts([]);setSentPhotoNames([]);setReportStates({});setConfirmationIndex(null);setHistoryOpen(false);},[clearRevision,sessionId]);
+  useEffect(()=>{if(!sessionId||loadedSession.current===sessionId||!api.recentTurns)return;let live=true;const version=++recentLoad.current;void api.recentTurns(sessionId).then(rows=>{if(live&&version===recentLoad.current&&loadedSession.current!==sessionId){loadedSession.current=sessionId;setRecent(rows);}}).catch(()=>{if(live&&version===recentLoad.current)setError(new Error('Could not restore recent conversation. Your medication records have not changed.'));});return()=>{live=false;};},[sessionId,clearRevision]);
 
   useEffect(()=>{let live=true; if(api.agentUsage) void api.agentUsage().then(value=>{if(live)setUsage(value);}).catch(()=>{if(live)setUsage(null);});return()=>{live=false;};},[]);
 
   async function send() {
-    if (!text.trim()&&!photo) return;
+    if (sending.current||busy||(!text.trim()&&!photo)) return;
     if(photo&&!photoConsent){setError(new Error(t('Allow photo processing before sending this image.')));return;}
     if(photo&&photo.size>8_000_000){setError(new Error(t('Choose an image smaller than 8 MB.')));return;}
+    sending.current=true;setHistoryOpen(false);setPendingText(text.trim()||t('Please help me understand this photo.'));
     onExpand?.();
     setReportNotice('');
     stopPlayback();setSpeaking(false);
@@ -116,7 +123,7 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
       setUsage(reply.usage??null); window.localStorage.setItem("pharmascan.agent-session",reply.session_id); onSession(reply.session_id); setTurns(previous => [...previous, reply].slice(-6)); setText('');setPhoto(null);
       if (playbackOptions.current.active && playbackOptions.current.enabled && playbackOptions.current.autoplay && playbackOptions.current.language===sentLanguage) void readAloud(reply.message,Math.min(turns.length,5));
     } catch (caught) { if (mounted.current) setError(caught); }
-    finally { if (mounted.current) setBusy(false); }
+    finally { sending.current=false;if (mounted.current){setBusy(false);setPendingText('');} }
   }
 
   async function readAloud(message: string, index: number) {
@@ -160,9 +167,22 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
     } catch (caught) { setError(caught); } finally { setBusy(false); }
   }
 
-  return <ConversationSurface open={!compact&&Boolean(onClose)} onClose={onClose} locked={confirmationIndex!==null||careProposal!==null||busy}><section className={compact ? `companion-composer${todayEntry?' today-assistant card':''}` : 'assistant-view'} aria-label="Medication companion">
+  function showCurrentConversation(){setHistoryOpen(false);requestAnimationFrame(()=>messageInput.current?.focus());}
+  const workspaceLocked=busy||turns.some(row=>Boolean(row.pending_report))||careProposal!==null;
+  async function newConversation(){
+    if(workspaceLocked||sending.current)return;
+    sending.current=true;setBusy(true);setError(null);setHistoryOpen(false);
+    try{const session=await api.newConversation();if(!mounted.current)return;
+      stopPlayback();setSpeaking(false);recentLoad.current+=1;loadedSession.current=session.session_id;
+      window.localStorage.setItem('pharmascan.agent-session',session.session_id);onSession(session.session_id);
+      setTurns([]);setRecent([]);setSentTexts([]);setSentPhotoNames([]);setReportStates({});setConfirmationIndex(null);setReportNotice('');
+    }catch(caught){if(mounted.current)setError(caught);}finally{sending.current=false;if(mounted.current)setBusy(false);}
+  }
+  if(compact&&!todayEntry)return <button type="button" className="assistant-launcher no-print" aria-label={t('Open MediThread Assistant')} title={t('Open MediThread Assistant')} onClick={onExpand}><img src="/branding/assistant-avatar.png" width="64" height="64" alt=""/></button>;
+
+  return <ConversationSurface open={!compact&&Boolean(onClose)} onClose={onClose} locked={confirmationIndex!==null||careProposal!==null||busy} actions={<><button className="icon-button" aria-label={t('Conversation history')} title={t('Conversation history')} aria-pressed={historyOpen} disabled={workspaceLocked} onClick={()=>{if(historyOpen)showCurrentConversation();else setHistoryOpen(true);}}><Icon name="clock"/></button><button className="icon-button" aria-label={t('New conversation')} title={t('New conversation')} disabled={workspaceLocked} onClick={()=>void newConversation()}><Icon name="plus"/></button></>}><section className={compact ? `companion-composer${todayEntry?' today-assistant card':''}` : 'assistant-view'} aria-label="Medication companion">
     {compact&&todayEntry?<>
-      <div className="today-assistant__heading"><Icon name="message"/><h2>MediThread Assistant</h2></div>
+      <div className="today-assistant__heading"><Icon name="message"/><h2>MediThread Assistant</h2><button className="icon-button" aria-label={t('Open conversation')} title={t('Open conversation')} onClick={onExpand}><Icon name="chevron-right"/></button></div>
       <p className="card__hint">{t('Understand your medicines, review your records or prepare for a visit.')}</p>
       <div className="assistant-tasks" aria-label={t('Assistant tasks')}>
         {([
@@ -172,8 +192,9 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
         ] as const).map(([label,prompt])=><button type="button" key={label} disabled={busy||Boolean(text.trim())||Boolean(photo)} onClick={()=>{setText(t(prompt));onExpand?.();}}>{t(label)}</button>)}
       </div>
     </>:null}
-    <div className="conversation-scroll">
-    {!compact ? <h1>{t('Your companion')}</h1> : null}
+    {!compact&&historyOpen?<ConversationHistoryBrowser revision={historyRevision} onBack={showCurrentConversation}/>:null}
+    <div className="conversation-scroll" hidden={!compact&&historyOpen}>
+    {!compact&&!recent.length&&!turns.length&&!pendingText?<p className="notice">{t('Ask a question about your medicines or records.')}</p>:null}
     {!compact&&recent.length?<details className="recent-chat" open={!compact}><summary>{t('Recent conversation')} · {recent.length} / 6</summary>{recent.map((row,index)=><article key={index}><p className="user-message">{row.user}</p><p>{patientMessage(row.assistant)}</p></article>)}</details>:null}
     {/* Conversation reads top to bottom with the composer at the bottom, as
         every chat surface does. The input used to sit above the transcript, so
@@ -197,9 +218,6 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
       </li>)}
     </ul> : null}
 
-    {/* Shown beside the open conversation, where someone is actually speaking,
-        instead of in a second blocking dialog at the microphone. */}
-    {!compact&&preferences.voice_enabled ? <p className="voice-privacy">{t('Voice uses your browser’s speech service. Audio is not saved.')}</p> : null}
     {/* The daily allowance is the one line a patient needs *before* deciding to
         send a message, so it is shown in the open conversation too — it used to be
         rendered above the page title on all four screens, which was noise, but
@@ -208,15 +226,16 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
     {/* The busy line and the saved-report notice belong to the open
         conversation, where the patient is actually talking to the assistant;
         repeated on four screens they are noise above the page title. */}
-    {!compact&&busy ? <p role="status">{t('Checking your records...')}</p> : null}
+    {!compact&&pendingText?<div className="turn pending-message"><p className="user-message">{pendingText}</p><p role="status">{t('Checking your records...')}</p></div>:null}
+    {!compact&&busy&&!pendingText?<p role="status">{t('Starting a new conversation?')}</p>:null}
     {error ? <ErrorNotice error={error} /> : null}
     {!compact&&reportNotice ? <p role="status">{t(reportNotice)}</p> : null}
         {confirmationIndex!==null&&turns[confirmationIndex]?.pending_report ? (()=>{const index=confirmationIndex,turn=turns[index]!;const cancel=()=>{setTurns(previous=>previous.map((row,at)=>at===index?{...row,pending_report:null}:row));setReportStates(previous=>({...previous,[index]:'Report cancelled'}));setConfirmationIndex(null);};return <ConfirmReportSheet title="Just to confirm" summary={turn.pending_report!.summary} busy={busy} onConfirm={()=>void confirmReport(index)} onCancel={cancel}>
         <button onClick={()=>void readAloud(turn.message,index)} disabled={!preferences.voice_enabled}>{t('Play response')}</button>{speaking?<button onClick={()=>{stopPlayback();setSpeaking(false);}}>{t('Stop audio')}</button>:null}</ConfirmReportSheet>;})() : null}
     {careProposal?<CareReviewSheet proposal={careProposal} onCancel={()=>setCareProposal(null)} onSaved={()=>{setCareProposal(null);setReportNotice('Your medication-care record was saved.');onChanged?.();window.dispatchEvent(new Event('pharmascan:reminder-refresh'));}}/>:null}
-    {!compact?<ConversationHistory revision={historyRevision} blocked={busy||turns.some(row=>Boolean(row.pending_report))||careProposal!==null} onCleared={()=>{loadedSession.current=sessionId;setRecent([]);setTurns([]);setSentTexts([]);setSentPhotoNames([]);setReportStates({});}}/>:null}
+
     </div>
-    {photo?<div className="photo-attachment" aria-label={t('Photo attachment')}>
+    {photo?<div hidden={!compact&&historyOpen} className="photo-attachment" aria-label={t('Photo attachment')}>
       {photoPreview?<img src={photoPreview} alt={t('Selected photo preview')}/>:null}
       <div className="photo-attachment__details"><strong>{photo.name}</strong>
         <label>{t('Photo type')} <select value={photoType} onChange={event=>setPhotoType(event.target.value as typeof photoType)}>
@@ -226,10 +245,10 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
       </div>
       <button type="button" className="icon-button" aria-label={t('Remove photo')} onClick={()=>setPhoto(null)}><Icon name="close"/></button>
     </div>:null}
-    <div className="composer-row">
-      <input ref={photoInput} className="sr-only" type="file" accept="image/png,image/jpeg" aria-label={t('Choose a photo')} onChange={event=>{const selected=event.currentTarget.files?.[0]??null;setPhoto(selected);if(selected)onExpand?.();event.currentTarget.value='';}}/>
+    <div className="composer-row" hidden={!compact&&historyOpen}>
+      <input ref={photoInput} className="sr-only" type="file" accept="image/png,image/jpeg" aria-label={t('Choose a photo')} onChange={event=>{const selected=event.currentTarget.files?.[0]??null;setPhoto(selected);event.currentTarget.value='';}}/>
       <button className="photo-button" type="button" aria-label={t('Add a photo to chat')} onClick={()=>photoInput.current?.click()}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1"/><path d="m4 18 5-5 4 3 4-5 4 6"/></svg></button>
-      <input aria-label={t("Review your message before sending")} value={text} disabled={busy} onFocus={()=>{if(compact)onExpand?.();}}
+      <input ref={messageInput} aria-label={t("Review your message before sending")} value={text} disabled={busy}
         onChange={event => setText(event.target.value)} placeholder={t("Ask about your medication...")}
         onKeyDown={event => { if (event.key === 'Enter') void send(); }} />
       {usage&&compact?<span className="composer-allowance" role="status" title={`${t('AI conversations left today')}: ${remaining} / ${usage.limit} · ${t('Resets at midnight Singapore time')}`}>

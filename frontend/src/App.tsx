@@ -59,6 +59,7 @@ function CompanionApp() {
   const {t,preferences,loadPreferences,preferenceError}=useLanguage();
   const [evidenceTaskId,setEvidenceTaskId]=useState<string|null>(null);
   const [assistantOpen,setAssistantOpen]=useState(false);
+  const [conversationClearRevision,setConversationClearRevision]=useState(0);
   const [assistantSlots,setAssistantSlots]=useState<Record<string,unknown>>({});
   const [routedPhoto,setRoutedPhoto]=useState<File|null>(null);
   const [healthDescription,setHealthDescription]=useState('');
@@ -80,7 +81,7 @@ function CompanionApp() {
   const [guideOpen,setGuideOpen]=useState(false),[guideOwner,setGuideOwner]=useState(''),[guideReplay,setGuideReplay]=useState(false);
   const {tab,navigate:setTab,back:goBack,isRoot}=useCareNavigation(guideOpen&&!loading&&!fatal&&Boolean(medications));
   const contentRef=useRef<HTMLDivElement>(null);
-  useEffect(()=>{if(contentRef.current)contentRef.current.inert=guideOpen&&!loading&&!fatal&&Boolean(medications);},[guideOpen,loading,fatal,medications]);
+  useEffect(()=>{if(contentRef.current)contentRef.current.inert=assistantOpen||tab==='assistant'||(guideOpen&&!loading&&!fatal&&Boolean(medications));},[assistantOpen,tab,guideOpen,loading,fatal,medications]);
   const [member,setMember]=useState(false),[identity,setIdentity]=useState<Account|null>(null),[now,setNow]=useState(()=>new Date());
   /* The signed-out state gets its own surface, so the shell needs to know the
      kind of identity and not only whether an email account is linked. */
@@ -144,10 +145,11 @@ function CompanionApp() {
     <main ref={mainRef} id="main-content" className="app-main">
     {!guideOpen?<NotificationInvitation ownerId={guideOwner} onSettings={()=>setTab('reminder-settings')}/>:null}
     {loading&&!accountPage ? <Card title="Getting your records ready"><p role="status">{t('Starting your private demo session…')}</p></Card> : !medications&&!accountPage ? <Card title="Your records could not be loaded"><p>{t('Please retry the connection. An unavailable record is not an empty medication list.')}</p><button onClick={() => { if (health && sessionId) void refreshMedications(); else window.location.reload(); }}>{t('Retry loading records')}</button></Card> : <>
-      <div hidden={!assistantVisible}><AssistantScreen ownerId={guideOwner} onClose={()=>{setAssistantOpen(false);if(tab==='assistant')goBack();}} contextSlots={assistantSlots} onExpand={openAssistant} active={assistantOpen||tab==='today'||tab==='assistant'} onHealthReview={description=>{setAssistantOpen(false);setHealthDescription(description);setTab('health-notes');}} onVisualCheck={id=>{setAssistantOpen(false);setVisualRegimen(id);setTab('check');}} sessionId={sessionId} onSession={setSessionId} todayEntry={tab==='today'} compact={!assistantOpen&&tab!=='assistant'} onChanged={refreshMedications}/></div>
+      {tab==='today'?<section className="welcome"><h1 className="greeting">{t(greeting)}{preferences.preferred_language==='zh'?'，':', '}{name}!</h1><p>{t('Your medication and self-care companion')}</p></section>:null}
+      <div hidden={!assistantVisible}><AssistantScreen ownerId={guideOwner} clearRevision={conversationClearRevision} onClose={()=>{setAssistantOpen(false);if(tab==='assistant')goBack();}} contextSlots={assistantSlots} onExpand={openAssistant} active={assistantOpen||tab==='today'||tab==='assistant'} onHealthReview={description=>{setAssistantOpen(false);setHealthDescription(description);setTab('health-notes');}} onVisualCheck={id=>{setAssistantOpen(false);setVisualRegimen(id);setTab('check');}} sessionId={sessionId} onSession={setSessionId} todayEntry={tab==='today'} compact={!assistantOpen&&tab!=='assistant'} onChanged={refreshMedications}/></div>
       {tab === 'check'||tab==='check-result' ? <VisualCheckScreen ownerId={guideOwner} initialFile={routedPhoto} showResult={tab==='check-result'} onResult={()=>setTab('check-result')} showBack={false} regimenId={visualRegimen} onBack={goBack} onAddSource={()=>setTab('label')}/> : null}
       {tab === 'today' ? <>
-        <section className="welcome"><h1 className="greeting">{t(greeting)}{preferences.preferred_language==='zh'?'，':', '}{name}!</h1><p>{t('Your medication and self-care companion')}</p></section>
+
         <div className="landscape-columns today-panels">{currentMedications.length?<TodayMedicationCarousel medications={currentMedications} focusRegimenId={focusRegimen}>{medication=><TodayScreen key={medication.regimen_id} showTitle={false} focusRegimenId={focusRegimen} onFeeling={()=>{setHealthDescription('');setTab('health-notes');}} onVisualCheck={id=>{setVisualRegimen(id);setTab('check');}} compact medications={[medication]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')}/>}</TodayMedicationCarousel>:<TodayScreen compact medications={[]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')} onVisualCheck={()=>{setVisualRegimen(null);setTab('check');}}/>}
         <CareTaskSummary medications={medications?.medications??[]} onOpen={()=>setTab('care-tasks')}/></div>
       </> : null}
@@ -182,7 +184,7 @@ function CompanionApp() {
       {tab==='help'?<OnboardingGuide owner={guideOwner} replay onClose={()=>setTab('me')}/>:null}
       {tab==='account'?<MeScreen standalone={standaloneSignIn} onGuest={()=>setTab('today')} onHelp={()=>setTab('help')} onSettings={()=>setTab('settings')} onFeedback={()=>setTab('feedback')} onIdentityChanged={()=>{window.localStorage.removeItem('pharmascan.agent-session');window.location.reload();}}/>:null}
       {tab==='profile'?<><ProfileScreen/><MeScreen onIdentityChanged={()=>window.location.reload()}/></>:null}
-      {tab==='privacy'||tab==='about'?<InformationScreen ownerId={guideOwner} kind={tab} onPrivacy={()=>setTab('privacy')} onHistory={()=>setTab('records')}/>:null}
+      {tab==='privacy'||tab==='about'?<InformationScreen ownerId={guideOwner} kind={tab} onConversationCleared={()=>setConversationClearRevision(value=>value+1)} onPrivacy={()=>setTab('privacy')} onHistory={()=>setTab('records')}/>:null}
       {tab==='caregivers'?<CaregiversScreen/>:null}
       {tab==='settings'?<SettingsScreen/>:null}
       {tab==='reminder-settings'||tab==='language-settings'||tab==='accessibility'?<SettingsScreen section={tab==='reminder-settings'?'reminders':tab==='language-settings'?'language':'accessibility'}/>:null}

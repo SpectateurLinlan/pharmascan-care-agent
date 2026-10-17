@@ -1,6 +1,6 @@
 /** Real App and browser layout; synthetic authenticated HTTP only, no live writes. */
 import {test,expect,type Page} from '@playwright/test';
-async function mockPatientApp(page:Page){
+async function mockPatientApp(page:Page,historyEnabled=true){
  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
  const token='DEMO.synthetic-session-token',owner='d00d0000-0000-4000-8000-000000000001';
  const user={id:owner,aud:'authenticated',role:'authenticated',email:null,phone:'',app_metadata:{provider:'anonymous',providers:['anonymous']},user_metadata:{demo_only:true},is_anonymous:true,created_at:'2026-10-16T00:00:00Z'};
@@ -13,7 +13,7 @@ async function mockPatientApp(page:Page){
  });
  const task={id:'DEMO-source-only',medication_id:'DEMO-med',version:1,status:'pending_information',product:{name:'DEMO source medicine',strength:'5 mg',dose_form:'tablet',formulation:null,brand:null,ingredients:[],category:'unknown',verification:'source_supplied'},source_ids:['DEMO-source'],missing:['schedule'],conflicts:[],possible_duplicate_ids:[],draft_regimen_id:null,suggested_regimen:null};
  let sourceReads=0;const writes:string[]=[];
- const prefs={display_name:'Guest',preferred_language:'en',speech_locale:'en-SG',text_size:'standard',text_scale_percent:100,voice_enabled:false,tts_autoplay:false,conversation_history_enabled:true,reminder_lead_minutes:0,reminders_enabled:false,timezone:'Asia/Singapore'};
+ const prefs={display_name:'Guest',preferred_language:'en',speech_locale:'en-SG',text_size:'standard',text_scale_percent:100,voice_enabled:false,tts_autoplay:false,conversation_history_enabled:historyEnabled,reminder_lead_minutes:0,reminders_enabled:false,timezone:'Asia/Singapore'};
  await page.route(url=>new URL(url).pathname.startsWith('/api/'),async route=>{
   const request=route.request(),path=new URL(request.url()).pathname;
   expect(request.headers().authorization).toBe(`Bearer ${token}`);
@@ -29,7 +29,7 @@ async function mockPatientApp(page:Page){
   else if(path.endsWith('/history'))body={entries:[],next_before:null};
   await route.fulfill({json:body});
  });
- return {errors,writes,getSourceReads:()=>sourceReads};
+ return {errors,writes,prefs,getSourceReads:()=>sourceReads};
 }
 
 test('source-only count, supplement cancellation and assistant alignment stay consistent',async({page})=>{
@@ -59,20 +59,20 @@ test('source-only count, supplement cancellation and assistant alignment stay co
  }
  for(const width of [390,430,1280,1600,1920]){
   await page.setViewportSize({width,height:950});await page.locator('[data-guide="me"]').click();
-  const main=page.locator('.app-main'),dock=page.locator('.companion-composer .composer-row');
+  const dock=page.locator('.assistant-launcher');
   await expect(dock).toBeVisible();
-  await expect.poll(async()=>{const a=(await main.boundingBox())!,b=(await dock.boundingBox())!;return Math.abs(a.x-b.x)+Math.abs(a.width-b.width);}).toBeLessThan(2);
+  const avatar=(await dock.boundingBox())!;expect(avatar.x+avatar.width).toBeLessThanOrEqual(width);if(width<1024){const nav=(await page.locator('.patient-nav').boundingBox())!;expect(avatar.y+avatar.height).toBeLessThanOrEqual(nav.y);}
   await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const logo=page.locator('.brand-mark');await expect(logo).toBeVisible();expect(await logo.evaluate((el:HTMLImageElement)=>el.complete&&el.naturalWidth>0)).toBe(true);
   await expect(logo).toHaveAttribute('src','/branding/medithread-192.png');
-  await dock.getByRole('textbox').focus();
+  await dock.click();
   const dialog=page.getByRole('dialog',{name:scale===100?'Medication assistant':'用药助手'});await expect(dialog).toBeVisible();
   const panel=dialog.locator('.conversation-scroll'),composer=dialog.locator('.composer-row');
   const a=(await panel.boundingBox())!,b=(await composer.boundingBox())!;
   expect(Math.abs(a.x-b.x)).toBeLessThan(2);expect(Math.abs(a.width-b.width)).toBeLessThan(2);
   await expect(dialog.locator('.composer-send')).toBeInViewport();
   if(width===1600)await page.screenshot({path:`../outputs/ux-consistency-desktop-${scale}.png`});
-  await dialog.locator('.conversation-toolbar button').click();
+  await dialog.getByRole('button',{name:scale===100?'Close conversation':'收起对话',exact:true}).click();
  }
  }
  const manifest=await (await page.request.get('/manifest.webmanifest')).json();
@@ -106,7 +106,7 @@ test('Today tasks reuse one conversation and root pages adapt to landscape and e
  await page.locator('[data-guide="medicines"]').click();await page.locator('[data-guide="today"]').click();
  await expect(entry.getByRole('textbox')).toHaveValue('DEMO unsent question');
  await expect(entry.getByRole('button',{name:'Understand medicines',exact:true})).toBeDisabled();
- await entry.getByRole('textbox').focus();await expect(dialog.locator('.turn')).toHaveCount(1);
+ await entry.getByRole('textbox').focus();await expect(dialog).toHaveCount(0);await entry.getByRole('button',{name:'Open conversation'}).click();await expect(dialog.locator('.turn')).toHaveCount(1);
  await dialog.getByRole('textbox').fill('');await dialog.getByRole('button',{name:'Close conversation'}).click();
  for(const language of ['en','zh']){
  for(const scale of [100,150]){
@@ -117,7 +117,7 @@ test('Today tasks reuse one conversation and root pages adapt to landscape and e
    for(const tab of ['today','medicines','records','me']){
     await page.locator(`[data-guide="${tab}"]`).click();
     await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-    await expect(page.locator('.composer-row:visible')).toHaveCount(1);
+    await expect(page.locator('.composer-row:visible')).toHaveCount(tab==='today'?1:0);await expect(page.locator('.assistant-launcher:visible')).toHaveCount(tab==='today'?0:1);
     if(width>=1024){const main=(await page.locator('.app-main').boundingBox())!,brand=(await page.locator('.brand').boundingBox())!;expect(Math.abs(main.x-brand.x)).toBeLessThan(2);}
     const grid=page.locator(tab==='today'?'.today-panels':'.ui-screen--columns');
     await expect(grid).toBeVisible();
@@ -140,6 +140,49 @@ test('Today tasks reuse one conversation and root pages adapt to landscape and e
  }
  await page.setViewportSize({width:768,height:430});await page.locator('[data-guide="today"]').click();
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
- await entry.getByRole('textbox').focus();await expect(page.getByRole('dialog').locator('.composer-send')).toBeInViewport();
+ await entry.getByRole('textbox').focus();await expect(page.getByRole('dialog')).toHaveCount(0);await entry.getByRole('button',{name:'继续对话'}).click();await expect(page.getByRole('dialog').locator('.composer-send')).toBeInViewport();
  expect(sends).toBe(1);expect(errors).toEqual([]);
+});
+
+test('inline send, shared avatar, opt-in saved exchanges and explicit clear keep separate semantics',async({page})=>{
+ test.setTimeout(90000);page.setDefaultTimeout(8000);
+ const {errors,prefs}=await mockPatientApp(page,false);let sends=0,clears=0,newSessions=0;
+ let saved:Array<{id:string;user_text:string;assistant_text:string;created_at:string}>=[];
+ await page.route(url=>new URL(url).pathname==='/api/agent/messages',async route=>{
+  expect(route.request().headers().authorization).toBe('Bearer DEMO.synthetic-session-token');sends++;
+  const body=route.request().postDataJSON(),answer=`SIMULATED answer ${sends}`;
+  if(prefs.conversation_history_enabled)saved.push({id:`DEMO-saved-${sends}`,user_text:body.text,assistant_text:answer,created_at:new Date().toISOString()});
+  await route.fulfill({json:{message:answer,intent:'clarification',session_id:body.session_id??'DEMO-session',session_state:'idle',requires_confirmation:false,tool_traces:[],mode:'rules'}});
+ });
+ await page.route(url=>new URL(url).pathname==='/api/agent/history',async route=>{
+  expect(route.request().headers().authorization).toBe('Bearer DEMO.synthetic-session-token');
+  if(route.request().method()==='DELETE'){expect(route.request().postDataJSON()).toEqual({confirmed:true});clears++;saved=[];await route.fulfill({json:{cleared:true}});return;}
+  await route.fulfill({json:{entries:saved,next_before:null}});
+ });
+ await page.goto('/e2e/patient-feedback.html?shell=1');
+ const entry=page.locator('.today-assistant');await expect(entry).toBeVisible();
+ const welcome=(await page.locator('.welcome').boundingBox())!,hero=(await entry.boundingBox())!;expect(welcome.y+welcome.height).toBeLessThanOrEqual(hero.y);
+ await entry.getByRole('textbox').click();await entry.getByRole('textbox').fill('DEMO unsaved exchange');await expect(page.getByRole('dialog')).toHaveCount(0);
+ await expect(page.locator('.assistant-launcher')).toHaveCount(0);expect(sends).toBe(0);
+ await entry.getByRole('button',{name:'Send',exact:true}).click();const dialog=page.getByRole('dialog',{name:'Medication assistant'});await expect(dialog.getByText('SIMULATED answer 1')).toBeVisible();
+ await expect(dialog.getByLabel('Save new conversations')).toHaveCount(0);expect(saved).toHaveLength(0);
+ await dialog.getByRole('textbox').fill('DEMO keep this draft');await dialog.getByRole('button',{name:'Conversation history'}).click();
+ await expect(dialog.getByText('Saving is off. No saved messages are available.')).toBeVisible();
+ await dialog.getByRole('button',{name:'Back to current conversation'}).click();await expect(dialog.getByRole('textbox')).toHaveValue('DEMO keep this draft');
+ await dialog.getByRole('button',{name:'Close conversation'}).click();await expect(page.getByRole('dialog')).toHaveCount(0);await expect(entry.getByRole('textbox')).toBeFocused();await page.locator('[data-guide="records"]').click();await page.locator('.assistant-launcher').click();
+ await expect(dialog.getByRole('textbox')).toHaveValue('DEMO keep this draft');await expect(dialog.getByText('SIMULATED answer 1')).toBeVisible();
+ await dialog.getByRole('button',{name:'Close conversation'}).click();await expect(page.locator('.assistant-launcher')).toBeFocused();await page.locator('[data-guide="me"]').click();await page.getByRole('button',{name:/Privacy and data/}).click();
+ const save=page.getByRole('checkbox',{name:/Save new conversations/});await expect(save).not.toBeChecked();const preferenceSaved=page.waitForResponse(response=>response.request().method()==='PUT'&&new URL(response.url()).pathname==='/api/me/preferences');await save.click();expect((await preferenceSaved).status()).toBe(200);await expect(save).toBeChecked();
+ await page.locator('[data-guide="today"]').click();await entry.getByRole('textbox').fill('DEMO saved exchange');await entry.getByRole('button',{name:'Send',exact:true}).click();await expect(dialog.getByText('SIMULATED answer 2')).toBeVisible();expect(saved).toHaveLength(1);
+ await dialog.getByRole('textbox').fill('DEMO current draft');await dialog.getByRole('button',{name:'Conversation history'}).click();
+ await expect(dialog.locator('.history-date-group h2')).toHaveText('Today');await dialog.locator('.history-entry').click();
+ await expect(dialog.locator('.history-message')).toContainText('SIMULATED answer 2');expect(sends).toBe(2);
+ await dialog.getByRole('button',{name:'Back to current conversation'}).click();await expect(dialog.getByRole('textbox')).toHaveValue('DEMO current draft');
+ await page.route(url=>new URL(url).pathname==='/api/demo/start',async route=>{expect(route.request().postDataJSON().session_id).toBeNull();newSessions++;await route.fulfill({json:{session_id:'DEMO-fresh-session',patient_id:'d00d0000-0000-4000-8000-000000000001',demo_only:true,note:'SIMULATED',seeded_medication_count:0}});});
+ await dialog.getByRole('button',{name:'New conversation'}).click();await expect(dialog.locator('.turn')).toHaveCount(0);await expect(dialog.getByRole('textbox')).toHaveValue('DEMO current draft');expect(newSessions).toBe(1);expect(saved).toHaveLength(1);
+ await dialog.getByRole('button',{name:'Close conversation'}).click();await page.locator('[data-guide="me"]').click();await page.getByRole('button',{name:/Privacy and data/}).click();
+ await page.getByRole('button',{name:'Clear saved conversations',exact:true}).click();expect(clears).toBe(0);await page.getByRole('button',{name:'Cancel',exact:true}).click();expect(saved).toHaveLength(1);
+ await page.getByRole('button',{name:'Clear saved conversations',exact:true}).click();await page.getByRole('button',{name:'Confirm clear',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);expect(clears).toBe(1);expect(saved).toHaveLength(0);
+ await page.locator('[data-guide="today"]').click();await expect(entry.getByRole('textbox')).toHaveValue('DEMO current draft');await expect(page.locator('.assistant-launcher')).toHaveCount(0);
+ expect(errors).toEqual([]);
 });

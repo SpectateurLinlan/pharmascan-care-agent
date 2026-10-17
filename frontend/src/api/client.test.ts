@@ -26,6 +26,17 @@ describe('api client', () => {
     vi.mocked(accessToken).mockResolvedValue(null);
   });
 
+  it('starts a new owned conversation without reusing the current session',async()=>{
+    vi.mocked(accessToken).mockResolvedValue('DEMO.synthetic-token');
+    const fetchMock=mockFetch(200,{patient_id:'DEMO-owner',session_id:'DEMO-new',demo_only:true,seeded_medication_count:0,note:'SIMULATED'});
+    vi.stubGlobal('fetch',fetchMock);window.localStorage.setItem('pharmascan.agent-session','DEMO-old');
+    expect((await api.newConversation()).session_id).toBe('DEMO-new');
+    const init=fetchMock.mock.calls[0]![1] as RequestInit;
+    expect(JSON.parse(init.body as string)).toMatchObject({session_id:null});
+    expect(init.headers).toMatchObject({Authorization:'Bearer DEMO.synthetic-token'});
+    expect(window.localStorage.getItem('pharmascan.agent-session')).toBe('DEMO-old');
+  });
+
   it('parses a successful health response', async () => {
     vi.stubGlobal(
       'fetch',

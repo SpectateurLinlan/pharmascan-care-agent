@@ -413,6 +413,8 @@ export const api = {
       body: JSON.stringify({ client_id: clientId(),session_id:window.localStorage.getItem("pharmascan.agent-session") }),
     }),
 
+  newConversation:()=>request<DemoStartResponse>('/api/demo/start',{method:'POST',body:JSON.stringify({client_id:clientId(),session_id:null})}),
+
   listMedications: () => request<MedicationListResponse>(withClient('/api/me/medications')),
 
   endPlan:(regimenId:string)=>request<{regimen_id:string;state:string}>(withClient(`/api/medications/${encodeURIComponent(regimenId)}/end`),{method:'POST',body:JSON.stringify({confirmed:true})}),
