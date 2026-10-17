@@ -1,4 +1,5 @@
 import {Icon} from './Icon';
+import {createPortal} from 'react-dom';
 import {ConversationSurface} from './ConversationSurface';
 import {ConversationHistoryBrowser} from './ConversationHistoryBrowser';
 import { useLanguage } from '../language';
@@ -12,8 +13,8 @@ import {CareReviewSheet} from './CareReviewSheet';
 import type {CareReview} from '../api/care';
 import {useImageConsent} from '../imageConsent';
 
-export function AssistantScreen({ sessionId, onSession, ownerId, compact = false, todayEntry = false, clearRevision = 0, active = true, onChanged,onVisualCheck,onHealthReview,onExpand,onClose,contextSlots={} }: {
-  onClose?:()=>void;contextSlots?:Record<string,unknown>;
+export function AssistantScreen({ sessionId, onSession, ownerId, compact = false, todayEntry = false, launcherVisible = true, clearRevision = 0, active = true, onChanged,onVisualCheck,onHealthReview,onExpand,onClose,contextSlots={} }: {
+  onClose?:()=>void;contextSlots?:Record<string,unknown>;launcherVisible?:boolean;
   sessionId: string | null; onSession: (id: string) => void; ownerId?:string; compact?: boolean; todayEntry?:boolean; clearRevision?:number; onExpand?:()=>void; active?:boolean; onChanged?: () => void;onVisualCheck?:(id:string|null)=>void;onHealthReview?:(description:string)=>void;
 }) {
   const {language,t,preferences,ttsProvider,speechRate}=useLanguage();
@@ -178,7 +179,7 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
       setTurns([]);setRecent([]);setSentTexts([]);setSentPhotoNames([]);setReportStates({});setConfirmationIndex(null);setReportNotice('');
     }catch(caught){if(mounted.current)setError(caught);}finally{sending.current=false;if(mounted.current)setBusy(false);}
   }
-  if(compact&&!todayEntry)return <button type="button" className="assistant-launcher no-print" aria-label={t('Open MediThread Assistant')} title={t('Open MediThread Assistant')} onClick={onExpand}><img src="/branding/assistant-avatar.png" width="64" height="64" alt=""/></button>;
+  if(compact&&!todayEntry)return launcherVisible?createPortal(<button type="button" className="assistant-launcher no-print" aria-label={t('Open MediThread Assistant')} title={t('Open MediThread Assistant')} onClick={onExpand}><img src="/branding/assistant-avatar-green.png" width="48" height="48" alt=""/><span>{t('AI assistant')}</span></button>,document.body):null;
 
   return <ConversationSurface open={!compact&&Boolean(onClose)} onClose={onClose} locked={confirmationIndex!==null||careProposal!==null||busy} actions={<><button className="icon-button" aria-label={t('Conversation history')} title={t('Conversation history')} aria-pressed={historyOpen} disabled={workspaceLocked} onClick={()=>{if(historyOpen)showCurrentConversation();else setHistoryOpen(true);}}><Icon name="clock"/></button><button className="icon-button" aria-label={t('New conversation')} title={t('New conversation')} disabled={workspaceLocked} onClick={()=>void newConversation()}><Icon name="plus"/></button></>}><section className={compact ? `companion-composer${todayEntry?' today-assistant card':''}` : 'assistant-view'} aria-label="Medication companion">
     {compact&&todayEntry?<>

@@ -1,5 +1,5 @@
 /** Real App and browser layout; synthetic authenticated HTTP only, no live writes. */
-import {test,expect,type Page} from '@playwright/test';
+import {test,expect,chromium,type Page} from '@playwright/test';
 async function mockPatientApp(page:Page,historyEnabled=true){
  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
  const token='DEMO.synthetic-session-token',owner='d00d0000-0000-4000-8000-000000000001';
@@ -27,6 +27,8 @@ async function mockPatientApp(page:Page,historyEnabled=true){
   else if(path===`/api/evidence/tasks/${task.id}`)body=task;
   else if(path.endsWith('/usage'))body={llm_user_turns:0,model_requests:0,limit:20,usage_date:'2026-10-17',next_reset_at:'2026-10-18T00:00:00+08:00'};
   else if(path.endsWith('/history'))body={entries:[],next_before:null};
+  else if(path==='/api/reminders/push/config')body={available:false,public_key:null,test_available:false};
+  else if(path==='/api/speech/capabilities')body={cloud_tts_allowed:false};
   await route.fulfill({json:body});
  });
  return {errors,writes,prefs,getSourceReads:()=>sourceReads};
@@ -54,8 +56,8 @@ test('source-only count, supplement cancellation and assistant alignment stay co
  expect(writes.every(path=>['/api/demo/start','/api/me/care-tasks/refresh'].includes(path))).toBe(true);
  for(const scale of [100,150]){
  if(scale===150){
-  await page.locator('[data-guide="me"]').click();await page.getByRole('slider',{name:'Text size'}).focus();await page.keyboard.press('End');
-  await expect(page.getByRole('slider')).toHaveValue('150');await page.getByRole('button',{name:'Language and speech',exact:true}).click();await page.getByRole('menuitemradio',{name:'中文'}).click();
+  await page.locator('[data-guide="me"]').click();await page.locator('.settings-shortcut').click();await page.locator('#text-size').focus();await page.keyboard.press('End');
+  await expect(page.locator('#text-size')).toHaveValue('150');await page.locator('.language-shortcut').click();await page.getByRole('menuitemradio',{name:'中文'}).click();
  }
  for(const width of [390,430,1280,1600,1920]){
   await page.setViewportSize({width,height:950});await page.locator('[data-guide="me"]').click();
@@ -80,6 +82,101 @@ test('source-only count, supplement cancellation and assistant alignment stay co
  expect((await page.request.get('/branding/medithread-32.png')).status()).toBe(200);
  expect((await page.request.get('/branding/medithread-180.png')).status()).toBe(200);
  expect(getSourceReads()).toBeGreaterThan(0);expect(errors).toEqual([]);
+});
+
+test('settings ownership, persisted reminder preferences and viewport launcher geometry',async({page})=>{
+ test.setTimeout(90000);page.setDefaultTimeout(8000);
+ const {errors,prefs}=await mockPatientApp(page);
+ await page.route(url=>new URL(url).pathname==='/api/reminders/plan',async route=>{
+  expect(route.request().headers().authorization).toBe('Bearer DEMO.synthetic-session-token');
+  await route.fulfill({json:Array.from({length:5},(_,index)=>({occurrence_id:`DEMO-${index}`,regimen_id:'DEMO-regimen',rule_id:'DEMO-rule',medication_name:`DEMO scheduled ${index}`,due_at:'2099-10-17T08:00:00Z',remind_at:'2099-10-17T08:00:00Z',slot:'08:00'}))});
+ });
+ await page.goto('/e2e/patient-feedback.html?shell=1');
+ await page.locator('[data-guide="me"]').click();
+ await expect(page.locator('#text-size')).toHaveCount(0);
+ await page.getByRole('button',{name:/Medication reminders/}).click();
+ await expect(page.getByRole('heading',{name:'Medication reminders and notifications'})).toBeVisible();
+ await expect(page.getByLabel('Enable medication reminders')).not.toBeChecked();
+ await page.getByLabel('Enable medication reminders').check();
+ await page.getByLabel('Reminder lead minutes').fill('15');
+ await expect.poll(()=>prefs.reminder_lead_minutes).toBe(15);
+ await expect(page.locator('#upcoming-reminder-list li')).toHaveCount(3);
+ await page.getByRole('button',{name:'View all upcoming reminders'}).click();
+ await expect(page.locator('#upcoming-reminder-list li')).toHaveCount(5);
+ await page.locator('.settings-shortcut').click();
+ await expect(page.getByRole('heading',{name:'Usage preferences',exact:true})).toBeVisible();
+ await expect(page.getByLabel('Enable medication reminders')).toHaveCount(0);
+ await expect(page.locator('#upcoming-reminder-list')).toHaveCount(0);
+ await page.locator('.back-button').click();
+ await expect(page.getByLabel('Enable medication reminders')).toBeChecked();
+ await expect(page.getByLabel('Reminder lead minutes')).toHaveValue('15');
+ await page.reload();
+ await expect(page.getByLabel('Enable medication reminders')).toBeChecked();
+ await expect(page.getByLabel('Reminder lead minutes')).toHaveValue('15');
+ for(const language of ['en','zh'])for(const scale of [100,150]){
+ await page.locator('.settings-shortcut').click();
+ await page.locator('#text-size').focus();await page.keyboard.press(scale===150?'End':'Home');
+ await expect.poll(()=>prefs.text_scale_percent).toBe(scale);
+ await page.locator('.language-shortcut').click();
+ await page.getByRole('menuitemradio',{name:language==='en'?'English':'中文'}).click();
+ await page.locator('[data-guide="me"]').click();
+ await page.locator('.app-main').getByRole('button',{name:/Medication reminders|用药提醒/}).click();
+ for(const width of [390,430,768,1024,1280,1600,1920]){
+  await page.setViewportSize({width,height:950});
+  const body=(await page.locator('.app-main').boundingBox())!,back=(await page.locator('.back-button').boundingBox())!;
+  expect(Math.abs(body.x-back.x),JSON.stringify({width,body,back})).toBeLessThan(2);
+  const launcher=page.locator('.assistant-launcher');
+  expect(await launcher.evaluate(el=>el.parentElement===document.body)).toBe(true);
+  const box=(await launcher.boundingBox())!;
+  expect(width-box.x-box.width).toBeGreaterThanOrEqual(15);
+  expect(box.height).toBe(width>=1024?60:56);
+  if(width<1024){const nav=(await page.locator('.patient-nav').boundingBox())!;expect(nav.y-box.y-box.height).toBeGreaterThanOrEqual(15);}
+  else expect(950-box.y-box.height).toBe(24);
+  expect(await launcher.locator('img').evaluate((el:HTMLImageElement)=>el.complete&&el.naturalWidth>0)).toBe(true);
+  await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
+  expect((await launcher.boundingBox())!.x).toBeCloseTo(box.x,0);
+  expect((await launcher.boundingBox())!.y).toBeCloseTo(box.y,0);
+  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  if([390,1600].includes(width)&&scale===100&&language==='en')await page.screenshot({path:`../outputs/settings-cleanup-${width}.png`});
+ }
+ }
+ await page.setViewportSize({width:768,height:430});
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ const landscape=(await page.locator('.assistant-launcher').boundingBox())!;
+ expect(landscape.y+landscape.height).toBeLessThanOrEqual(406);
+ // Existing critical forms remain free of the portal launcher.
+ await page.locator('[data-guide="medicines"]').click();
+ await page.getByRole('button',{name:/Add medication|添加药物/}).click();
+ await expect(page.locator('.assistant-launcher')).toHaveCount(0);
+ expect(errors).toEqual([]);
+});
+
+test('real Chrome browser zoom keeps the launcher and shared header inside the viewport',async({},testInfo)=>{
+ test.setTimeout(45000);
+ // A disposable persistent profile enables Chrome's own browser zoom API.
+ // This is browser zoom, not CSS zoom, DPR emulation or pinch scaling.
+ const context=await chromium.launchPersistentContext('',{...testInfo.project.use.launchOptions,headless:true,viewport:null,args:['--window-size=1280,950']});
+ try{
+  const page=await context.newPage();await mockPatientApp(page);
+  await page.goto('http://127.0.0.1:5174/e2e/patient-feedback.html?shell=1');
+  await page.locator('[data-guide="me"]').click();
+  const baseline=await page.evaluate(()=>({width:innerWidth,dpr:devicePixelRatio}));
+  const settings=await context.newPage();await settings.goto('chrome://settings/appearance');
+  for(const zoom of [1,1.25,1.5]){
+   await settings.evaluate(value=>{const chrome=(window as unknown as {chrome:{settingsPrivate:{setDefaultZoom:(zoom:number)=>void}}}).chrome;chrome.settingsPrivate.setDefaultZoom(value);},zoom);
+   await expect.poll(()=>page.evaluate(()=>devicePixelRatio)).toBeCloseTo(baseline.dpr*zoom,2);
+   const width=await page.evaluate(()=>innerWidth);expect(Math.abs(width-baseline.width/zoom)).toBeLessThan(2);
+   const main=(await page.locator('.app-main').boundingBox())!,brand=(await page.locator('.brand').boundingBox())!;
+   expect(Math.abs(main.x-brand.x)).toBeLessThan(2);
+   const launcher=page.locator('.assistant-launcher'),box=(await launcher.boundingBox())!;
+   expect(box.x).toBeGreaterThanOrEqual(16);expect(box.x+box.width).toBeLessThanOrEqual(width-15);
+   await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+   await launcher.focus();await page.keyboard.press('Enter');
+   await expect(page.getByRole('dialog').locator('.composer-send')).toBeInViewport();
+   await page.getByRole('button',{name:'Close conversation'}).click();
+   await expect(launcher).toBeFocused();
+  }
+ }finally{await context.close();}
 });
 
 test('Today tasks reuse one conversation and root pages adapt to landscape and enlarged text',async({page})=>{
@@ -110,9 +207,9 @@ test('Today tasks reuse one conversation and root pages adapt to landscape and e
  await dialog.getByRole('textbox').fill('');await dialog.getByRole('button',{name:'Close conversation'}).click();
  for(const language of ['en','zh']){
  for(const scale of [100,150]){
-  await page.locator('[data-guide="me"]').click();await page.getByRole('slider').focus();await page.keyboard.press(scale===150?'End':'Home');
-  await expect(page.getByRole('slider')).toHaveValue(String(scale));await page.locator('.language-shortcut').click();await page.getByRole('menuitemradio',{name:language==='en'?'English':'中文'}).click();
-  for(const width of [390,430,768,1280,1600,1920]){
+  await page.locator('[data-guide="me"]').click();await page.locator('.settings-shortcut').click();await page.locator('#text-size').focus();await page.keyboard.press(scale===150?'End':'Home');
+  await expect(page.locator('#text-size')).toHaveValue(String(scale));await page.locator('.language-shortcut').click();await page.getByRole('menuitemradio',{name:language==='en'?'English':'中文'}).click();
+  for(const width of [390,430,768,1024,1280,1600,1920]){
    await page.setViewportSize({width,height:950});
    for(const tab of ['today','medicines','records','me']){
     await page.locator(`[data-guide="${tab}"]`).click();
@@ -122,7 +219,7 @@ test('Today tasks reuse one conversation and root pages adapt to landscape and e
     const grid=page.locator(tab==='today'?'.today-panels':'.ui-screen--columns');
     await expect(grid).toBeVisible();
     const layout=await grid.evaluate(el=>({columns:getComputedStyle(el).gridTemplateColumns.split(' ').length,mainWidth:document.querySelector('.app-main')!.getBoundingClientRect().width,rem:parseFloat(getComputedStyle(document.documentElement).fontSize)}));
-    expect(layout.columns).toBe(layout.mainWidth>=58*layout.rem?2:1);
+    expect(layout.columns).toBe(tab==='today'?1:layout.mainWidth>=58*layout.rem?2:1);
     const peers=tab==='today'?grid.locator(':scope > *'):tab==='medicines'?grid.locator(':scope > .medicines-courses, :scope > .entry-group'):grid.locator(':scope > .entry-group');
     const left=(await peers.nth(0).boundingBox())!,right=(await peers.nth(1).boundingBox())!;
     if(layout.columns===2){expect(Math.abs(left.y-right.y)).toBeLessThan(2);expect(right.x).toBeGreaterThan(left.x+left.width);}

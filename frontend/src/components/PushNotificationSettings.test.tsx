@@ -36,11 +36,12 @@ it('failed test never claims acceptance, and a different device is revoked by it
  fireEvent.click(screen.getByRole('button',{name:'Send test notification'}));
  await screen.findByRole('alert');
  expect(screen.queryByText('The push service accepted the test. Check your device; receipt has not been verified.')).toBeNull();
+ fireEvent.click(screen.getByText('Advanced information and device management'));
  fireEvent.click(screen.getByRole('button',{name:'Disable device 2'}));
  await waitFor(()=>expect(api.revokePushSubscription).toHaveBeenCalledWith('DEMO-other'));
 });
 it('disables only the current device and can explicitly enable again',async()=>{
- render(<PushNotificationSettings/>);await screen.findByRole('button',{name:'Disable device 1'});
+ render(<PushNotificationSettings/>);fireEvent.click(screen.getByText('Advanced information and device management'));await screen.findByRole('button',{name:'Disable device 1'});
  fireEvent.click(screen.getByRole('button',{name:'Turn off this device'}));
  await waitFor(()=>expect(disableWebPush).toHaveBeenCalledWith());
  await screen.findByText('This device subscription is off. Browser permission is unchanged.');

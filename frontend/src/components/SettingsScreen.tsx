@@ -18,17 +18,17 @@ export function SettingsScreen({section='all'}:{section?:'all'|'language'|'acces
  useEffect(()=>{let live=true;if(api.speechCapabilities)void api.speechCapabilities().then(cap=>{if(live)setCloudAllowed(cap.cloud_tts_allowed);}).catch(()=>{if(live)setCloudAllowed(false);});return()=>{live=false;};},[]);
 
  const titles:Record<'all'|'language'|'accessibility'|'reminders',string>={
-  all:'Settings',language:'Language and speech',accessibility:'Accessibility',reminders:'Medication reminders',
+  all:'Usage preferences',language:'Usage preferences',accessibility:'Accessibility',reminders:'Medication reminders and notifications',
  };
  const leads:Record<'all'|'language'|'accessibility'|'reminders',string>={
-  all:'Everything you can change about how the app works for you.',
-  language:'Which language the app uses, and how it speaks to you.',
+  all:'Choose your language, voice and text size.',
+  language:'Choose your language, voice and text size.',
   accessibility:'Make the app easier to read and to tap.',
   reminders:'When the app prompts you about a dose, and how that reaches you.',
  };
  const showLanguage=section==='all'||section==='language';
- const showAccessibility=section==='all'||section==='accessibility';
- const showReminders=section==='all'||section==='reminders';
+ const showAccessibility=section==='all'||section==='language'||section==='accessibility';
+ const showReminders=section==='reminders';
 
  return <Screen title={titles[section]} lead={leads[section]}>
   {showLanguage?<>

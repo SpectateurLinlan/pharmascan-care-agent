@@ -10,7 +10,7 @@ const steps = [
   {target:'.composer-row', title:'Speak, review, then send', body:'Tap the microphone, allow speech recognition, then review or edit the words. Send is on the right. You can always type instead. Your browser may use an online speech service.'},
   {target:'[data-guide="records"]', title:'Record and review your reports', body:'After choosing I took it, confirm the separate summary to save your report. Cancel saves nothing. Records contains your reports and summaries; a report does not prove ingestion. Reminders are prompts, not changes to your plan.'},
   {target:'[data-guide="me"]', title:'Choose your voice settings', body:'Automatic reading is off by default. Turn on Read replies automatically in Language and speech if you want it. You can also use Play response and Stop audio. Browser voice is the default; cloud voice requires an explicit choice.'},
-  {target:'[data-guide="me"]', title:'Your account and settings', body:'Me contains your account status and settings. Link a guest account using email to access it on another device. Settings contains language, speech, text size and reminder options. You can reopen this guide from Me → Help / User Guide.'},
+  {target:'[data-guide="me"]', title:'Your account and settings', body:'Me contains your account and settings categories. Open Medication reminders for reminders and device notifications, or Usage preferences for language, speech and text size. You can reopen this guide from Me → Help / User Guide.'},
 ] as const;
 
 export function OnboardingGuide({owner,replay=false,onClose}: {owner:string;replay?:boolean;onClose:()=>void}) {

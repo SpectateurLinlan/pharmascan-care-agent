@@ -70,10 +70,12 @@ export function PushNotificationSettings(){
   {!pushSupported()?<p>{t('Web Push is unsupported on this device.')}</p>:null}
   {config?.available===false?<p>{t('Web Push is not configured on this server.')}</p>:null}
   {typeof Notification!=='undefined'&&Notification.permission==='denied'?<p>{t('Notifications are blocked. Follow the device guide to change system settings.')}</p>:null}
+  <details><summary>{t('Advanced information and device management')}</summary>
   <h4>{t('Account devices')}</h4>
   {loaded?devices.length?<ul className="push-devices">{devices.map((row,index)=><li key={row.id}>{t('Device')} {index+1}{row.id===current?.id?` · ${t('This device')}`:''} · {t(row.enabled?'Enabled':'Off')}
    {row.enabled?<button disabled={busy} onClick={()=>void run(()=>row.id===current?.id?disableWebPush():api.revokePushSubscription(row.id),'Device subscription disabled.')}>{t('Disable device')} {index+1}</button>:null}</li>)}</ul>:<p>{t('No saved devices.')}</p>:<p role="status">{t('Device status has not been checked. Refresh to retry.')}</p>}
   <button disabled={busy||!loaded} onClick={()=>void run(()=>disableWebPush(true),'Push subscriptions disabled for this account.')}>{t('Disable Web Push on all devices')}</button>
+  </details>
   <NotificationGuide/>
   {busy?<p role="status">{t('Updating notification settings…')}</p>:null}
   {notice?<p role="status">{t(notice)}</p>:null}{error?<ErrorNotice error={error}/>:null}

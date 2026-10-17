@@ -5,7 +5,6 @@ import {api,type AgentUsage} from '../api/client';
 import {Icon} from './Icon';
 import {useEffect,useState} from 'react';
 import {accountAuth,type Account,type AccountPort} from '../api/auth';
-import {TextSizeSlider} from './TextSizeSlider';
 import {useLanguage} from '../language';
 import {Card} from './primitives';
 import {Row, RowGroup, Screen} from '../ui/primitives';
@@ -36,13 +35,13 @@ export function PatientHub({onOpen,onGuide,auth=accountAuth}:{onOpen:(page:MeDes
    <Row icon="user" title="Caregiver contacts" hint="Private contact details" onClick={()=>onOpen('caregivers')}/>
    <Row icon="bell" title="Medication reminders" hint="In-app prompts and notifications" onClick={()=>onOpen('reminder-settings')}/>
   </RowGroup>
-  <RowGroup title="Make it comfortable">
-   <Row icon="languages" title="Language and speech" hint="English / 中文" onClick={()=>onOpen('language-settings')}/>
+  <RowGroup title="Usage preferences">
+   <Row icon="languages" title="Language, speech and text size" onClick={()=>onOpen('language-settings')}/>
   </RowGroup>
-  <section className="card"><h2>{t('Text size')}</h2><TextSizeSlider/></section>
-  {/* A menu of equal destinations, so it takes the full width and spreads. */}
-  <RowGroup title="About the app">
+  <RowGroup title="Privacy and data">
    <Row icon="shield" title="Privacy and data" hint="Your records and conversation privacy" onClick={()=>onOpen('privacy')}/>
+  </RowGroup>
+  <RowGroup title="App information">
    {onGuide?<Row icon="info" title="Help / User Guide" onClick={onGuide}/>:null}
    <Row icon="file" title="About MediThread" onClick={()=>onOpen('about')}/>
    <Row icon="message" title="Feedback" onClick={()=>onOpen('feedback')}/>

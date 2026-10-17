@@ -28,6 +28,7 @@
 /* Spacing is explicit: containers are flex columns with a token gap, so no rule
    depends on a browser default margin and text size scaling moves everything. */
 .companion {
+  --page-gutter: var(--s-4);
   display: flex;
   flex-direction: column;
   gap: var(--s-4);
@@ -37,7 +38,7 @@
      composer, so nothing is ever hidden behind a fixed element. */
   padding:
     calc(var(--app-header-height, 4.5rem) + var(--s-5))
-    var(--s-4)
+    var(--page-gutter)
     calc(var(--bottom-nav-height, 4.5rem) + var(--dock-height) + var(--s-5));
 }
 
@@ -79,7 +80,7 @@ details > * + * {
   transform: translateX(-50%);
   width: min(100%, var(--content-max));
   min-height: 4.5rem;
-  padding: var(--s-3) var(--s-4);
+  padding: var(--s-3) var(--page-gutter);
   background: var(--surface);
   border-bottom: 1px solid var(--line);
   z-index: 20;
@@ -143,9 +144,8 @@ details > * + * {
   font-size: 1.75rem;
   line-height: 1;
   color: var(--ink);
-  /* The icon itself is inset inside its 48px target. Align its visible stroke
-     to the same content edge as the cards while preserving the full hit area. */
-  margin-inline-start: calc(-1 * var(--s-3));
+  /* Use the shared content edge for the complete keyboard/touch target. */
+  margin-inline-start: 0;
 }
 
 .language-menu {
@@ -1856,8 +1856,9 @@ button.danger:hover:not(:disabled) {
   }
 
   .companion {
-    padding-left: var(--s-8);
-    padding-right: var(--s-8);
+    --page-gutter: var(--s-8);
+    padding-left: var(--page-gutter);
+    padding-right: var(--page-gutter);
   }
 
   .composer-row {
@@ -1988,7 +1989,7 @@ button.danger:hover:not(:disabled) {
     transform: none;
     width: auto;
     /* Keep the brand and the shortcuts on the content column, not the viewport. */
-    padding-inline: max(var(--s-8), calc((100% - var(--content-max)) / 2));
+    padding-inline: max(var(--s-8), calc((100% - var(--rail-width) - var(--content-max)) / 2));
   }
 
   .patient-nav {
@@ -2072,6 +2073,7 @@ button.danger:hover:not(:disabled) {
 
 @media (max-width: 340px) {
   .companion {
+    --page-gutter: var(--s-3);
     padding-left: var(--s-3);
     padding-right: var(--s-3);
   }
@@ -2370,21 +2372,34 @@ button.danger:disabled {
 .conversation-panel .transcript { margin: 0; }
 .conversation-panel .turn p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .today-assistant .photo-attachment { position: relative; left: auto; right: auto; bottom: auto; width: 100%; max-width: none; transform: none; margin: 0; }
+/* Portaled to body: fixed to the viewport, independent of content containers.
+   Measured bottom navigation already includes its safe-area padding. */
+.today-panels { display: flex; flex-direction: column; gap: var(--s-5); }
 .assistant-launcher {
   position: fixed;
-  right: var(--s-4);
-  bottom: calc(var(--bottom-nav-height, 4.5rem) + var(--s-3) + env(safe-area-inset-bottom));
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(var(--bottom-nav-height, 4.5rem) + 16px);
   z-index: 30;
-  width: 64px;
-  height: 64px;
-  padding: var(--s-1);
-  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 56px;
+  height: 56px;
+  min-height: 56px;
+  padding: 4px;
+  border-radius: 999px;
   border: 1px solid var(--line-strong);
   background: var(--surface);
+  color: var(--brand);
 }
-.assistant-launcher img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.assistant-launcher img { display: block; flex: 0 0 48px; width: 48px; height: 48px; object-fit: contain; }
+.assistant-launcher span { display: none; }
+.assistant-launcher:hover { background: var(--surface-alt); }
+.assistant-launcher:focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; }
 @media (min-width: 1024px), (min-width: 700px) and (orientation: landscape) and (max-height: 520px) {
-  .assistant-launcher { bottom: var(--s-5); }
+  .assistant-launcher { right: max(24px, env(safe-area-inset-right)); bottom: max(24px, env(safe-area-inset-bottom)); width: auto; min-width: 120px; height: 60px; padding: 5px 12px 5px 5px; }
+  .assistant-launcher span { display: inline; font-size: var(--fs-caption); font-weight: var(--fw-strong); }
 }
 @media (max-width: 1023px) {
   .conversation-backdrop { padding: 0; align-items: stretch; }
