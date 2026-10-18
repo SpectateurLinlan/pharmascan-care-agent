@@ -95,6 +95,7 @@ class PatientMedicationDTO(DTO):
 
 
 class RegimenDraftInput(DTO):
+    patient_edited: bool = False
     """Fields captured during enrollment; anything missing stays pending."""
 
     medication_name: str
@@ -115,6 +116,7 @@ class RegimenDraftInput(DTO):
 
 
 class RegimenVersionDTO(DTO):
+    patient_edited: bool = False
     evidence_task_id: UUID | None = None
     course_start_date: date | None = None
     course_end_date: date | None = None
@@ -201,6 +203,7 @@ class DoseHistoryEntryDTO(DTO):
 
 
 class AgentSessionDTO(DTO):
+    conversation_id: UUID | None = None
     context: AgentContext = Field(default_factory=AgentContext)
     id: UUID
     patient_id: UUID

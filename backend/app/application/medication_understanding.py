@@ -47,8 +47,9 @@ class MedicationUnderstandingService:
             found = exact or [row for row in rows if needle in row.display_name.casefold()]
             if len(found) == 1:
                 medication = found[0]
-            elif len(found) > 1:
+            elif len(found) > 1 and question != "general_use":
                 return MedicationUnderstanding(
+                    clarification_required=True,
                     question=question,
                     medication_name=medication_name,
                     patient_safe_summary="有多项用药符合这个名称，请选择具体药物、规格和剂型。"
@@ -111,6 +112,8 @@ class MedicationUnderstandingService:
                 original_line=printed.line if printed else None,
             )
         result = MedicationUnderstanding(
+            medication_id=medication.id if current else None,
+            regimen_id=regimen.id if current else None,
             question=question,
             medication_name=name,
             personal_instructions=instructions if question == "personal_instructions" else None,
@@ -130,6 +133,7 @@ class MedicationUnderstandingService:
         basis = source.dose_basis if reviewed else None
         product = candidate.product if candidate else None
         query = KnowledgeProduct(
+            scope="ingredient" if question == "general_use" else "product",
             name=product.name if product else name,
             rxcui=product.rxcui if product else None,
             ingredients=[row.name for row in product.ingredients] if product else [],
@@ -154,27 +158,40 @@ class MedicationUnderstandingService:
         )
         knowledge = self._provider.lookup(query)
         if language == "zh":
-            summary = "记录尚未确认医生为您开药的具体原因；一般用途不能证明您的诊断或个人处方原因。 "
+            summary = f"{name}："
             if knowledge.status == "matched":
                 summary += knowledge.use_statement_zh or "该标签暂无经核对的中文用途译文，请核对以下英文原文。"
                 summary += f" 美国标签原文（部分用途）：{knowledge.use_statement}"
             else:
-                summary += "目前无法可靠匹配美国标签或读取资料，请补充成分、剂型、规格及原始标签，或向药剂师核实。"
-            summary += (
-                " 美国标签不代表FDA已核准或新加坡注册，也不是您的服药指示；这里只摘录部分信息，完整注意事项请查看来源。"
-            )
+                summary += (
+                    "目前无法可靠匹配或读取标签来确认一般用途，可能是成分名称不匹配、标签用途冲突或服务不可用；"
+                    "请核对原始标签或向药剂师查询。"
+                )
+            summary += " 这是一般标签资料，不说明医生为您开药的个人原因，也不是个人剂量指示或新加坡批准适应证。"
         else:
-            summary = "Your record does not establish why your prescriber chose this medicine for you. "
+            summary = f"{name}: "
             if knowledge.status == "matched":
                 summary += f"One use stated in the matched US label: {knowledge.use_statement} "
             else:
-                summary += "I could not reliably match or retrieve a US label. Please confirm the ingredients, form, "
-                summary += "strength and original label with your pharmacist. "
-            summary += "General uses do not establish your diagnosis or personal indication. US label information "
-            summary += "does not establish FDA approval, Singapore registration or your personal dosing instructions. "
-            summary += "This is a partial excerpt; see the sources for full warnings."
+                summary += (
+                    "I could not reliably confirm a general use from the source: the i"
+                    "ngredient may not match, label uses may conflict, or the service "
+                    "may be unavailable. Check the original label with your pharmacist"
+                    ". "
+                )
+            summary += (
+                "General label uses do not establish your personal indication, dos"
+                "ing instructions, FDA approval or Singapore registration. This is"
+                " a partial excerpt; see the source."
+            )
         for citation in knowledge.sources:
             summary += f"\nopenFDA / SPL ({citation.effective_time}, v{citation.version}): {citation.url}"
+        if question == "personal_reason":
+            summary = (
+                "记录尚未确认医生为您开药的个人原因。 "
+                if language == "zh"
+                else "Your record does not establish why your prescriber chose this medicine for you. "
+            ) + summary
         return result.model_copy(update={"general_knowledge": knowledge, "patient_safe_summary": summary})
 
     @staticmethod

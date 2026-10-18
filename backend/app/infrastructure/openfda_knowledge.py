@@ -63,6 +63,19 @@ def matches(product: KnowledgeProduct, label: Label) -> bool:
     Missing form/route/release evidence deliberately prevents a reliable product match.
     """
     facts = label.openfda
+    if product.scope == "ingredient":
+        # A harmonized exact generic/ingredient name is evidence for an
+        # ingredient-level excerpt, never for this patient's physical product.
+        generic = {normalized(value) for value in facts.generic_name}
+        actual = {normalized(value) for value in facts.substance_name}
+        expected = {normalized(value) for value in product.ingredients}
+        name = normalized(product.name)
+        identity = bool(expected and expected == actual) or (name in generic and len(actual) == 1)
+        return (
+            identity
+            and bool(facts.product_type)
+            and set(facts.product_type) <= {"HUMAN PRESCRIPTION DRUG", "HUMAN OTC DRUG"}
+        )
     if product.rxcui and product.rxcui not in facts.rxcui:
         return False
     if normalized(product.name) not in {normalized(value) for value in facts.generic_name + facts.brand_name}:
@@ -113,10 +126,13 @@ def use_statements(label: Label) -> list[str]:
     """Recognize complete directly printed statements; never infer an indication."""
     text = plain(" ".join(label.indications_and_usage))
     statements = []
-    for name in sorted(label.openfda.generic_name + label.openfda.brand_name, key=len, reverse=True):
+    names = label.openfda.generic_name + label.openfda.brand_name
+    if len(label.openfda.substance_name) == 1:
+        names += label.openfda.substance_name
+    for name in sorted(set(names), key=len, reverse=True):
         subject = (
             rf"\b{re.escape(name)}(?: (?:extended[- ]release |delayed[- ]release )?"
-            r"(?:tablets?|capsules?|oral solution|oral suspension))? (?:is|are) "
+            r"(?:tablets?|capsules?|oral solution|oral suspension))?(?:,? USP)? (?:is|are) "
         )
         if re.search(subject + r"not indicated", text, re.I):
             return []
@@ -144,6 +160,26 @@ def statement_key(text: str, label: Label) -> str:
     return re.sub(r"\b(is|are)\b", "is", value)
 
 
+def ingredient_use_key(text: str, label: Label) -> str:
+    """Compare only a directly stated indication, not population/form equivalence.
+
+    Returned answers still quote the source's full qualifying sentence.
+    """
+    match = re.search(r"\bindicated for (?:the )?treatment of ([^.,;]+)", text, re.I)
+    if match:
+        target = re.split(
+            r"\s+(?:in (?:adults|children|patients|pediatric)|alone|in combination)\b", match[1], flags=re.I
+        )[0]
+        return "treatment:" + normalized(target)
+    if re.search(
+        r"indicated as an adjunct to diet and exercise to improve glycemic control .+type 2 diabetes mellitus",
+        text,
+        re.I,
+    ):
+        return "adjunct glycemic control in type 2 diabetes mellitus"
+    return statement_key(text, label)
+
+
 def chinese_use(text: str) -> str | None:
     """Small controlled translation surface; unsupported sentences stay in English."""
     if re.fullmatch(
@@ -157,6 +193,16 @@ def chinese_use(text: str) -> str | None:
         re.I,
     ):
         return "该美国标签列出的用途是配合饮食和运动，帮助成人2型糖尿病患者控制血糖。"
+    if re.search(
+        r"indicated as an adjunct to diet and exercise to improve glycemic control .+type 2 diabetes mellitus",
+        text,
+        re.I,
+    ) and not re.search(r"\bnot\b", text, re.I):
+        return "所引美国标签列出的用途是配合饮食和运动，帮助2型糖尿病患者控制血糖；具体适用年龄请核对标签原文。"
+    if re.search(r"\bindicated for the treatment of hypertension\b", text, re.I) and not re.search(
+        r"\bnot\b", text, re.I
+    ):
+        return "所引美国标签列出的一个用途是治疗高血压、降低血压。这里摘录一项用途，具体适用人群请核对标签原文。"
     return None
 
 
@@ -165,7 +211,7 @@ class OpenFDAKnowledge:
         self._client, self._clock, self._monotonic = client, clock, monotonic
 
     def lookup(self, product: KnowledgeProduct) -> KnowledgeResult:
-        if not product.form or not product.route or product.release == "unknown":
+        if product.scope == "product" and (not product.form or not product.route or product.release == "unknown"):
             return KnowledgeResult(status="no_reliable_match", reason="missing_form_route_or_release")
         name = product.ingredients[0] if product.ingredients else product.name
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 ()/+\-]{0,159}", name):
@@ -220,8 +266,17 @@ class OpenFDAKnowledge:
                 return KnowledgeResult(
                     status="no_reliable_match", reason="identity_or_use_not_supported", candidate_count=len(rows)
                 )
-            fingerprints = {frozenset(statement_key(value, row) for value in use_statements(row)) for row in selected}
-            if len(fingerprints) != 1:
+            keys = [
+                {
+                    ingredient_use_key(value, row) if product.scope == "ingredient" else statement_key(value, row)
+                    for value in use_statements(row)
+                }
+                for row in selected
+            ]
+            common = set.intersection(*keys)
+            if (product.scope == "ingredient" and not common) or (
+                product.scope == "product" and len({frozenset(key) for key in keys}) != 1
+            ):
                 return KnowledgeResult(
                     status="no_reliable_match", reason="conflicting_label_uses", candidate_count=len(rows)
                 )
@@ -252,11 +307,18 @@ class OpenFDAKnowledge:
                         sections=sections,
                     )
                 )
-            statement = use_statement(selected[0])
+            statement = next(
+                value
+                for value in use_statements(selected[0])
+                if product.scope == "product" or ingredient_use_key(value, selected[0]) in common
+            )
             translated = chinese_use(statement)
             return KnowledgeResult(
                 status="matched",
-                reason="exact_product_family_and_consistent_use",
+                reason="exact_ingredient_and_consistent_label_use"
+                if product.scope == "ingredient"
+                else "exact_product_family_and_consistent_use",
+                match_scope="US_label_ingredient" if product.scope == "ingredient" else "US_label_product_family",
                 candidate_count=len(rows),
                 sources=sources,
                 use_statement=statement,

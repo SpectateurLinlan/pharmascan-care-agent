@@ -3,6 +3,7 @@
 from uuid import UUID
 
 from ..contracts.agent_context import AgentContext, CareClarification, RecentTurn
+from ..contracts.context_bounds import bounded_context
 from ..contracts.enums import ToolName, ToolStatus
 from ..contracts.privacy import bounded_text as bounded_text
 from .tools import ToolResult
@@ -34,6 +35,8 @@ def record_context(
             rows = result.payload.get("medications", [])
         if result.tool_name == ToolName.GET_DOSE_STATUS:
             rows = [result.payload]
+        if result.payload.get("action") == "get_medication_understanding":
+            rows = [result.payload]
         if len(rows) != 1:
             if result.tool_name == ToolName.CHECK_DUE_DOSE:
                 values.update(referenced_medication_id=None, referenced_regimen_id=None, referenced_occurrence_id=None)
@@ -48,4 +51,4 @@ def record_context(
     values["conversation_summary"] = (
         f"Last verified task: {intent}. References are tool-derived; self-report needs explicit confirmation."
     )
-    return context.model_copy(update=values)
+    return bounded_context(context.model_copy(update=values))

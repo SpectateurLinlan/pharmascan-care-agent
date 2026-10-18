@@ -6,6 +6,7 @@ declares its parameters as a frozen DTO; nothing accepts a raw dict.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, Literal
 from uuid import UUID
 
@@ -59,6 +60,8 @@ class ConfirmRegimenRequest(ToolRequest):
 class CheckDueDoseRequest(ToolRequest):
     window: Literal["due", "tonight", "today"] = "due"
     regimen_id: UUID | None = None
+    day_offset: int = Field(default=0, ge=-30, le=0)
+    target_date: date | None = None
 
 
 class RecordSelfReportRequest(ToolRequest):
@@ -74,8 +77,12 @@ class ListActiveMedicationsRequest(ToolRequest):
 
 
 class MedicationHistoryRequest(ToolRequest):
-    regimen_id: UUID
-    days: int = 7
+    medication_name: str | None = Field(default=None, max_length=160)
+    regimen_id: UUID | None = None
+    medication_id: UUID | None = None
+    days: int = Field(default=7, ge=1, le=30)
+    target_date: date | None = None
+    day_offset: int = Field(default=0, ge=-30, le=0)
 
 
 class GetDoseStatusRequest(ToolRequest):
@@ -90,6 +97,7 @@ class GetDoseStatusRequest(ToolRequest):
     medication_id: UUID | None = None
     occurrence_id: UUID | None = None
     day_offset: int = Field(default=0, ge=-30, le=0)
+    target_date: date | None = None
 
 
 class EnrollmentResultPayload(ToolDTO):

@@ -302,6 +302,7 @@ def _patient_medication(row: dict[str, Any]) -> PatientMedicationDTO:
 
 def _regimen(row: dict[str, Any]) -> RegimenVersionDTO:
     return RegimenVersionDTO(
+        patient_edited=bool(row.get("patient_edited", False)),
         id=_as_uuid(row["id"]),
         patient_id=_as_uuid(row["patient_id"]),
         patient_medication_id=_as_uuid(row["patient_medication_id"]),
@@ -641,7 +642,7 @@ class PostgresRegimenVersionRepository:
         "id, patient_id, patient_medication_id, source_id, version_no, state, "
         "dose_amount, dose_unit, frequency_rule, is_prn, route, food_instruction, "
         "effective_from, effective_to, supersedes_id, confirmation_challenge_id, "
-        "course_start_date, course_end_date, created_at, demo_only"
+        "course_start_date, course_end_date, created_at, patient_edited, demo_only"
     )
 
     def __init__(self, session: SessionFactory) -> None:
@@ -700,9 +701,9 @@ class PostgresRegimenVersionRepository:
                      medication_name_field_id, quantity_field_id, unit_field_id,
                      frequency_field_id, prn_field_id, source_reviewed_at,
                      effective_from, effective_to, supersedes_id, confirmation_challenge_id,
-                     course_start_date, course_end_date, demo_only)
+                     course_start_date, course_end_date, patient_edited, demo_only)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, true)
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, true)
                 """,
                 (
                     regimen.id,
@@ -729,6 +730,7 @@ class PostgresRegimenVersionRepository:
                     regimen.confirmation_challenge_id,
                     regimen.course_start_date,
                     regimen.course_end_date,
+                    regimen.patient_edited,
                 ),
             )
 

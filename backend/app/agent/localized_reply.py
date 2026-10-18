@@ -17,6 +17,10 @@ def chinese_reply(intent: AgentIntent, results: list[ToolResult]) -> str:
         return "无法完成此操作。请查看今日药物和记录，或先完成药物核对与激活。没有保存新的用药自述。"
     if last.tool_name == ToolName.CHECK_DUE_DOSE:
         return schedule_reply(last, "zh")
+    if last.tool_name == ToolName.GET_DOSE_STATUS and intent != AgentIntent.DOSE_SELF_REPORT:
+        from .status_reply import status_reply
+
+        return status_reply(last, "zh")
     if intent == AgentIntent.DOSE_SELF_REPORT and last.tool_name != ToolName.RECORD_SELF_REPORT:
         state = ""
         if last.tool_name == ToolName.GET_DOSE_STATUS:
@@ -38,5 +42,11 @@ def chinese_reply(intent: AgentIntent, results: list[ToolResult]) -> str:
         )
         return f"已保存提醒，时间为 {time}。应用打开或重新打开时可查看。用药计划没有改变。"
     if last.tool_name == ToolName.GET_MEDICATION_HISTORY:
-        return "请查看您的用药记录。没有自述记录不代表漏服。"
+        from .patient_read_reply import history_reply
+
+        return history_reply([last], "zh")
+    if last.tool_name == ToolName.LIST_ACTIVE_MEDICATIONS:
+        from .patient_read_reply import medication_list_reply
+
+        return medication_list_reply(last, "zh")
     return "请在今日页面查看药物，或在我的药物中完成核对与激活。"

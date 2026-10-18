@@ -8,6 +8,12 @@ def schedule_reply(result: ToolResult, language: str) -> str:
     window = result.payload.get("window", "due")
     rows = result.payload.get("schedule" if window in {"tonight", "today"} else "due_doses", [])
     timezone = result.payload.get("local_timezone", "Asia/Singapore")
+    day = result.payload.get("local_date")
+    date_label = ("昨天" if chinese else "yesterday") if result.payload.get("relative_day") == -1 else day
+    if date_label and result.payload.get("relative_day", 0) != 0:
+        window_label = str(date_label)
+    else:
+        window_label = ("今晚" if window == "tonight" else "今天") if chinese else window
     if not rows:
         if window == "due":
             return (
@@ -16,11 +22,11 @@ def schedule_reply(result: ToolResult, language: str) -> str:
                 else "No scheduled dose is due right now. "
                 "Later doses and as-needed medicines are separate from this result."
             )
-        label = "今晚" if window == "tonight" else "今天"
+        label = window_label
         return (
             f"已核对的计划中，{label}没有固定时间的用药安排（{timezone}）。按需用药不列入固定安排。"
             if chinese
-            else f"No fixed dose is scheduled in your reviewed active record {window} "
+            else f"No fixed dose is scheduled in the saved version for {window_label} "
             f"({timezone}). As-needed medicines have no fixed schedule."
         )
     descriptions = []
@@ -43,17 +49,13 @@ def schedule_reply(result: ToolResult, language: str) -> str:
             else f"{row['medication_name']}: {quantity} {unit} at {row['local_time']} ({state})"
         )
     if chinese:
-        heading = (
-            "当前已到期的安排"
-            if window == "due"
-            else "您已核对的" + ("今晚" if window == "tonight" else "今天") + "用药计划"
-        )
+        heading = "当前已到期的安排" if window == "due" else "您已核对的" + window_label + "用药计划"
         return (
             f"{heading}（{timezone}）："
             + "；".join(descriptions)
             + "。仅显示已有计划，不是新的用药建议；没有自述记录不等于漏服。"
         )
-    heading = "Scheduled doses due now" if window == "due" else "Your reviewed schedule " + window
+    heading = "Scheduled doses due now" if window == "due" else "Your reviewed schedule " + window_label
     return (
         f"{heading} ({timezone}): "
         + "; ".join(descriptions)

@@ -275,6 +275,7 @@ def execute_care_tool(
             "barriers": {"__all__": {"patient_id"}},
             "follow_ups": {"__all__": {"patient_id", "history"}},
             "summary": {"observations": {"__all__": {"patient_id"}}},
+            "observations": {"__all__": {"patient_id"}},
         },
     )
     summary_data = data["summary"]
@@ -303,12 +304,44 @@ def execute_care_tool(
         if language == "zh" and task["source"] == "stock_estimate" and title == "Review medication supply":
             title = "核对药物余量与补药"
         label = f"{medication}: {title}" if medication else title
-        summary += f" {'自述跟进' if language == 'zh' else 'Reported follow-up'}: “{label}” ({task['due_at']})."
+        due = task["due_at"]
+        # Date-only values remain dates; aware instants display in the supplied patient zone.
+        if "T" in due:
+            moment = datetime.fromisoformat(due.replace("Z", "+00:00"))
+            if moment.tzinfo is not None:
+                due = moment.astimezone(ZoneInfo(timezone)).strftime("%Y-%m-%d %H:%M") + f" ({timezone})"
+        summary += f" {'自述跟进' if language == 'zh' else 'Reported follow-up'}: “{label}” ({due})."
     for barrier in data["barriers"][-2:]:
         summary += f" {'自述困难' if language == 'zh' else 'Reported difficulty'}: “{barrier['description'][:160]}”."
     if name != "get_unresolved_follow_ups":
-        for note in summary_data["observations"][:2]:
-            summary += f" {'自述观察' if language == 'zh' else 'Reported observation'}: “{note['description'][:160]}”."
+        notes = data["observations"]
+        summary += (
+            f"\n符合本次范围的健康观察共 {len(notes)} 条。"
+            if language == "zh"
+            else f"\nHealth observations in this query: {len(notes)}."
+        )
+        for note in notes[:10]:
+            moment = datetime.fromisoformat(note["occurred_at"].replace("Z", "+00:00"))
+            when = moment.astimezone(ZoneInfo(timezone)).strftime("%Y-%m-%d %H:%M")
+            value = note.get("value")
+            measurement = (
+                ""
+                if value is None
+                else f" {value:g}"
+                + (f"/{note['secondary_value']:g}" if note.get("secondary_value") is not None else "")
+                + f" {note.get('unit') or ''}"
+            )
+            summary += f"\n- {when} ({timezone}){measurement}: “{note['description'][:200]}”"
+            if len(note["description"]) > 200:
+                summary += (
+                    "（描述节选，完整内容见健康记录）" if language == "zh" else " (excerpt; full text in Health notes)"
+                )
+        if len(notes) > 10:
+            summary += (
+                "\n仅展开最近10条，其余请查看全部健康记录。"
+                if language == "zh"
+                else "\nShowing the latest 10; view all remaining entries in Health notes."
+            )
     if name in ("get_health_observations", "get_longitudinal_summary", "prepare_medication_review"):
         summary += _describe_trends(data["trends"], language, timezone)
     if name == "prepare_medication_review":
@@ -325,7 +358,16 @@ def execute_care_tool(
     }.get(name, {"barriers", "inventory", "follow_ups", "questions", "trends"})
     bounded = {key: value[:5] if isinstance(value, list) else value for key, value in data.items() if key in sections}
     if name in ("get_health_observations", "get_longitudinal_summary", "prepare_medication_review"):
-        bounded["observations"] = summary_data["observations"][:4]
+        bounded["observation_count"] = len(data["observations"])
+        bounded["observations"] = [
+            {
+                **row,
+                "description": row["description"][:200],
+                "notes": None,
+                "description_truncated": len(row["description"]) > 200,
+            }
+            for row in data["observations"][:10]
+        ]
     # Trends are bounded to the latest six actual measurements in model context.
     if "trends" in bounded:
         bounded["trends"] = [{**row, "points": row["points"][-6:]} for row in bounded["trends"]]

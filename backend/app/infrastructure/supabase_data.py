@@ -65,6 +65,12 @@ class SupabaseDataClient:
                 code = response.json().get("code", "unknown")
             except (ValueError, AttributeError):
                 code = "malformed"
+            if code == "P7504":
+                from ..domain.errors import NotFoundError
+
+                raise NotFoundError("Draft not found")
+            if code == "P7502" or code == "23503":
+                raise ValidationError("This draft has protected or shared records and cannot be deleted.")
             if code == "P7501":
                 raise RegimenOverlapError()
             if response.status_code >= 500 or response.status_code == 429:

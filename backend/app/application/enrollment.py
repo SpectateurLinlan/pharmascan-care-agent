@@ -295,6 +295,14 @@ class MedicationEnrollmentService:
         missing = policy.missing_required_instructions(provided, is_prn=draft.is_prn)
         state = RegimenState.PENDING_CLARIFICATION if missing else RegimenState.DRAFT
         regimen = RegimenVersionDTO(
+            patient_edited=draft.patient_edited
+            or (
+                existing_medication_id is not None
+                and any(
+                    r.state in {RegimenState.ACTIVE, RegimenState.ENDED, RegimenState.SUPERSEDED}
+                    for r in self._regimens.list_for_medication(patient_id, existing_medication_id)
+                )
+            ),
             evidence_task_id=evidence_task_id,
             id=self._ids.new_id(),
             patient_id=patient_id,

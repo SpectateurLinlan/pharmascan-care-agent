@@ -19,6 +19,8 @@ from ..contracts.chat_photo import ChatPhotoContext
 from ..contracts.dose_display import DoseBasis
 from ..contracts.dto import IDEMPOTENCY_KEY_PATTERN, PendingSelfReportDTO
 from ..contracts.long_term import CareReview
+from ..contracts.medication_dialogue import MedicationChoice, MedicationSelection
+from ..contracts.navigation_context import NavigationInput
 from ..contracts.observations import HealthNoteReview
 from ..contracts.quota import Usage
 from ..contracts.source_extraction import MedicationSourceExtractionDTO
@@ -65,6 +67,9 @@ class DemoStartResponse(BaseModel):
 
 
 class AgentMessageRequest(Request):
+    medication_selection: MedicationSelection | None = None
+    conversation_id: UUID | None = None
+    navigation_context: NavigationInput | None = None
     photo_context: ChatPhotoContext | None = None
     language: Literal["en", "zh"] = "en"
     text: str = Field(default="", max_length=2000)
@@ -86,6 +91,8 @@ class ToolTraceResponse(BaseModel):
 
 
 class AgentMessageResponse(BaseModel):
+    medication_choice: MedicationChoice | None = None
+    conversation_id: UUID | None = None
     history_saved: bool | None = None
     care_request: CareReview | None = None
     health_note_request: HealthNoteReview | None = None
@@ -133,6 +140,7 @@ class MedicationListResponse(BaseModel):
 
 
 class DraftCreateRequest(Request):
+    patient_edited: bool = False
     dose_basis: DoseBasis | None = None
     course_start_date: date | None = None
     course_end_date: date | None = None

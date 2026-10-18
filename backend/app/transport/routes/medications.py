@@ -16,9 +16,10 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
 
 from ...contracts.dose_display import DoseDisplay, DoseDisplayInput
+from ...contracts.draft_deletion import DraftDeletionResult, DraftKind
 from ...contracts.dto import FrequencyRuleDTO, RegimenDraftInput
 from ...domain.dose_display import dose_display
-from ...domain.errors import NotFoundError
+from ...domain.errors import NotFoundError, ProviderUnavailableError
 from ..auth import AuthenticatedPrincipal
 from ..deps import ApplicationContainer, get_container, get_principal
 from ..schemas import (
@@ -46,6 +47,7 @@ class RegimenHistoryItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
     regimen_id: UUID
     display_name: str
+    patient_edited: bool = False
     version_no: int
     state: str
     effective_from: datetime | None
@@ -71,6 +73,7 @@ def regimen_history(
         for regimen in container.enrollment.list_regimens(principal.patient_id, medication.id):
             result.append(
                 RegimenHistoryItem(
+                    patient_edited=regimen.patient_edited,
                     regimen_id=regimen.id,
                     display_name=medication.display_name,
                     version_no=regimen.version_no,
@@ -177,6 +180,7 @@ def create_draft(
         extraction_evidence=payload.extraction_evidence,
         patient_id=patient_id,
         draft=RegimenDraftInput(
+            patient_edited=payload.patient_edited,
             medication_name=payload.medication_name,
             dose_amount=payload.dose_amount,
             dose_unit=payload.dose_unit,
@@ -308,3 +312,21 @@ def activate(
 def _medication_name(container: ApplicationContainer, patient_id: UUID, regimen) -> str:
     medication = container.enrollment.get_medication(patient_id, regimen.patient_medication_id)
     return medication.display_name if medication else "Unknown medication"
+
+
+class DeleteDraftRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirmed: Literal[True]
+
+
+@router.delete("/medications/unfinished/{kind}/{target}", response_model=DraftDeletionResult)
+def delete_unfinished(
+    kind: DraftKind,
+    target: UUID,
+    payload: DeleteDraftRequest,
+    principal: AuthenticatedPrincipal = Depends(get_principal),
+    container: ApplicationContainer = Depends(get_container),
+):
+    if container.draft_deletion is None:
+        raise ProviderUnavailableError("Draft deletion unavailable")
+    return container.draft_deletion.delete(principal.patient_id, kind, target, payload.confirmed)

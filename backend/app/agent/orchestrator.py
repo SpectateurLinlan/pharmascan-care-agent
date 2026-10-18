@@ -23,9 +23,12 @@ from ..contracts.chat_photo import ChatPhotoContext
 from ..contracts.dto import AgentSessionDTO, PendingSelfReportDTO
 from ..contracts.enums import AgentIntent, ToolName, ToolStatus
 from ..contracts.long_term import CareReview
+from ..contracts.medication_dialogue import MedicationChoice, MedicationSelection
+from ..contracts.navigation_context import NavigationContext
 from ..contracts.observations import HealthNoteReview
 from ..contracts.ports import AgentSessionRepository, Clock, IdGenerator
 from ..contracts.quota import Usage
+from ..contracts.temporal import without_calendar_words
 from ..contracts.visual_check import VisualCheckRequest
 from ..domain.errors import DomainError, NotFoundError
 from ..domain.health_safety import needs_urgent_help_notice, urgent_help_notice
@@ -61,10 +64,13 @@ def _mentions(haystack: str, keyword: str) -> bool:
 
 
 def _reported_choice(text: str) -> str:
-    lowered = text.lower()
+    lowered = without_calendar_words(text).lower()
+    import re
+
+    lowered = re.sub(r"(?<=[\u3400-\u9fff])\s+(?=[\u3400-\u9fff])", "", lowered)
     if any(word in lowered for word in ("not sure", "unsure", "不确定", "不记得")):
         return "unsure"
-    if "did not take" in lowered or "didn't take" in lowered or "not taking" in lowered:
+    if "did not take" in lowered or "didn't take" in lowered or "not taking" in lowered or "没吃" in lowered:
         return "not_taken"
     if lowered.strip().startswith(("i took", "i already took", "我吃了", "我已经吃了", "我吃过")):
         return "taken"
@@ -79,6 +85,8 @@ class AgentTurn:
     language: Literal["en", "zh"] = "en"
     slots: dict[str, Any] = field(default_factory=dict)
     photo_context: ChatPhotoContext | None = None
+    navigation_context: NavigationContext | None = None
+    medication_selection: MedicationSelection | None = None
 
     @property
     def patient_text(self) -> str:
@@ -90,6 +98,7 @@ class AgentTurn:
 
 @dataclass(frozen=True)
 class AgentReply:
+    medication_choice: MedicationChoice | None = field(default=None, kw_only=True)
     care_request: CareReview | None = field(default=None, kw_only=True)
     health_note_request: HealthNoteReview | None = field(default=None, kw_only=True)
     visual_check_request: VisualCheckRequest | None = field(default=None, kw_only=True)
@@ -148,7 +157,7 @@ class DeterministicIntentRouter:
         ),
         (
             AgentIntent.DOSE_SELF_REPORT,
-            ("took", "taken", "not taken", "unsure", "reported", "不确定", "不记得", "吃过", "吃了"),
+            ("took", "taken", "not taken", "unsure", "reported", "不确定", "不记得", "吃过", "吃了", "没吃"),
         ),
         (AgentIntent.MEDICATION_HISTORY, ("history", "past", "last week", "summary")),
         (AgentIntent.MEDICATION_ENROLLMENT, ("add", "enroll", "new medication", "prescription")),
@@ -171,6 +180,10 @@ class DeterministicIntentRouter:
         "my",
         "the",
         "today",
+        "我",
+        "吃过",
+        "吗",
+        "？",
         "tonight",
         "this morning",
         "this evening",
@@ -183,7 +196,12 @@ class DeterministicIntentRouter:
     )
 
     def route(self, turn: AgentTurn, session: AgentSessionDTO) -> AgentIntent:
-        # An explicit slot always wins over free text.
+        lowered = turn.text.lower()
+        if any(word in lowered for word in ("did i take", "have i taken", "查看", "吃过")) and (
+            "?" in lowered or "？" in lowered or "吗" in lowered or "查看" in lowered
+        ):
+            return AgentIntent.DOSE_STATUS_QUERY
+        # Explicit enrollment slots still own enrollment, not arbitrary dates.
         if "intake_status" in turn.slots:
             return AgentIntent.DOSE_SELF_REPORT
         if "medication_name" in turn.slots and "ask_status" not in turn.slots:
@@ -214,7 +232,7 @@ class DeterministicIntentRouter:
         If nothing legible remains the caller receives an empty string and must
         ask a clarifying question instead of matching some arbitrary record.
         """
-        working = text.strip()
+        working = without_calendar_words(text).strip()
         lowered = working.lower()
         # Remove filler phrases longest-first so "have i taken" is consumed
         # before the shorter "taken".
@@ -407,6 +425,34 @@ class AgentOrchestrator:
                 },
             )
         intent = self._router.route(turn, session)
+        calendar = self._registry.calendar_selection(patient_id, turn.text)
+        today = self._registry.calendar_selection(patient_id, "").day
+        historical_write = intent == AgentIntent.DOSE_SELF_REPORT and calendar.explicit and calendar.day != today
+        if not calendar.supported or historical_write:
+            message = (
+                "这里暂不支持补记过去日期的服药情况；没有保存记录，也没有生成今天的确认。"
+                if turn.language == "zh" and historical_write
+                else "Historical dose backfill is not supported here. Nothing was saved or prepared for today."
+                if historical_write
+                else "请明确要查询的单个日期（年-月-日）。不会自动改为查询今天。"
+                if turn.language == "zh"
+                else "Please specify a single calendar date (YYYY-MM-DD). I will not substitute today."
+            )
+            context = record_context(
+                session.context,
+                text=turn.patient_text,
+                message=message,
+                intent=intent.value,
+                language=turn.language,
+                results=[],
+            )
+            context = context.model_copy(update={"awaiting_clarification": None})
+            self._sessions.update(
+                session.model_copy(
+                    update={"context": context, "state": "collecting", "state_version": session.state_version + 1}
+                )
+            )
+            return AgentReply(message=message, intent=intent, session_id=session.id, session_state="collecting")
         confirming_report = intent == AgentIntent.DOSE_SELF_REPORT and bool(turn.slots.get("confirm_challenge_id"))
         prior = None
         if intent == AgentIntent.DOSE_SELF_REPORT:
@@ -580,6 +626,12 @@ class AgentOrchestrator:
                 **base, occurrence_id=UUID(doses[0]["occurrence_id"]), minutes=int(match[1])
             )
 
+        calendar = self._registry.calendar_selection(session.patient_id, turn.text)
+        if intent == AgentIntent.CLARIFICATION and calendar.explicit:
+            if ToolName.CHECK_DUE_DOSE not in executed:
+                return ToolName.CHECK_DUE_DOSE, CheckDueDoseRequest(**base, window="today", target_date=calendar.day)
+            return None
+
         if intent == AgentIntent.CLARIFICATION and any(
             phrase in turn.text.lower()
             for phrase in (
@@ -702,11 +754,19 @@ class AgentOrchestrator:
                     return ToolName.GET_DOSE_STATUS, GetDoseStatusRequest(
                         **base,
                         medication_id=session.context.referenced_medication_id,
-                        occurrence_id=session.context.referenced_occurrence_id,
+                        target_date=calendar.day,
                     )
+                if name in {"查看", "查看昨天"}:
+                    if ToolName.CHECK_DUE_DOSE not in executed:
+                        return ToolName.CHECK_DUE_DOSE, CheckDueDoseRequest(
+                            **base, window="today", target_date=calendar.day
+                        )
+                    return None
                 if not name:
                     return None
-                return ToolName.GET_DOSE_STATUS, GetDoseStatusRequest(**base, medication_name=name, day_offset=0)
+                return ToolName.GET_DOSE_STATUS, GetDoseStatusRequest(
+                    **base, medication_name=name, target_date=calendar.day
+                )
             return None
 
         if intent == AgentIntent.MEDICATION_HISTORY:
@@ -719,6 +779,7 @@ class AgentOrchestrator:
                     **base,
                     regimen_id=turn.slots["regimen_id"],
                     days=int(turn.slots.get("days", 7)),
+                    target_date=calendar.day if calendar.explicit else None,
                 )
             return None
 
@@ -841,12 +902,13 @@ def _summarise(result: ToolResult) -> str:
     if result.tool_name == ToolName.RECORD_SELF_REPORT:
         return "Recorded as reported by you — this does not prove the medication was taken."
     if result.tool_name == ToolName.LIST_ACTIVE_MEDICATIONS:
-        return f"You have {result.payload.get('item_count', 0)} active medication(s)."
+        from .patient_read_reply import medication_list_reply
+
+        return medication_list_reply(result, "en")
     if result.tool_name == ToolName.GET_MEDICATION_HISTORY:
-        return (
-            f"Found {result.payload.get('item_count', 0)} scheduled dose(s). "
-            "Doses with no report are not counted as missed."
-        )
+        from .patient_read_reply import history_reply
+
+        return history_reply([result], "en")
     if result.tool_name == ToolName.CHECK_DUE_DOSE:
         from .schedule_reply import schedule_reply
 
@@ -862,33 +924,9 @@ def _describe_dose_status(result: ToolResult) -> str:
     Absence of a report is stated as "no confirmed record", never as a missed
     dose. A reported "taken" is attributed to the patient, not to the system.
     """
-    payload = result.payload
-    name = payload.get("medication_name")
-    if payload.get("resolution") == "unknown_medication":
-        return result.error_message or "I could not find that medication in your list."
-    if payload.get("resolution") == "no_regimen" or not payload.get("reported"):
-        if not payload.get("reported"):
-            return (
-                f"No confirmed dose record for {name or 'that medication'} today. "
-                "That is not the same as a missed dose, and I cannot tell whether "
-                "you took it."
-            )
-    status = payload.get("intake_status")
-    reported_at = payload.get("reported_at")
-    when = _local_time_label(reported_at)
-    if status == "reported_taken":
-        return (
-            f"You reported taking {name} today{when}."
-            " This is your own report and does not prove the medicine was taken."
-        )
-    if status == "reported_not_taken":
-        return f"You reported not taking {name} today{when}."
-    if status == "unsure":
-        return (
-            f"You reported being unsure whether you took {name} today{when}. "
-            "I will not guess — you can check again or record it once you know."
-        )
-    return f"No confirmed dose record for {name or 'that medication'} today."
+    from .status_reply import status_reply
+
+    return status_reply(result, "en")
 
 
 def _local_time_label(iso_timestamp: object) -> str:

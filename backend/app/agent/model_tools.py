@@ -1,6 +1,7 @@
 """Model arguments never include identity or confirmation/write credentials."""
 
 from dataclasses import dataclass
+from datetime import date
 from types import MappingProxyType
 from typing import Literal
 from uuid import UUID
@@ -42,19 +43,26 @@ class Empty(Arguments):
     pass
 
 
-class Schedule(Arguments):
+class CalendarArguments(Arguments):
+    day_offset: int = Field(default=0, ge=-30, le=0)
+    target_date: date | None = None
+
+
+class Schedule(CalendarArguments):
     window: Literal["due", "tonight", "today"] = "due"
     regimen_id: UUID | None = None
 
 
-class Status(Arguments):
+class Status(CalendarArguments):
     medication_name: str | None = Field(default=None, min_length=1, max_length=160)
     medication_id: UUID | None = None
     occurrence_id: UUID | None = None
 
 
-class History(Arguments):
-    regimen_id: UUID
+class History(CalendarArguments):
+    medication_name: str | None = Field(default=None, max_length=160)
+    regimen_id: UUID | None = None
+    medication_id: UUID | None = None
     days: int = Field(default=7, ge=1, le=30)
 
 
@@ -170,9 +178,13 @@ class ModelTools:
         self._understanding = medication_understanding
         self._clock = clock
 
-    def context_metadata(self) -> dict[str, str | None]:
+    def context_metadata(self, patient_id: UUID | None = None) -> dict[str, str | None]:
         """Injected current time and patient zone; no owner or credential data."""
-        return {"timezone": self._timezone, "current_time": self._clock.now().isoformat() if self._clock else None}
+        return {
+            "timezone": self._registry.local_timezone(patient_id) if patient_id else self._timezone,
+            "current_time": (self._clock.now() if self._clock else self._registry.current_time()).isoformat(),
+            "local_date": self._registry.calendar_selection(patient_id, "").day.isoformat() if patient_id else None,
+        }
 
     def evidence_context(self, patient_id: UUID, task_id: UUID) -> dict[str, object]:
         if self._evidence is None:
@@ -243,18 +255,24 @@ class ModelTools:
             if self._understanding is None:
                 raise ProviderUnavailableError("Medication knowledge unavailable")
             if not params.get("medication_id") and not params.get("medication_name"):
+                if turn.navigation_context and turn.navigation_context.medication_id:
+                    params["medication_id"] = turn.navigation_context.medication_id
                 session = self._fallback.get_session(patient_id=patient_id, session_id=session_id)
-                if session and session.context.referenced_medication_id:
+                if not params.get("medication_id") and session and session.context.referenced_medication_id:
                     params["medication_id"] = session.context.referenced_medication_id
             understanding = self._understanding.explain(
-                patient_id=patient_id, **params, language=turn.language, timezone=self._timezone
+                patient_id=patient_id,
+                **params,
+                language=turn.language,
+                timezone=self._registry.local_timezone(patient_id),
             )
             payload = {
                 "action": name,
                 "item_count": 1,
-                "state": "medication_understanding",
                 **understanding.model_dump(mode="json"),
             }
+            # This is an action, not a session/regimen lifecycle state. The
+            # existing audit state CHECK intentionally rejects arbitrary labels.
             # Existing grouped read audit contract also covers medication education;
             # no new DB tool-name constraint, patient identity or write authority.
             unavailable = understanding.general_knowledge and understanding.general_knowledge.status == "unavailable"
@@ -286,7 +304,7 @@ class ModelTools:
                 turn_id=client_turn_id,
                 text=turn.text,
                 language=turn.language,
-                timezone=self._timezone,
+                timezone=self._registry.local_timezone(patient_id),
             )
             result = ToolResult(
                 tool_name=ToolName.PREPARE_CARE_ACTION if output.review else ToolName.GET_LONG_TERM_CARE,
@@ -363,6 +381,24 @@ class ModelTools:
                 data=action.model_dump(mode="json"), intent=AgentIntent.CLARIFICATION, results=[], visual_request=action
             )
         if name == "prepare_self_report":
+            calendar = self._registry.calendar_selection(patient_id, turn.text)
+            today = self._registry.calendar_selection(patient_id, "").day
+            if not calendar.supported or (calendar.explicit and calendar.day != today):
+                reply = self._fallback.handle_turn(
+                    patient_id=patient_id,
+                    session_id=session_id,
+                    turn=AgentTurn(
+                        text=turn.text,
+                        language=turn.language,
+                        slots={**params, "intake_status": params["intake_status"]},
+                    ),
+                )
+                return ExecutedTool(
+                    data={"message": reply.message, "requires_confirmation": False},
+                    intent=AgentIntent.DOSE_SELF_REPORT,
+                    results=reply.tool_results,
+                    prepared_reply=reply,
+                )
             import re
 
             text = turn.text.lower()
@@ -372,7 +408,7 @@ class ModelTools:
             clarified = session.context.awaiting_clarification if session else None
             explicit = bool(
                 re.search(r"^\s*i (?:already )?(?:took|did not take|didn't take)\b", text)
-            ) or text.startswith(("我吃了", "我已经吃了", "我没吃"))
+            ) or text.startswith(("我吃了", "我已经吃了", "我没吃", "我今天吃了", "我今天没吃"))
             if not explicit and not (clarified and clarified.requested_intake_status):
                 raise ValidationError("An explicit self-report is required")
             listed = self._registry.execute(ToolName.LIST_ACTIVE_MEDICATIONS, ListActiveMedicationsRequest(**base))
@@ -397,7 +433,7 @@ class ModelTools:
                         prepared_reply=reply,
                     )
             expected = (
-                ("not_taken" if any(word in text for word in ["did not take", "didn't take", "我没吃"]) else "taken")
+                ("not_taken" if any(word in text for word in ["did not take", "didn't take", "没吃"]) else "taken")
                 if explicit
                 else clarified.requested_intake_status
             )
@@ -447,6 +483,16 @@ class ModelTools:
             match = re.search(r"\bin (\d+) (?:minutes?|min)\b", turn.text.lower())
             if not match or int(match[1]) != params["minutes"]:
                 raise ValidationError("Confirm an explicit reminder delay")
+        if name in {"get_dose_status", "check_due_dose", "get_medication_history"}:
+            calendar = self._registry.calendar_selection(patient_id, turn.text)
+            if not calendar.supported:
+                raise ValidationError("Please specify a single supported calendar date; today was not substituted")
+            if calendar.explicit:
+                params["target_date"] = calendar.day
+                params["day_offset"] = 0
+                # A date is a calendar query, never the current due-dose window.
+                if name == "check_due_dose" and params.get("window") == "due":
+                    params["window"] = "today"
         tool, request_type, intent = mapping[name]
         result = self._registry.execute(tool, request_type(**base, **params))
         return ExecutedTool(

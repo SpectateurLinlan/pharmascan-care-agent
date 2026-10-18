@@ -1,9 +1,11 @@
 """Bounded, read-only discovery before clarifying a contextual medicine-use question."""
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from uuid import UUID
 
+from ..contracts.agent_context import CandidateReference
 from ..contracts.enums import ToolStatus
 from ..domain.errors import ProviderUnavailableError
 from .model_tools import ExecutedTool, ModelTools
@@ -35,6 +37,27 @@ def current_medication_question(text: str) -> bool | None:
 class CurrentMedicationAnswer:
     message: str
     results: list[ToolResult]
+    awaiting_choice: bool = False
+    selected_reference: CandidateReference | None = None
+
+
+def matching_medication_choices(text: str, rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Exact name/prefix only; strength/form suffixes may narrow but never break a tie."""
+
+    def normalize(value: str) -> str:
+        value = unicodedata.normalize("NFKC", value).casefold().strip()
+        value = re.sub(r"(?<=[a-z])(?=\d)|(?<=\d)(?=[a-z])", " ", value)
+        return re.sub(r"\s+", " ", value)
+
+    choice = normalize(text)
+    if not choice or len(choice) > 160 or not re.fullmatch(r"[\w .+()/%-]+", choice):
+        return []
+    matches = []
+    for row in rows:
+        name = normalize(str(row["display_name"]))
+        if name == choice or name.startswith(choice + " "):
+            matches.append(row)
+    return matches
 
 
 def read_current_medication_uses(
@@ -46,7 +69,8 @@ def read_current_medication_uses(
     turn: AgentTurn,
     reference: UUID | None,
     plural: bool,
-) -> CurrentMedicationAnswer:
+    choice: str | None = None,
+) -> CurrentMedicationAnswer | None:
     """Use server-owned references only; list + at most three knowledge reads."""
     results: list[ToolResult] = []
     zh = turn.language == "zh"
@@ -81,10 +105,18 @@ def read_current_medication_uses(
             else "Your account has no active medication plans. You can finish setup and review in Medicines.",
             results,
         )
-    selected = rows if plural else [row for row in rows if str(row["medication_id"]) == str(reference)]
-    if not selected and reference is None and len(rows) == 1:
+    selected = (
+        matching_medication_choices(choice, rows)
+        if choice is not None
+        else rows
+        if plural
+        else [row for row in rows if str(row["medication_id"]) == str(reference)]
+    )
+    if choice is not None and not selected:
+        return None  # A different topic/action must still go through its normal policy path.
+    if choice is None and not selected and reference is None and len(rows) == 1:
         selected = rows
-    if not selected or len(selected) > 3:
+    if not selected or len(selected) > 3 or (choice is not None and len(selected) != 1):
         names = "、".join(str(row["display_name"]) for row in rows)
         message = (
             f"您目前登记的用药有：{names}。请问您想了解哪一种？"
@@ -93,7 +125,7 @@ def read_current_medication_uses(
         )
         if plural:
             message += " 每次可查询最多三种，请先选择。" if zh else " Please choose up to three for this request."
-        return CurrentMedicationAnswer(message, results)
+        return CurrentMedicationAnswer(message, results, awaiting_choice=True)
     summaries = []
     for row in selected:
         try:
@@ -104,7 +136,14 @@ def read_current_medication_uses(
                     "question": "general_use",
                 },
             )
-            summaries.append(str(explained.data["patient_safe_summary"]))
+            summaries.append(f"{row['display_name']}\n{explained.data['patient_safe_summary']}")
         except ProviderUnavailableError:
             summaries.append(f"{row['display_name']}: {unavailable}")
-    return CurrentMedicationAnswer("\n\n".join(summaries), results)
+    selected_reference = (
+        CandidateReference.model_validate(
+            {key: selected[0][key] for key in ("medication_id", "regimen_id", "display_name")}
+        )
+        if len(selected) == 1
+        else None
+    )
+    return CurrentMedicationAnswer("\n\n".join(summaries), results, selected_reference=selected_reference)
