@@ -9,7 +9,7 @@
 .ui-screen {
   display: flex;
   flex-direction: column;
-  gap: var(--s-5);
+  gap: var(--section-gap);
 }
 
 .ui-screen__head {
@@ -178,10 +178,11 @@
 }
 
 .period-actions.records-summary-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--s-2);
 }
+.period-actions.records-summary-actions button { flex: 0 1 auto; width: auto; min-width: min(100%, 8rem); max-width: 100%; }
 
 @container (min-width: 38rem) {
   .records-navigation-group.entry-group > .ui-rows {
@@ -189,9 +190,6 @@
     column-gap: var(--s-3);
   }
 
-  .period-actions.records-summary-actions {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 @container (min-width: 58rem) {
@@ -393,6 +391,95 @@
 .me-category .ui-row { gap: var(--s-3); }
 .record-form { width: 100%; max-width: 48rem; min-width: 0; }
 .record-form .field { min-width: 0; }
+.records-navigation-group.entry-group { border: 0; padding: 0; background: transparent; }
+.records-navigation-group .ui-row { background: var(--surface); padding: var(--s-4); }
+.records-navigation-group .ui-row:last-child,
+.me-app-info .ui-row:last-child { border-bottom: 1px solid var(--line); }
+.record-history { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
+.medication-choices { display:flex; flex-wrap:wrap; gap:var(--s-2); margin-block:var(--s-3); max-width:38rem; }
+.medication-choices button { flex:0 1 auto; width:auto; max-width:100%; white-space:normal; text-align:start; overflow-wrap:anywhere; }
+.medication-choices p { flex-basis:100%; }
+.answer-sources a { overflow-wrap:anywhere; }
+.record-history__current { padding-block-end: var(--s-3); border-bottom: 1px solid var(--line); }
+.record-history__current h3 { margin: 0 0 var(--s-2); }
+.record-history__current ul { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-5); margin: 0; padding-inline-start: 1.25rem; }
+.record-history__current-hint { margin: var(--s-2) 0 0; color: var(--ink-2); }
+.record-history__error { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); padding: var(--s-3) var(--s-4); border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface-warm); }
+.record-history__error p { margin: 0; }
+.record-history__error button { width: auto; flex: 0 0 auto; }
+.record-history .field { max-width: 48rem; }
+.record-history .history { margin: 0; }
+.record-history__more { align-self: start; width: auto; }
+.record-history__dates { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--s-4); }
+.record-history__dates label { flex: 1 1 13rem; max-width: 20rem; min-width: 0; }
+.record-history__dates input { display: block; width: 100%; min-width: 0; }
+.record-history .history li { align-items: start; gap: var(--s-4); }
+.record-history .history li > div { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.record-history .history li > span { max-width: 45%; }
+.record-history .history details { margin-top: var(--s-2); }
+@media (max-width: 600px) {
+  .record-history .history li { flex-direction: column; }
+  .record-history .history li > span { max-width: 100%; }
+}
+.record-history__filters { display: grid; grid-template-columns: minmax(0,1fr); gap: var(--s-4); }
+.record-history .record-history__filters .field { min-width: 0; margin: 0; }
+.record-history .history small { display: block; color: var(--ink-2); }
+@container (min-width: 48rem) {
+  .record-history__filters { grid-template-columns: minmax(0,1fr) minmax(0,2fr) minmax(0,1fr); align-items: start; }
+}
+.report-reading { max-width: var(--report-measure); overflow-wrap: anywhere; line-height: var(--lh-body); }
+.report-reading > * + * { margin-top: var(--s-4); }
+.report-reading > h3 { margin-top: var(--s-6); }
+.report-details { border-top: 1px solid var(--line); padding-top: var(--s-4); }
+.report-details summary { color: var(--brand); font-weight: var(--fw-strong); }
+.report-details__content { padding-block: var(--s-4); }
+.report-details__content > * + * { margin-top: var(--s-3); }
+.report-actions { position: relative; display: flex; flex-wrap: wrap; gap: var(--s-3); }
+.report-actions button { flex: 0 1 auto; width: auto; }
+@media (min-width: 1024px) {
+  .report-reader { max-height: 65dvh; overflow-y: auto; scrollbar-gutter: stable; padding-inline-end: var(--s-4); }
+}
+@media print {
+  .report-reader { max-height: none; overflow: visible; }
+  .report-reading { max-width: none; }
+  .companion { padding: 0; }
+  [data-app-content] { max-width: none; }
+  .report-details summary { display: none; }
+}
 @container (min-width: 48rem) {
   .me-app-info.entry-group > .ui-rows { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
+  .today-panels > .card > button,
+  .today-panels > .card > .actions > button,
+  .identity-card .guest-link > button { flex: 0 1 auto; width: auto; align-self: start; }
 }
+
+/* Search uses the established native select and keyboard semantics. */
+.record-history__search { grid-column: 1 / -1; max-width: 36rem; }
+.record-history__search button { width: fit-content; }
+
+/* Keep peer controls on the same baseline; vertical form margins do not belong in grids. */
+.enrollment-fields { align-items: start; }
+.grid-2.enrollment-fields > .field { margin: 0; min-width: 0; }
+.time-row > .field { margin: 0; min-width: 0; }
+.time-row .picker-control .picker-open { flex: 0 0 var(--tap); width: var(--tap); padding-inline: var(--s-2); }
+@media (max-width: 40rem) {
+  .field .time-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; }
+  .time-row > .field { grid-column: 1 / -1; }
+  .time-row > .icon-button { grid-column: 2; }
+  .time-row > button:last-child { grid-column: 3; }
+}
+.course-fields { margin-block: var(--s-4); }
+.course-mode { display: flex; flex-wrap: wrap; gap: var(--s-3); margin-bottom: var(--s-3); }
+.course-mode label { display: inline-flex; align-items: center; gap: var(--s-2); min-height: 2.75rem; }
+.course-mode input { width: auto; min-height: auto; }
+.patient-toast--success { pointer-events: none; animation: success-notice-fade 4.5s forwards; }
+@keyframes success-notice-fade { 0%,85% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .patient-toast--success { animation: none; } }
+
+.ui-screen--medicines .ui-actions,.add-medication-wide { width: 100%; }
+.ui-screen--medicines .ui-actions .add-medication-wide { width: 100%; max-width: none; }
+.add-medication-methods { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--s-3); }
+.add-medication-methods button { display:flex; align-items:center; gap:var(--s-3); min-width:0; }
+@media(max-width:40rem){.add-medication-methods{grid-template-columns:1fr;}}
+.pending-registration { display:flex; gap:var(--s-3); align-items:center; margin-block:var(--s-3); }
+.pending-registration > button:first-child { flex:1; min-width:0; }

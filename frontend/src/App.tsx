@@ -1,3 +1,4 @@
+import {BottomSheet} from './components/BottomSheet';
 import {accountDisplayName} from './accountPresentation';
 import {Icon,type IconName} from './components/Icon';
 import {LanguageMenu} from './components/LanguageMenu';
@@ -72,6 +73,7 @@ function CompanionApp() {
   const [sourceTasks,setSourceTasks]=useState<EvidenceTask[]|null>(null),[setupError,setSetupError]=useState<unknown>(null);
   const setupRequest=useRef(0);
   const loadSourceTasks=useCallback(async()=>{const version=++setupRequest.current;try{const rows=await api.evidenceTasks();if(version===setupRequest.current){setSourceTasks(rows);setSetupError(null);}}catch(caught){if(version===setupRequest.current){setSourceTasks(null);setSetupError(caught);}}},[]);
+  const [manualDirty,setManualDirty]=useState(false);
   const [resumeId, setResumeId] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -79,7 +81,7 @@ function CompanionApp() {
   const [loading, setLoading] = useState(true);
   const [fatal, setFatal] = useState<unknown>(null);
   const [guideOpen,setGuideOpen]=useState(false),[guideOwner,setGuideOwner]=useState(''),[guideReplay,setGuideReplay]=useState(false);
-  const {tab,navigate:setTab,back:goBack,isRoot}=useCareNavigation(guideOpen&&!loading&&!fatal&&Boolean(medications));
+  const {tab,navigate:setTab,back:goBack,isRoot,pending,confirmLeave,cancelLeave}=useCareNavigation(guideOpen&&!loading&&!fatal&&Boolean(medications),manualDirty);
   const [member,setMember]=useState(false),[identity,setIdentity]=useState<Account|null>(null),[now,setNow]=useState(()=>new Date());
   /* The signed-out state gets its own surface, so the shell needs to know the
      kind of identity and not only whether an email account is linked. */
@@ -122,32 +124,34 @@ function CompanionApp() {
      about identity, so it renders without the tabs, the rail or the composer. */
   const standaloneSignIn=accountKind==='signed_out'&&tab==='account';
   const assistantVisible=!standaloneSignIn&&(tab==='today'||tab==='assistant');
-  const openMedicine=(page:MedicineDestination,id?:string)=>{if(id)setDetailId(id);setTab(page);};
+  const openMedicine=(page:MedicineDestination,id?:string)=>{if(page==='manual'){setResumeId(null);}if(id)setDetailId(id);setTab(page);};
   const detail=versions.find(row=>row.regimen_id===detailId);
-  const openAssistant=()=>{setAssistantSlots(tab==='medicine-detail'&&detail?{regimen_id:detail.regimen_id,medication_id:detail.medication_id}:{});setTab('assistant');};
+  const openAssistant=(contextual=true)=>{setAssistantSlots(contextual&&['medicine-detail','medicines','records'].includes(tab)?{source_page:tab,...(tab==='medicine-detail'&&detail?{regimen_id:detail.regimen_id,medication_id:detail.medication_id}:{}),navigation_nonce:crypto.randomUUID()}:{});setTab('assistant');};
+  const viewTodayMedication=()=>{setTab('today');requestAnimationFrame(()=>requestAnimationFrame(()=>document.getElementById('today-medication')?.scrollIntoView({behavior:'smooth',block:'start'})));};
   const calendarDate=new Intl.DateTimeFormat('en-CA',{timeZone:preferences.timezone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
   const currentMedications=medications?.medications.filter(row=>!isPastCourse(row,calendarDate)&&(!row.course_start_date||row.course_start_date<=calendarDate))??[];
   const guideVisible=guideOpen&&!loading&&!fatal&&Boolean(medications)&&tab==='today';
   return <div className={standaloneSignIn?'app companion signin-shell':'app companion'} data-root-surface={assistantSurface?'true':undefined}><div data-app-content>
     <a className="skip-link" href="#main-content">{t('Skip to content')}</a>
-    {!standaloneSignIn?<header ref={headerRef} className="companion-header app-header">{!isRoot&&tab!=='assistant'?<button className="back-button" aria-label={t('Back')} onClick={goBack}><Icon name="chevron-left"/></button>:null}<div className="brand"><img className="brand-mark" src="/branding/medithread-192.png" width="28" height="28" alt=""/><span>MediThread</span></div><LanguageMenu/>{tab!=='assistant'?<button type="button" className="assistant-header-shortcut" aria-label={t('AI assistant')} onClick={openAssistant}><img src="/branding/assistant-avatar-green.png" width="28" height="28" alt=""/><span>{t('AI assistant')}</span></button>:null}<button className="notification-shortcut" aria-label={t('Medication reminders')} onClick={()=>setTab('reminder-settings')}><Icon name="bell"/></button><button className="settings-shortcut" aria-label={t('Settings')} onClick={()=>setTab('settings')}><Icon name="settings"/></button></header>:null}
+    {!standaloneSignIn?<header ref={headerRef} className="companion-header app-header">{!isRoot&&tab!=='assistant'?<button className="back-button" aria-label={t('Back')} onClick={goBack}><Icon name="chevron-left"/></button>:null}<div className="brand"><img className="brand-mark" src="/branding/medithread-192.png" width="28" height="28" alt=""/><span>MediThread</span></div><LanguageMenu/>{tab!=='assistant'?<button type="button" className="assistant-header-shortcut" aria-label={t('AI assistant')} onClick={()=>openAssistant()}><img src="/branding/assistant-avatar-green.png" width="28" height="28" alt=""/><span>{t('AI assistant')}</span></button>:null}<button className="notification-shortcut" aria-label={t('Medication reminders')} onClick={()=>setTab('reminder-settings')}><Icon name="bell"/></button><button className="settings-shortcut" aria-label={t('Settings')} onClick={()=>setTab('settings')}><Icon name="settings"/></button></header>:null}
     {preferenceError ? <p role="alert">{preferenceError}</p> : null}
+    {pending?<BottomSheet title={t('Leave without saving?')} onCancel={cancelLeave}><p>{t('Leaving clears the unsaved details on this page. Saved registrations can be managed in Finish medication setup.')}</p><button className="danger" onClick={()=>{setManualDirty(false);setResumeId(null);confirmLeave();}}>{t('Leave and clear')}</button><button onClick={cancelLeave}>{t('Keep editing')}</button></BottomSheet>:null}
     {fatal ? <ErrorNotice error={fatal} /> : null}
     <main ref={mainRef} id="main-content" className="app-main">
     {!guideOpen?<NotificationInvitation ownerId={guideOwner} onSettings={()=>setTab('reminder-settings')}/>:null}
     {loading&&!accountPage ? <Card title="Getting your records ready"><p role="status">{t('Starting your private demo session…')}</p></Card> : !medications&&!accountPage ? <Card title="Your records could not be loaded"><p>{t('Please retry the connection. An unavailable record is not an empty medication list.')}</p><button onClick={() => { if (health && sessionId) void refreshMedications(); else window.location.reload(); }}>{t('Retry loading records')}</button></Card> : <>
       {tab==='today'?<section className="welcome"><h1 className="greeting">{t(greeting)}{preferences.preferred_language==='zh'?'，':', '}{name}!</h1><p>{t('Your medication and self-care companion')}</p></section>:null}
-      <div hidden={!assistantVisible}><AssistantScreen workspace={tab==='assistant'} ownerId={guideOwner} clearRevision={conversationClearRevision} onClose={goBack} contextSlots={assistantSlots} onExpand={openAssistant} active={tab==='today'||tab==='assistant'} onHealthReview={description=>{setHealthDescription(description);setTab('health-notes');}} onVisualCheck={id=>{setVisualRegimen(id);setTab('check');}} sessionId={sessionId} onSession={setSessionId} todayEntry={tab==='today'} compact={tab!=='assistant'} onChanged={refreshMedications}/></div>
+      <div hidden={!assistantVisible}><AssistantScreen onSourceReturn={source=>{if(source.page==='medicine-detail'&&source.regimen_id){setDetailId(source.regimen_id);setTab('medicine-detail');}else if(source.page!=='medicine-detail')setTab(source.page);}} workspace={tab==='assistant'} ownerId={guideOwner} clearRevision={conversationClearRevision} onClose={goBack} contextSlots={assistantSlots} onExpand={openAssistant} onViewTodayMedication={viewTodayMedication} active={tab==='today'||tab==='assistant'} onHealthReview={description=>{setHealthDescription(description);setTab('health-notes');}} onVisualCheck={id=>{setVisualRegimen(id);setTab('check');}} sessionId={sessionId} onSession={setSessionId} todayEntry={tab==='today'} compact={tab!=='assistant'} onChanged={refreshMedications}/></div>
       {tab === 'check'||tab==='check-result' ? <VisualCheckScreen ownerId={guideOwner} initialFile={routedPhoto} showResult={tab==='check-result'} onResult={()=>setTab('check-result')} showBack={false} regimenId={visualRegimen} onBack={goBack} onAddSource={()=>setTab('label')}/> : null}
       {tab === 'today' ? <>
 
-        <div className="today-panels">{currentMedications.length?<TodayMedicationCarousel medications={currentMedications} focusRegimenId={focusRegimen}>{medication=><TodayScreen key={medication.regimen_id} showTitle={false} focusRegimenId={focusRegimen} onFeeling={()=>{setHealthDescription('');setTab('health-notes');}} onVisualCheck={id=>{setVisualRegimen(id);setTab('check');}} compact medications={[medication]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')}/>}</TodayMedicationCarousel>:<TodayScreen compact medications={[]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')} onVisualCheck={()=>{setVisualRegimen(null);setTab('check');}}/>}
+        <div className="today-panels"><div id="today-medication" className="today-medication-anchor">{currentMedications.length?<TodayMedicationCarousel medications={currentMedications} focusRegimenId={focusRegimen}>{medication=><TodayScreen key={medication.regimen_id} showTitle={false} focusRegimenId={focusRegimen} onFeeling={()=>{setHealthDescription('');setTab('health-notes');}} onVisualCheck={id=>{setVisualRegimen(id);setTab('check');}} compact medications={[medication]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')}/>}</TodayMedicationCarousel>:<TodayScreen compact medications={[]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')} onVisualCheck={()=>{setVisualRegimen(null);setTab('check');}}/>}</div>
         <CareTaskSummary medications={medications?.medications??[]} onOpen={()=>setTab('care-tasks')}/></div>
       </> : null}
       {tab==='medicines'?<MedicinesHub medications={medications?.medications??[]} drafts={drafts} setupCount={setupEntries?.length??null} versions={versions} onOpen={openMedicine}/>:null}
       {tab==='add-method'?<AddMethodScreen onOpen={setTab}/>:null}
       <div data-testid="evidence-workspace" hidden={tab!=='label'}><EvidenceEnrollmentScreen active={tab==='label'} ownerId={guideOwner} onPill={file=>{setRoutedPhoto(file);setVisualRegimen(null);setTab('check');}} onNewRegistration={()=>setEvidenceTaskId(null)} onCancel={()=>{void refreshMedications();setTab('unfinished');}} initialTaskId={evidenceTaskId} sessionId={sessionId} onChanged={refreshMedications}/></div>
-      <div hidden={tab!=='manual'}><EnrollScreen resumeRegimenId={resumeId} resumeRow={versions.find(row=>row.regimen_id===resumeId)??null} sourceSelection={sourceSelection} sessionId={sessionId} medications={medications} onChanged={refreshMedications}/></div>
+      {tab==='manual'?<div><EnrollScreen onDirtyChange={setManualDirty} resumeRegimenId={resumeId} resumeRow={versions.find(row=>row.regimen_id===resumeId)??null} sourceSelection={sourceSelection} sessionId={sessionId} medications={medications} onChanged={refreshMedications}/></div>:null}
       <div data-page="edit-medication" hidden={tab!=='edit-medication'}>{editTarget?<EnrollScreen onActivated={id=>{setDetailId(id);goBack();}} editFrom={editTarget} sessionId={sessionId} medications={medications} onChanged={refreshMedications}/>:tab==='edit-medication'?<Card title="Choose a medication"><button onClick={()=>setTab('medicines')}>{t('Medicines')}</button></Card>:null}</div>
       {tab==='unfinished'?<PendingEvidenceTasks entries={setupEntries} error={setupError} onRetry={()=>void refreshMedications()} onContinue={id=>{setEvidenceTaskId(id);setTab('label');}} onResume={id=>{setResumeId(id);setTab('manual');}}/>:null}
       {tab==='past-medicines'?<Card title="Past courses">{versions.filter(row=>isPastCourse(row,calendarDate)).map(row=><Entry key={row.regimen_id} title={row.display_name} hint={`${row.course_start_date??t('Not specified')} → ${row.course_end_date??t('Not specified')}`} onClick={()=>openMedicine('medicine-detail',row.regimen_id)}/>)}{!versions.some(row=>isPastCourse(row,calendarDate))?<p>{t('No past courses yet.')}</p>:null}</Card>:null}
@@ -169,7 +173,7 @@ function CompanionApp() {
           <Row icon="calendar" title="Medication follow-ups" hint="Your care follow-ups" onClick={()=>setTab('care-tasks')}/>
           <Row icon="clipboard" title="Medication review preparation" hint="Information for your next review" onClick={()=>setTab('medication-review')}/>
         </RowGroup>
-        <div className="screen-full"><HistoryScreen /></div>
+        <div className="screen-full"><HistoryScreen currentMedications={currentMedications} /></div>
       </Screen> : null}
       {tab==='me'?<PatientHub onOpen={setTab} onGuide={openGuide}/>:null}
       {tab==='help'?<OnboardingGuide owner={guideOwner} replay onClose={()=>setTab('me')}/>:null}
@@ -185,7 +189,7 @@ function CompanionApp() {
     </main>
     {!standaloneSignIn?<ReminderMonitor enabled={!loading&&!fatal&&!guideVisible} onReview={id=>{setFocusRegimen(id);setTab('today');}}/>:null}
     {!standaloneSignIn?<nav ref={navRef} className="patient-nav" aria-label="Main navigation">{tabs.map(entry => <button key={entry.id} data-guide={entry.id} className={entry.id==='assistant'?'nav-assistant':''}
-      aria-current={(tab === entry.id || (entry.id==='today'&&['check','check-result','care-tasks'].includes(tab)) || (entry.id==='me'&&accountPage)||(entry.id==='medicines'&&['add-method','past-medicines','unfinished','gallery','medicine-detail','label','manual','edit-medication'].includes(tab))||(entry.id==='records'&&(tab.startsWith('summary-')||['health-notes','adherence-barriers','medication-review'].includes(tab)))) ? 'page' : undefined} onClick={() => entry.id==='assistant'?openAssistant():setTab(entry.id)}>
+      aria-current={(tab === entry.id || (entry.id==='today'&&['check','check-result','care-tasks'].includes(tab)) || (entry.id==='me'&&accountPage)||(entry.id==='medicines'&&['add-method','past-medicines','unfinished','gallery','medicine-detail','label','manual','edit-medication'].includes(tab))||(entry.id==='records'&&(tab.startsWith('summary-')||['health-notes','adherence-barriers','medication-review'].includes(tab)))) ? 'page' : undefined} onClick={() => entry.id==='assistant'?openAssistant(false):setTab(entry.id)}>
       {entry.id==='assistant'?<img className="nav-assistant__avatar" src="/branding/assistant-avatar-green.png" width="28" height="28" alt=""/>:<Icon name={entry.symbol}/>}<span>{t(entry.label)}</span></button>)}</nav>:null}
     </div>{guideVisible?<OnboardingGuide owner={guideOwner} replay={guideReplay} onClose={closeGuide}/>:null}
   </div>;

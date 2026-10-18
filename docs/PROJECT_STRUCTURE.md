@@ -12,9 +12,9 @@
 ```text
 pharmascan-care-agent/
 ├── README.md          # Product overview, capabilities, screenshots and limits
+├── README.zh-CN.md    # Simplified Chinese product overview
 ├── LICENSE            # Apache-2.0 project source licence
 ├── NOTICE             # Attribution and third-party licence boundary
-├── DESIGN.md          # Patient UI design conventions
 ├── .env.example       # Backend configuration template; no real credentials
 ├── .gitignore         # Generated artifacts and sensitive-file exclusions
 ├── .python-version    # Hosted Python version selection
@@ -22,6 +22,9 @@ pharmascan-care-agent/
 ├── vercel.json        # Independent Push Dispatcher project only
 └── .vercelignore      # Deployment source allowlist; separate from Git tracking
 ```
+
+Patient-facing design tokens and layout conventions are maintained in
+`frontend/src/ui/`.
 
 ---
 

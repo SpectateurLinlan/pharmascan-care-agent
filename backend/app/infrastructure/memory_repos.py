@@ -48,6 +48,7 @@ class InMemoryStore:
     """Single owner of all in-memory rows; injected into every repository."""
 
     def __init__(self) -> None:
+        self.draft_deletions: dict = {}
         self.reminders: dict[tuple[UUID, UUID], ReminderDTO] = {}
         self.sources: dict[tuple[UUID, UUID], SourceDocumentDTO] = {}
         self.source_fields: dict[tuple[UUID, UUID], SourceFieldDTO] = {}

@@ -11,6 +11,7 @@ class KnowledgeDTO(BaseModel):
 
 
 class KnowledgeProduct(KnowledgeDTO):
+    scope: Literal["product", "ingredient"] = "product"
     name: str = Field(min_length=1, max_length=160)
     ingredients: list[str] = Field(default_factory=list, max_length=8)
     form: str | None = None
@@ -42,7 +43,7 @@ class LabelSource(KnowledgeDTO):
 class KnowledgeResult(KnowledgeDTO):
     status: Literal["matched", "no_reliable_match", "unavailable"]
     reason: str
-    match_scope: Literal["US_label_product_family"] = "US_label_product_family"
+    match_scope: Literal["US_label_product_family", "US_label_ingredient"] = "US_label_product_family"
     candidate_count: int = 0
     sources: list[LabelSource] = Field(default_factory=list)
     use_statement: str | None = None
@@ -80,6 +81,9 @@ class ReviewedInstructions(KnowledgeDTO):
 
 
 class MedicationUnderstanding(KnowledgeDTO):
+    clarification_required: bool = False
+    medication_id: UUID | None = None
+    regimen_id: UUID | None = None
     question: Literal["general_use", "personal_instructions", "personal_reason"]
     medication_name: str | None
     general_knowledge: KnowledgeResult | None = None

@@ -76,15 +76,19 @@
    * below valid on a phone.
    */
   --rail-width: 0px;
-  --content-max: 430px;
+  --content-max: 960px;
+  --dashboard-max: 1200px;
+  --section-padding: var(--s-5);
+  --section-gap: var(--s-6);
+  --report-measure: 72ch;
   --dock-height: 4.5rem;
 
   /* --- light palette ----------------------------------------------------- */
-  --canvas: #f7f4ef;
+  --canvas: #faf9f6;
   --surface: #ffffff;
-  --surface-2: #f1ece4;
-  --surface-inset: #efeae2;
-  --line: #ded7cc;
+  --surface-2: #f6f5f2;
+  --surface-inset: #f3f2ee;
+  --line: #e4e2dd;
   --line-strong: #c6bcae;
 
   --ink: #16292a;

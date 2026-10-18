@@ -72,11 +72,43 @@ def stop_process(process: subprocess.Popen[bytes]) -> None:
         process.wait()
 
 
+def python_snapshot(directory: Path) -> dict[Path, tuple[int, int]]:
+    """Watch local app Python only, including added/deleted files; no extra dependency."""
+    snapshot = {}
+    for path in directory.rglob("*.py"):
+        if path.is_symlink():
+            continue
+        try:
+            stat = path.stat()
+        except FileNotFoundError:  # A save/rename can race the directory scan.
+            continue
+        snapshot[path] = (stat.st_mtime_ns, stat.st_size)
+    return snapshot
+
+
+def start_process(command: list[str], cwd: Path, env: dict[str, str]) -> subprocess.Popen[bytes]:
+    return subprocess.Popen(
+        command,
+        cwd=cwd,
+        env=env,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+        creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW) if os.name == "nt" else 0,
+        start_new_session=os.name != "nt",
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--backend-port", type=port_number, default=8001)
     parser.add_argument("--frontend-port", type=port_number, default=5173)
     parser.add_argument("--python", help="Backend Python executable (optional explicit environment).")
+    parser.add_argument(
+        "--reload",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Automatically restart the local API after Python changes (default: enabled).",
+    )
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     npm = shutil.which("npm.cmd" if os.name == "nt" else "npm")
@@ -124,28 +156,38 @@ def main() -> int:
     frontend_env = os.environ.copy()
     frontend_env["VITE_API_TARGET"] = f"http://127.0.0.1:{args.backend_port}"
     processes: list[subprocess.Popen[bytes]] = []
+    watched_directory = root / "backend" / "app"
+    snapshot = python_snapshot(watched_directory) if args.reload else {}
     print(f"Starting app: http://localhost:{args.frontend_port}", flush=True)
     print(f"API docs: http://127.0.0.1:{args.backend_port}/docs", flush=True)
+    print(f"API Python reload: {'enabled' if args.reload else 'disabled'}", flush=True)
     print("Press Ctrl+C to stop both servers. Startup progress appears below.", flush=True)
     try:
         for command, cwd, env in (
             (backend_command, root, os.environ.copy()),
             (frontend_command, root / "frontend", frontend_env),
         ):
-            processes.append(
-                subprocess.Popen(
-                    command,
-                    cwd=cwd,
-                    env=env,
-                    stdout=sys.stdout,
-                    stderr=sys.stderr,
-                    creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW)
-                    if os.name == "nt"
-                    else 0,
-                    start_new_session=os.name != "nt",
+            processes.append(start_process(command, cwd, env))
+        waiting_for_fix = False
+        while processes[1].poll() is None:
+            backend_exited = processes[0].poll() is not None
+            if backend_exited and not args.reload:
+                break
+            if backend_exited and not waiting_for_fix:
+                print(
+                    "API exited; waiting for a Python edit. Restart the launcher for configuration changes.", flush=True
                 )
-            )
-        while all(process.poll() is None for process in processes):
+                waiting_for_fix = True
+            if args.reload:
+                updated = python_snapshot(watched_directory)
+                if updated != snapshot:
+                    print("Backend Python changed; restarting the local API...", flush=True)
+                    # Own the restart here: Windows Uvicorn CTRL_C_EVENT reload
+                    # can stall when launched with redirected/hidden console I/O.
+                    stop_process(processes[0])
+                    processes[0] = start_process(backend_command, root, os.environ.copy())
+                    snapshot = updated
+                    waiting_for_fix = False
             time.sleep(0.2)
         print("A development server exited; stopping the other server.", file=sys.stderr)
         return 1

@@ -6,6 +6,7 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
+from .observations import Observation
 from .review_summary import ReviewSummary
 
 CountUnit = Literal["tablet", "capsule"]
@@ -229,6 +230,7 @@ class SourceRecord(CareDTO):
 
 
 class MedicationCareReport(CareDTO):
+    observations: list[Observation] = Field(default_factory=list)
     generated_at: datetime
     timezone: str
     observation_window_days: Literal[7, 30]

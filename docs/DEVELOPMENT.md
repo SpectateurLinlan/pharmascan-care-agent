@@ -1,5 +1,9 @@
 # MediThread development
 
+## Requirement-driven acceptance
+
+Before changing code, identify the effective owner requirements and supplements in the [Requirement Register](REQUIREMENTS.md), then make a small behavior-level acceptance matrix. Follow [Requirement-Driven Acceptance](REQUIREMENT_ACCEPTANCE.md): record source, expected outcome, owning API/component, actual verification environment and per-behavior result. Test totals, tool success and code existence do not replace patient-outcome acceptance. Mid-task supplements update the matrix; new requirements after completion are dated additions. Product scope stays in MASTER_SPEC; sensitive approvals stay in DEFERRED_WORK. These documents do not authorize implementation or publication.
+
 ## Local setup and startup
 
 Prerequisites: Python 3.11+, Node.js 22.12+ and npm. From the repository root:
@@ -14,7 +18,20 @@ npm --prefix frontend ci
 python scripts/start_dev.py
 ```
 
-On macOS/Linux activate with `source .venv/bin/activate` and use `cp` in place of `Copy-Item`. The launcher starts FastAPI on `127.0.0.1:8001` and Vite on `localhost:5173`; Ctrl+C stops its own child processes. It installs nothing. If a port is occupied, stop the intended server yourself or choose other ports:
+On macOS/Linux activate with `source .venv/bin/activate` and use `cp` in place of `Copy-Item`. The launcher starts FastAPI on `127.0.0.1:8001` and Vite on `localhost:5173`; Ctrl+C stops its own child processes. It installs nothing.
+
+The local API automatically restarts when Python files under `backend/app` change.
+The launcher supervises these restarts directly, avoiding Windows Uvicorn console-signal
+issues; only its own backend process is replaced. After a Python error stops the API,
+fixing and saving the source triggers another attempt while Vite stays running.
+Vite provides frontend hot updates separately. Use `python scripts/start_dev.py --no-reload`
+to disable backend reload. Restart the launcher manually after changing environment
+variables, dependencies or the launcher itself; existing running servers must be
+restarted once to pick up this new default. This affects local development only,
+not Render or Dispatcher startup. Unsaved in-memory backend state can reset when
+the API restarts; persisted account records are not deleted by reload.
+
+If a port is occupied, stop the intended server yourself or choose other ports:
 
 ```powershell
 python scripts/start_dev.py --backend-port 8011 --frontend-port 5181

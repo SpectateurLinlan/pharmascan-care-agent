@@ -70,6 +70,7 @@ class SupabaseConversationHistory:
     def page(self, patient_id: UUID, since: datetime, before: UUID | None, limit: int) -> list[HistoryTurn]:
         self._client.check_patient(patient_id)
         filters = {
+            "conversation_id": "is.null",
             "patient_id": f"eq.{patient_id}",
             "created_at": f"gte.{since.isoformat()}",
             "order": "created_at.desc,id.desc",

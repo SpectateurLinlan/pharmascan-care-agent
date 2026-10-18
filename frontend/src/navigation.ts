@@ -19,8 +19,10 @@ function initial():string[] {
   return valid(route)?[route]:['today'];
 }
 /** Root selection replaces only its current entry; child tasks retain their origin. */
-export function useCareNavigation(blocked:boolean) {
+export function useCareNavigation(blocked:boolean,leaveBlocked=false) {
   const [stack,setStack]=useState(initial);
+  const [pending,setPending]=useState<string[]|null>(null);
+  const leaving=useRef(leaveBlocked);leaving.current=leaveBlocked;
   const current=useRef(stack);current.current=stack;
   const locked=useRef(blocked);locked.current=blocked;
   useEffect(()=>{
@@ -28,21 +30,26 @@ export function useCareNavigation(blocked:boolean) {
     if(!authCallback())window.history.replaceState({...window.history.state,careRoute:current.current},'',`#${current.current.at(-1)}`);
     const pop=()=>{
       if(locked.current){window.history.pushState({careRoute:current.current},'',`#${current.current.at(-1)}`);return;}
-      setStack(initial());
+      const next=initial();
+      if(leaving.current){window.history.pushState({careRoute:current.current},'',`#${current.current.at(-1)}`);setPending(next);return;}
+      setStack(next);
     };
-    window.addEventListener('popstate',pop);return()=>window.removeEventListener('popstate',pop);
+    const unload=(event:BeforeUnloadEvent)=>{if(leaving.current){event.preventDefault();event.returnValue='';}};
+    window.addEventListener('beforeunload',unload);window.addEventListener('popstate',pop);return()=>{window.removeEventListener('popstate',pop);window.removeEventListener('beforeunload',unload);};
   },[]);
   const navigate=useCallback((value:string) => {
     const next=normalize(value);if(locked.current||authCallback()||!valid(next)||next===current.current.at(-1))return;
     const isRoot=roots.some(root=>root===next);
     const updated=isRoot?[next]:[...current.current,next].slice(-12);
+    if(leaving.current){setPending(updated);return;}
     window.history[isRoot?'replaceState':'pushState']({careRoute:updated},'',`#${next}`);
     setStack(updated);document.documentElement.scrollTop=0;
   },[]);
   function back(){
     if(locked.current)return;
     if(stack.length>1)window.history.back();
-    else {const parent=parents[stack[0]??'']??'today';window.history.replaceState({careRoute:[parent]},'',`#${parent}`);setStack([parent]);}
+    else {const parent=parents[stack[0]??'']??'today';if(leaving.current){setPending([parent]);return;}window.history.replaceState({careRoute:[parent]},'',`#${parent}`);setStack([parent]);}
   }
-  return {tab:stack.at(-1)??'today',navigate,back,isRoot:roots.some(root=>root===stack.at(-1))};
+  const confirmLeave=()=>{if(!pending)return;window.history.replaceState({careRoute:pending},'',`#${pending.at(-1)}`);setStack(pending);setPending(null);};
+  return {pending,confirmLeave,cancelLeave:()=>setPending(null),tab:stack.at(-1)??'today',navigate,back,isRoot:roots.some(root=>root===stack.at(-1))};
 }

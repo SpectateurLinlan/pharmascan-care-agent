@@ -1,0 +1,140 @@
+{
+  "provenance": "Public openFDA responses captured for deterministic replay; not a fresh provider call during tests",
+  "captured_at": "2026-10-18T04:25:58.156513+00:00",
+  "results": [
+    {
+      "id": "4fee8eba-2fa2-4a9c-884a-ccec171e1977",
+      "set_id": "614d974f-51c7-4b18-8171-39eb6e8d4c03",
+      "version": "2",
+      "effective_time": "20260216",
+      "openfda": {
+        "application_number": [
+          "NDA214439"
+        ],
+        "brand_name": [
+          "NORLIQVA"
+        ],
+        "generic_name": [
+          "AMLODIPINE"
+        ],
+        "manufacturer_name": [
+          "CMP Pharma, Inc."
+        ],
+        "product_ndc": [
+          "46287-037"
+        ],
+        "product_type": [
+          "HUMAN PRESCRIPTION DRUG"
+        ],
+        "route": [
+          "ORAL"
+        ],
+        "substance_name": [
+          "AMLODIPINE"
+        ],
+        "rxcui": [
+          "2599173",
+          "2599179"
+        ],
+        "spl_id": [
+          "4fee8eba-2fa2-4a9c-884a-ccec171e1977"
+        ],
+        "spl_set_id": [
+          "614d974f-51c7-4b18-8171-39eb6e8d4c03"
+        ],
+        "package_ndc": [
+          "46287-037-01"
+        ],
+        "is_original_packager": [
+          true
+        ],
+        "upc": [
+          "0346287037019"
+        ],
+        "nui": [
+          "N0000000069",
+          "N0000175421",
+          "N0000175566",
+          "M0006414",
+          "N0000190114"
+        ],
+        "pharm_class_moa": [
+          "Calcium Channel Antagonists [MoA]",
+          "Cytochrome P450 3A Inhibitors [MoA]"
+        ],
+        "pharm_class_epc": [
+          "Dihydropyridine Calcium Channel Blocker [EPC]",
+          "Calcium Channel Blocker [EPC]"
+        ],
+        "pharm_class_cs": [
+          "Dihydropyridines [CS]"
+        ],
+        "unii": [
+          "1J444QC288"
+        ]
+      },
+      "indications_and_usage": [
+        "1 INDICATIONS AND USAGE NORLIQVA is a calcium channel blocker for the treatment of: Hypertension ( 1.1 ) NORLIQVA is indicated for the treatment of hypertension in adults and children 6 years of age and older, to lower blood pressure. Lowering blood pressure reduces the risk of fatal and nonfatal cardiovascular events, primarily strokes and myocardial infarctions. Coronary Artery Disease ( 1.2 ) Chronic Stable Angina Vasospastic Angina (Prinzmetal's or Variant Angina) Angiographically Documented Coronary Artery Disease in patients without heart failure or an ejection fraction <40% 1.1 Hypertension NORLIQVA ® is indicated for the treatment of hypertension, to lower blood pressure in adults and children 6 years of age and older. Lowering blood pressure reduces the risk of fatal and nonfatal cardiovascular events, primarily strokes and myocardial infarctions. These benefits have been seen in controlled trials of antihypertensive drugs from a wide variety of pharmacologic classes including NORLIQVA. Control of high blood pressure should be part of comprehensive cardiovascular risk management, including, as appropriate, lipid control, diabetes management, antithrombotic therapy, smoking cessation, exercise, and limited sodium intake. Many patients will require more than one drug to achieve blood pressure goals. For specific advice on goals and management, see published guidelines, such as those of the National High Blood Pressure Education Program's Joint National Committee on Prevention, Detection, Evaluation, and Treatment of High Blood Pressure (JNC). Numerous antihypertensive drugs, from a variety of pharmacologic classes and with different mechanisms of action, have been shown in randomized controlled trials to reduce cardiovascular morbidity and mortality, and it can be concluded that it is blood pressure reduction, and not some other pharmacologic property of the drugs, that is largely responsible for those benefits. The largest and most consistent cardiovascular outcome benefit has been a reduction in the risk of stroke, but reductions in myocardial infarction and cardiovascular mortality also have been seen regularly. Elevated systolic or diastolic pressure causes increased cardiovascular risk, and the absolute risk increase per mmHg is greater at higher blood pressures, so that even modest reductions of severe hypertension can provide substantial benefit. Relative risk reduction from blood pressure reduction is similar across populations with varying absolute risk, so the absolute benefit is greater in patients who are at higher risk independent of their hypertension (for example, patients with diabetes or hyperlipidemia), and such patients would be expected to benefit from more aggressive treatment to a lower blood pressure goal. Some antihypertensive drugs have smaller blood pressure effects (as monotherapy) in black patients, and many antihypertensive drugs have additional approved indications and effects (e.g., on angina, heart failure, or diabetic kidney disease). These considerations may guide selection of therapy. NORLIQVA may be used alone or in combination with other antihypertensive agents. 1.2 Coronary Artery Disease (CAD) Chronic Stable Angina NORLIQVA is indicated for the symptomatic treatment of chronic stable angina. NORLIQVA may be used alone or in combination with other antianginal agents. Vasospastic Angina (Prinzmetal's or Variant Angina) NORLIQVA is indicated for the treatment of confirmed or suspected vasospastic angina. NORLIQVA may be used as monotherapy or in combination with other antianginal agents. Angiographically Documented CAD In patients with recently documented CAD by angiography and without heart failure or an ejection fraction <40%, NORLIQVA is indicated to reduce the risk of hospitalization for angina and to reduce the risk of a coronary revascularization procedure."
+      ],
+      "dosage_forms_and_strengths": [
+        "3 DOSAGE FORMS AND STRENGTHS Oral Solution: 1 mg/mL clear, pale straw-colored solution with a mixed berry flavor. Oral solution: 1 mg/mL ( 3 )"
+      ]
+    },
+    {
+      "id": "19e4bfb8-2ed1-4a6b-adf5-853ad2953362",
+      "set_id": "011de1a5-1ac0-4831-9e8d-26ec79ba2205",
+      "version": "6",
+      "effective_time": "20240821",
+      "openfda": {
+        "application_number": [
+          "ANDA090564"
+        ],
+        "brand_name": [
+          "Metformin Hydrochloride"
+        ],
+        "generic_name": [
+          "METFORMIN HYDROCHLORIDE"
+        ],
+        "manufacturer_name": [
+          "A-S Medication Solutions"
+        ],
+        "product_ndc": [
+          "50090-7011"
+        ],
+        "product_type": [
+          "HUMAN PRESCRIPTION DRUG"
+        ],
+        "route": [
+          "ORAL"
+        ],
+        "substance_name": [
+          "METFORMIN HYDROCHLORIDE"
+        ],
+        "rxcui": [
+          "861007"
+        ],
+        "spl_id": [
+          "19e4bfb8-2ed1-4a6b-adf5-853ad2953362"
+        ],
+        "spl_set_id": [
+          "011de1a5-1ac0-4831-9e8d-26ec79ba2205"
+        ],
+        "package_ndc": [
+          "50090-7011-0"
+        ],
+        "original_packager_product_ndc": [
+          "70010-063"
+        ],
+        "unii": [
+          "786Z46389E"
+        ]
+      },
+      "indications_and_usage": [
+        "1 INDICATIONS & USAGE Metformin hydrochloride tablets are indicated as an adjunct to diet and exercise to improve glycemic control in adults and pediatric patients 10 years of age and older with type 2 diabetes mellitus. Metformin hydrochloride tablets are biguanide indicated as an adjunct to diet and exercise to improve glycemic control in adults and pediatric patients 10 years of age and older with type 2 diabetes mellitus. ( 1 )"
+      ],
+      "dosage_forms_and_strengths": [
+        "3 DOSAGE FORMS & STRENGTHS Metformin Hydrochloride Tablets, USP are available as: • Tablets: 500 mg - White to off-white, round, biconvex, film coated tablets debossed with G 10 on one side and plain on the other side. • Tablets: 850 mg - White to off-white, round, biconvex, film coated tablets debossed with G 11 on one side and plain on the other side. • Tablets: 1000 mg - White to off-white, oval, biconvex, scored, film coated tablets debossed with G and12 on either side of the scoreline on one side and plain on the other side. Metformin Hydrochloride Tablets: 500 mg, 850 mg, and 1000 mg ( 3 )"
+      ]
+    }
+  ]
+}

@@ -184,6 +184,29 @@ class DoseScheduleService:
                 generated.append(persisted)
         return sorted(generated, key=lambda o: o.due_at)
 
+    def planned_instants(self, *, patient_id: UUID, regimen_id: UUID, start: datetime, end: datetime) -> list[datetime]:
+        """Read a version's actual rules without creating historical occurrences."""
+        regimen = self._require_regimen(patient_id, regimen_id)
+        if regimen.is_prn or regimen.effective_from is None:
+            return []
+        if end <= start or end - start > timedelta(days=2):
+            raise ValidationError("Calendar schedule reads are limited to two days")
+        moments = set()
+        for rule in self._rules.list_for_regimen(patient_id, regimen_id):
+            if rule.rule_kind != RuleKind.SCHEDULED or not rule.enabled:
+                continue
+            zone = ZoneInfo(rule.timezone)
+            for moment in self._expand(rule, start, end, zone):
+                day = moment.astimezone(zone).date()
+                if (
+                    moment >= regimen.effective_from
+                    and (regimen.effective_to is None or moment < regimen.effective_to)
+                    and (regimen.course_start_date is None or day >= regimen.course_start_date)
+                    and (regimen.course_end_date is None or day <= regimen.course_end_date)
+                ):
+                    moments.add(moment)
+        return sorted(moments)
+
     @staticmethod
     def _expand(rule: DoseRuleDTO, start: datetime, end: datetime, tz: ZoneInfo) -> list[datetime]:
         """Expand a rule into absolute UTC instants within [start, end).
@@ -694,14 +717,16 @@ class SelfReportService:
         name = medication.display_name if medication else ""
 
         all_events = self._events.list_for_patient(patient_id, window_start, window_end)
-        events = {e.occurrence_id: e for e in all_events if e.occurrence_id is not None}
         occurrences = self._occurrences.list_for_regimen(patient_id, regimen_id, window_start, window_end)
 
         entries: list[DoseHistoryEntryDTO] = []
         for occurrence in occurrences:
+            event = self._events.find_by_occurrence(patient_id, occurrence.id)
+            if event is not None and event.regimen_id != regimen_id:
+                raise ValidationError("Dose event and occurrence regimen differ")
             entries.append(
                 DoseHistoryEntryDTO(
-                    event=events.get(occurrence.id),
+                    event=event,
                     occurrence=occurrence,
                     regimen_id=regimen_id,
                     medication_display_name=name,

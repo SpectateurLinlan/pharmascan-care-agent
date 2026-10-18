@@ -1,5 +1,5 @@
 import {api,type DoseHistoryResponse,type MedicationSummary,type RegimenHistoryItem} from '../api/client';
-import {useEffect,useState} from 'react';
+import {useEffect,useState,useRef} from 'react';
 import {useLanguage} from '../language';
 import {ErrorNotice} from './primitives';
 import {BottomSheet} from './BottomSheet';
@@ -19,7 +19,7 @@ function summaryHint(row:MedicationSummary,t:(value:string)=>string){
 }
 
 export function MedicinesHub({medications,versions,onOpen,setupCount=null}:{medications:MedicationSummary[];drafts:RegimenHistoryItem[];setupCount?:number|null;versions:RegimenHistoryItem[];onOpen:(page:MedicineDestination,regimenId?:string)=>void}){
- const {t,preferences}=useLanguage();
+ const {t,preferences}=useLanguage();const choices=useRef<HTMLDivElement>(null);
  const today=new Intl.DateTimeFormat('en-CA',{timeZone:preferences.timezone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
  const current=medications.filter(row=>!isPastCourse(row,today)&&(!row.course_start_date||row.course_start_date<=today));
  const upcoming=medications.filter(row=>!isPastCourse(row,today)&&row.course_start_date&&row.course_start_date>today);
@@ -29,15 +29,20 @@ export function MedicinesHub({medications,versions,onOpen,setupCount=null}:{medi
   className="ui-screen--medicines"
   title="My Medicines"
   lead="What you are taking, and what is known about each medicine."
-  actions={<button className="primary" onClick={()=>onOpen('add-method')}>＋ {t('Add medication')}</button>}
+
  >
+  <button className="primary add-medication-wide" onClick={()=>{choices.current?.focus();choices.current?.scrollIntoView?.({block:'nearest'});}}>＋ {t('Add medication')}</button>
+  <div className="add-medication-methods" ref={choices} tabIndex={-1} aria-label={t('Add medication')}>
+   <button onClick={()=>onOpen('label')}><Icon name="camera"/><span>{t('Read medication information')}</span></button>
+   <button onClick={()=>onOpen('manual')}><Icon name="clipboard"/><span>{t('Add manually')}</span></button>
+  </div>
   <nav className="medicine-shortcuts" aria-label={t('Medication management shortcuts')}>
    <button className="medicine-shortcut" onClick={()=>onOpen('past-medicines')}><span className="ui-row__icon"><Icon name="clipboard"/></span><span className="ui-row__text"><strong className="ui-row__title">{t('Past courses')}</strong><small className="ui-row__hint">{pastCount} {t('courses')}</small></span><span className="ui-row__end"><Icon name="chevron-right"/></span></button>
    <button className="medicine-shortcut" onClick={()=>onOpen('gallery')}><span className="ui-row__icon"><Icon name="image"/></span><span className="ui-row__text"><strong className="ui-row__title">{t('Photos and evidence')}</strong><small className="ui-row__hint">{t('Manage source photos and evidence')}</small></span><span className="ui-row__end"><Icon name="chevron-right"/></span></button>
    <button className="medicine-shortcut" onClick={()=>onOpen('unfinished')}><span className="ui-row__icon"><Icon name="alert"/></span><span className="ui-row__text"><strong className="ui-row__title">{t('Finish medication setup')}</strong><small className="ui-row__hint">{setupCount===null?t('View saved source registrations'):`${setupCount} ${t('awaiting review')}`}</small></span><span className="ui-row__end"><Icon name="chevron-right"/></span></button>
   </nav>
   <div className="medicines-courses"><RowGroup title="Currently taking">
-   {current.length?current.map(row=><Row key={row.regimen_id} title={row.display_name} hint={summaryHint(row,t)} end={<span className="medicine-row-end">{badge(row)}<Icon name="chevron-right"/></span>} onClick={()=>onOpen('medicine-detail',row.regimen_id)}/>)
+   {current.length?current.map(row=><Row key={row.regimen_id} title={row.display_name} hint={summaryHint(row,t)} end={<span className="medicine-row-end">{badge(row)}{versions.find(v=>v.regimen_id===row.regimen_id)?.patient_edited?<span className="tag">{t('Edited')}</span>:null}<Icon name="chevron-right"/></span>} onClick={()=>onOpen('medicine-detail',row.regimen_id)}/>)
     :<EmptyState icon="pill" title="No current medication plans." text="Add a medication, review the instructions from your label or pharmacist, and activate the plan. Only a reviewed plan appears in Today."/>}
   </RowGroup>
   {upcoming.length?<RowGroup title="Upcoming courses">{upcoming.map(row=><Row key={row.regimen_id} title={row.display_name} hint={`${t('Course start date')}: ${row.course_start_date}`} end={badge(row)} onClick={()=>onOpen('medicine-detail',row.regimen_id)}/>)}</RowGroup>:null}
@@ -75,7 +80,7 @@ export function MedicationDetail({row,summary,onHistory,onGallery,onCheck,onEdit
  const strength=basis?.strength_text;
  const form=basis?.form||basis?.formulation;
  return <Screen title={row.display_name} actions={<><button className="primary" onClick={onCheck}>{t('Compare a pill photo')}</button><button onClick={onHistory}>{t('My History')}</button></>}>
-  <div className="record-status"><VerificationBadge state={row.state}/></div>
+  <div className="record-status"><VerificationBadge state={row.state}/>{row.patient_edited?<span className="tag">{t('Edited')}</span>:null}</div>
 
   <section className="card">
    <h2 className="card__title">{t('What this medicine is')}</h2>

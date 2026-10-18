@@ -1,0 +1,522 @@
+{
+  "provenance": "Actual public openFDA eight-candidate response; captured during C02 live source diagnosis; no patient data",
+  "results": [
+    {
+      "indications_and_usage": [
+        "1 INDICATIONS AND USAGE ZITUVIMET is a combination of sitagliptin, a dipeptidyl peptidase-4 (DPP-4) inhibitor, and metformin hydrochloride (HCl), a biguanide, indicated as an adjunct to diet and exercise to improve glycemic control in adults with type 2 diabetes mellitus. ( 1 ) Limitations of Use: ZITUVIMET is not recommended in patients with type 1 diabetes mellitus. ( 1 ) ZITUVIMET has not been studied in patients with a history of pancreatitis. ( 1 ) ZITUVIMET is indicated as an adjunct to diet and exercise to improve glycemic control in adults with type 2 diabetes mellitus. Limitations of Use ZITUVIMET is not recommended in patients with type 1 diabetes mellitus. ZITUVIMET has not been studied in patients with a history of pancreatitis. It is unknown whether patients with a history of pancreatitis are at increased risk for the development of pancreatitis while using ZITUVIMET. [see Warnings and Precautions ( 5.2 )]."
+      ],
+      "dosage_forms_and_strengths": [
+        "3 DOSAGE FORMS AND STRENGTHS ZITUVIMET Tablets: • sitagliptin 50 mg and metformin HCl 500 mg tablets • sitagliptin 50 mg and metformin HCl 1,000 mg tablets ( 3 ) Tablets: sitagliptin 50 mg and metformin HCl 500 mg tablets are white to off-white, oval shaped, biconvex, film coated tablets debossed with \"1786\" on one side and plain on the other side. sitagliptin 50 mg and metformin HCl 1,000 mg tablets are reddish brown, oval shaped, biconvex, film coated tablets debossed with \"1787\" on one side and plain on the other side."
+      ],
+      "set_id": "0098dec4-f0e5-45d5-8aa4-5d0faf9ab142",
+      "id": "8c26dc1a-fba3-4266-bfaf-624b0941ef8b",
+      "effective_time": "20260812",
+      "version": "6",
+      "openfda": {
+        "application_number": [
+          "NDA216743"
+        ],
+        "brand_name": [
+          "ZITUVIMET"
+        ],
+        "generic_name": [
+          "SITAGLIPTIN AND METFORMIN HYDROCHLORIDE"
+        ],
+        "manufacturer_name": [
+          "Zydus Lifesciences Limited"
+        ],
+        "product_ndc": [
+          "70771-1859",
+          "70771-1860"
+        ],
+        "product_type": [
+          "HUMAN PRESCRIPTION DRUG"
+        ],
+        "route": [
+          "ORAL"
+        ],
+        "substance_name": [
+          "SITAGLIPTIN",
+          "METFORMIN HYDROCHLORIDE"
+        ],
+        "rxcui": [
+          "861769",
+          "861819",
+          "2677162",
+          "2677164"
+        ],
+        "spl_id": [
+          "8c26dc1a-fba3-4266-bfaf-624b0941ef8b"
+        ],
+        "spl_set_id": [
+          "0098dec4-f0e5-45d5-8aa4-5d0faf9ab142"
+        ],
+        "package_ndc": [
+          "70771-1859-6",
+          "70771-1859-8",
+          "70771-1860-6",
+          "70771-1860-8"
+        ],
+        "is_original_packager": [
+          true
+        ],
+        "nui": [
+          "N0000175913",
+          "N0000175912"
+        ],
+        "pharm_class_epc": [
+          "Dipeptidyl Peptidase 4 Inhibitor [EPC]"
+        ],
+        "pharm_class_moa": [
+          "Dipeptidyl Peptidase 4 Inhibitors [MoA]"
+        ],
+        "unii": [
+          "786Z46389E",
+          "QFP0P1DV7Z"
+        ]
+      }
+    },
+    {
+      "indications_and_usage": [
+        "1 INDICATIONS & USAGE Metformin hydrochloride tablets are indicated as an adjunct to diet and exercise to improve glycemic control in adults and pediatric patients 10 years of age and older with type 2 diabetes mellitus. Metformin hydrochloride tablets are biguanide indicated as an adjunct to diet and exercise to improve glycemic control in adults and pediatric patients 10 years of age and older with type 2 diabetes mellitus. ( 1 )"
+      ],
+      "dosage_forms_and_strengths": [
+        "3 DOSAGE FORMS & STRENGTHS Metformin Hydrochloride Tablets, USP are available as: • Tablets: 500 mg - White to off-white, round, biconvex, film coated tablets debossed with G 10 on one side and plain on the other side. • Tablets: 850 mg - White to off-white, round, biconvex, film coated tablets debossed with G 11 on one side and plain on the other side. • Tablets: 1000 mg - White to off-white, oval, biconvex, scored, film coated tablets debossed with G and12 on either side of the scoreline on one side and plain on the other side. Metformin Hydrochloride Tablets: 500 mg, 850 mg, and 1000 mg ( 3 )"
+      ],
+      "set_id": "011de1a5-1ac0-4831-9e8d-26ec79ba2205",
+      "id": "19e4bfb8-2ed1-4a6b-adf5-853ad2953362",
+      "effective_time": "20240821",
+      "version": "6",
+      "openfda": {
+        "application_number": [
+          "ANDA090564"
+        ],
+        "brand_name": [
+          "Metformin Hydrochloride"
+        ],
+        "generic_name": [
+          "METFORMIN HYDROCHLORIDE"
+        ],
+        "manufacturer_name": [
+          "A-S Medication Solutions"
+        ],
+        "product_ndc": [
+          "50090-7011"
+        ],
+        "product_type": [
+          "HUMAN PRESCRIPTION DRUG"
+        ],
+        "route": [
+          "ORAL"
+        ],
+        "substance_name": [
+          "METFORMIN HYDROCHLORIDE"
+        ],
+        "rxcui": [
+          "861007"
+        ],
+        "spl_id": [
+          "19e4bfb8-2ed1-4a6b-adf5-853ad2953362"
+        ],
+        "spl_set_id": [
+          "011de1a5-1ac0-4831-9e8d-26ec79ba2205"
+        ],
+        "package_ndc": [
+          "50090-7011-0"
+        ],
+        "original_packager_product_ndc": [
+          "70010-063"
+        ],
+        "unii": [
+          "786Z46389E"
+        ]
+      }
+    },
+    {
+      "indications_and_usage": [
+        "1 INDICATIONS AND USAGE Metformin hydrochloride tablets, USP are indicated as an adjunct to diet and exercise to improve glycemic control in adults and pediatric patients 10 years of age and older with type 2 diabetes mellitus. Metformin hydrochloride tablets, USP are a biguanide indicated as an adjunct to diet and exercise to improve glycemic control in adults and pediatric patients 10 years of age and older with type 2 diabetes mellitus. ( 1 )"
+      ],
+      "dosage_forms_and_strengths": [
+        "3 DOSAGE FORMS AND STRENGTHS Metformin Hydrochloride Tablets, USP are available as: Tablets: 500 mg white to off white, round, biconvex, flavored, film coated tablets with 'LL' debossed on one side and plain on the other side. Tablets: 850 mg white to off white, capsule shaped, biconvex, flavored, film coated tablets with 'L06' debossed on one side and plain on the other side. Tablets: 1,000 mg white to off white, oval, biconvex, flavored, film coated tablets, with score line on both sides, with 'L' and '11' debossed on either side of score line on one side. Metformin hydrochloride tablets, USP: 500 mg, 850 mg, and 1,000 mg ( 3 )"
+      ],
+      "set_id": "0178b9dd-bafa-9e81-e063-6294a90a88b0",
+      "id": "4b81b8de-7de7-2dc4-e063-6294a90a7a10",
+      "effective_time": "20260101",
+      "version": "4",
+      "openfda": {
+        "application_number": [
+          "ANDA209882"
+        ],
+        "brand_name": [
+          "Metformin Hydrochloride"
+        ],
+        "generic_name": [
+          "METFORMIN HYDROCHLORIDE"
+        ],
+        "manufacturer_name": [
+          "Northwind Health Company, LLC"
+        ],
+        "product_ndc": [
+          "51655-644"
+        ],
+        "product_type": [
+          "HUMAN PRESCRIPTION DRUG"
+        ],
+        "route": [
+          "ORAL"
+        ],
+        "substance_name": [
+          "METFORMIN HYDROCHLORIDE"
+        ],
+        "rxcui": [
+          "861004"
+        ],
+        "spl_id": [
+          "4b81b8de-7de7-2dc4-e063-6294a90a7a10"
+        ],
+        "spl_set_id": [
+          "0178b9dd-bafa-9e81-e063-6294a90a88b0"
+        ],
+        "package_ndc": [
+          "51655-644-26"
+        ],
+        "original_packager_product_ndc": [
+          "42385-949"
+        ],
+        "unii": [
+          "786Z46389E"
+        ]
+      }
+    },
+    {
+      "indications_and_usage": [
+        "1 INDICATIONS AND USAGE Metformin hydrochloride tablets are indicated as an adjunct to diet and exercise to improve glycemic control in adults and pediatric patients 10 years of age and older with type 2 diabetes mellitus. Metformin hydrochloride tablets is a biguanide indicated as an adjunct to diet and exercise to improve glycemic control in adults and pediatric patients 10 years of age and older with type 2 diabetes mellitus. ( 1 )"
+      ],
+      "dosage_forms_and_strengths": [
+        "3 DOSAGE FORMS AND STRENGTHS Metformin hydrochloride tablets, USP are available as: Metformin Hydrochloride Tablets USP, 500 mg are blackberry flavored, white to off-white, round, biconvex, film-coated tablets debossed “IP 218” on obverse and “500” on the reverse. Metformin Hydrochloride Tablets USP, 850 mg are blackberry flavored, white to off-white, round, biconvex, film-coated tablets debossed “IP 219” on obverse and “850” on the reverse. Metformin Hydrochloride Tablets USP, 1,000 mg are blackberry flavored, white to off-white, oval, biconvex, bisected, film-coated tablets debossed “IP 220” on obverse and “1000” on the reverse. Metformin hydrochloride tablets: 500 mg, 850 mg, and 1,000 mg. ( 3 )"
+      ],
+      "set_id": "0230a3c3-34cf-478b-88c3-4d96e5300018",
+      "id": "4138efd9-8582-c8db-e063-6294a90adcd7",
+      "effective_time": "20251015",
+      "version": "19",
+      "openfda": {
+        "application_number": [
+          "ANDA077880"
+        ],
+        "brand_name": [
+          "Metformin Hydrochloride"
+        ],
+        "generic_name": [
+          "METFORMIN HYDROCHLORIDE"
+        ],
+        "manufacturer_name": [
+          "PD-Rx Pharmaceuticals, Inc."
+        ],
+        "product_ndc": [
+          "43063-527"
+        ],
+        "product_type": [
+          "HUMAN PRESCRIPTION DRUG"
+        ],
+        "route": [
+          "ORAL"
+        ],
+        "substance_name": [
+          "METFORMIN HYDROCHLORIDE"
+        ],
+        "rxcui": [
+          "861007"
+        ],
+        "spl_id": [
+          "4138efd9-8582-c8db-e063-6294a90adcd7"
+        ],
+        "spl_set_id": [
+          "0230a3c3-34cf-478b-88c3-4d96e5300018"
+        ],
+        "package_ndc": [
+          "43063-527-14",
+          "43063-527-20",
+          "43063-527-30",
+          "43063-527-60",
+          "43063-527-90",
+          "43063-527-98",
+          "43063-527-93",
+          "43063-527-94"
+        ],
+        "original_packager_product_ndc": [
+          "53746-218"
+        ],
+        "upc": [
+          "0343063527207"
+        ],
+        "unii": [
+          "786Z46389E"
+        ]
+      }
+    },
+    {
+      "indications_and_usage": [
+        "INDICATIONS AND USAGE Glipizide and metformin hydrochloride tablets USP are indicated as an adjunct to diet and exercise to improve glycemic control in adults with type 2 diabetes mellitus."
+      ],
+      "set_id": "03d9ce02-0559-494c-a53d-de9b9a64b606",
+      "id": "7d659eb2-cee9-4326-a439-ef5ec9ec9c63",
+      "effective_time": "20260611",
+      "version": "19",
+      "openfda": {
+        "application_number": [
+          "ANDA077270"
+        ],
+        "brand_name": [
+          "Glipizide and Metformin Hydrochloride"
+        ],
+        "generic_name": [
+          "GLIPIZIDE AND METFORMIN HYDROCHLORIDE"
+        ],
+        "manufacturer_name": [
+          "Teva Pharmaceuticals USA, Inc."
+        ],
+        "product_ndc": [
+          "0093-7455",
+          "0093-7456",
+          "0093-7457"
+        ],
+        "product_type": [
+          "HUMAN PRESCRIPTION DRUG"
+        ],
+        "route": [
+          "ORAL"
+        ],
+        "substance_name": [
+          "GLIPIZIDE",
+          "METFORMIN HYDROCHLORIDE"
+        ],
+        "rxcui": [
+          "861731",
+          "861736",
+          "861740"
+        ],
+        "spl_id": [
+          "7d659eb2-cee9-4326-a439-ef5ec9ec9c63"
+        ],
+        "spl_set_id": [
+          "03d9ce02-0559-494c-a53d-de9b9a64b606"
+        ],
+        "package_ndc": [
+          "0093-7455-01",
+          "0093-7456-01",
+          "0093-7457-01"
+        ],
+        "is_original_packager": [
+          true
+        ],
+        "upc": [
+          "0300937455011",
+          "0300937456018",
+          "0300937457015"
+        ],
+        "nui": [
+          "N0000175608",
+          "M0020795"
+        ],
+        "pharm_class_epc": [
+          "Sulfonylurea [EPC]"
+        ],
+        "pharm_class_cs": [
+          "Sulfonylurea Compounds [CS]"
+        ],
+        "unii": [
+          "786Z46389E",
+          "X7WDT95N5C"
+        ]
+      }
+    },
+    {
+      "indications_and_usage": [
+        "1 INDICATIONS & USAGE Metformin hydrochloride tablets are indicated as an adjunct to diet and exercise to improve glycemic control in adults and pediatric patients 10 years of age and older with type 2 diabetes mellitus. Metformin hydrochloride tablets are biguanide indicated as an adjunct to diet and exercise to improve glycemic control in adults and pediatric patients 10 years of age and older with type 2 diabetes mellitus. ( 1 )"
+      ],
+      "dosage_forms_and_strengths": [
+        "3 DOSAGE FORMS & STRENGTHS Metformin Hydrochloride Tablets, USP are available as: • Tablets: 500 mg - White to off-white, round, biconvex, film coated tablets debossed with G 10 on one side and plain on the other side. • Tablets: 850 mg - White to off-white, round, biconvex, film coated tablets debossed with G 11 on one side and plain on the other side. • Tablets: 1000 mg - White to off-white, oval, biconvex, scored, film coated tablets debossed with G and12 on either side of the scoreline on one side and plain on the other side. Metformin Hydrochloride Tablets: 500 mg, 850 mg, and 1000 mg ( 3 )"
+      ],
+      "set_id": "041632fa-9bf4-8d7c-e063-6294a90adefb",
+      "id": "1ef48a70-a4ad-28bf-e063-6394a90a9795",
+      "effective_time": "20240805",
+      "version": "2",
+      "openfda": {
+        "application_number": [
+          "ANDA090564"
+        ],
+        "brand_name": [
+          "Metformin Hydrochloride"
+        ],
+        "generic_name": [
+          "METFORMIN HYDROCHLORIDE"
+        ],
+        "manufacturer_name": [
+          "NuCare Pharmaceuticals,Inc."
+        ],
+        "product_ndc": [
+          "68071-3495"
+        ],
+        "product_type": [
+          "HUMAN PRESCRIPTION DRUG"
+        ],
+        "route": [
+          "ORAL"
+        ],
+        "substance_name": [
+          "METFORMIN HYDROCHLORIDE"
+        ],
+        "rxcui": [
+          "861010"
+        ],
+        "spl_id": [
+          "1ef48a70-a4ad-28bf-e063-6394a90a9795"
+        ],
+        "spl_set_id": [
+          "041632fa-9bf4-8d7c-e063-6294a90adefb"
+        ],
+        "package_ndc": [
+          "68071-3495-8"
+        ],
+        "original_packager_product_ndc": [
+          "70010-064"
+        ],
+        "upc": [
+          "0368071349580"
+        ],
+        "unii": [
+          "786Z46389E"
+        ]
+      }
+    },
+    {
+      "indications_and_usage": [
+        "1 INDICATIONS AND USAGE Metformin hydrochloride tablets are indicated as an adjunct to diet and exercise to improve glycemic control in adults and pediatric patients 10 years of age and older with type 2 diabetes mellitus. Metformin hydrochloride tablets is a biguanide indicated as an adjunct to diet and exercise to improve glycemic control in adults and pediatric patients 10 years of age and older with type 2 diabetes mellitus. (1)"
+      ],
+      "dosage_forms_and_strengths": [
+        "3 DOSAGE FORMS AND STRENGTHS Metformin Hydrochloride Tablets USP, 500 mg: White, biconvex, circular shaped film coated, with blackberry scent tablets debossed with ‘M 4’ on one side and plain on the other side. Metformin Hydrochloride Tablets USP, 850 mg: White, biconvex, circular shaped film coated, with blackberry scent tablets debossed with ‘M 6’ on one side and plain on the other side. Metformin Hydrochloride Tablets USP, 1000 mg: White, biconvex, oval shaped film coated, with blackberry scent tablets with a score line in between ‘M’ and ‘8’ on one side and plain on the other side. Metformin hydrochloride tablets: 500 mg, 850 mg, and 1000 mg (3)"
+      ],
+      "set_id": "0448c618-2f0d-4ed3-866f-74b413cf902d",
+      "id": "eda81df8-05d9-4eac-b058-7eb51d7aa6e4",
+      "effective_time": "20260416",
+      "version": "6",
+      "openfda": {
+        "application_number": [
+          "ANDA077095"
+        ],
+        "brand_name": [
+          "Metformin Hydrochloride"
+        ],
+        "generic_name": [
+          "METFORMIN HYDROCHLORIDE"
+        ],
+        "manufacturer_name": [
+          "NCS HealthCare of KY, LLC dba Vangard Labs"
+        ],
+        "product_ndc": [
+          "0615-8577",
+          "0615-8578",
+          "0615-8629"
+        ],
+        "product_type": [
+          "HUMAN PRESCRIPTION DRUG"
+        ],
+        "route": [
+          "ORAL"
+        ],
+        "substance_name": [
+          "METFORMIN HYDROCHLORIDE"
+        ],
+        "rxcui": [
+          "861004",
+          "861007",
+          "861010"
+        ],
+        "spl_id": [
+          "eda81df8-05d9-4eac-b058-7eb51d7aa6e4"
+        ],
+        "spl_set_id": [
+          "0448c618-2f0d-4ed3-866f-74b413cf902d"
+        ],
+        "package_ndc": [
+          "0615-8577-39",
+          "0615-8578-39",
+          "0615-8578-05",
+          "0615-8578-30",
+          "0615-8629-39",
+          "0615-8629-05",
+          "0615-8629-28",
+          "0615-8629-30"
+        ],
+        "original_packager_product_ndc": [
+          "59651-855",
+          "59651-856",
+          "59651-854"
+        ],
+        "unii": [
+          "786Z46389E"
+        ]
+      }
+    },
+    {
+      "indications_and_usage": [
+        "1 INDICATIONS AND USAGE Metformin hydrochloride extended-release tablets are indicated as an adjunct to diet and exercise to improve glycemic control in adults and pediatric patients 10 years of age and older with type 2 diabetes mellitus. Metformin hydrochloride extended-release tablets are biguanide indicated as an adjunct to diet and exercise to improve glycemic control in adults and pediatric patients 10 years of age and older with type 2 diabetes mellitus. ( 1 )"
+      ],
+      "dosage_forms_and_strengths": [
+        "3 DOSAGE FORMS AND STRENGTHS Metformin hydrochloride extended-release tablets, USP are available as: • Extended-release tablets: 500 mg white to off-white uncoated, modified capsule shaped tablets debossed with \"G7\" on one side and plain on other side. • Metformin Hydrochloride Extended-Release Tablets: 500 mg ( 3 )"
+      ],
+      "set_id": "05999192-ebc6-4198-bd1e-f46abbfb4f8a",
+      "id": "5b0d17ff-e1b6-c6cf-e063-6394a90ae215",
+      "effective_time": "20260909",
+      "version": "5",
+      "openfda": {
+        "application_number": [
+          "ANDA209313"
+        ],
+        "brand_name": [
+          "Metformin"
+        ],
+        "generic_name": [
+          "METFORMIN ER 500 MG"
+        ],
+        "manufacturer_name": [
+          "REMEDYREPACK INC."
+        ],
+        "product_ndc": [
+          "70518-4370"
+        ],
+        "product_type": [
+          "HUMAN PRESCRIPTION DRUG"
+        ],
+        "route": [
+          "ORAL"
+        ],
+        "substance_name": [
+          "METFORMIN HYDROCHLORIDE"
+        ],
+        "rxcui": [
+          "860975"
+        ],
+        "spl_id": [
+          "5b0d17ff-e1b6-c6cf-e063-6394a90ae215"
+        ],
+        "spl_set_id": [
+          "05999192-ebc6-4198-bd1e-f46abbfb4f8a"
+        ],
+        "package_ndc": [
+          "70518-4370-0",
+          "70518-4370-2",
+          "70518-4370-1",
+          "70518-4370-3",
+          "70518-4370-4"
+        ],
+        "original_packager_product_ndc": [
+          "70010-491"
+        ],
+        "unii": [
+          "786Z46389E"
+        ]
+      }
+    }
+  ]
+}

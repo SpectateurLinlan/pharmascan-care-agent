@@ -34,7 +34,7 @@ it('clears all patient-specific course evidence before adding another medicine',
  vi.mocked(api.reviewDraft).mockResolvedValue({source_id:'DEMO-s',reviewed_field_count:1,note:'demo_only'});
  vi.mocked(api.requestChallenge).mockResolvedValue({regimen_id:'DEMO-r',challenge_id:'DEMO-c',session_id:'DEMO-session',session_state:'awaiting_confirmation',session_state_version:1,expires_at:'2099-01-01T00:00:00Z',summary:{medication_name:'DEMO first',dose_amount:1,dose_unit:'tablet',frequency:{kind:'daily',local_times:['08:00'],days_of_week:[]},is_prn:false,version_no:1,local_timezone:'Asia/Singapore'},note:'demo_only'});
  vi.mocked(api.activate).mockResolvedValue({regimen_id:'DEMO-r',state:'active',superseded_regimen_ids:[]});
- render(<EnrollScreen sessionId="DEMO-session" medications={null} onChanged={vi.fn()}/>);enterCheckedEvidence();
+ const onChanged=vi.fn();render(<EnrollScreen sessionId="DEMO-session" medications={null} onChanged={onChanged}/>);enterCheckedEvidence();
  fireEvent.change(screen.getByLabelText('Course start date'),{target:{value:'2026-10-16'}});fireEvent.change(screen.getByLabelText('Number of days'),{target:{value:'7'}});
  // Two perceived steps over the same backend states: one summary, then the
  // existing B14 challenge. There is no separate "create draft" step for the
@@ -44,6 +44,7 @@ it('clears all patient-specific course evidence before adding another medicine',
  fireEvent.click(screen.getByLabelText('I have checked these details against my original instructions.'));
  fireEvent.click(screen.getByRole('button',{name:'Add this medication'}));
  await screen.findByRole('button',{name:'Yes, save this medication'});
+ expect(onChanged).toHaveBeenCalledTimes(1); // The saved draft is visible before activation.
  fireEvent.click(screen.getByRole('button',{name:'Yes, save this medication'}));
  await screen.findByText('Medication added. It now appears in your medication list.');
  // The form is replaced by the success card, so "cleared" is asserted where it

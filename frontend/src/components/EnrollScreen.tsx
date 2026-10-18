@@ -38,18 +38,19 @@ import {
   type RegimenHistoryItem,
 } from '../api/client';
 import { BottomSheet } from './BottomSheet';
-import { Card, ErrorNotice, Tag } from './primitives';
+import { Card, ErrorNotice, Tag, AutoDismissNotice } from './primitives';
 
 const WEEKDAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 
 export function EnrollScreen({
   sessionId,
   medications,
-  onChanged, sourceSelection, resumeRegimenId, resumeRow, editFrom, onActivated,
+  onChanged, onDirtyChange, sourceSelection, resumeRegimenId, resumeRow, editFrom, onActivated,
 }: {
   editFrom?: RegimenHistoryItem | null; onActivated?:(id:string)=>void;
   sessionId: string | null;
   medications: MedicationListResponse | null;
+  onDirtyChange?:(dirty:boolean)=>void;
   onChanged: () => void; resumeRegimenId?: string | null; resumeRow?: RegimenHistoryItem | null;
   sourceSelection?: { preview: SourcePreview; name: string } | null;
 }) {
@@ -67,6 +68,7 @@ export function EnrollScreen({
   const [courseStart, setCourseStart] = useState('');
   const [courseEnd, setCourseEnd] = useState('');
   const [courseDays,setCourseDays]=useState('');
+  const [courseMode,setCourseMode]=useState<'days'|'end'>(editFrom?.course_end_date?'end':'days');
   const [foodInstruction,setFoodInstruction]=useState('');
   const [frequency, setFrequency] = useState<'daily' | 'weekly'>('daily');
   const [weekdays, setWeekdays] = useState<number[]>([]);
@@ -86,13 +88,14 @@ export function EnrollScreen({
   // A checked source and a course belong to one enrollment, never the next drug.
   function clearEntryFields() {
     setName('');setDoseAmount('');setDoseUnit('tablet');setDoseBasis(emptyDoseBasis);
-    setTimes(['08:00']);setIsPrn(false);setCourseStart('');setCourseEnd('');setCourseDays('');
+    setTimes(['08:00']);setIsPrn(false);setCourseStart('');setCourseEnd('');setCourseDays('');setCourseMode('days');
     setFoodInstruction('');setFrequency('daily');setWeekdays([]);
   }
 
+  useEffect(()=>{onDirtyChange?.(!activated&&Boolean(name||doseAmount||courseStart||courseEnd||courseDays||draft||foodInstruction||doseBasis.strength_text||doseBasis.instructions_text||isPrn||times.join(',')!=='08:00'));},[activated,name,doseAmount,courseStart,courseEnd,courseDays,draft,foodInstruction,doseBasis,isPrn,times,onDirtyChange]);
   const prefilled=useRef<string|null>(null);
   useEffect(()=>{if(!editFrom||prefilled.current===editFrom.regimen_id)return;prefilled.current=editFrom.regimen_id;
-    setDoseBasis(emptyDoseBasis);setCourseDays('');
+    setDoseBasis(emptyDoseBasis);setCourseDays('');setCourseMode(editFrom?.course_end_date?'end':'days');
     setFrequency(editFrom.frequency_rule?.kind==='weekly'?'weekly':'daily');setWeekdays(editFrom.frequency_rule?.days_of_week??[]);setName(editFrom.display_name);setDoseAmount(String(editFrom.dose_amount??''));setDoseUnit(editFrom.dose_unit??'');setTimes(editFrom.local_times.length?editFrom.local_times:['']);setIsPrn(editFrom.is_prn);setCourseStart(editFrom.course_start_date??'');setCourseEnd(editFrom.course_end_date??'');setFoodInstruction(editFrom.food_instruction??'');setStep('form');
   },[editFrom]);
   useEffect(() => { if (sourceSelection) { clearEntryFields();setName(sourceSelection.name);setTimes(['']);setStep('form'); } }, [sourceSelection]);
@@ -102,14 +105,18 @@ export function EnrollScreen({
    * regimen row so the patient can complete it, and the medication is reused
    * rather than registered a second time.
    */
+  const resumed=useRef<string|null>(null);
   useEffect(() => {
-    if (!resumeRegimenId) return;
+    if (!resumeRegimenId||resumed.current===resumeRegimenId) return;
     let active = true;
+    setBusy(true);setStep('form');setReviewed(false);setChallenge(null);
     void api.resumeDraft(resumeRegimenId).then(saved => {
       if(!active)return;
+      resumed.current=resumeRegimenId;
       setMedicationId(saved.medication_id);
       setDraft(saved);
       if(resumeRow){
+        setCourseMode(resumeRow.course_end_date?'end':'days');
         setDoseBasis(emptyDoseBasis);setCourseDays('');
         setFrequency(resumeRow.frequency_rule?.kind==='weekly'?'weekly':'daily');setWeekdays(resumeRow.frequency_rule?.days_of_week??[]);
         setName(resumeRow.display_name);setDoseAmount(String(resumeRow.dose_amount??''));setDoseUnit(resumeRow.dose_unit??'tablet');
@@ -117,7 +124,7 @@ export function EnrollScreen({
         setCourseStart(resumeRow.course_start_date??'');setCourseEnd(resumeRow.course_end_date??'');setFoodInstruction(resumeRow.food_instruction??'');
       }
       setStep('form');
-    }).catch(caught => { if(active) setError(caught); });
+    }).catch(caught => { if(active) setError(caught); }).finally(()=>{if(active)setBusy(false);});
     return () => { active = false; };
   }, [resumeRegimenId, resumeRow]);
 
@@ -151,6 +158,7 @@ export function EnrollScreen({
     const parsedAmount = doseAmount.trim() === '' ? null : Number(doseAmount);
     const selectedTimes = normalisedTimes();
     return {
+      patient_edited:Boolean(editFrom),
       course_start_date: courseStart || null,
       course_end_date: courseEnd || null,
       ...(sourceSelection && sourceSelection.name.trim() === name.trim() ? { extraction_evidence: sourceSelection.preview } : {}),
@@ -183,6 +191,8 @@ export function EnrollScreen({
       }
       const created = await api.createDraft(draftInput(), medicationId ?? undefined);
       setDraft(created); setMedicationId(created.medication_id);
+      // A saved draft belongs in pending setup immediately, even if confirmation is cancelled.
+      await onChanged();
       if (created.missing_instructions.length > 0) {
         // The draft is stored but is NOT active. Nothing is inferred to fill the
         // gap; the patient supplies it and commits again.
@@ -243,9 +253,9 @@ export function EnrollScreen({
       />
     </div>
 
-    <div className="grid-2">
+    <div className="grid-2 enrollment-fields">
       <div className="field">
-        <label htmlFor={fieldId('med-dose')}>{t('Units per dose')}<span className="sr-only"> · {t('Dose amount')}</span></label>
+        <label htmlFor={fieldId('med-dose')}>{t('Units per dose')}</label>
         <input
           id={fieldId('med-dose')} aria-label={t('Dose amount')}
           value={doseAmount}
@@ -255,7 +265,7 @@ export function EnrollScreen({
         />
       </div>
       <div className="field">
-        <label htmlFor={fieldId('med-unit')}>{t('Dose unit')}<span className="sr-only"> · {t('Unit')}</span></label>
+        <label htmlFor={fieldId('med-unit')}>{t('Dose unit')}</label>
         <input
           id={fieldId('med-unit')} aria-label={t('Unit')}
           value={doseUnit}
@@ -267,11 +277,15 @@ export function EnrollScreen({
     <p className="notice">{t('Units per dose is how many you take each time — for example 1 tablet. It is not the strength printed on the pack.')}</p>
 
     <DoseDetails id={fieldId('dose-basis')} basis={doseBasis} onChange={setDoseBasis} amount={doseAmount} unit={doseUnit}/>
-    <div className="grid-2 picker-fields">
-      <MedicationDate label="Course start date" value={courseStart} onChange={value=>{setCourseStart(value);if(courseDays)setCourseEnd(courseEndForDuration(value,Number(courseDays))??'');}}/>
-      <MedicationDate label="Last day (inclusive)" min={courseStart} value={courseEnd} onChange={value=>{setCourseEnd(value);setCourseDays('');}}/>
-    </div>
-    <div className="field"><label htmlFor={fieldId('course-days')}>{t('Number of days')}</label><input id={fieldId('course-days')} type="number" min="1" max="3660" value={courseDays} onChange={event=>{setCourseDays(event.target.value);setCourseEnd(courseEndForDuration(courseStart,Number(event.target.value))??'');}}/><p className="notice">{t('Enter a start date and the duration in your reviewed instructions. The last day is calculated inclusively.')}</p></div>
+    <fieldset className="course-fields">
+      <legend>{t('Course duration')}</legend>
+      <div className="course-mode"><label><input type="radio" name={fieldId('course-mode')} checked={courseMode==='days'} onChange={()=>{setCourseMode('days');setCourseDays(courseDuration(courseStart,courseEnd));}}/>{t('Enter number of days')}</label><label><input type="radio" name={fieldId('course-mode')} checked={courseMode==='end'} onChange={()=>setCourseMode('end')}/>{t('Enter last day')}</label></div>
+      <div className="grid-2 enrollment-fields">
+        <MedicationDate label="Course start date" value={courseStart} onChange={value=>{setCourseStart(value);if(courseMode==='days'){setCourseEnd(courseEndForDuration(value,Number(courseDays))??'');}else{setCourseDays(courseDuration(value,courseEnd));}}}/>
+        {courseMode==='end'?<MedicationDate label="Last day (inclusive)" min={courseStart} value={courseEnd} onChange={value=>{setCourseEnd(value);setCourseDays(courseDuration(courseStart,value));}}/>:<div className="field"><label htmlFor={fieldId('course-days')}>{t('Number of days')}</label><input id={fieldId('course-days')} type="number" min="1" max="3660" value={courseDays} onChange={event=>{setCourseDays(event.target.value);setCourseEnd(courseEndForDuration(courseStart,Number(event.target.value))??'');}}/></div>}
+      </div>
+      <p className="notice" role="status">{courseMode==='days'&&courseEnd?`${t('Last day (inclusive)')}: ${courseEnd}`:courseMode==='end'&&courseDays?`${t('Number of days')}: ${courseDays}`:t('Enter a start date and either the number of days or the last day. The other value is calculated, including the last day.')}</p>
+    </fieldset>
     <div className="field"><label htmlFor="food-instruction">{t('Food instructions')}</label><select id="food-instruction" value={foodInstruction} onChange={event=>setFoodInstruction(event.target.value)}><option value="">{t('Not specified')}</option>{['before food','after food','with food','without regard to food'].map(value=><option key={value} value={value}>{t(value)}</option>)}</select></div>
     <div className="field"><label htmlFor={fieldId('med-frequency')}>{t('Schedule')}</label><select id={fieldId('med-frequency')} disabled={isPrn} value={frequency} onChange={event => setFrequency(event.target.value as 'daily' | 'weekly')}><option value="daily">{t('Every day')}</option><option value="weekly">{t('Selected weekdays')}</option></select></div>
     {!isPrn && frequency === 'weekly' ? <fieldset className="field"><legend>{t('Selected weekdays')}</legend>{WEEKDAYS.map((day,index)=><label key={day}><input type="checkbox" checked={weekdays.includes(index+1)} onChange={event => setWeekdays(current => event.target.checked ? [...current,index+1] : current.filter(value=>value!==index+1))} />{t(day)}</label>)}</fieldset> : null}
@@ -318,7 +332,7 @@ export function EnrollScreen({
   // --- added ---------------------------------------------------------------
   if (activated) {
     return <Card title={editFrom?'Review a new plan version':'Add a medication'}>
-      <div className="patient-toast" role="status"><p>{t('Medication added. It now appears in your medication list.')}</p><button onClick={reset}>{t('Close')}</button></div>
+      <AutoDismissNotice>{t('Medication added. It now appears in your medication list.')}</AutoDismissNotice>
       <div className="actions">
         <button onClick={reset} disabled={busy}>{t('Add another')}</button>
       </div>
@@ -416,6 +430,13 @@ export function EnrollScreen({
 
 export function isAlreadyRecordedError(error: unknown): boolean {
   return error instanceof ApiError && error.code === 'DUPLICATE_EVENT';
+}
+
+export function courseDuration(start:string,end:string):string{
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||!/^\d{4}-\d{2}-\d{2}$/.test(end))return '';
+ const first=Date.parse(start+'T00:00:00Z'),last=Date.parse(end+'T00:00:00Z');
+ if(!Number.isFinite(first)||!Number.isFinite(last)||new Date(first).toISOString().slice(0,10)!==start||new Date(last).toISOString().slice(0,10)!==end)return '';
+ const days=(last-first)/86400000+1;return days>=1&&days<=3660?String(days):'';
 }
 
 /** Calendar arithmetic only after the patient supplies both start and days. */

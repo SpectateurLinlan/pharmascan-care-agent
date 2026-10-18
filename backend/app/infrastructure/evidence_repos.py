@@ -43,6 +43,40 @@ class MemoryEvidenceRepository:
         self._medications = medications
         self._records: dict[tuple[str, UUID], EvidenceRecord] = {}
 
+    def remove_draft_artifacts(self, owner, medication, whole, tasks, sources):
+        images = [
+            r
+            for (kind, _), r in self._records.items()
+            if kind == "images"
+            and r.patient_id == owner
+            and r.medication_id == medication
+            and (whole or r.source_id in sources)
+        ]
+        paths = [
+            r.storage_path
+            for r in images
+            if not any(
+                k == "images" and other.id != r.id and other.storage_path == r.storage_path
+                for (k, _), other in self._records.items()
+            )
+        ]
+        for key, row in list(self._records.items()):
+            if row.patient_id != owner:
+                continue
+            kind = key[0]
+            remove = (
+                row.id in tasks
+                if kind == "tasks"
+                else row.medication_id == medication and (whole or row.source_id in sources)
+                if kind in {"sources", "images"}
+                else whole and row.medication_id == medication
+                if kind in {"sets", "embeddings"}
+                else False
+            )
+            if remove:
+                del self._records[key]
+        return paths
+
     def list(self, patient_id: UUID, kind: RecordKind) -> list[EvidenceRecord]:
         return [row for (key, _), row in self._records.items() if key == kind and row.patient_id == patient_id]
 
@@ -151,6 +185,9 @@ class MemoryImageStore:
     def get(self, path: str) -> bytes:
         return self._data[path]
 
+    def delete(self, path: str) -> None:
+        self._data.pop(path, None)
+
 
 class SupabaseImageStore:
     def __init__(
@@ -182,6 +219,8 @@ class SupabaseImageStore:
                 duplicate = False
             if duplicate:
                 return b""
+        if method == "DELETE" and response.status_code == 404:
+            return b""
         if response.status_code >= 400:
             raise ProviderUnavailableError("Private image operation rejected")
         return response.content
@@ -191,3 +230,6 @@ class SupabaseImageStore:
 
     def get(self, path: str) -> bytes:
         return self._request("GET", path)
+
+    def delete(self, path: str) -> None:
+        self._request("DELETE", path)

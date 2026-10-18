@@ -300,6 +300,7 @@ class LongTermCareService:
                 "generated_at": now.isoformat(),
                 "timezone": timezone,
                 "observation_window_days": days,
+                "observations": [row.model_dump(mode="json") for row in notes],
                 "summary": summary.model_dump(mode="json"),
                 "trends": observation_trends(notes),
                 "barriers": [row.model_dump(mode="json") for row in barriers],

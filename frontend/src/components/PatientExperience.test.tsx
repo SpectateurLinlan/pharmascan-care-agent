@@ -32,3 +32,8 @@ it('shows an actionable persistent overlap notice without transport jargon',()=>
  expect(screen.getByRole('alert').textContent).not.toMatch(/HTTP|REGIMEN_OVERLAP/);
  fireEvent.click(screen.getByRole('button',{name:'Dismiss'}));expect(screen.queryByRole('alert')).toBeNull();
 });
+it('does not portal an error from a hidden page, and shows it when that page becomes active',()=>{
+ const error=new Error('DEMO hidden-page error'),view=render(<div hidden><ErrorNotice error={error}/></div>);
+ expect(screen.queryByRole('alert')).toBeNull();
+ view.rerender(<div><ErrorNotice error={error}/></div>);expect(screen.getByRole('alert')).toBeTruthy();
+});

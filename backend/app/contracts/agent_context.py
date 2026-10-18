@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .medication_dialogue import MedicationDialogue
+
 
 class CandidateReference(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -53,3 +55,4 @@ class AgentContext(BaseModel):
     preferred_language: Literal["en", "zh"] = "en"
     recent_turns: list[RecentTurn] = Field(default_factory=list, max_length=6)
     conversation_summary: str = Field(default="", max_length=600)
+    medication_dialogue: MedicationDialogue | None = None

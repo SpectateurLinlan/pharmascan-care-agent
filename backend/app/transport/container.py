@@ -42,7 +42,9 @@ from ..agent.registry import ToolRegistry
 from ..application.ai_quota import QuotaAgent
 from ..application.caregivers import CaregiverService
 from ..application.conversation_history import ConversationHistoryService
+from ..application.conversation_threads import ConversationThreadService
 from ..application.dosing import DoseScheduleService, SelfReportService
+from ..application.draft_deletion import DraftDeletionService
 from ..application.enrollment import MedicationEnrollmentService
 from ..application.evidence_enrollment import EvidenceEnrollmentService
 from ..application.long_term import LongTermCareService
@@ -51,6 +53,7 @@ from ..application.patient_feedback import FeedbackService
 from ..application.personal_gallery import PersonalGalleryService
 from ..application.preferences import PreferenceService
 from ..application.push_test import PushTestService
+from ..application.record_history import RecordHistoryService
 from ..application.reminder_alerts import ReminderAlertService
 from ..application.reminder_plan import ReminderPlanService
 from ..application.reminders import ReminderService
@@ -67,6 +70,8 @@ from ..contracts.reminders import ReminderRepository
 from ..infrastructure.care_repos import MemoryCareRepository, SupabaseCareRepository
 from ..infrastructure.caregiver_repos import MemoryCaregivers, SupabaseCaregivers
 from ..infrastructure.conversation_history import MemoryConversationHistory, SupabaseConversationHistory
+from ..infrastructure.conversation_threads import MemoryConversationThreads, SupabaseConversationThreads
+from ..infrastructure.draft_deletion import MemoryDraftDeletion, SupabaseDraftDeletion
 from ..infrastructure.feedback_repos import MemoryFeedback, SupabaseFeedback
 from ..infrastructure.identifiers import RandomIdGenerator
 from ..infrastructure.memory_repos import (
@@ -87,6 +92,7 @@ from ..infrastructure.memory_repos import (
 from ..infrastructure.observation_repos import MemoryObservations, SupabaseObservations
 from ..infrastructure.preference_repos import MemoryPreferences, SupabasePreferences
 from ..infrastructure.quota_repos import SupabaseQuota
+from ..infrastructure.record_history import MemoryRecordHistory, SupabaseRecordHistory
 from ..infrastructure.reminder_repos import MemoryReminderRepository, SupabaseReminderRepository
 from .auth import AuthBoundary, AuthenticatedPrincipal, SupabaseAuthApiVerifier
 
@@ -137,7 +143,10 @@ class ApplicationContainer:
     evidence_enrollment: EvidenceEnrollmentService | None = None
     gallery: PersonalGalleryService | None = None
     close_request: Callable[[], None] | None = None
+    draft_deletion: DraftDeletionService | None = None
+    record_history: RecordHistoryService | None = None
     conversation_history: ConversationHistoryService | None = None
+    conversation_threads: ConversationThreadService | None = None
 
 
 def _services(
@@ -284,10 +293,21 @@ def build_container(
     long_term = LongTermCareService(
         MemoryCareRepository(), enrollment, events, observations_service, summary_service, the_clock, dose_rules
     )
+    thread_repository = MemoryConversationThreads()
+
+    def clear_chat_text(owner):
+        sessions.clear_conversation_text(owner)
+        thread_repository.clear(owner)
+
     return ApplicationContainer(
-        conversation_history=ConversationHistoryService(
-            MemoryConversationHistory(sessions.clear_conversation_text), the_clock
+        draft_deletion=DraftDeletionService(MemoryDraftDeletion(store, evidence_repo, image_store)),
+        record_history=RecordHistoryService(
+            MemoryRecordHistory(store), enrollment, PreferenceService(preference_repo), the_clock
         ),
+        conversation_threads=ConversationThreadService(
+            thread_repository, sessions, the_clock, PreferenceService(preference_repo)
+        ),
+        conversation_history=ConversationHistoryService(MemoryConversationHistory(clear_chat_text), the_clock),
         long_term=long_term,
         evidence_enrollment=evidence_service,
         gallery=gallery_service,
@@ -651,6 +671,13 @@ def build_supabase_container(
             from ..infrastructure.push_subscriptions import SupabasePushSubscriptions
 
             return ApplicationContainer(
+                draft_deletion=DraftDeletionService(SupabaseDraftDeletion(client, image_store)),
+                record_history=RecordHistoryService(
+                    SupabaseRecordHistory(client), services[0], PreferenceService(preference_repo), root.clock
+                ),
+                conversation_threads=ConversationThreadService(
+                    SupabaseConversationThreads(client), repos.sessions, root.clock, PreferenceService(preference_repo)
+                ),
                 conversation_history=ConversationHistoryService(SupabaseConversationHistory(client), root.clock),
                 long_term=long_term,
                 push_subscriptions=SupabasePushSubscriptions(client),
