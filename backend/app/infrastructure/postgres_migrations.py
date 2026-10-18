@@ -143,9 +143,11 @@ def ensure_ledger(connection: psycopg.Connection) -> None:
 
 
 def applied_migrations(connection: psycopg.Connection) -> dict[str, str]:
-    """Return ``{version: sha256}`` for every migration already recorded."""
-    ensure_ledger(connection)
+    """Read recorded hashes without initializing or otherwise mutating the ledger."""
     with connection.cursor() as cursor:
+        cursor.execute("SELECT to_regclass('public.core_schema_migrations') AS ledger")
+        if cursor.fetchone()["ledger"] is None:
+            return {}
         cursor.execute(f"SELECT version, sha256 FROM public.{LEDGER_TABLE}")
         return {row["version"]: row["sha256"] for row in cursor.fetchall()}
 

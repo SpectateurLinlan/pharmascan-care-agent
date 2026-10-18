@@ -370,6 +370,7 @@ def _dose_event(row: dict[str, Any]) -> DoseEventDTO:
 
 def _session(row: dict[str, Any]) -> AgentSessionDTO:
     return AgentSessionDTO(
+        conversation_id=_as_uuid_or_none(row.get("conversation_id")),
         context=row.get("context", {}),
         id=_as_uuid(row["id"]),
         patient_id=_as_uuid(row["patient_id"]),
@@ -1135,7 +1136,10 @@ class PostgresDoseEventRepository:
 class PostgresAgentSessionRepository:
     """``AgentSessionRepository`` over ``public.agent_sessions``."""
 
-    _COLUMNS = "id, patient_id, intent, state, pending_field_names, state_version, updated_at, expires_at, context"
+    _COLUMNS = (
+        "id, patient_id, intent, state, pending_field_names, "
+        "state_version, updated_at, expires_at, context, conversation_id"
+    )
 
     def __init__(self, session: SessionFactory) -> None:
         self._session = session
@@ -1167,8 +1171,8 @@ class PostgresAgentSessionRepository:
                 """
                 INSERT INTO public.agent_sessions
                     (id, patient_id, intent, state, pending_field_names, prompt_version,
-                     state_version, updated_at, expires_at, context, demo_only)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, true)
+                     state_version, updated_at, expires_at, context, conversation_id, demo_only)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, true)
                 """,
                 (
                     session.id,
@@ -1181,6 +1185,7 @@ class PostgresAgentSessionRepository:
                     session.updated_at,
                     session.expires_at,
                     Jsonb(session.context.model_dump(mode="json")),
+                    session.conversation_id,
                 ),
             )
 
@@ -1191,7 +1196,7 @@ class PostgresAgentSessionRepository:
                 """
                 UPDATE public.agent_sessions
                    SET intent = %s, state = %s, pending_field_names = %s,
-                       state_version = %s, updated_at = %s, expires_at = %s, context = %s
+                       state_version = %s, updated_at = %s, expires_at = %s, context = %s, conversation_id = %s
                  WHERE patient_id = %s AND id = %s
                 """,
                 (
@@ -1202,6 +1207,7 @@ class PostgresAgentSessionRepository:
                     session.updated_at,
                     session.expires_at,
                     Jsonb(session.context.model_dump(mode="json")),
+                    session.conversation_id,
                     session.patient_id,
                     session.id,
                 ),

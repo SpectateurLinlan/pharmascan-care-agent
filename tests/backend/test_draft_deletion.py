@@ -3,6 +3,7 @@
 from uuid import UUID
 
 import httpx
+import pytest
 from app.domain.errors import ProviderUnavailableError
 from app.infrastructure.draft_deletion import SupabaseDraftDeletion
 from app.infrastructure.evidence_repos import MemoryImageStore, SupabaseImageStore
@@ -84,6 +85,27 @@ def test_storage_api_deletes_owned_object_and_handles_missing_idempotently():
     store.delete(f"{OWNER}/DEMO.png")
     store.delete(f"{OWNER}/DEMO.png")
     assert len(calls) == 2
+
+
+def test_schema_contract_error_is_provider_unavailable_not_patient_input():
+    from app.domain.errors import ProviderUnavailableError
+
+    def handler(_request):
+        return httpx.Response(400, json={"code": "42703", "message": "column does not exist"})
+
+    client = SupabaseDataClient(
+        base_url="https://example.invalid",
+        publishable_key="DEMO",
+        access_token="DEMO",
+        patient_id=OWNER,
+        client_factory=lambda: httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    with pytest.raises(ProviderUnavailableError, match="database service is not ready"):
+        client.request(
+            "POST",
+            "/rest/v1/rpc/delete_unconfirmed_medication",
+            body={"p_kind": "draft", "p_id": str(fixture_id(90)), "p_confirmed": True},
+        )
 
 
 def test_cleanup_failure_is_reported_and_retry_uses_same_receipt():

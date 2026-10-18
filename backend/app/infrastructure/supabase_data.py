@@ -71,6 +71,13 @@ class SupabaseDataClient:
                 raise NotFoundError("Draft not found")
             if code == "P7502" or code == "23503":
                 raise ValidationError("This draft has protected or shared records and cannot be deleted.")
+            # Undefined columns / stale PostgREST function schemas are server
+            # deployment mismatches, not patient input errors. In particular,
+            # never tell a patient that their confirmed delete failed because
+            # they entered something incorrectly when the database contract
+            # is the part that needs repair.
+            if code in {"42703", "42883", "PGRST202"}:
+                raise ProviderUnavailableError("The database service is not ready for this request. Please try again later.")
             if code == "P7501":
                 raise RegimenOverlapError()
             if response.status_code >= 500 or response.status_code == 429:

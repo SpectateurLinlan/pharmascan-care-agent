@@ -58,7 +58,12 @@ class SupabaseRecordHistory:
 
     def _decode(self, owner, dto, rows):
         try:
-            values = [dto.model_validate(row) for row in rows]
+            # PostgREST physical rows include provenance/creation columns that
+            # are not HTTP DTO fields. Normalize at this adapter boundary.
+            values = [
+                dto.model_validate({key: value for key, value in row.items() if key in dto.model_fields})
+                for row in rows
+            ]
         except SchemaError as error:
             raise ProviderUnavailableError("Invalid medication history response.") from error
         if any(row.patient_id != owner for row in values):
@@ -96,18 +101,19 @@ class SupabaseRecordHistory:
 
     def medications(self, owner):
         self._client.check_patient(owner)
-        fields = ",".join(PatientMedicationDTO.model_fields)
         return self._decode(
             owner,
             PatientMedicationDTO,
-            self._client.all_rows("patient_medications", patient_id=f"eq.{owner}", select=fields),
+            self._client.all_rows("patient_medications", patient_id=f"eq.{owner}", select="*"),
         )
 
     def plans(self, owner):
         self._client.check_patient(owner)
-        fields = ",".join(RegimenVersionDTO.model_fields)
+        # Optional DTO fields may belong to a later schema (patient_edited in
+        # 027). Read existing physical columns, preserving newer flags when
+        # present, instead of demanding uninstalled columns in SELECT.
         return self._decode(
-            owner, RegimenVersionDTO, self._client.all_rows("regimen_versions", patient_id=f"eq.{owner}", select=fields)
+            owner, RegimenVersionDTO, self._client.all_rows("regimen_versions", patient_id=f"eq.{owner}", select="*")
         )
 
     def _page(self, owner, table, dto, time, plans, start, end, as_of, before, limit, **extra):

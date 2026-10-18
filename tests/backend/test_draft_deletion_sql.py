@@ -48,6 +48,67 @@ def test_reviewed_unconfirmed_draft_really_removes_exclusive_db_rows_and_retries
     assert delete(db, plan) == result
 
 
+def test_http_service_rpc_executes_real_postgres_then_refetch_is_missing(db):
+    """Real FastAPI/services/PG; only the local PostgREST wire is bridged, not its SQL result."""
+    import json
+
+    import httpx
+    from app.application.draft_deletion import DraftDeletionService
+    from app.application.enrollment import MedicationEnrollmentService
+    from app.infrastructure.draft_deletion import SupabaseDraftDeletion
+    from app.infrastructure.evidence_repos import MemoryImageStore
+    from app.infrastructure.postgres_db import PostgresDatabase
+    from app.infrastructure.postgres_repos import build_postgres_repositories
+    from app.infrastructure.supabase_data import SupabaseDataClient
+    from fastapi.testclient import TestClient
+
+    from .grouped_records_browser_server import build_grouped_records_app
+    from .records_browser_server import TOKEN
+
+    source, medication, plan = seed(db)
+    app = build_grouped_records_app()
+    root = app.state.container
+    repos = build_postgres_repositories(PostgresDatabase(dsn=f"postgresql://postgres@127.0.0.1:55439/{db.info.dbname}"))
+    root.enrollment = MedicationEnrollmentService(
+        medications=repos.medications,
+        regimens=repos.regimens,
+        sources=repos.sources,
+        source_fields=repos.source_fields,
+        dose_rules=repos.dose_rules,
+        challenges=repos.challenges,
+        clock=root.clock,
+        ids=root.ids,
+    )
+
+    def rpc(request):
+        assert request.url.path == "/rest/v1/rpc/delete_unconfirmed_medication"
+        assert request.headers["authorization"] == "Bearer DEMO"
+        args = json.loads(request.content)
+        with owner(db, A):
+            result = db.execute(
+                "select delete_unconfirmed_medication(%s,%s,%s)", (args["p_kind"], args["p_id"], args["p_confirmed"])
+            ).fetchone()[0]
+        return httpx.Response(200, json=result)
+
+    client = SupabaseDataClient(
+        base_url="https://example.invalid",
+        publishable_key="DEMO",
+        access_token="DEMO",
+        patient_id=A,
+        client_factory=lambda: httpx.Client(transport=httpx.MockTransport(rpc)),
+    )
+    root.draft_deletion = DraftDeletionService(SupabaseDraftDeletion(client, MemoryImageStore()))
+    headers = {"Authorization": "Bearer " + TOKEN}
+    path = "/api/medications/unfinished/draft/" + str(plan)
+    with TestClient(app) as http:
+        assert http.get("/api/medications/drafts/" + str(plan), headers=headers).status_code == 200
+        assert http.request("DELETE", path, headers=headers, json={"confirmed": True}).json()["deleted"] is True
+        assert http.get("/api/medications/drafts/" + str(plan), headers=headers).status_code == 404
+        assert http.request("DELETE", path, headers=headers, json={"confirmed": True}).status_code == 200
+    assert db.execute("select count(*) from patient_medications where id=%s", (medication,)).fetchone()[0] == 0
+    assert db.execute("select count(*) from source_documents where id=%s", (source,)).fetchone()[0] == 0
+
+
 def test_direct_delete_and_cross_patient_are_denied(db):
     import psycopg
 
