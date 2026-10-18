@@ -7,7 +7,7 @@ import {HistoryScreen,intakeLabel} from './HistoryScreen';
 import {CareTasksScreen} from './CareTasksScreen';
 import {HealthTrackingScreen} from './HealthTrackingScreen';
 
-vi.mock('../api/client',()=>({ApiError:class extends Error{},api:{regimenHistory:vi.fn(),doseHistory:vi.fn(),careTasks:vi.fn(),createCareTask:vi.fn(),observations:vi.fn(),saveObservation:vi.fn()}}));
+vi.mock('../api/client',()=>({ApiError:class extends Error{},api:{historyCatalogue:vi.fn(),medicationHistory:vi.fn(),regimenHistory:vi.fn(),doseHistory:vi.fn(),careTasks:vi.fn(),createCareTask:vi.fn(),observations:vi.fn(),saveObservation:vi.fn()}}));
 afterEach(()=>{cleanup();vi.resetAllMocks();});
 const plan:RegimenHistoryItem={regimen_id:'DEMO-old',medication_id:'DEMO-med',display_name:'DEMO medicine 5 mg',version_no:1,state:'superseded',effective_from:'2026-10-01T23:00:00Z',effective_to:'2026-10-10T00:00:00Z',course_start_date:'2026-10-01',course_end_date:'2026-10-31',dose_amount:1,dose_unit:'tablet',food_instruction:null,is_prn:false,local_times:['08:00']};
 it('labels plan changes by effective time, not a new treatment course or product strength',()=>{
@@ -25,11 +25,12 @@ it('keeps all four dose states distinct, without inferring a missed dose',()=>{
 });
 it('selects the same stable plan IDs across versions and distinct course dates',async()=>{
  const plans=[plan,{...plan,regimen_id:'DEMO-current',state:'active',version_no:2,effective_from:'2026-10-10T00:00:00Z'},{...plan,regimen_id:'DEMO-other-course',course_start_date:'2026-08-01',course_end_date:'2026-08-30',effective_from:'2026-08-01T00:00:00Z',state:'ended'}];
- vi.mocked(api.regimenHistory).mockResolvedValue(plans);
- vi.mocked(api.doseHistory).mockImplementation(async id=>({item_count:1,note:'demo_only',entries:[{occurrence_id:`DEMO-${id}`,due_at:'2026-10-02T00:00:00Z',reported:false,intake_status:null,visual_status:null}]}));
- render(<HistoryScreen/>);await screen.findByText('This dose has no record of whether you took it yet.');
- const select=screen.getByLabelText('Medication plan');expect(select.querySelectorAll('option')).toHaveLength(3);
- for(const row of plans){fireEvent.change(select,{target:{value:row.regimen_id}});await waitFor(()=>expect(api.doseHistory).toHaveBeenLastCalledWith(row.regimen_id));}
+ vi.mocked(api.historyCatalogue).mockResolvedValue({medications:[{id:plan.medication_id,display_name:plan.display_name,product_id:null,identity_status:'unverified'}],plans:plans.map(p=>({id:p.regimen_id,medication_id:p.medication_id,supersedes_id:null,effective_from:p.effective_from,effective_to:p.effective_to,state:p.state,dose_amount:p.dose_amount,dose_unit:p.dose_unit,strength_text:'5 mg'}))});
+ vi.mocked(api.medicationHistory).mockResolvedValue({entries:[],next_cursor:null,window_start:null,window_end:'2026-10-17T00:00:00Z',as_of:'2026-10-17T00:00:00Z',scope:'stored_records_only',missing_plan_start:false});
+ render(<HistoryScreen/>);await screen.findByText(/Displayed records/);
+ const select=screen.getByLabelText('Medication plan');expect(select.querySelectorAll('option')).toHaveLength(4);
+ for(const row of plans){fireEvent.change(select,{target:{value:row.regimen_id}});await waitFor(()=>expect(api.medicationHistory).toHaveBeenLastCalledWith({range_kind:'30',regimen_id:row.regimen_id}));}
+
 });
 it('makes follow-up creation visible, cancellable and still confirmation gated',async()=>{
  vi.mocked(api.careTasks).mockResolvedValue([]);render(<CareTasksScreen regimens={[plan]}/>);

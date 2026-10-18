@@ -10,7 +10,7 @@ test('Metformin 500 mg at 20:00 persists after reload and is private to user A',
  await page.locator('#med-time-0').fill('20:00');
  const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Singapore',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
  await page.getByLabel('Course start date',{exact:true}).fill(today);
- await page.getByLabel('Last day (inclusive)',{exact:true}).fill(today);
+ await page.getByRole('radio',{name:'Enter last day',exact:true}).check();await page.getByLabel('Last day (inclusive)',{exact:true}).fill(today);
  await page.getByRole('button',{name:'Create draft',exact:true}).click();
  await page.getByRole('button',{name:'I have reviewed these details'}).click();
  await page.getByRole('button',{name:'Show me the summary to confirm'}).click();

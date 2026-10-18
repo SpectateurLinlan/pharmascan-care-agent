@@ -29,11 +29,13 @@ it('Me is an entry hierarchy with a separate account destination, not an expande
  fireEvent.click(screen.getByRole('button',{name:/About MediThread/}));expect(open).toHaveBeenLastCalledWith('about');
  fireEvent.click(screen.getByRole('button',{name:/Feedback/}));expect(open).toHaveBeenLastCalledWith('feedback');
 });
-it('Medicines has grouped database-backed entries and a separate add-method choice',()=>{
+it('Medicines has grouped database-backed entries and direct inline add methods',()=>{
  const open=vi.fn();const {unmount}=render(<MedicinesHub medications={[medication]} drafts={[]} versions={[]} setupCount={1} onOpen={open}/>);
  expect(screen.getByRole('heading',{name:'Currently taking'})).toBeTruthy();expect(screen.queryByLabelText('Medication name')).toBeNull();
  fireEvent.click(screen.getByRole('button',{name:/DEMO Metformin/}));expect(open).toHaveBeenCalledWith('medicine-detail','DEMO-regimen');
- fireEvent.click(screen.getByRole('button',{name:/Add medication/}));expect(open).toHaveBeenCalledWith('add-method');
+ fireEvent.click(screen.getByRole('button',{name:/Add medication/}));expect(open).not.toHaveBeenCalledWith('add-method');
+ fireEvent.click(screen.getByRole('button',{name:/Read medication information/}));expect(open).toHaveBeenLastCalledWith('label');
+ fireEvent.click(screen.getByRole('button',{name:/Add manually/}));expect(open).toHaveBeenLastCalledWith('manual');
  fireEvent.click(screen.getByRole('button',{name:/Past courses/}));expect(open).toHaveBeenCalledWith('past-medicines');
  fireEvent.click(screen.getByRole('button',{name:/Photos and evidence/}));expect(open).toHaveBeenCalledWith('gallery');
  fireEvent.click(screen.getByRole('button',{name:/Finish medication setup/}));expect(open).toHaveBeenCalledWith('unfinished');

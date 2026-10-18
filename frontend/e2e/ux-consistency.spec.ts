@@ -28,6 +28,7 @@ async function mockPatientApp(page:Page,historyEnabled=true){
   else if(path==='/api/evidence/tasks'){sourceReads++;body=[task];}
   else if(path===`/api/evidence/tasks/${task.id}`)body=task;
   else if(path.endsWith('/usage'))body={llm_user_turns:0,model_requests:0,limit:20,usage_date:'2026-10-17',next_reset_at:'2026-10-18T00:00:00+08:00'};
+  else if(path==='/api/agent/conversations')body={entries:[],next_before:null};
   else if(path.endsWith('/history'))body={entries:[],next_before:null};
   else if(path==='/api/reminders/push/config')body={available:false,public_key:null,test_available:false};
   else if(path==='/api/speech/capabilities')body={cloud_tts_allowed:false};
@@ -174,7 +175,7 @@ test('photo evidence stays separate from patient bubbles and persisted history i
   await page.locator('.photo-consent input').check();await page.locator('.composer-send').click();
   await expect(page.locator('.turn .user-message')).toContainText(question);await expect(page.locator('.turn .user-message')).not.toContainText('DEMO_PRIVATE_OCR_MARKER');
   await page.locator('.assistant-header-shortcut').click();
-  await page.locator('.conversation-actions button').first().click();
+  const historyToggle=page.locator('.conversation-brand button');if(await historyToggle.getAttribute('aria-expanded')==='false')await historyToggle.click();
   await expect(page.locator('.history-entry')).toContainText(question);await expect(page.locator('.history-entry')).not.toContainText('DEMO_PRIVATE_OCR_MARKER');
   await page.locator('.history-entry').click();await expect(page.locator('.selected-history .user-message')).toHaveText(stored);
   expect(errors).toEqual([]);await page.close();
@@ -331,7 +332,8 @@ test('Today tasks reuse one conversation and root pages adapt to landscape and e
  });
  await page.goto('/e2e/patient-feedback.html?shell=1');
  const entry=page.locator('.today-assistant');await expect(entry.getByRole('heading',{name:'MediThread Assistant'})).toBeVisible();
- await expect(entry.getByRole('button',{name:/Understand medicines|Review my records|Prepare for a visit/})).toHaveCount(3);
+ await expect(entry.getByRole('button',{name:/Understand medicines|Review my records|Prepare for a visit|View today’s medication/})).toHaveCount(4);
+ await entry.getByRole('button',{name:'View today’s medication',exact:true}).click();await expect(page.locator('#today-medication')).toBeInViewport();
  const tasks=[['Understand medicines','current medications'],['Review my records','past 7 days'],['Prepare for a visit','pharmacist or doctor']];
  for(const [label,prompt] of tasks){
   await entry.getByRole('button',{name:label,exact:true}).click();
@@ -344,6 +346,7 @@ test('Today tasks reuse one conversation and root pages adapt to landscape and e
  await entry.locator('.today-assistant__expand').click();const workspace=page.locator('.conversation-workspace');await expect(workspace.locator('.turn')).toHaveCount(1);
  await workspace.getByRole('textbox').fill('DEMO unsent question');await workspace.getByRole('button',{name:'Back'}).click();
  await page.locator('[data-guide="medicines"]').click();await page.locator('[data-guide="today"]').click();
+ await expect(entry.locator('details.recent-chat')).not.toHaveAttribute('open','');
  await expect(entry.getByRole('textbox')).toHaveValue('DEMO unsent question');
  await expect(entry.getByRole('button',{name:'Understand medicines',exact:true})).toBeDisabled();
  await entry.getByRole('textbox').focus();await expect(workspace).toHaveCount(0);await entry.locator('.today-assistant__expand').click();await expect(workspace.locator('.turn')).toHaveCount(1);

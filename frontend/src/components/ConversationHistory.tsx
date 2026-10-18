@@ -10,8 +10,7 @@ import {ErrorNotice} from './primitives';
  * The switch enables saving for *future* turns. It does not backfill messages
  * from before it was turned on, so the label, the explanation and the state
  * line all say "from now on" rather than implying the current chat was stored.
- * The retention window, the consent behaviour and the persistence calls are
- * unchanged.
+ * Durable threads and legacy exchanges have different retention rules.
  */
 export function ConversationHistory({onCleared,blocked=false}:{revision?:number;onCleared:()=>void;blocked?:boolean}){
  const {t,preferences,updatePreferences,preferenceError}=useLanguage();const [savingPreference,setSavingPreference]=useState(false);const [saveState,setSaveState]=useState<'idle'|'saved'|'failed'>('idle');const [error,setError]=useState<unknown>(null),[loading,setLoading]=useState(false),[confirm,setConfirm]=useState(false),[info,setInfo]=useState(false);
@@ -30,7 +29,7 @@ export function ConversationHistory({onCleared,blocked=false}:{revision?:number;
  }
  return <section className="conversation-history">
  <div className="history-controls"><label className="consent"><input type="checkbox" disabled={savingPreference} checked={enabled} onChange={event=>void saveHistoryPreference(event.target.checked)}/><span>{t('Save new conversations')}<small>{t('Only new messages are saved when this is enabled.')}</small></span></label><button className="icon-button" aria-label={t('About saved conversations')} onClick={()=>setInfo(true)}>?</button></div>
- {info?<BottomSheet title={t('About saved conversations')} onCancel={()=>setInfo(false)}><p>{t('History displays saved exchanges from the last 30 days, with up to 200 stored exchanges. Older text is not deleted on a timer. Clear saved conversations removes saved and recent chat text; medication and health records remain separate.')}</p><p>{t('Saving starts from now on. Messages sent before you turn this on are not added.')}</p><button onClick={()=>setInfo(false)}>{t('Close')}</button></BottomSheet>:null}
+ {info?<BottomSheet title={t('About saved conversations')} onCancel={()=>setInfo(false)}><p>{t('Saved conversations can be reopened and continued. Older exchanges without a conversation identity remain read-only within the existing 30-day, 200-exchange window. Clearing removes saved and recent chat text, not medication or health records.')}</p><p>{t('Saving starts from now on. Messages sent before you turn this on are not added.')}</p><button onClick={()=>setInfo(false)}>{t('Close')}</button></BottomSheet>:null}
  {savingPreference?<p role="status">{t('Saving preference...')}</p>:null}
  {saveState==='saved'?<p className="history-state" role="status">{enabled?t('Saved history is on. New messages will be added to it.'):t('Saved history is off. New messages will not be added to it.')}</p>:null}
  {saveState==='failed'?<div className="history-retry" role="alert"><p>{t('Could not confirm the saving setting. Reload to check its current status, then try again.')}</p><button disabled={savingPreference} onClick={()=>void saveHistoryPreference(!enabled)}>{t('Try again')}</button></div>:null}

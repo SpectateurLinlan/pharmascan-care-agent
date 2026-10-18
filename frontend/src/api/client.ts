@@ -96,7 +96,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export interface SpeechCapabilities { cloud_tts_allowed: boolean; available: boolean; provider: string; review_required: true; raw_audio_retained: false }
 export interface TranscriptResponse { text: string; provider: string; request_id: string; confidence: null; review_required: true }
-export interface RegimenHistoryItem { frequency_rule?:MedicationSummary['frequency_rule'];regimen_id: string; display_name: string; version_no: number; state: string;
+export interface RegimenHistoryItem { patient_edited?:boolean; frequency_rule?:MedicationSummary['frequency_rule'];regimen_id: string; display_name: string; version_no: number; state: string;
   effective_from: string | null; effective_to: string | null; medication_id:string;course_start_date:string|null;course_end_date:string|null;
   dose_amount:number|null;dose_unit:string|null;food_instruction:string|null;is_prn:boolean;local_times:string[] }
 export interface PrintedEvidence {value:string;line:string}
@@ -117,6 +117,10 @@ function withClient(path: string, extra?: Record<string, string>): string {
 // --- response types (mirror backend schemas.py) -----------------------------
 
 export interface ConversationEntry {id:string;user_text:string;assistant_text:string;created_at:string}
+export interface ConversationSummary {id:string;title:string;created_at:string;updated_at:string}
+export interface ThreadMessage extends ConversationEntry {conversation_id:string;photo_attached:boolean}
+export interface ThreadPage {conversation:ConversationSummary;entries:ThreadMessage[];next_before:string|null}
+export interface NavigationContext {page:'medicines'|'medicine-detail'|'records';medication_id?:string|null;regimen_id?:string|null;display_name?:string|null}
 export interface ConversationPage {entries:ConversationEntry[];next_before:string|null}
 export interface PatientPreferences {
   conversation_history_enabled?:boolean;
@@ -275,6 +279,14 @@ export interface DoseHistoryResponse {
   note: string;
 }
 
+export type MedicationHistoryRange='7'|'30'|'90'|'custom'|'all'|'plan';
+export interface HistoryMedication {id:string;display_name:string;product_id:string|null;identity_status:string}
+export interface HistoryPlan {patient_edited?:boolean;id:string;medication_id:string;supersedes_id:string|null;effective_from:string|null;effective_to:string|null;state:string;dose_amount:number|null;dose_unit:string|null;strength_text:string|null;dosage_form?:string|null;frequency?:{kind:string;local_times:string[];days_of_week:number[];every_hours:number|null}|null;is_prn?:boolean}
+export interface HistoryCatalogue {medications:HistoryMedication[];plans:HistoryPlan[]}
+export interface MedicationHistoryEntry {id:string;medication_id:string;regimen_id:string;display_name:string;sort_time:string;due_at:string|null;event_id:string|null;event_time:string|null;submitted_at:string|null;intake_status:string|null;reported:boolean;kind:'scheduled'|'unscheduled'}
+export interface MedicationHistoryPage {entries:MedicationHistoryEntry[];next_cursor:string|null;window_start:string|null;window_end:string;as_of:string;scope:'stored_records_only';missing_plan_start:boolean}
+export interface MedicationHistoryFilters {medication_id?:string;medication_name?:string;regimen_id?:string;range_kind:MedicationHistoryRange;start?:string;end?:string}
+
 export interface ToolTrace {
   tool_name: string;
   status: string;
@@ -286,7 +298,11 @@ export interface ToolTrace {
 
 export interface AgentUsage {llm_user_turns:number;model_requests:number;limit:number;usage_date:string;next_reset_at:string;}
 
+export interface MedicationSelection {choice_id:string;medication_id:string}
+export interface MedicationChoice {id:string;question:'general_use'|'personal_instructions'|'personal_reason';prompt?:string;expires_at:string;options:Array<{medication_id:string;regimen_id:string;display_name:string;label:string}>}
 export interface AgentMessageResponse {
+  medication_choice?:MedicationChoice|null;
+  conversation_id?:string|null;
   history_saved?:boolean|null;
   care_request?: import('./care').CareReview|null;
   health_note_request?:{description:string;requires_patient_review:true;urgent_help_advised?:boolean}|null;
@@ -315,6 +331,7 @@ export interface ChatPhotoContext {
 // --- client -----------------------------------------------------------------
 
 export interface DraftInput {
+  patient_edited?:boolean;
   course_start_date?: string | null;
   course_end_date?: string | null;
   extraction_evidence?: SourcePreview;
@@ -340,7 +357,7 @@ export interface DoseReminderAlert {key:string;occurrence_id:string;regimen_id:s
 export interface VisualCheckResult { decision:'unknown'|'ambiguous'|'unavailable'; selected_medication:string|null; comparison_available:false; reason:string; candidates:Array<{external_catalogue_id:string;display_name:string|null;visual_similarity:number|null;market:'US';strength:string|null}>; count_reliable:boolean; ingestion_proven:false; safe_to_take_confirmed:false; next_action:string }
 
 export interface EvidenceProduct {name:string;strength:string|null;dose_form:string|null;formulation:string|null;brand:string|null;ingredients:string[];category:'unknown'|'POM'|'P'|'GSL'|'supplement';verification:'source_supplied'|'patient_reviewed'}
-export interface EvidenceDraft {medication_name:string;dose_amount:number|null;dose_unit:string|null;frequency_rule:{kind:string;local_times:string[];days_of_week:number[];every_hours:number|null}|null;is_prn:boolean;route?:string|null;food_instruction:string|null;course_start_date?:string|null;course_end_date?:string|null}
+export interface EvidenceDraft {patient_edited?:boolean;medication_name:string;dose_amount:number|null;dose_unit:string|null;frequency_rule:{kind:string;local_times:string[];days_of_week:number[];every_hours:number|null}|null;is_prn:boolean;route?:string|null;food_instruction:string|null;course_start_date?:string|null;course_end_date?:string|null}
 export interface EvidenceTask {id:string;medication_id:string;version:number;status:'pending_information'|'conflict'|'ready_for_review'|'draft_created';product:EvidenceProduct;product_missing?:string[];source_ids:string[];missing:string[];conflicts:string[];possible_duplicate_ids:string[];draft_regimen_id:string|null;suggested_regimen:EvidenceDraft|null}
 export interface GalleryImage {id:string;medication_id:string;image_kind:'loose_pill'|'package'|'blister'|'source';source_description:string;reviewed:boolean;eligibility:'associated'|'eligible'|'ineligible';eligibility_reason:string;created_at:string}
 export interface GalleryEntry {evidence_task_id?:string|null;similar_name_records?:number;medication:{id:string;display_name:string;identity_status:string};product:EvidenceProduct|null;status:'current'|'upcoming'|'historical'|'pending';regimens:Array<{id:string;state:string;version_no:number;course_start_date:string|null;course_end_date:string|null;dose_amount:number|null;dose_unit:string|null}>;images:GalleryImage[];eligible_count:number}
@@ -368,6 +385,10 @@ export const api = {
   addReference:(medicationId:string,file:File,kind:'loose_pill'|'package'|'blister',source:string,reviewed:boolean,compare:boolean)=>request<GalleryImage>(withClient(`/api/evidence/gallery/${medicationId}/images`,{image_kind:kind,source_description:source,reviewed:String(reviewed),for_comparison:String(compare)}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'false'},body:file}),
   checkPersonalDose:(file:File,regimenId:string|null)=>request<RecognitionEvidence>(withClient('/api/evidence/check-dose',regimenId?{regimen_id:regimenId}:{}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'false'},body:file}),
   conversationHistory:(before?:string)=>request<ConversationPage>(withClient('/api/agent/history',before?{before}:{})),
+  conversations:(before?:string)=>request<{entries:ConversationSummary[];next_before:string|null}>(withClient('/api/agent/conversations',before?{before}:{})),
+  conversation:(id:string,before?:string)=>request<ThreadPage>(withClient(`/api/agent/conversations/${encodeURIComponent(id)}`,before?{before}:{})),
+  resumeConversation:(id:string)=>request<{conversation:ConversationSummary;session_id:string}>(withClient(`/api/agent/conversations/${encodeURIComponent(id)}/resume`),{method:'POST',body:'{}'}),
+  navigationContext:(source:NavigationContext)=>request<NavigationContext>(withClient('/api/agent/navigation-context'),{method:'POST',body:JSON.stringify(source)}),
   clearConversationHistory:()=>request<{cleared:true}>(withClient('/api/agent/history'),{method:'DELETE',body:JSON.stringify({confirmed:true})}),
   doseDisplay:(basis:DoseBasis,units_per_dose:number,dose_unit:string)=>request<DoseDisplay>(withClient('/api/medications/dose-display'),{method:'POST',body:JSON.stringify({basis,units_per_dose,dose_unit})}),
   recentTurns:(sessionId:string)=>request<Array<{user:string;assistant:string}>>(withClient(`/api/agent/sessions/${sessionId}/recent-turns`)),
@@ -395,6 +416,8 @@ export const api = {
   submitPrnReport: (payload: { regimen_id: string; intake_status: string; idempotency_key: string; challenge_id: string }) =>
     request<SelfReportResponse>(withClient('/api/prn/report'), { method: 'POST', body: JSON.stringify(payload) }),
   regimenHistory: () => request<RegimenHistoryItem[]>(withClient('/api/me/regimens')),
+  historyCatalogue:()=>request<HistoryCatalogue>(withClient('/api/me/medication-history/catalogue')),
+  medicationHistory:(filters:MedicationHistoryFilters,cursor?:string)=>request<MedicationHistoryPage>(withClient('/api/me/medication-history',{...filters,...(cursor?{cursor}:{})})),
   sourcePreview: (image: File, kind: 'package' | 'pharmacy_label' | 'prescription') => request<SourcePreview>(
     withClient('/api/sources/preview', { source_kind: kind }), {
       method: 'POST', headers: { 'Content-Type': image.type, 'X-Stage2-Consent': 'true', 'X-Demo-Only': 'false' }, body: image,
@@ -425,6 +448,7 @@ export const api = {
 
   listMedications: () => request<MedicationListResponse>(withClient('/api/me/medications')),
 
+  deleteDraft:(kind:'draft'|'source',id:string)=>request<{deleted:true;medication_deleted:boolean;cleanup_pending:boolean}>(withClient(`/api/medications/unfinished/${kind}/${encodeURIComponent(id)}`),{method:'DELETE',body:JSON.stringify({confirmed:true})}),
   endPlan:(regimenId:string)=>request<{regimen_id:string;state:string}>(withClient(`/api/medications/${encodeURIComponent(regimenId)}/end`),{method:'POST',body:JSON.stringify({confirmed:true})}),
   createDraft: (input: DraftInput, medicationId?:string) =>
     request<DraftCreateResponse>(withClient('/api/medications/drafts',medicationId?{medication_id:medicationId}:{}), {
@@ -488,6 +512,9 @@ export const api = {
     ),
 
   sendMessage: (payload: {
+    medication_selection?:MedicationSelection;
+      conversation_id?:string|null;
+      navigation_context?:NavigationContext;
     photo_context?:ChatPhotoContext;
     text: string;
     language?: 'en' | 'zh';
