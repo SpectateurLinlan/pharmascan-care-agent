@@ -8,10 +8,10 @@ contract so that unfrozen external schemas never leak into domain types
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer, model_validator
 
 from .agent_context import AgentContext
 from .dose_display import DoseBasis
@@ -66,6 +66,12 @@ class SourceFieldDTO(DTO):
     demo_only: bool = True
 
 
+class IntervalAnchor(DTO):
+    local_date: date
+    local_time: str = Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+    time_source: Literal["patient_entered", "default_0800"]
+
+
 class FrequencyRuleDTO(DTO):
     """Deterministic schedule rule (mirrors SQL jsonb CHECK).
 
@@ -78,6 +84,14 @@ class FrequencyRuleDTO(DTO):
     local_times: list[str] = Field(default_factory=list)  # "HH:MM"
     days_of_week: list[int] = Field(default_factory=list)  # 1..7
     every_hours: int | None = None
+    interval_anchor: IntervalAnchor | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize_frequency(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        data = handler(self)
+        if self.interval_anchor is None:
+            data.pop("interval_anchor", None)
+        return data
 
 
 # --- Patient medication / regimen -------------------------------------------

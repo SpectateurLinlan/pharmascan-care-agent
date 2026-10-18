@@ -15,11 +15,13 @@ from ..contracts.dto import AgentSessionDTO
 from ..contracts.enums import AgentIntent, ToolStatus
 from ..contracts.medication_dialogue import MedicationChoice, MedicationDialogue, MedicationOption
 from ..contracts.ports import IdGenerator
+from ..contracts.temporal import without_calendar_words
 from ..domain.errors import AuthenticationRequiredError, DomainError, ValidationError
 from .knowledge_intent import medication_question
 from .model_tools import ModelTools
 from .orchestrator import AgentTurn
-from .patient_read_reply import history_reply, medication_list_reply
+from .patient_read_reply import history_reply, knowledge_sources_reply, localized_form, medication_list_reply
+from .status_reply import status_reply
 from .tools import ToolResult
 
 
@@ -101,8 +103,8 @@ class ReadDialogue:
             re.search(
                 (
                     "\\bhistory\\b|\\brecords?\\b.*\\b(?:dose|medicine|medication)\\b|\\b(?:d"
-                    "ose|medication) records?\\b|report(?:ed)? taking|服药记录|服药自述|用药记录|吃过"
-                    "哪些药"
+                    "ose|medication) (?:records?|reports?)\\b|report(?:ed)? taking|服药记录|服药自述|用药记录|吃过"
+                    "哪些药|\\bdid i (?:take|report taking)\\b|\\bhave i (?:taken|reported taking)\\b"
                 ),
                 text,
             )
@@ -113,7 +115,7 @@ class ReadDialogue:
             text,
         ):
             history = True
-        health = bool(re.search(r"health (?:notes|observations|records)|健康(?:记录|观察|感受)", text))
+        health = bool(re.search(r"health (?:notes|observations|records|data)|健康(?:记录|观察|感受|数据)", text))
         listing = (
             bool(
                 re.search(
@@ -125,7 +127,7 @@ class ReadDialogue:
             and not history
             and not re.search(r"should|due|计划|需要|要吃|今天吃什么药", text)
         )
-        source = bool(re.search(r"\bsource|\bcitation|来源|依据", text))
+        source = bool(re.search(r"\bsource|\bcitation|(?:information|answer|that|this).*come from|来源|依据", text))
         identify = (
             bool(re.search(r"第.+是什么|what is the (?:first|second|third) one", text)) and not question and not source
         )
@@ -200,11 +202,31 @@ class ReadDialogue:
                     str(data["patient_safe_summary"]), previous.model_copy(update={"topic": "other", "choice": None})
                 )
             if history:
+                status_question = re.search(
+                    r"^(?:did i (?:take|report taking)|have i (?:taken|reported taking))\s+(.+?)[?？.]*$",
+                    turn.text,
+                    re.I,
+                )
+                if status_question:
+                    target = without_calendar_words(status_question[1]).strip(" ?？.,")
+                    if target and target.casefold() not in {"it", "this", "that"}:
+                        execute("get_dose_status", {"medication_name": target})
+                        return answer(
+                            status_reply(results[-1], turn.language),
+                            previous.model_copy(update={"topic": "other", "choice": None}),
+                            intent=AgentIntent.DOSE_STATUS_QUERY,
+                        )
                 days = self._days(text, str(metadata["local_date"]))
                 params = {"days": days}
                 match = re.search(r"(?:history|records) (?:for|of) (.+?)[?？.]*$", turn.text, re.I)
                 if match:
-                    params["medication_name"] = match[1].strip(" ?？.")
+                    target = without_calendar_words(match[1])
+                    target = re.sub(
+                        r"\b(?:this|last) (?:week|month)\b|\b(?:past|last) \d+ days?\b", " ", target, flags=re.I
+                    )
+                    target = re.sub(r"\b(?:for|during|from|in)\b", " ", target, flags=re.I).strip(" ?？.,")
+                    if target:
+                        params["medication_name"] = target
                 elif (
                     session.context.last_intent == AgentIntent.MEDICATION_HISTORY.value
                     and previous.history_medication_id
@@ -241,7 +263,11 @@ class ReadDialogue:
                             and normalized(row["strength_text"]) not in normalized(row["display_name"])
                             else ""
                         )
-                        + (f" ({row['dosage_form']})" if row.get("dosage_form") else "")
+                        + (
+                            f" ({localized_form(str(row['dosage_form']), turn.language)})"
+                            if row.get("dosage_form")
+                            else ""
+                        )
                     )[:300],
                 )
                 for row in rows
@@ -249,8 +275,15 @@ class ReadDialogue:
             version = hashlib.sha256(
                 json.dumps(
                     sorted(
-                        (str(row.medication_id), str(row.regimen_id), row.label, tuple(row.ingredient_names))
-                        for row in options
+                        (
+                            str(row["medication_id"]),
+                            str(row["regimen_id"]),
+                            row["display_name"],
+                            row.get("strength_text"),
+                            row.get("dosage_form"),
+                            tuple(row.get("ingredients", [])),
+                        )
+                        for row in rows
                     )
                 ).encode()
             ).hexdigest()
@@ -327,6 +360,8 @@ class ReadDialogue:
                     )
                 reliable_order = displayed if previous.candidate_version == version else []
                 selected = resolve_options(turn.text, reliable_order or options, allow_order=bool(reliable_order))
+                if source and not selected and previous.topic == "medication" and previous.candidate_version == version:
+                    selected = [row for row in options if row.medication_id in previous.answered_medication_ids]
                 if not selected and question and question.get("medication_name"):
                     target = question["medication_name"]
                     if not re.search(
@@ -407,11 +442,39 @@ class ReadDialogue:
                     selected[0] if len(selected) == 1 else None,
                 )
             summaries = []
+            evidence_groups: dict[tuple[str, str], tuple[list[str], str, int]] = {}
             for row in selected:
                 output = execute(
                     "get_medication_understanding", {"medication_id": str(row.medication_id), "question": q}
                 )
-                summaries.append(row.display_name + "\n" + str(output.data["patient_safe_summary"]))
+                summary = (
+                    knowledge_sources_reply(output.data, turn.language)
+                    if source
+                    else str(output.data["patient_safe_summary"])
+                )
+                knowledge = output.data.get("general_knowledge")
+                name = str(output.data.get("medication_name", ""))
+                prefix = name + ("：" if zh else ": ")
+                if (
+                    q == "general_use"
+                    and not compare
+                    and knowledge
+                    and knowledge.get("status") == "matched"
+                    and summary.startswith(prefix)
+                ):
+                    body = summary[len(prefix) :]
+                    # Share an identical sourced explanation, not a medication identity.
+                    # All original names/strengths/IDs and tool reads remain distinct.
+                    key = (body, json.dumps(knowledge.get("sources", []), sort_keys=True))
+                    if key in evidence_groups:
+                        evidence_groups[key][0].append(name)
+                    else:
+                        evidence_groups[key] = ([name], prefix[len(name) :], len(summaries))
+                        summaries.append("")
+                else:
+                    summaries.append(summary)
+            for key, (names, separator, position) in evidence_groups.items():
+                summaries[position] = " / ".join(names) + separator + key[0]
             prefix = (
                 (
                     "以下分别来自标签的一般用途，不能据此判断药物可互换。\n"
@@ -424,6 +487,7 @@ class ReadDialogue:
                 if compare
                 else ""
             )
+            state = state.model_copy(update={"answered_medication_ids": [row.medication_id for row in selected]})
             return answer(prefix + "\n\n".join(summaries), state, selected[0] if len(selected) == 1 else None)
         except AuthenticationRequiredError:
             raise

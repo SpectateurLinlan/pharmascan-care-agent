@@ -1,0 +1,71 @@
+"""Current local-day attention read; creates no occurrences, reports or reminders."""
+
+from uuid import UUID
+
+from ..contracts.ports import Clock
+from ..contracts.temporal import local_day_window
+from ..contracts.today_attention import TodayAttention, TodayPlan
+from ..domain.dose_attention import attention_deadline
+from .dosing import DoseScheduleService, SelfReportService
+from .enrollment import MedicationEnrollmentService
+
+
+def read_today_attention(
+    *,
+    owner: UUID,
+    enrollment: MedicationEnrollmentService,
+    schedule: DoseScheduleService,
+    reports: SelfReportService,
+    clock: Clock,
+) -> TodayAttention:
+    now = clock.now()
+    timezone = schedule.local_timezone(owner)
+    from zoneinfo import ZoneInfo
+
+    day = now.astimezone(ZoneInfo(timezone)).date()
+    start, end = local_day_window(day, timezone)
+    plans = []
+    for medication in enrollment.list_medications(owner):
+        plan = enrollment.find_active_regimen(owner, medication.id)
+        if not plan or medication.archived_at or (plan.effective_from and plan.effective_from > now):
+            continue
+        if (
+            (plan.effective_to and plan.effective_to <= now)
+            or (plan.course_start_date and plan.course_start_date > day)
+            or (plan.course_end_date and plan.course_end_date < day)
+        ):
+            continue
+        if plan.is_prn:
+            plans.append(TodayPlan(regimen_id=plan.id, state="as_needed", unrecorded_times=[]))
+            continue
+        frequency = plan.frequency_rule or {}
+        if (
+            frequency.get("kind") not in {"daily", "weekly", "interval"}
+            or not frequency.get("local_times")
+            or (frequency.get("kind") == "interval" and not frequency.get("interval_anchor"))
+        ):
+            # Do not treat a legacy/default anchor as a verified interval plan.
+            plans.append(TodayPlan(regimen_id=plan.id, state="unavailable", unrecorded_times=[]))
+            continue
+        moments = schedule.planned_instants(patient_id=owner, regimen_id=plan.id, start=start, end=end)
+        history = reports.history(patient_id=owner, regimen_id=plan.id, window_start=start, window_end=min(end, now))
+        recorded = {row.occurrence.due_at for row in history if row.event is not None and row.occurrence is not None}
+        pending, unrecorded = [], []
+        for index, moment in enumerate(moments):
+            if moment > now or moment in recorded:
+                continue
+            following = moments[index + 1] if index + 1 < len(moments) else None
+            (pending if now < attention_deadline(moment, following, end) else unrecorded).append(moment)
+        state = (
+            "pending"
+            if pending
+            else "upcoming"
+            if any(moment > now for moment in moments)
+            else "unrecorded"
+            if unrecorded
+            else "recorded"
+            if recorded
+            else "not_scheduled"
+        )
+        plans.append(TodayPlan(regimen_id=plan.id, state=state, unrecorded_times=unrecorded))
+    return TodayAttention(as_of=now, local_date=day.isoformat(), timezone=timezone, plans=plans)

@@ -961,7 +961,7 @@ def test_education_choice_continues_the_original_question_and_can_switch_medicin
     knowledge = selected.tool_results[-1].payload
     assert knowledge["action"] == "get_medication_understanding"
     assert knowledge["question"] == "general_use" and knowledge["medication_name"] == "Nifedipine LA 30 mg"
-    assert selected.message.startswith("Nifedipine LA 30 mg\n")
+    assert selected.message.startswith("Nifedipine LA 30 mg")
     assert not selected.requires_confirmation and not wired.store.events
     context = wired.sessions.get(patient, session.id).context
     assert context.referenced_medication_id == nifedipine.medication.id
@@ -971,7 +971,7 @@ def test_education_choice_continues_the_original_question_and_can_switch_medicin
     switched = conversation.handle_turn(
         patient_id=patient, session_id=session.id, turn=AgentTurn(text="Amlodipine", language=language)
     )
-    assert switched.message.startswith("Amlodipine besylate\n")
+    assert switched.message.startswith("Amlodipine besylate")
     assert wired.sessions.get(patient, session.id).context.referenced_medication_id == first.medication.id
 
 
@@ -1085,7 +1085,7 @@ def test_nifedipine_choice_reads_real_typed_extracted_label_without_writes(revie
         patient_id=patient, session_id=session.id, turn=AgentTurn(text="Nifedipine LA", language="zh")
     )
     assert queries[0].form == "tablet" and queries[0].release == "modified_release"
-    assert reply.message.startswith("Nifedipine LA 30 mg\n")
+    assert reply.message.startswith("Nifedipine LA 30 mg")
     assert reply.tool_results[-1].payload["action"] == "get_medication_understanding"
     assert not reply.requires_confirmation and not wired.store.events
 
@@ -1167,7 +1167,7 @@ def test_medication_education_audit_respects_database_state_contract(reviewed, w
         invalid = {**persisted[-1], "response_summary": {"state": "medication_understanding", "demo_only": True}}
         with pytest.raises(DomainValidationError, match="code 23514"):
             client.request("POST", "/rest/v1/agent_tool_calls", body=invalid)
-    assert reply.message.startswith("Nifedipine LA 30 mg\n")
+    assert reply.message.startswith("Nifedipine LA 30 mg")
     assert len(persisted) == 3 and persisted[-1]["tool_name"] == "get_long_term_care"
     assert persisted[-1]["tool_status"] == "success" and "state" not in persisted[-1]["response_summary"]
     assert persisted[-1]["response_summary"]["item_count"] == 1

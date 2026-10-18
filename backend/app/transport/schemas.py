@@ -155,7 +155,7 @@ class DraftCreateRequest(Request):
     medication_name: str = Field(min_length=1, max_length=200)
     dose_amount: float | None = None
     dose_unit: str | None = Field(default=None, max_length=40)
-    frequency_kind: Literal["daily", "weekly", "interval_hours"] | None = None
+    frequency_kind: Literal["daily", "weekly", "interval", "interval_hours"] | None = None
     frequency_local_times: list[str] = Field(default_factory=list)
     frequency_days_of_week: list[int] = Field(default_factory=list)
     frequency_every_hours: int | None = None

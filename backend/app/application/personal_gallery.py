@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable
 from uuid import UUID, uuid5
-from zoneinfo import ZoneInfo
 
 from ..contracts.enums import IdentityStatus, RegimenState
 from ..contracts.medication_evidence import (
@@ -22,6 +21,7 @@ from ..contracts.ports import Clock, IdGenerator
 from ..contracts.vision import MatchOutcome
 from ..domain.errors import NotFoundError, ProviderUnavailableError, ValidationError
 from .enrollment import MedicationEnrollmentService
+from .timezone import FixedTzProvider, LocalTzProvider
 
 
 class PersonalGalleryService:
@@ -35,16 +35,18 @@ class PersonalGalleryService:
         normalize: Callable[[bytes], bytes],
         clock: Clock,
         ids: IdGenerator,
+        tz_provider: LocalTzProvider | None = None,
     ):
         self._repo, self._storage, self._vision, self._enrollment = repository, storage, vision, enrollment
         self._normalize, self._clock, self._ids = normalize, clock, ids
+        self._timezone = tz_provider or FixedTzProvider()
 
     def list(self, patient_id: UUID) -> list[dict]:
         images = self._repo.list(patient_id, "images")
         tasks = self._repo.list(patient_id, "tasks")
         embedded_ids = {row.image_id for row in self._repo.list(patient_id, "embeddings")}
         result = []
-        today = self._clock.now().astimezone(ZoneInfo("Asia/Singapore")).date()
+        today = self._clock.now().astimezone(self._timezone.local_tz(patient_id)).date()
         medications = self._repo.medications(patient_id)
         for medication in medications:
             regimens = self._enrollment.list_regimens(patient_id, medication.id)
@@ -233,7 +235,7 @@ class PersonalGalleryService:
                     reason = "Visual evidence only. Review the current recorded medication plan separately."
                     if outcome.medication_id:
                         matched = UUID(outcome.medication_id)
-                        today = self._clock.now().astimezone(ZoneInfo("Asia/Singapore")).date()
+                        today = self._clock.now().astimezone(self._timezone.local_tz(patient_id)).date()
                         current = self._enrollment.find_active_regimen(patient_id, matched)
                         if (
                             not current

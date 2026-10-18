@@ -4,6 +4,7 @@ The Markdown is emitted from actual responses, including every failed turn.
 """
 
 import json
+import re
 from pathlib import Path
 from uuid import uuid4
 
@@ -14,6 +15,30 @@ from .correctness02_support import FOREIGN, OWNER, build_harness
 
 OUT = Path("outputs/AGENT_CORRECTNESS02_CONVERSATIONS_20261018.md")
 SCENARIOS = {}
+EVIDENCE_INDEX = (
+    "Additional actual runs: [PostgreSQL](correctness02-postgres-conversations.md), "
+    "[Browser: shared Today/Workspace, privacy, EN/ZH150](correctness02-browser-conversations.md), "
+    "[Browser increment: exact product](correctness02-browser-product-conversations.md), "
+    "[real public source](correctness02-live-knowledge.md). "
+    "The [initial real-source failure](correctness02-live-knowledge-initial.md) is preserved; "
+    "it led to the tested USP/ingredient-label parser correction, not fabricated success."
+)
+EXPECTATIONS = {
+    "list": "List eligible real medicines, preserving strengths, PRN and registration-not-ingestion limits.",
+    "knowledge": "Explain the selected medicine's sourced general uses with citation; infer no personal indication.",
+    "plan": "Read the exact current reviewed product plan: actual per-dose amount, unit and timing.",
+    "health": "Include all three fixture notes, actual local dates and the 128/82 mmHg value/unit; infer no causality.",
+    "history": "Describe actual medicines, local dates/times and report states under the original plans and scope.",
+    "choice": "Show authorized current choices without guessing; retain the pending read intent and product scope.",
+    "identify": "Resolve the actual previously displayed order, not a later repository ordering.",
+    "strengths": "Show reviewed related strengths without merging original registrations or regimen identities.",
+    "limit": "Explain the unsupported range or expired/changed choice; never silently substitute today.",
+    "unavailable": "Explain source failure/mismatch without invented medical facts; retry must re-read the source.",
+    "schedule": "Query the patient's 2026-10-18 schedule with the real medicines, amounts and local times.",
+    "status": "Read only Amlodipine 5 mg on 2026-10-17: reported not taken; preserve the event date.",
+    "denied": "Refuse historical backfill: no proposal for today, confirmation or new Dose Event.",
+    "safe": "Preserve ownership and no-write boundaries; empty data or length-test filler must not invent facts.",
+}
 
 
 def premise(h):
@@ -46,6 +71,8 @@ def write_report():
             "ce**. Separate SQL/browser/live-source evidence is linked in the "
             "final acceptance matrix."
         ),
+        "",
+        EVIDENCE_INDEX,
         "",
         "| Scenario | Main target | Turns | Run mode | Result | Key issue |",
         "|---|---|---:|---|---|---|",
@@ -101,7 +128,7 @@ def write_report():
                     "- "
                     + medication["name"]
                     + ": "
-                    + str(plan.get("status"))
+                    + str(plan.get("state"))
                     + "; "
                     + str(plan.get("dose_amount"))
                     + " "
@@ -123,7 +150,7 @@ def write_report():
                 quoted(row["user"]),
                 "",
                 "Expected:",
-                quoted(row["expected"]),
+                quoted(EXPECTATIONS.get(row["expected"].split(";")[0].split(":")[0], "") + "\n" + row["expected"]),
                 "",
                 "Actual Assistant:",
                 quoted(row["actual"]),
@@ -301,9 +328,8 @@ def assess(h, kind, data, target=None):
             issues.append("Tool/entity/date: yesterday's exact medicine status not resolved")
         if "reported not taking Amlodipine 5 mg" not in message or "2026-10-17" not in message:
             issues.append("Final: actual historical not-taken report missing")
-    if kind == "denied" and (
-        "prepare_self_report" not in names or "Historical dose backfill is not supported" not in message
-    ):
+    # A deterministic veto before the model/tools is safer than preparing a rejected write.
+    if kind == "denied" and "Historical dose backfill is not supported" not in message:
         issues.append("Safety/intent: historical statement was not explicitly refused without today's proposal")
     if kind in ("list", "strengths"):
         if "list_active_medications" not in names:
@@ -324,10 +350,15 @@ def assess(h, kind, data, target=None):
             if kind == "knowledge":
                 if not knowledge or knowledge["status"] != "matched":
                     issues.append("Source: no reliable matched label")
-                elif knowledge["use_statement"] not in message or not all(
-                    source["url"] in message for source in knowledge["sources"]
-                ):
-                    issues.append("Final: source facts/citation omitted")
+                else:
+                    source_only = bool(re.search(r"source|citation|来源|依据", row["user"], re.I))
+                    # Verified translated facts remain required; source-only followups must not repeat uses.
+                    use = knowledge.get("use_statement_zh") if "美国标签" in message else None
+                    use = use or knowledge["use_statement"]
+                    if (not source_only and use not in message) or not all(
+                        source["url"] in message for source in knowledge["sources"]
+                    ):
+                        issues.append("Final: source facts/citation omitted")
             elif kind == "plan":
                 p = read.get("personal_instructions")
                 if not p or str(p["dose_amount"]).rstrip("0").rstrip(".") not in message:
@@ -338,9 +369,14 @@ def assess(h, kind, data, target=None):
         choice = data.get("medication_choice")
         if not choice or not choice["options"]:
             issues.append("UI/state: dynamic choices missing")
-        if "get_medication_understanding" in names:
+        if any(
+            call["tool"] == "get_medication_understanding" and not call["data"].get("clarification_required")
+            for call in tools
+        ):
             issues.append("Entity: ambiguous choice silently guessed")
     if kind == "health":
+        if "blood_pressure" in message:
+            issues.append("Final/language: internal measurement key exposed")
         for text in ["DEMO felt tired", "DEMO headache resolved", "DEMO felt well", "128/82", "mmHg"]:
             if text not in message:
                 issues.append("Final/data: health record fact omitted " + text)
@@ -515,7 +551,7 @@ def test_continuous_long_conversation(name, goal, steps):
     run_scene(name, goal, steps)
 
 
-@pytest.mark.parametrize("case", range(8))
+@pytest.mark.parametrize("case", range(9))
 def test_short_negative_and_recovery_conversations(case):
     h = build_harness()
     goal = ""
@@ -565,16 +601,24 @@ def test_short_negative_and_recovery_conversations(case):
             goal = "Saving disabled creates no durable conversation; reads still continue"
             h.root.preferences.save(OWNER, PreferenceUpdate(conversation_history_enabled=False))
             steps = [("What is this medicine for?", "choice", None), ("second", "knowledge", "Amlodipine 10 mg")]
-        else:
+        elif case == 7:
             goal = "Non-ASCII long context remains bounded and does not change the selected patient medicine"
             steps = (
                 [("What is Amlodipine 5 mg used for?", "knowledge", "Amlodipine 5 mg")]
                 + [("合成上下文，仅测试对话长度。" * 100, "safe", None)] * 7
                 + [("What is Amlodipine 10 mg used for?", "knowledge", "Amlodipine 10 mg")]
             )
+        else:
+            goal = "Personal instructions keep exact-product choices separate from ingredient-level general uses"
+            steps = [("How should I take Amlodipine?", "choice", None), ("PLAN_CLICK", "plan", "Amlodipine 10 mg")]
         initial = premise(h)
         for text, kind, target in steps:
             selection = None
+            if text == "PLAN_CLICK":
+                choice = h.rows[-1]["reply"]["medication_choice"]
+                option = next(row for row in choice["options"] if "10 mg" in row["label"])
+                selection = {"choice_id": choice["id"], "medication_id": option["medication_id"]}
+                text = option["label"]
             if text == "RETRY":
                 h.provider_state["mode"] = "normal"
                 text = steps[0][0]

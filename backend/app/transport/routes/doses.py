@@ -50,6 +50,7 @@ router = APIRouter(prefix="/api", tags=["doses"])
 @router.get("/doses/due", response_model=DueDoseResponse)
 def due_dose(
     regimen_id: UUID = Query(),
+    attention_only: bool = False,
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ) -> DueDoseResponse:
@@ -75,7 +76,7 @@ def due_dose(
         )
 
     container.schedule.materialize(patient_id=patient_id, regimen_id=regimen_id, days=2)
-    due = container.schedule.find_due(patient_id=patient_id, regimen_id=regimen_id)
+    due = container.schedule.find_due(patient_id=patient_id, regimen_id=regimen_id, attention_only=attention_only)
     occurrence = due.occurrence
     # find_due returns the schedule facts only; the display name is resolved
     # here from the medication record so the UI never renders a blank name.

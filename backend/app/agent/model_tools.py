@@ -87,9 +87,22 @@ class ImageCheck(Arguments):
     regimen_id: UUID | None = None
 
 
+class IntervalEnrollment(Arguments):
+    medication_name: str = Field(min_length=1, max_length=160)
+    every_hours: int = Field(ge=1, le=720)
+    dose_amount: float | None = Field(default=None, gt=0)
+    dose_unit: str | None = Field(default=None, max_length=40)
+
+
 SPECS = MappingProxyType(
     {
         **CARE_SPECS,
+        "prepare_interval_enrollment": (
+            IntervalEnrollment,
+            "For an explicit request to register a medicine with an every-N-hours schedule. "
+            "Collect first-dose date/time through controlled clarification; blank time defaults to disclosed 08:00. "
+            "Never infer the interval or dose. Creates at most an unreviewed draft, never activates or records intake.",
+        ),
         "get_medication_understanding": (
             Understanding,
             "Required for what is this medicine for / how should I take it / why prescribed. "
@@ -251,6 +264,39 @@ class ModelTools:
                 "Photo evidence cannot authorize record actions; send a separate explicit text message"
             )
         params = SPECS[name][0].model_validate(arguments).model_dump(exclude_none=True)
+        if name == "prepare_interval_enrollment":
+            import re
+
+            if not re.search(r"\b(add|enroll|register)\b|添加|登记|新建.*计划", turn.text, re.I):
+                raise ValidationError("A new interval draft needs an explicit enrollment request")
+            # Clock/date anchors come from this utterance, not model-invented defaults.
+            times = re.findall(r"\b(?:[01]\d|2[0-3]):[0-5]\d\b", turn.text)
+            dates = re.findall(r"\b\d{4}-\d{2}-\d{2}\b", turn.text)
+            reply = self._fallback.handle_turn(
+                patient_id=patient_id,
+                session_id=session_id,
+                turn=AgentTurn(
+                    text=turn.text,
+                    language=turn.language,
+                    slots={
+                        "medication_name": params["medication_name"],
+                        "dose_amount": params.get("dose_amount"),
+                        "dose_unit": params.get("dose_unit"),
+                        "frequency_kind": "interval",
+                        "frequency_every_hours": params["every_hours"],
+                        "frequency_local_times": times if len(times) == 1 else [],
+                        "course_start_date": dates[0] if len(dates) == 1 else None,
+                        "client_turn_id": client_turn_id,
+                        "correlation_id": correlation_id,
+                    },
+                ),
+            )
+            return ExecutedTool(
+                data={"message": reply.message, "requires_confirmation": False},
+                intent=AgentIntent.MEDICATION_ENROLLMENT,
+                results=reply.tool_results,
+                prepared_reply=reply,
+            )
         if name == "get_medication_understanding":
             if self._understanding is None:
                 raise ProviderUnavailableError("Medication knowledge unavailable")

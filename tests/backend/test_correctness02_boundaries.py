@@ -7,14 +7,65 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from app.agent.patient_read_reply import medication_list_reply
+from app.agent.tools import ToolResult
 from app.contracts.agent_context import AgentContext, RecentTurn
 from app.contracts.context_bounds import bounded_context
+from app.contracts.enums import ToolName, ToolStatus
 from app.contracts.medication_dialogue import MedicationChoice, MedicationDialogue, MedicationOption
 from app.contracts.medication_knowledge import KnowledgeProduct
 from app.contracts.observations import ObservationInput
 from app.infrastructure.openfda_knowledge import OpenFDAKnowledge
 
 from .correctness02_support import OWNER, build_harness
+
+
+def test_release_paraphrases_keep_plural_history_and_source_intents():
+    h = build_harness()
+    h.ask("What are those medicines generally used for?")
+    reply = h.rows[-1]
+    assert all(name in reply["actual"] for name in ["Amlodipine 5 mg", "Amlodipine 10 mg", "Metformin"])
+    assert not any(call["parameters"].get("medication_name") == "those medicines" for call in reply["tools"])
+    h.ask("Please show this week's medication reports with dates and uncertainty.")
+    assert any(call["tool"] == "get_medication_history" for call in h.rows[-1]["tools"])
+    assert "2026-10-15" in h.rows[-1]["actual"] and "unsure" in h.rows[-1]["actual"]
+    h.ask("What is this medicine for?")
+    h.ask("Metformin")
+    use = h.rows[-1]["actual"]
+    h.ask("Where does that information come from?")
+    sources = h.rows[-1]["actual"]
+    assert "https://dailymed.nlm.nih.gov/" in sources
+    assert "general ingredient uses" in sources and sources != use
+    assert "One use stated" not in sources
+
+
+@pytest.mark.parametrize(
+    "text,language", [("I took Amlodipine yesterday. Please record it.", "en"), ("我昨天吃过药，帮我记到昨天。", "zh")]
+)
+def test_historical_self_report_is_refused_before_model_can_ask_an_unrelated_clarification(text, language):
+    h = build_harness()
+    before = h.model.requests
+    reply = h.ask(text, language=language)
+    assert "Historical dose backfill" in reply["message"] if language == "en" else "不支持补记" in reply["message"]
+    assert not reply.get("pending_report") and len(h.root.store.events) == 3
+    assert h.model.requests == before
+
+
+@pytest.mark.parametrize("language", ["en", "zh"])
+def test_large_current_list_explicitly_discloses_partial_coverage_instead_of_claiming_all(language):
+    result = ToolResult(
+        tool_name=ToolName.LIST_ACTIVE_MEDICATIONS,
+        status=ToolStatus.SUCCESS,
+        payload={
+            "medications": [
+                {"display_name": f"DEMO medicine {index}", "identity_status": "unverified"} for index in range(21)
+            ]
+        },
+    )
+    reply = medication_list_reply(result, language)
+    assert "21" in reply and "20" in reply
+    assert ("not the complete list" if language == "en" else "不是完整清单") in reply
+    assert ("product identity not yet verified" if language == "en" else "产品身份尚未核实") in reply
 
 
 def test_large_non_ascii_choice_metadata_expires_without_dropping_current_question():
@@ -275,6 +326,73 @@ def test_a_b_conversations_reject_each_others_choice_and_foreign_owner_cannot_re
             f"/api/agent/conversations/{a[1]}/resume", headers={"Authorization": "Bearer DEMO.foreign"}
         )
         assert denied.status_code == 404 and "Amlodipine" not in denied.text
+        assert len(h.root.store.events) == 3
+    finally:
+        h.close()
+
+
+def test_plural_knowledge_source_followup_keeps_exact_answered_entities():
+    h = build_harness()
+    try:
+        h.ask("What are those medicines generally used for?")
+        original = [
+            r["parameters"]["medication_id"] for r in h.rows[-1]["tools"] if r["tool"] == "get_medication_understanding"
+        ]
+        reply = h.ask("Where does that information come from?")
+        current = [
+            r["parameters"]["medication_id"] for r in h.rows[-1]["tools"] if r["tool"] == "get_medication_understanding"
+        ]
+        assert original == current and len(current) == 3
+        assert not reply["medication_choice"]
+        assert "hypertension" not in reply["message"]
+        assert "openFDA" in reply["message"]
+    finally:
+        h.close()
+
+
+def test_identical_general_label_explanation_is_shared_without_hiding_product_reads():
+    h = build_harness()
+    try:
+        reply = h.ask("What are those medicines generally used for?")
+        calls = [r for r in h.rows[-1]["tools"] if r["tool"] == "get_medication_understanding"]
+        assert len(calls) == 3
+        assert len({r["parameters"]["medication_id"] for r in calls}) == 3
+        assert all(n in reply["message"] for n in ["Amlodipine 5 mg", "Amlodipine 10 mg", "Metformin 500 mg"])
+        amlodipine = calls[0]["data"]["general_knowledge"]
+        assert reply["message"].count(amlodipine["use_statement"]) == 1
+        for source in amlodipine["sources"]:
+            assert reply["message"].count(source["url"]) == 1
+    finally:
+        h.close()
+
+
+@pytest.mark.parametrize("scope", ["this week", "yesterday", "2026-10-17"])
+def test_records_for_date_phrase_is_not_a_medication_name(scope):
+    h = build_harness()
+    try:
+        reply = h.ask("Show medication records for " + scope + ".")
+        call = h.rows[-1]["tools"][-1]
+        assert call["tool"] == "get_medication_history"
+        assert "medication_name" not in call["parameters"]
+        assert "2026-10-17" in reply["message"]
+        assert "not yet recorded" in reply["message"]
+        assert "unavailable" not in reply["message"]
+    finally:
+        h.close()
+
+
+@pytest.mark.parametrize("query", ["Did I take Amlodipine 5 mg yesterday?", "Have I taken Amlodipine 5 mg yesterday?"])
+def test_status_question_after_knowledge_reads_history_instead_of_resuming_education(query):
+    from tests.backend.correctness02_support import build_harness
+
+    h = build_harness()
+    try:
+        h.ask("What are those medicines generally used for?")
+        reply = h.ask(query)
+        assert "reported not taking" in reply["message"]
+        assert "2026-10-17" in reply["message"]
+        assert "Metformin" not in reply["message"]
+        assert "hypertension" not in reply["message"]
         assert len(h.root.store.events) == 3
     finally:
         h.close()

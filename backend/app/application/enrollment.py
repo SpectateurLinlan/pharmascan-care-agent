@@ -172,6 +172,30 @@ class MedicationEnrollmentService:
             if medication.display_name.casefold() != draft.medication_name.casefold():
                 raise ValidationError("Product name conflict requires review")
             self._validate_existing_product(medication, draft, dose_basis)
+        if draft.frequency_rule is not None and draft.frequency_rule.kind == "interval":
+            from ..contracts.dto import IntervalAnchor
+            from ..domain.interval_schedule import interval_moments
+
+            frequency = draft.frequency_rule
+            if draft.course_start_date is None:
+                raise ValidationError("Enter the first-dose date for an interval schedule")
+            if len(frequency.local_times) > 1:
+                raise ValidationError("An interval schedule needs one first-dose time")
+            time = _normalise_local_time(frequency.local_times[0]) if frequency.local_times else "08:00"
+            anchor = IntervalAnchor(
+                local_date=draft.course_start_date,
+                local_time=time,
+                time_source="patient_entered" if frequency.local_times else "default_0800",
+            )
+            frequency = frequency.model_copy(update={"local_times": [time], "interval_anchor": anchor})
+            # Validate timezone/DST and interval bounds before any repository write.
+            interval_moments(
+                frequency.model_dump(mode="json"),
+                self._clock.now(),
+                self._clock.now(),
+                str(self._tz.local_tz(patient_id)),
+            )
+            draft = draft.model_copy(update={"frequency_rule": frequency})
         if evidence_task_id and existing_medication_id:
             prior = next(
                 (
@@ -185,7 +209,7 @@ class MedicationEnrollmentService:
                 expected = (
                     draft.dose_amount,
                     draft.dose_unit,
-                    draft.frequency_rule.model_dump() if draft.frequency_rule else None,
+                    draft.frequency_rule.model_dump(mode="json") if draft.frequency_rule else None,
                     draft.is_prn,
                     draft.route,
                     draft.food_instruction,
@@ -257,7 +281,7 @@ class MedicationEnrollmentService:
         if draft.dose_unit is not None:
             provided[FieldName.DOSE_UNIT.value] = draft.dose_unit
         if draft.frequency_rule is not None:
-            provided[FieldName.FREQUENCY_RULE.value] = draft.frequency_rule.model_dump()
+            provided[FieldName.FREQUENCY_RULE.value] = draft.frequency_rule.model_dump(mode="json")
         if draft.is_prn:
             provided[FieldName.IS_PRN.value] = True
         if draft.route is not None:
@@ -312,7 +336,7 @@ class MedicationEnrollmentService:
             state=state,
             dose_amount=draft.dose_amount,
             dose_unit=draft.dose_unit,
-            frequency_rule=(draft.frequency_rule.model_dump() if draft.frequency_rule else None),
+            frequency_rule=(draft.frequency_rule.model_dump(mode="json") if draft.frequency_rule else None),
             is_prn=draft.is_prn,
             route=draft.route,
             food_instruction=draft.food_instruction,

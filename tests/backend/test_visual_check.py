@@ -89,6 +89,7 @@ def test_visual_http_uses_strict_stage2_candidate_evidence_no_clinical_writes(ov
     assert result["decision"] == ("ambiguous" if overlap else "unknown")
     assert result["candidates"] and not result["comparison_available"]
     assert not result["safe_to_take_confirmed"] and not result["ingestion_proven"]
+    assert result["count_reliable"] is False
     assert calls.count("/v1/detect") == 1 and calls.count("/v1/identify") == 1
     assert not container.store.events and not container.store.regimens
     response = client.post(

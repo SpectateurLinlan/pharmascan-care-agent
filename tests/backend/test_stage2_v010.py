@@ -109,7 +109,15 @@ def test_missing_fields_stay_unknown_and_none_is_not_a_product(contract, sticker
 def test_interval_prn_and_range_never_get_an_invented_fixed_schedule(updates):
     parts = PrintedInstructions(text="DEMO", line="DEMO", **updates)
     draft = apply_printed_parts(RegimenDraftInput(medication_name="DEMO"), parts)
-    assert draft.frequency_rule is None
+    if updates.get("every_hours"):
+        # Owner-approved later flow retains the printed interval and asks for its anchor;
+        # retaining a frequency is not inventing clock times or a historical start.
+        assert draft.frequency_rule.kind == "interval"
+        assert draft.frequency_rule.every_hours == updates["every_hours"]
+        assert draft.frequency_rule.local_times == [] and draft.frequency_rule.interval_anchor is None
+        assert draft.course_start_date is None
+    else:
+        assert draft.frequency_rule is None
     assert draft.is_prn == bool(updates.get("as_needed"))
     assert draft.dose_amount is None
 
@@ -126,6 +134,51 @@ def test_review_cannot_erase_explicit_frequency_or_dose():
         validate_printed_review(draft, parts)
     validate_printed_review(
         draft.model_copy(update={"frequency_rule": FrequencyRuleDTO(kind="daily", local_times=["08:00", "20:00"])}),
+        parts,
+    )
+
+
+@pytest.mark.parametrize("printed,local", [("20:00", "20:00"), ("8:30 pm", "20:30"), ("12:15 am", "00:15")])
+def test_explicit_clock_in_real_ocr_text_cannot_be_replaced_by_default_time(printed, local):
+    parts = PrintedInstructions(
+        text=f"Take ONE tablet daily at {printed} for 7 days.",
+        line=f"Take ONE tablet daily at {printed} for 7 days.",
+        times_per_day=1,
+    )
+    wrong = RegimenDraftInput(
+        medication_name="DEMO", frequency_rule=FrequencyRuleDTO(kind="daily", local_times=["08:00"])
+    )
+    with pytest.raises(ValidationError, match="explicit clock"):
+        validate_printed_review(wrong, parts)
+    validate_printed_review(
+        wrong.model_copy(update={"frequency_rule": FrequencyRuleDTO(kind="daily", local_times=[local])}), parts
+    )
+
+
+def test_chinese_explicit_clock_is_preserved_and_invalid_am_pm_is_not_guessed():
+    draft = RegimenDraftInput(
+        medication_name="DEMO", frequency_rule=FrequencyRuleDTO(kind="daily", local_times=["20:00"])
+    )
+    validate_printed_review(draft, PrintedInstructions(text="每天在20:00服用一片", line="每天在20:00服用一片"))
+    with pytest.raises(ValidationError, match="ambiguous"):
+        validate_printed_review(draft, PrintedInstructions(text="Take at 20:00 pm", line="Take at 20:00 pm"))
+
+
+def test_printed_interval_first_clock_does_not_use_unknown_time_default():
+    from datetime import date
+
+    parts = PrintedInstructions(text="Take every 6 hours, starting at 20:00", line="DEMO", every_hours=6)
+    draft = RegimenDraftInput(
+        medication_name="DEMO",
+        course_start_date=date(2026, 10, 18),
+        frequency_rule=FrequencyRuleDTO(kind="interval", every_hours=6, local_times=["08:00"]),
+    )
+    with pytest.raises(ValidationError, match="explicit clock"):
+        validate_printed_review(draft, parts)
+    validate_printed_review(
+        draft.model_copy(
+            update={"frequency_rule": FrequencyRuleDTO(kind="interval", every_hours=6, local_times=["20:00"])}
+        ),
         parts,
     )
 

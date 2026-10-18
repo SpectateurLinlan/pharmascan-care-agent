@@ -48,6 +48,8 @@ class EnrollMedicationRequest(ToolRequest):
     is_prn: bool = False
     route: str | None = None
     food_instruction: str | None = None
+    course_start_date: date | None = None
+    course_end_date: date | None = None
 
 
 class ConfirmRegimenRequest(ToolRequest):

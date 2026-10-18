@@ -6,6 +6,14 @@ from zoneinfo import ZoneInfo
 from .tools import ToolResult
 
 
+def localized_form(value: str, language: str) -> str:
+    if language != "zh":
+        return value
+    return {"tablet": "片剂", "tablets": "片剂", "capsule": "胶囊", "capsules": "胶囊", "oral": "口服"}.get(
+        value.lower(), value
+    )
+
+
 def local_time(value: object, timezone: str) -> str:
     if not value:
         return ""
@@ -24,16 +32,66 @@ def medication_list_reply(result: ToolResult, language: str) -> str:
             else "You have no currently active registered medication plans."
         )
     lines = [heading]
-    for index, row in enumerate(rows, 1):
-        details = [str(row[key]) for key in ("strength_text", "dosage_form") if row.get(key)]
+    for index, row in enumerate(rows[:20], 1):
+        name = str(row["display_name"])
+        details = [
+            (
+                {"tablet": "片剂", "tablets": "片剂", "capsule": "胶囊", "capsules": "胶囊", "oral": "口服"}.get(
+                    str(row[key]).lower(), str(row[key])
+                )
+                if zh
+                else str(row[key])
+            )
+            for key in ("strength_text", "dosage_form")
+            if row.get(key) and str(row[key]).replace(" ", "").casefold() not in name.replace(" ", "").casefold()
+        ]
         label = str(row["display_name"]) + (" — " + ", ".join(details) if details else "")
         if row.get("is_prn"):
             label += "（按需使用）" if zh else " (as needed)"
         if row.get("identity_status") == "unverified":
             label += "（产品身份尚未核实）" if zh else " (product identity not yet verified)"
         lines.append(f"{index}. {label}")
+    if len(rows) > 20:
+        lines.append(
+            f"本次显示前20项，共{len(rows)}项有效登记；这不是完整清单，其余请在药物页查看或指定药名查询。"
+            if zh
+            else f"Showing the first 20 of {len(rows)} active registrations, not the complete list. "
+            "View remaining entries in Medicines or ask about a named medicine."
+        )
     lines.append(
         "这是登记的用药清单，不能证明实际服用。" if zh else "This is your registered list, not proof of taking a dose."
+    )
+    return "\n".join(lines)
+
+
+def knowledge_sources_reply(data: dict, language: str) -> str:
+    """Source follow-ups answer provenance, without repeating the indications."""
+    knowledge = data.get("general_knowledge") or {}
+    sources = knowledge.get("sources") or []
+    if not sources:
+        return (
+            "本次没有可核实的知识来源，请稍后重试；不会用无来源的医学知识补充。"
+            if language == "zh"
+            else "No reliable knowledge source was available for this lookup. Please retry later."
+        )
+    name = str(data.get("medication_name") or "")
+    lines = [
+        f"{name}：回答依据是以下美国药品标签。"
+        if language == "zh"
+        else f"{name}: this answer uses the following US drug labels."
+    ]
+    lines.extend(
+        f"- openFDA / SPL{(' — ' + row['label_name']) if row.get('label_name') else ''} "
+        f"· {row['effective_time']} · v{row['version']}: {row['url']}"
+        for row in sources
+    )
+    lines.append(
+        "这些标签支持一般成分用途，不代表已确认您持有的具体产品或个人处方。"
+        if language == "zh"
+        else (
+            "These support general ingredient uses; they do not "
+            "confirm your particular product or personal prescription."
+        )
     )
     return "\n".join(lines)
 

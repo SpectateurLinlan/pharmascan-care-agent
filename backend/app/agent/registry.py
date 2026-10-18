@@ -383,7 +383,7 @@ class ToolRegistry:
         frequency = None
         if request.frequency_kind is not None:
             frequency = FrequencyRuleDTO(
-                kind=request.frequency_kind,  # type: ignore[arg-type]
+                kind="interval" if request.frequency_kind == "interval_hours" else request.frequency_kind,
                 local_times=list(request.frequency_local_times),
                 days_of_week=list(request.frequency_days_of_week),
                 every_hours=request.frequency_every_hours,
@@ -398,6 +398,8 @@ class ToolRegistry:
                 is_prn=request.is_prn,
                 route=request.route,
                 food_instruction=request.food_instruction,
+                course_start_date=request.course_start_date,
+                course_end_date=request.course_end_date,
             ),
         )
         payload = EnrollmentResultPayload(
@@ -406,10 +408,13 @@ class ToolRegistry:
             state=result.regimen.state.value,
             missing_instructions=[m.field.value for m in result.missing_instructions],
         )
+        data = payload.model_dump(mode="json")
+        if frequency and frequency.kind == "interval":
+            data["interval_anchor"] = result.regimen.frequency_rule.get("interval_anchor")
         return ToolResult(
             tool_name=ToolName.ENROLL_MEDICATION_DRAFT,
             status=ToolStatus.SUCCESS,
-            payload=payload.model_dump(mode="json"),
+            payload=data,
             clarification_question=(
                 "I still need: " + ", ".join(payload.missing_instructions) if payload.missing_instructions else None
             ),

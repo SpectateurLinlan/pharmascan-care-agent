@@ -147,11 +147,18 @@ def _describe_trends(trends: list[dict[str, object]], language: str, timezone: s
         start = datetime.fromisoformat(row["start"]).astimezone(ZoneInfo(timezone)).isoformat()
         end = datetime.fromisoformat(row["end"]).astimezone(ZoneInfo(timezone)).isoformat()
         kind, unit, count = row["kind"], row["unit"], row["count"]
+        label = {
+            "blood_pressure": ("blood pressure", "血压"),
+            "blood_glucose": ("blood glucose", "血糖"),
+            "weight": ("weight", "体重"),
+            "sleep": ("sleep", "睡眠"),
+            "mood": ("mood", "心情"),
+        }.get(kind, ("measurement", "测量"))[language == "zh"]
         if count < 2:
             text += (
-                f" {kind}：仅 {count} 条 {unit} 记录，不足以描述变化。"
+                f" {label}：仅 {count} 条 {unit} 记录，不足以描述变化。"
                 if language == "zh"
-                else f" {kind}: only {count} {unit} record; insufficient to describe change."
+                else f" {label}: only {count} {unit} record; insufficient to describe change."
             )
             continue
         a, b = str(first["value"]), str(last["value"])
@@ -161,9 +168,9 @@ def _describe_trends(trends: list[dict[str, object]], language: str, timezone: s
             b += f"/{last['secondary_value']}"
             delta += f"/{last['secondary_value'] - first['secondary_value']:+g}"
         text += (
-            f" {kind}：{count} 条记录，{start} 至 {end}，从 {a} 到 {b} {unit}，首末差值 {delta} {unit}。"
+            f" {label}：{count} 条记录，{start} 至 {end}，从 {a} 到 {b} {unit}，首末差值 {delta} {unit}。"
             if language == "zh"
-            else f" {kind}: {count} records, {start} to {end}; "
+            else f" {label}: {count} records, {start} to {end}; "
             f"first {a}, last {b} {unit}, endpoint change {delta} {unit}."
         )
     if text:
@@ -296,6 +303,8 @@ def execute_care_tool(
             f"Unrecorded does not mean missed. Reported difficulties: {len(data['barriers'])}; "
             f"open follow-ups: {len(data['follow_ups'])}."
         )
+    if name == "get_health_observations":
+        summary = ""  # Answer the health query directly; medication totals belong to a combined review.
     for task in data["follow_ups"][:4]:
         medication = next(
             (row["name"] for row in summary_data["medications"] if row["medication_id"] == task["medication_id"]), None
@@ -343,13 +352,32 @@ def execute_care_tool(
                 else "\nShowing the latest 10; view all remaining entries in Health notes."
             )
     if name in ("get_health_observations", "get_longitudinal_summary", "prepare_medication_review"):
-        summary += _describe_trends(data["trends"], language, timezone)
+        trends_text = _describe_trends(data["trends"], language, timezone)
+        if trends_text:
+            summary += "\n" + trends_text.strip()
     if name == "prepare_medication_review":
         summary += (
             " 请核对用药清单、库存及未完成事项，并准备与药剂师讨论上述记录。"
             if language == "zh"
             else " Review your medication list, supply and open tasks, and discuss these reports with your pharmacist."
         )
+        questions = data.get("questions", [])
+        if questions:
+            translated = {
+                "Which scheduled doses still need a patient report?": "哪些已有计划剂次还需要补充自述？",
+                (
+                    "Are there feelings or symptoms you would like to discuss with a healthcare professional?"
+                ): "有哪些感受或症状希望与医护人员讨论？",
+                "Is the intended course end date documented in your reviewed instructions?": (
+                    "已核对的指示是否注明了疗程结束日期？"
+                ),
+                "Discuss your reported medication difficulties and chosen support actions.": (
+                    "讨论已记录的用药困难和您选择的应对方式。"
+                ),
+                "Check medication supply and refill arrangements with your pharmacy.": "向药房核对药物余量和补药安排。",
+            }
+            summary += "\n复诊可讨论的问题：" if language == "zh" else "\nQuestions to discuss at your visit:"
+            summary += "\n" + "\n".join("- " + (translated.get(q, q) if language == "zh" else q) for q in questions)
     # Return only the requested minimum. UI has the full patient-review endpoint.
     sections = {
         "get_adherence_history": {"barriers"},

@@ -287,6 +287,7 @@ def build_container(
         normalize=patient_reference_image,
         clock=the_clock,
         ids=the_ids,
+        tz_provider=PreferenceTzProvider(preference_repo),
     )
     observations_service = ObservationService(MemoryObservations(), medications, the_clock)
     summary_service = ReviewSummaryService(enrollment, occurrences, events, observations_service, the_clock)
@@ -619,6 +620,7 @@ def build_supabase_container(
                 normalize=patient_reference_image,
                 clock=root.clock,
                 ids=ids or RandomIdGenerator(),
+                tz_provider=PreferenceTzProvider(preference_repo),
             )
             observations_service = ObservationService(SupabaseObservations(client), repos.medications, root.clock)
             summary_service = ReviewSummaryService(

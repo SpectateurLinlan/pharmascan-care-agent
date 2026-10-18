@@ -160,18 +160,19 @@ class MedicationUnderstandingService:
         if language == "zh":
             summary = f"{name}："
             if knowledge.status == "matched":
-                summary += knowledge.use_statement_zh or "该标签暂无经核对的中文用途译文，请核对以下英文原文。"
-                summary += f" 美国标签原文（部分用途）：{knowledge.use_statement}"
+                summary += knowledge.use_statement_zh or (
+                    f"该标签暂无经核对的中文用途译文，以下为美国标签原文（部分用途）：{knowledge.use_statement}"
+                )
             else:
                 summary += (
                     "目前无法可靠匹配或读取标签来确认一般用途，可能是成分名称不匹配、标签用途冲突或服务不可用；"
                     "请核对原始标签或向药剂师查询。"
                 )
-            summary += " 这是一般标签资料，不说明医生为您开药的个人原因，也不是个人剂量指示或新加坡批准适应证。"
+            summary += " 仅说明一般成分用途，不确认您的具体产品、处方原因或用量；来源为美国标签。"
         else:
             summary = f"{name}: "
             if knowledge.status == "matched":
-                summary += f"One use stated in the matched US label: {knowledge.use_statement} "
+                summary += f"{knowledge.use_statement} "
             else:
                 summary += (
                     "I could not reliably confirm a general use from the source: the i"
@@ -180,12 +181,12 @@ class MedicationUnderstandingService:
                     ". "
                 )
             summary += (
-                "General label uses do not establish your personal indication, dos"
-                "ing instructions, FDA approval or Singapore registration. This is"
-                " a partial excerpt; see the source."
+                "General ingredient information from US labels; not confirmation of your product, "
+                "prescription reason, dose or Singapore approval."
             )
         for citation in knowledge.sources:
-            summary += f"\nopenFDA / SPL ({citation.effective_time}, v{citation.version}): {citation.url}"
+            label = f" — {citation.label_name}" if citation.label_name else ""
+            summary += f"\nopenFDA / SPL{label} ({citation.effective_time}, v{citation.version}): {citation.url}"
         if question == "personal_reason":
             summary = (
                 "记录尚未确认医生为您开药的个人原因。 "
@@ -220,8 +221,15 @@ class MedicationUnderstandingService:
             schedule = f"{times}; weekdays (1=Monday): {frequency.get('days_of_week', [])}"
         else:
             schedule = ("每天 " if language == "zh" else "daily at ") + times
+        unit = (
+            {"tablet": "片", "tablets": "片", "capsule": "粒", "capsules": "粒", "mg": "毫克", "ml": "毫升"}.get(
+                str(instructions.dose_unit), instructions.dose_unit
+            )
+            if language == "zh"
+            else instructions.dose_unit
+        )
         summary = (
-            f"已核对的当前计划：{name}，每次 {instructions.dose_amount:g} {instructions.dose_unit}；{schedule}。"
+            f"已核对的当前计划：{name}，每次 {instructions.dose_amount:g} {unit}；{schedule}。"
             if language == "zh"
             else f"Your current reviewed plan: {name}, {instructions.dose_amount:g} "
             f"{instructions.dose_unit} per dose; {schedule}."
@@ -229,7 +237,12 @@ class MedicationUnderstandingService:
         food = instructions.food_instruction or ("未记录" if language == "zh" else "not recorded")
         summary += f" {'用餐说明' if language == 'zh' else 'Food instruction'}: {food}."
         if instructions.route:
-            summary += f" {'途径' if language == 'zh' else 'Route'}: {instructions.route}."
+            route = (
+                {"oral": "口服", "topical": "外用", "inhalation": "吸入"}.get(instructions.route, instructions.route)
+                if language == "zh"
+                else instructions.route
+            )
+            summary += f" {'途径' if language == 'zh' else 'Route'}: {route}."
         if instructions.course_start_date or instructions.course_end_date:
             summary += (
                 f" {'疗程' if language == 'zh' else 'Course'}: "

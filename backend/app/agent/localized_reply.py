@@ -15,6 +15,13 @@ def chinese_reply(intent: AgentIntent, results: list[ToolResult]) -> str:
         return "请核对下方药物和自述内容，然后明确确认。确认前不会保存用药自述。患者自述不能证明实际吞服。"
     if last.blocked:
         return "无法完成此操作。请查看今日药物和记录，或先完成药物核对与激活。没有保存新的用药自述。"
+    if last.tool_name == ToolName.ENROLL_MEDICATION_DRAFT and last.payload.get("interval_anchor"):
+        anchor = last.payload["interval_anchor"]
+        label = "默认 08:00" if anchor["time_source"] == "default_0800" else anchor["local_time"]
+        return (
+            f"已保存待核对草稿。首次服药：{anchor['local_date']} {label}。"
+            "请在药物登记表核对完整计划并明确确认后激活；没有保存服药自述。"
+        )
     if last.tool_name == ToolName.CHECK_DUE_DOSE:
         return schedule_reply(last, "zh")
     if last.tool_name == ToolName.GET_DOSE_STATUS and intent != AgentIntent.DOSE_SELF_REPORT:

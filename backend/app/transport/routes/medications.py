@@ -168,7 +168,7 @@ def create_draft(
     frequency: FrequencyRuleDTO | None = None
     if payload.frequency_kind is not None:
         frequency = FrequencyRuleDTO(
-            kind=payload.frequency_kind,
+            kind="interval" if payload.frequency_kind == "interval_hours" else payload.frequency_kind,
             local_times=list(payload.frequency_local_times),
             days_of_week=list(payload.frequency_days_of_week),
             every_hours=payload.frequency_every_hours,

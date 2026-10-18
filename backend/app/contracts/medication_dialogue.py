@@ -41,4 +41,5 @@ class MedicationDialogue(BaseModel):
     conversation_id: UUID | None = None
     candidate_version: str = Field(default="", max_length=64)
     subject_name: str | None = Field(default=None, max_length=160)
+    answered_medication_ids: list[UUID] = Field(default_factory=list, max_length=3)
     history_medication_id: UUID | None = None
