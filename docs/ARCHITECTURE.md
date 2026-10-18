@@ -254,3 +254,28 @@ Its explicitly requested diagnostic uses generic content without mutating clinic
 queue/events. Per-process diagnostic replay/cooldown is bounded but not durable
 across API instances. All scheduled notification deduplication remains in the
 existing PostgreSQL queue. No new migration/table/RLS policy is required.
+
+
+## Agent calendar reads (Correctness01, local 2026-10-18)
+
+`contracts/temporal.py` owns pure conservative calendar parsing and DST-aware
+local-day windows. The caller supplies an injected clock instant and the trusted
+patient zone. `TemporalDoseReader` composes public enrollment, schedule and
+self-report services; Agent orchestration never accesses repositories or SQL.
+`DoseScheduleService.planned_instants(patient_id, regimen_id, start, end)` previews
+only an owned immutable version's rules within a bounded window, without saving
+occurrences or creating speculative IDs. Historical reports keep their original
+regimen/occurrence linkage. `SelfReportService.history` joins an occurrence's
+existing report by owner+occurrence, independently of its later submission date.
+
+Internal typed status/schedule/history requests add optional `target_date` and
+`day_offset` (default0); HTTP message and confirmation DTOs remain compatible.
+Model dispatch aligns explicit patient dates with tool arguments; unsupported
+expressions clarify instead of querying today. Tool results expose actual local
+date/zone/window and distinct report states. Occurrence `due_at`, stored event
+`event_time` and `created_at` remain separate; no inferred ingestion timestamp.
+Past Agent self-report preparation/execution is blocked, not implemented as
+backfill. Resumed thread text is context only; confirmation/date/ownership are
+revalidated and old calls are never replayed. Migration028 is a separate
+forward-compatible audit allowlist fix, locally tested only; production execution
+requires explicit approval before rollout. No RLS, overlap or byte-cap relaxation.
