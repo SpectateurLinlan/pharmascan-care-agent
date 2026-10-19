@@ -282,6 +282,12 @@ class DoseScheduleService:
     def get_occurrence(self, patient_id: UUID, occurrence_id: UUID) -> DoseOccurrenceDTO | None:
         return self._occurrences.get(patient_id, occurrence_id)
 
+    def existing_occurrences(self, patient_id: UUID, regimen_id: UUID, start: datetime, end: datetime):
+        """Read persisted occurrences only; does not backfill a historical schedule."""
+        return sorted(
+            self._occurrences.list_for_regimen(patient_id, regimen_id, start, end), key=lambda row: row.due_at
+        )
+
     def find_due(
         self, *, patient_id: UUID, regimen_id: UUID, at: datetime | None = None, attention_only: bool = False
     ) -> DueDoseResultDTO:

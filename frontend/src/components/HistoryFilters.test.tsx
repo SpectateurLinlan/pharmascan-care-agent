@@ -85,3 +85,12 @@ it('reports history failures inline without the rejected current-medicine subsec
  expect(screen.queryByText('Please review this')).toBeNull();expect(screen.getByRole('button',{name:'Retry history query'})).toBeTruthy();
  expect((screen.getByLabelText('Medicine') as HTMLSelectElement).value).toBe('');
 });
+
+it('starts medication-scoped history with stable IDs and skips global catalogue controls',async()=>{
+ vi.mocked(api.medicationHistory).mockResolvedValue(historyPage(historyRecords(1)));
+ render(<HistoryScreen scopedTitle="DEMO Amlodipine · Medication history" initialFilters={{range_kind:'7',medication_id:'DEMO-med-1',regimen_id:'DEMO-plan-1',medication_name:'demo amlodipine'}}/>);
+ await screen.findByText(/Displayed records/);
+ expect(api.medicationHistory).toHaveBeenCalledWith({range_kind:'7',medication_id:'DEMO-med-1',regimen_id:'DEMO-plan-1',medication_name:'demo amlodipine'});
+ expect(api.historyCatalogue).not.toHaveBeenCalled();expect(screen.queryByLabelText('Medicine')).toBeNull();expect(screen.queryByLabelText('Search medicines')).toBeNull();expect(screen.getByLabelText('Date range')).toHaveProperty('value','7');
+ expect(screen.getByRole('button',{name:'Include earlier plan versions'})).toBeTruthy();
+});

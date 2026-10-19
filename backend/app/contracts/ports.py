@@ -12,6 +12,7 @@ from typing import Protocol
 from uuid import UUID
 
 from ..contracts.dto import (
+    ActivationResultDTO,
     AgentSessionDTO,
     ConfirmationChallengeDTO,
     DoseEventDTO,
@@ -63,11 +64,15 @@ class RegimenVersionRepository(Protocol):
     def next_version_no(self, patient_id: UUID, medication_id: UUID) -> int: ...
     def add(self, regimen: RegimenVersionDTO) -> None: ...
     def update(self, regimen: RegimenVersionDTO) -> None: ...
+    def activate_version(
+        self, *, patient_id: UUID, regimen_id: UUID, challenge_id: UUID, timezone: str
+    ) -> ActivationResultDTO: ...
 
 
 class DoseRuleRepository(Protocol):
     def list_for_regimen(self, patient_id: UUID, regimen_id: UUID) -> list[DoseRuleDTO]: ...
     def add(self, rule: DoseRuleDTO) -> None: ...
+    def update(self, rule: DoseRuleDTO) -> None: ...
 
 
 class DoseOccurrenceRepository(Protocol):

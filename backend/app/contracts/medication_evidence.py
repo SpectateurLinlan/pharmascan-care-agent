@@ -77,6 +77,15 @@ class MedicationImage(EvidenceDTO):
     eligibility: Literal["associated", "eligible", "ineligible"] = "associated"
     eligibility_reason: str = Field(max_length=200)
     created_at: datetime
+    metadata_version: int = Field(default=1, ge=1)
+    gallery_removed: bool = False
+    deleted_at: datetime | None = None
+    cleanup_pending: bool = False
+
+
+class GalleryUploadResult(EvidenceDTO):
+    photo: MedicationImage
+    duplicate: bool
 
 
 class VisualReferenceSet(EvidenceDTO):
@@ -118,10 +127,24 @@ class EvidenceRepository(Protocol):
     def list(self, patient_id: UUID, kind: RecordKind) -> list[EvidenceRecord]: ...
     def get(self, patient_id: UUID, kind: RecordKind, record_id: UUID) -> EvidenceRecord | None: ...
     def add(self, kind: RecordKind, record: EvidenceRecord) -> None: ...
+    def add_image_if_absent(self, image: MedicationImage) -> bool: ...
     def add_reference(
         self, image: MedicationImage, reference: VisualReferenceSet, embedding: ImageEmbedding
     ) -> None: ...
     def retire_image(self, patient_id: UUID, image_id: UUID) -> MedicationImage: ...
+    def manage_image(
+        self,
+        patient_id: UUID,
+        image_id: UUID,
+        *,
+        action: Literal["edit", "remove", "delete"],
+        expected_version: int,
+        occurred_at: datetime,
+        image_kind: ImageKind | None = None,
+        source_description: str | None = None,
+        confirmed: bool = False,
+    ) -> tuple[MedicationImage, str]: ...
+    def acknowledge_image_cleanup(self, patient_id: UUID, image_id: UUID) -> None: ...
     def update_task(self, task: EnrollmentTask, expected_version: int) -> None: ...
     def medications(self, patient_id: UUID) -> list[PatientMedicationDTO]: ...
 

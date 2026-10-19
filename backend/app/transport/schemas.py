@@ -43,6 +43,9 @@ class HealthResponse(BaseModel):
     database: Literal["simulated_in_memory", "postgres", "supabase"] = "simulated_in_memory"
     llm: Literal["unavailable_deterministic_degraded", "gemini_configured"] = "unavailable_deterministic_degraded"
     stage2_vision: Literal["simulated", "live"] = "simulated"
+    medication_library_files_enabled: bool = False
+    late_dose_reports_enabled: bool = False
+    care_task_followups_enabled: bool = False
 
 
 class DemoStartRequest(Request):
@@ -141,6 +144,7 @@ class MedicationListResponse(BaseModel):
 
 class DraftCreateRequest(Request):
     patient_edited: bool = False
+    supersedes_regimen_id: UUID | None = None
     dose_basis: DoseBasis | None = None
     course_start_date: date | None = None
     course_end_date: date | None = None

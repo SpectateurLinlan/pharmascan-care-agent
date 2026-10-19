@@ -90,6 +90,13 @@ class LongTermCareService:
         count, latest = counts[-1], rows[-1]
         versions = {row.id: row for row in regimens}
         reports = self._events.list_for_patient(patient_id, count.recorded_at, now + timedelta(microseconds=1))
+        uncertain_timing = any(
+            event.reported_late
+            and event.intake_status.value == "reported_taken"
+            and event.regimen_id in versions
+            and event.actual_administration_at is None
+            for event in reports
+        )
         used = sum(
             versions[event.regimen_id].dose_amount
             for event in reports
@@ -97,6 +104,10 @@ class LongTermCareService:
             and event.intake_status.value == "reported_taken"
             and versions[event.regimen_id].dose_amount is not None
             and count_unit(versions[event.regimen_id].dose_unit) == count.unit
+            and (
+                not event.reported_late
+                or (event.actual_administration_at is not None and event.actual_administration_at >= count.recorded_at)
+            )
         )
         remaining = max(0, latest.stock_after - used)
         zones = {}
@@ -112,13 +123,18 @@ class LongTermCareService:
             unit=count.unit,
             last_confirmed_stock=count.quantity,
             last_confirmed_at=count.recorded_at,
-            estimated_remaining=remaining,
+            estimated_remaining=None if uncertain_timing else remaining,
             daily_requirement=daily,
-            estimated_days=remaining / daily if daily else None,
-            low_stock=bool(daily and remaining <= latest.low_threshold),
+            estimated_days=remaining / daily if daily and not uncertain_timing else None,
+            low_stock=bool(not uncertain_timing and daily and remaining <= latest.low_threshold),
             transactions=rows,
             label_quantities=label_quantities,
-            estimate_note="Estimate from confirmed count, stock transactions and compatible "
+            estimate_note=(
+                "A late taken report has no administration time. Count your stock again before estimating. "
+                if uncertain_timing
+                else ""
+            )
+            + "Estimate from confirmed count, stock transactions and compatible "
             "patient-reported taken events; "
             "unreported consumption is unknown. Weekly demand is an average, not a run-out date. "
             "PRN, unsupported units or incomplete schedules have no daily estimate. Count again to correct it.",
@@ -159,6 +175,8 @@ class LongTermCareService:
                     notes="Low-stock estimate; contact your pharmacy to check supply. This is not an automatic refill.",
                 )
             )
+        if not stock.low_stock and stock.estimated_remaining is None and stock.daily_requirement is not None:
+            return  # Unknown late-report timing does not establish that a supply concern is resolved.
         if not stock.low_stock:
             for task in open_rows:
                 self._repo.update_task(
@@ -197,7 +215,10 @@ class LongTermCareService:
             if row.status not in ("open", "contacted", "deferred"):
                 continue
             if row.source == "stock_estimate" and row.medication_id:
-                if not self.inventory(patient_id, row.medication_id, timezone).low_stock:
+                stock = self.inventory(patient_id, row.medication_id, timezone)
+                if not stock.low_stock and not (
+                    stock.estimated_remaining is None and stock.daily_requirement is not None
+                ):
                     continue
             rows.append(row)
         return rows
@@ -212,10 +233,13 @@ class LongTermCareService:
             if values.medication_id and regimen.patient_medication_id != values.medication_id:
                 raise ValidationError("Regimen and medication do not agree")
         now = self._clock.now()
+        if not any(row.id == values.id for row in self.tasks(patient_id)):
+            self._validate_task_time(values.due_at, values.reminder_minutes, values.historical_confirmed)
         return self._repo.create_task(
             CareTask(
-                **values.model_dump(exclude={"confirmed"}),
+                **values.model_dump(exclude={"confirmed", "historical_confirmed"}),
                 patient_id=patient_id,
+                historical_entry=values.historical_confirmed,
                 created_at=now,
                 updated_at=now,
             )
@@ -226,7 +250,42 @@ class LongTermCareService:
             raise ValidationError("Confirm the follow-up change")
         if values.status == "deferred" and (values.due_at is None or values.due_at <= self._clock.now()):
             raise ValidationError("Choose a future follow-up time")
+        previous = next((row for row in self.tasks(patient_id) if row.id == task_id), None)
+        if previous is None:
+            raise NotFoundError("Follow-up not found for this patient")
+        if any(event.id == values.id for event in previous.history):
+            return self._repo.update_task(patient_id, task_id, values, self._clock.now())
+        if previous.status in {"completed", "cancelled"} and values.status != "open":
+            raise ValidationError("Reopen the follow-up before editing it")
+        fields = values.model_fields_set
+        medication_id = values.medication_id if "medication_id" in fields else previous.medication_id
+        regimen_id = values.regimen_id if "regimen_id" in fields else previous.regimen_id
+        if medication_id:
+            self._medication(patient_id, medication_id)
+        if regimen_id:
+            regimen = self._regimen(patient_id, regimen_id)
+            if medication_id and regimen.patient_medication_id != medication_id:
+                raise ValidationError("Regimen and medication do not agree")
+        if previous.source == "stock_estimate" and fields & {"title", "category", "medication_id", "regimen_id"}:
+            raise ValidationError("Supply follow-ups keep their original medication and type")
+        if values.status not in {"completed", "cancelled"} and (
+            (values.due_at is not None and values.due_at != previous.due_at)
+            or ("reminder_minutes" in fields and values.reminder_minutes != previous.reminder_minutes)
+            or previous.status in {"completed", "cancelled"}
+        ):
+            self._validate_task_time(
+                values.due_at or previous.due_at,
+                values.reminder_minutes if "reminder_minutes" in fields else previous.reminder_minutes,
+                values.historical_confirmed,
+            )
         return self._repo.update_task(patient_id, task_id, values, self._clock.now())
+
+    def _validate_task_time(self, due, reminder, historical_confirmed):
+        now = self._clock.now()
+        if due < now and not historical_confirmed:
+            raise ValidationError("Confirm that this is a historical follow-up")
+        if reminder is not None and due - timedelta(minutes=reminder) < now:
+            raise ValidationError("Choose a future reminder time or no reminder")
 
     def record_barrier(self, patient_id: UUID, values: BarrierInput) -> Barrier:
         if not values.confirmed:

@@ -58,6 +58,7 @@ class ReviewSummaryService:
         all_reports = self._events.list_for_patient(patient_id, start, now + timedelta(microseconds=1))
         reported_occurrences = {row.occurrence_id for row in all_reports if row.occurrence_id is not None}
         medications = []
+        summary_occurrences = set()
         for medication in self._enrollment.list_medications(patient_id):
             for regimen in self._enrollment.list_regimens(patient_id, medication.id):
                 if selected and regimen.id != selected.id:
@@ -71,6 +72,7 @@ class ReviewSummaryService:
                 if regimen.course_start_date and regimen.course_start_date > end.astimezone(zone).date():
                     continue
                 occurrences = self._occurrences.list_for_regimen(patient_id, regimen.id, start, end)
+                summary_occurrences.update(row.id for row in occurrences)
                 # An occurrence may be reported outside the summary window.
                 missing = sum(row.id not in reported_occurrences for row in occurrences)
                 medications.append(
@@ -91,7 +93,11 @@ class ReviewSummaryService:
                         without_report=missing,
                     )
                 )
-        events = [row for row in all_reports if start <= row.event_time < end]
+        events = [
+            row
+            for row in all_reports
+            if (row.occurrence_id in summary_occurrences if row.reported_late else start <= row.event_time < end)
+        ]
         if selected:
             events = [row for row in events if row.regimen_id == selected.id]
         observations = self._observations.list(patient_id, start, end)

@@ -48,6 +48,10 @@ class InMemoryStore:
     """Single owner of all in-memory rows; injected into every repository."""
 
     def __init__(self) -> None:
+        from threading import RLock
+
+        self.late_reports: dict = {}
+        self.late_report_lock = RLock()
         self.draft_deletions: dict = {}
         self.reminders: dict[tuple[UUID, UUID], ReminderDTO] = {}
         self.sources: dict[tuple[UUID, UUID], SourceDocumentDTO] = {}
@@ -194,6 +198,15 @@ class InMemoryDoseRuleRepository:
     def add(self, rule: DoseRuleDTO) -> None:
         self._store.dose_rules[(rule.patient_id, rule.id)] = rule
 
+    def update(self, rule: DoseRuleDTO) -> None:
+        key = (rule.patient_id, rule.id)
+        previous = self._store.dose_rules.get(key)
+        if previous is None:
+            raise KeyError(f"dose rule {rule.id} not found")
+        if rule.model_dump(exclude={"enabled"}) != previous.model_dump(exclude={"enabled"}) or rule.enabled:
+            raise ValueError("an existing dose rule may only be disabled")
+        self._store.dose_rules[key] = rule
+
 
 class InMemoryDoseOccurrenceRepository:
     """** SIMULATED ** in-memory repository with generation_key uniqueness."""
@@ -248,30 +261,35 @@ class InMemoryDoseEventRepository:
         return None
 
     def find_by_occurrence(self, patient_id: UUID, occurrence_id: UUID) -> DoseEventDTO | None:
-        for (owner, _), event in self._store.events.items():
-            if owner == patient_id and event.occurrence_id == occurrence_id:
+        from .late_report_repos import effective_memory_events
+
+        for event in effective_memory_events(self._store):
+            if event.patient_id == patient_id and event.occurrence_id == occurrence_id:
                 return event
         return None
 
     def list_for_patient(self, patient_id: UUID, window_start: datetime, window_end: datetime) -> list[DoseEventDTO]:
+        from .late_report_repos import effective_memory_events
+
         rows = [
             e
-            for (owner, _), e in self._store.events.items()
-            if owner == patient_id and window_start <= e.event_time < window_end
+            for e in effective_memory_events(self._store)
+            if e.patient_id == patient_id and window_start <= e.event_time < window_end
         ]
         return sorted(rows, key=lambda e: e.event_time)
 
     def add(self, event: DoseEventDTO) -> None:
-        if event.ingestion_proven:
-            raise ValueError("ingestion_proven must never be true (CHECK constraint)")
-        if event.visual_status.value != "not_checked":
-            raise ValueError("P0 slice: photo evidence is unsupported, visual_status must be not_checked")
-        if self.find_by_idempotency_key(event.patient_id, event.idempotency_key) is not None:
-            raise ValueError("duplicate idempotency_key would violate the unique index")
-        if event.occurrence_id is not None:
-            if self.find_by_occurrence(event.patient_id, event.occurrence_id) is not None:
-                raise ValueError("duplicate (patient_id, occurrence_id) would violate the unique index")
-        self._store.events[(event.patient_id, event.id)] = event
+        with self._store.late_report_lock:
+            if event.ingestion_proven:
+                raise ValueError("ingestion_proven must never be true (CHECK constraint)")
+            if event.visual_status.value != "not_checked":
+                raise ValueError("P0 slice: photo evidence is unsupported, visual_status must be not_checked")
+            if self.find_by_idempotency_key(event.patient_id, event.idempotency_key) is not None:
+                raise ValueError("duplicate idempotency_key would violate the unique index")
+            if event.occurrence_id is not None:
+                if self.find_by_occurrence(event.patient_id, event.occurrence_id) is not None:
+                    raise ValueError("duplicate (patient_id, occurrence_id) would violate the unique index")
+            self._store.events[(event.patient_id, event.id)] = event
 
 
 class InMemoryAgentSessionRepository:

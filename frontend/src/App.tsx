@@ -1,4 +1,3 @@
-import {RegimenHistoryScreen} from './components/RegimenHistoryScreen';
 import {BottomSheet} from './components/BottomSheet';
 import {accountDisplayName} from './accountPresentation';
 import {Icon,type IconName} from './components/Icon';
@@ -11,15 +10,19 @@ import {medicationSetupEntries} from './medicationSetup';
 import { AssistantScreen } from './components/AssistantScreen';
 import { EnrollScreen } from './components/EnrollScreen';
 import { HistoryScreen } from './components/HistoryScreen';
-import {MedicinesHub,AddMethodScreen,MedicationDetail,isPastCourse,type MedicineDestination} from './components/MedicinesHub';
+import {historyName} from './historyFilterLabels';
+import {MedicinesHub,MedicationDetail,isPastCourse,type MedicineDestination} from './components/MedicinesHub';
 import {PatientHub,ProfileScreen,InformationScreen,type MeDestination} from './components/PatientHub';
 import {HealthTrackingScreen} from './components/HealthTrackingScreen';
 import {ReviewSummaryScreen} from './components/ReviewSummaryScreen';
 import {CareTasksScreen,CareTaskSummary} from './components/CareTasksScreen';
+import {LateDoseFollowUps} from './components/LateDoseFollowUps';
 import {AdherenceBarriersScreen} from './components/AdherenceBarriersScreen';
 import {MedicationReviewScreen} from './components/MedicationReviewScreen';
 import { EvidenceEnrollmentScreen } from './components/EvidenceEnrollmentScreen';
 import {PersonalGalleryScreen} from './components/PersonalGalleryScreen';
+import {RegimenHistoryScreen} from './components/RegimenHistoryScreen';
+import {InventoryPanel} from './components/InventoryPanel';
 import {PendingEvidenceTasks} from './components/PendingEvidenceTasks';
 import { Card, ErrorNotice } from './components/primitives';
 import { Row, RowGroup, Screen } from './ui/primitives';
@@ -37,7 +40,7 @@ import {useCareNavigation} from './navigation';
 import {greetingAt,greetingName} from './greeting';
 import {CaregiversScreen} from './components/CaregiversScreen';
 
-type Tab = 'check-result' | 'check' | 'today' | 'medicines' | 'records' | 'assistant' | 'me' | 'settings' | 'health-notes' | 'summary-week' | 'summary-month' | 'summary-course' | MedicineDestination | MeDestination | 'help' | 'edit-medication';
+type Tab = 'check-result' | 'check' | 'today' | 'medicines' | 'records' | 'assistant' | 'me' | 'settings' | 'health-notes' | 'summary-week' | 'summary-month' | 'summary-course' | MedicineDestination | MeDestination | 'help' | 'edit-medication' | 'medicine-history';
 const tabs: { id: Tab; label: string; symbol: IconName }[] = [
   { id: 'today', label: 'Today', symbol: 'house' }, { id: 'medicines', label: 'Medicines', symbol: 'pill' },
   { id: 'records', label: 'Records', symbol: 'clipboard' }, { id: 'me', label: 'Me', symbol: 'user' },
@@ -70,6 +73,7 @@ function CompanionApp() {
   const [versions,setVersions]=useState<RegimenHistoryItem[]>([]);
   const [editTarget,setEditTarget]=useState<RegimenHistoryItem|null>(null);
   const [detailId,setDetailId]=useState<string|null>(null);
+  const [galleryMedicationId,setGalleryMedicationId]=useState<string|null>(null);
   const [drafts, setDrafts] = useState<RegimenHistoryItem[]>([]);
   const [sourceTasks,setSourceTasks]=useState<EvidenceTask[]|null>(null),[setupError,setSetupError]=useState<unknown>(null);
   const setupRequest=useRef(0);
@@ -125,7 +129,7 @@ function CompanionApp() {
      about identity, so it renders without the tabs, the rail or the composer. */
   const standaloneSignIn=accountKind==='signed_out'&&tab==='account';
   const assistantVisible=!standaloneSignIn&&(tab==='today'||tab==='assistant');
-  const openMedicine=(page:MedicineDestination,id?:string)=>{if(page==='manual'){setResumeId(null);}if(id)setDetailId(id);setTab(page);};
+  const openMedicine=(page:MedicineDestination,id?:string)=>{if(page==='manual'){setResumeId(null);}if(page==='gallery')setGalleryMedicationId(null);if(id)setDetailId(id);setTab(page);};
   const detail=versions.find(row=>row.regimen_id===detailId);
   const openAssistant=(contextual=true)=>{setAssistantSlots(contextual&&['medicine-detail','medicines','records'].includes(tab)?{source_page:tab,...(tab==='medicine-detail'&&detail?{regimen_id:detail.regimen_id,medication_id:detail.medication_id}:{}),navigation_nonce:crypto.randomUUID()}:{});setTab('assistant');};
   const viewTodayMedication=()=>{setTab('today');requestAnimationFrame(()=>requestAnimationFrame(()=>document.getElementById('today-medication')?.scrollIntoView({behavior:'smooth',block:'start'})));};
@@ -146,20 +150,22 @@ function CompanionApp() {
       {tab === 'check'||tab==='check-result' ? <VisualCheckScreen ownerId={guideOwner} initialFile={routedPhoto} showResult={tab==='check-result'} onResult={()=>setTab('check-result')} showBack={false} regimenId={visualRegimen} onBack={goBack} onAddSource={()=>setTab('label')}/> : null}
       {tab === 'today' ? <>
 
-        <div className="today-panels"><div id="today-medication" className="today-medication-anchor">{currentMedications.length?<TodayAttentionOverview medications={currentMedications} focusRegimenId={focusRegimen} onHistory={()=>setTab('records')}>{(medication,onInteractionChange)=><TodayScreen onInteractionChange={onInteractionChange} key={medication.regimen_id} showTitle={false} focusRegimenId={focusRegimen} onFeeling={()=>{setHealthDescription('');setTab('health-notes');}} onVisualCheck={id=>{setVisualRegimen(id);setTab('check');}} compact medications={[medication]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')}/>}</TodayAttentionOverview>:<TodayScreen compact medications={[]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')} onVisualCheck={()=>{setVisualRegimen(null);setTab('check');}}/>}</div>
-        <CareTaskSummary medications={medications?.medications??[]} onOpen={()=>setTab('care-tasks')}/></div>
+        <div className="today-panels"><div id="today-medication" className="today-medication-anchor">{currentMedications.length?<TodayAttentionOverview lateReportsEnabled={health?.late_dose_reports_enabled===true} medications={currentMedications} focusRegimenId={focusRegimen} onHistory={()=>setTab('records')}>{(medication,onInteractionChange)=><TodayScreen onInteractionChange={onInteractionChange} key={medication.regimen_id} showTitle={false} focusRegimenId={focusRegimen} onFeeling={()=>{setHealthDescription('');setTab('health-notes');}} onVisualCheck={id=>{setVisualRegimen(id);setTab('check');}} compact medications={[medication]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')}/>}</TodayAttentionOverview>:<TodayScreen compact medications={[]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')} onVisualCheck={()=>{setVisualRegimen(null);setTab('check');}}/>}</div>
+        {!currentMedications.length?<Card><LateDoseFollowUps enabled={health?.late_dose_reports_enabled===true}/></Card>:null}
+        <CareTaskSummary medications={medications?.medications??[]} onOpen={taskId=>setTab('care-tasks',taskId?{task:taskId}:undefined)}/></div>
       </> : null}
       {tab==='medicines'?<MedicinesHub medications={medications?.medications??[]} drafts={drafts} setupCount={setupEntries?.length??null} versions={versions} onOpen={openMedicine}/>:null}
-      {tab==='add-method'?<AddMethodScreen onOpen={setTab}/>:null}
       <div data-testid="evidence-workspace" hidden={tab!=='label'}><EvidenceEnrollmentScreen active={tab==='label'} ownerId={guideOwner} onPill={file=>{setRoutedPhoto(file);setVisualRegimen(null);setTab('check');}} onNewRegistration={()=>setEvidenceTaskId(null)} onCancel={()=>{void refreshMedications();setTab('unfinished');}} initialTaskId={evidenceTaskId} sessionId={sessionId} onChanged={refreshMedications}/></div>
       {tab==='manual'?<div><EnrollScreen onDirtyChange={setManualDirty} resumeRegimenId={resumeId} resumeRow={versions.find(row=>row.regimen_id===resumeId)??null} sourceSelection={sourceSelection} sessionId={sessionId} medications={medications} onChanged={refreshMedications}/></div>:null}
       <div data-page="edit-medication" hidden={tab!=='edit-medication'}>{editTarget?<EnrollScreen onActivated={id=>{setDetailId(id);goBack();}} editFrom={editTarget} sessionId={sessionId} medications={medications} onChanged={refreshMedications}/>:tab==='edit-medication'?<Card title="Choose a medication"><button onClick={()=>setTab('medicines')}>{t('Medicines')}</button></Card>:null}</div>
       {tab==='unfinished'?<PendingEvidenceTasks entries={setupEntries} error={setupError} onRetry={()=>void refreshMedications()} onContinue={id=>{setEvidenceTaskId(id);setTab('label');}} onResume={id=>{setResumeId(id);setTab('manual');}}/>:null}
       <RegimenHistoryScreen regimens={versions} active={tab==='past-medicines'} onOpen={id=>openMedicine('medicine-detail',id)}/>
       {tab==='medicine-detail'&&!detail?<Card title="Choose a medication"><button onClick={()=>setTab('medicines')}>{t('Medicines')}</button></Card>:null}
-      {tab==='medicine-detail'&&detail?<MedicationDetail versions={versions} summary={medications?.medications.find(row=>row.regimen_id===detail.regimen_id)} onAssistant={openAssistant} onChanged={refreshMedications} onEdit={()=>{setEditTarget(detail);setTab('edit-medication');}} row={detail} onHistory={()=>setTab('records')} onGallery={()=>setTab('gallery')} onCheck={()=>{setVisualRegimen(detail.regimen_id);setTab('check');}}/>:null}
-      {tab==='gallery'?<PersonalGalleryScreen onSources={id=>{setEvidenceTaskId(id);setTab('label');}} onCheck={id=>{setVisualRegimen(id);setTab('check');}}/>:null}
-      {tab==='care-tasks'?<CareTasksScreen regimens={versions}/>:null}
+      {tab==='medicine-detail'&&detail?<MedicationDetail versions={versions} summary={medications?.medications.find(row=>row.regimen_id===detail.regimen_id)} onChanged={refreshMedications} onEdit={()=>{setEditTarget(detail);setTab('edit-medication');}} row={detail} onManageInventory={()=>setTab('medication-inventory')} onHistory={()=>setTab('medicine-history')} onGallery={()=>{setGalleryMedicationId(detail.medication_id);setTab('gallery');}} onCheck={()=>{setVisualRegimen(detail.regimen_id);setTab('check');}}/>:null}
+      {tab==='medication-inventory'&&detail?<Screen title="Inventory management" lead={detail.display_name}><InventoryPanel key={detail.medication_id} medicationId={detail.medication_id} mode="manage"/></Screen>:null}
+      {tab==='medicine-history'&&detail?<Screen title="Medication history" lead={detail.display_name}><HistoryScreen key={detail.regimen_id} scopedTitle={`${t(detail.display_name)} · ${t('Medication history')}`} initialFilters={{range_kind:'7',medication_id:detail.medication_id,medication_name:historyName(detail.display_name),regimen_id:detail.regimen_id}}/></Screen>:null}
+      {tab==='gallery'?<PersonalGalleryScreen initialMedicationId={galleryMedicationId} onMedicationSelected={setGalleryMedicationId} onSources={id=>{setEvidenceTaskId(id);setTab('label');}} onMedicationDetail={id=>{const related=versions.filter(row=>row.medication_id===id);const chosen=related.find(row=>row.state==='active')??related[0];if(chosen)openMedicine('medicine-detail',chosen.regimen_id);}}/>:null}
+      {tab==='care-tasks'?<CareTasksScreen extended={health?.care_task_followups_enabled===true} regimens={versions}/>:null}
       {tab==='adherence-barriers'?<AdherenceBarriersScreen regimens={versions}/>:null}
       {tab==='medication-review'?<MedicationReviewScreen/>:null}
       {tab==='health-notes'?<HealthTrackingScreen initialDescription={healthDescription} medications={medications?.medications??[]}/>:null}
@@ -190,7 +196,7 @@ function CompanionApp() {
     </main>
     {!standaloneSignIn?<ReminderMonitor enabled={!loading&&!fatal&&!guideVisible} onReview={id=>{setFocusRegimen(id);setTab('today');}}/>:null}
     {!standaloneSignIn?<nav ref={navRef} className="patient-nav" aria-label="Main navigation">{tabs.map(entry => <button key={entry.id} data-guide={entry.id} className={entry.id==='assistant'?'nav-assistant':''}
-      aria-current={(tab === entry.id || (entry.id==='today'&&['check','check-result','care-tasks'].includes(tab)) || (entry.id==='me'&&accountPage)||(entry.id==='medicines'&&['add-method','past-medicines','unfinished','gallery','medicine-detail','label','manual','edit-medication'].includes(tab))||(entry.id==='records'&&(tab.startsWith('summary-')||['health-notes','adherence-barriers','medication-review'].includes(tab)))) ? 'page' : undefined} onClick={() => entry.id==='assistant'?openAssistant(false):setTab(entry.id)}>
+      aria-current={(tab === entry.id || (entry.id==='today'&&['check','check-result','care-tasks'].includes(tab)) || (entry.id==='me'&&accountPage)||(entry.id==='medicines'&&['past-medicines','unfinished','gallery','medicine-detail','medicine-history','medication-inventory','label','manual','edit-medication'].includes(tab))||(entry.id==='records'&&(tab.startsWith('summary-')||['health-notes','adherence-barriers','medication-review'].includes(tab)))) ? 'page' : undefined} onClick={() => entry.id==='assistant'?openAssistant(false):setTab(entry.id)}>
       {entry.id==='assistant'?<img className="nav-assistant__avatar" src="/branding/assistant-avatar-green.png" width="28" height="28" alt=""/>:<Icon name={entry.symbol}/>}<span>{t(entry.label)}</span></button>)}</nav>:null}
     </div>{guideVisible?<OnboardingGuide owner={guideOwner} replay={guideReplay} onClose={closeGuide}/>:null}
   </div>;

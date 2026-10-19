@@ -31,6 +31,16 @@ it('concurrent bootstrap signs in anonymously only once',async()=>{
  const {driver,gateway}=setup();driver.getSession.mockResolvedValue({data:{session:null},error:null});
  await Promise.all([gateway.getAccessToken(),gateway.getAccessToken()]);expect(driver.signInAnonymously).toHaveBeenCalledOnce();
 });
+it('existing-session reads wait for the same SDK and never bootstrap another identity',async()=>{
+ const {driver,gateway}=setup();
+ let complete:((value:Awaited<ReturnType<Driver['getSession']>>)=>void)|undefined;
+ driver.getSession.mockImplementationOnce(()=>new Promise(resolve=>{complete=resolve;}));
+ const read=gateway.getExistingAccessToken();
+ complete?.({data:{session:{access_token:'SIMULATED_REFRESHED'} as Session},error:null});
+ expect(await read).toBe('SIMULATED_REFRESHED');expect(driver.signInAnonymously).not.toHaveBeenCalled();
+ driver.getSession.mockResolvedValue({data:{session:null},error:null});
+ expect(await gateway.getExistingAccessToken()).toBeNull();expect(driver.signInAnonymously).not.toHaveBeenCalled();
+});
 it('only a changed subject invalidates patient state; refresh metadata must not discard an open draft',async()=>{
  const {driver}=setup();let listener:Parameters<Driver['onAuthStateChange']>[0]|undefined;
  const unsubscribe=vi.fn();const observed={...driver,onAuthStateChange:vi.fn((callback:Parameters<Driver['onAuthStateChange']>[0])=>{listener=callback;return {data:{subscription:{unsubscribe}}};})};

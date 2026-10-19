@@ -101,6 +101,9 @@ class Settings:
     demo_agent_daily_turn_limit: int = 20
     enable_web_push: bool = False
     enable_push_subscriptions: bool = False
+    enable_medication_library_files: bool = False
+    enable_late_dose_reports: bool = False
+    enable_care_task_followups: bool = False
     vapid_public_key: str | None = field(default=None, repr=False)
     vapid_private_key: str | None = field(default=None, repr=False)
     vapid_subject: str | None = field(default=None, repr=False)
@@ -170,6 +173,10 @@ class Settings:
             demo_agent_daily_turn_limit=int(limit),
             enable_web_push=(read("ENABLE_WEB_PUSH") or "").lower() in {"1", "true", "yes"},
             enable_push_subscriptions=(read("ENABLE_PUSH_SUBSCRIPTIONS") or "").lower() in {"1", "true", "yes"},
+            enable_medication_library_files=(read("ENABLE_MEDICATION_LIBRARY_FILES") or "").lower()
+            in {"1", "true", "yes"},
+            enable_care_task_followups=(read("ENABLE_CARE_TASK_FOLLOWUPS") or "").lower() in {"1", "true", "yes"},
+            enable_late_dose_reports=(read("ENABLE_LATE_DOSE_REPORTS") or "").lower() in {"1", "true", "yes"},
             vapid_public_key=read("VAPID_PUBLIC_KEY"),
             vapid_private_key=read("VAPID_PRIVATE_KEY"),
             vapid_subject=read("VAPID_SUBJECT"),

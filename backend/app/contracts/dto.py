@@ -110,6 +110,7 @@ class PatientMedicationDTO(DTO):
 
 class RegimenDraftInput(DTO):
     patient_edited: bool = False
+    supersedes_regimen_id: UUID | None = None
     """Fields captured during enrollment; anything missing stays pending."""
 
     medication_name: str
@@ -186,6 +187,8 @@ class DoseOccurrenceDTO(DTO):
 
 
 class DoseEventDTO(DTO):
+    reported_late: bool = False
+    actual_administration_at: datetime | None = None
     id: UUID
     patient_id: UUID
     regimen_id: UUID

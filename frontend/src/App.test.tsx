@@ -4,7 +4,7 @@ import {cleanup,render,screen,waitFor} from '@testing-library/react';
 import {App} from './App';
 import {api} from './api/client';
 import {accountAuth} from './api/auth';
-vi.mock('./api/client',()=>({ApiError:class extends Error{},api:{refreshFollowUps:vi.fn(),health:vi.fn(),startDemo:vi.fn(),preferences:vi.fn().mockResolvedValue({preferred_language:'en'}),listMedications:vi.fn(),regimenHistory:vi.fn()}}));
+vi.mock('./api/client',()=>({ApiError:class extends Error{},api:{refreshFollowUps:vi.fn(),doseFollowUps:vi.fn(),health:vi.fn(),startDemo:vi.fn(),preferences:vi.fn().mockResolvedValue({preferred_language:'en'}),listMedications:vi.fn(),regimenHistory:vi.fn()}}));
 afterEach(()=>{cleanup();localStorage.clear();vi.restoreAllMocks();vi.resetAllMocks();});
 it('refuses stale backend before any authenticated setup or business query',async()=>{
  vi.mocked(api.health).mockResolvedValue({status:'ok',service:'pharmascan-care-agent',database:'supabase',llm:'unavailable_deterministic_degraded',stage2_vision:'simulated'});

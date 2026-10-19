@@ -8,7 +8,7 @@ import {CareTasksScreen} from './CareTasksScreen';
 import {HealthTrackingScreen} from './HealthTrackingScreen';
 
 vi.mock('../api/client',()=>({ApiError:class extends Error{},api:{historyCatalogue:vi.fn(),medicationHistory:vi.fn(),regimenHistory:vi.fn(),doseHistory:vi.fn(),careTasks:vi.fn(),createCareTask:vi.fn(),observations:vi.fn(),saveObservation:vi.fn()}}));
-afterEach(()=>{cleanup();vi.resetAllMocks();});
+afterEach(()=>{cleanup();vi.restoreAllMocks();vi.resetAllMocks();});
 const plan:RegimenHistoryItem={regimen_id:'DEMO-old',medication_id:'DEMO-med',display_name:'DEMO medicine 5 mg',version_no:1,state:'superseded',effective_from:'2026-10-01T23:00:00Z',effective_to:'2026-10-10T00:00:00Z',course_start_date:'2026-10-01',course_end_date:'2026-10-31',dose_amount:1,dose_unit:'tablet',food_instruction:null,is_prn:false,local_times:['08:00']};
 it('labels plan changes by effective time, not a new treatment course or product strength',()=>{
  const label=regimenLabel(plan,key=>key,'en-SG','Asia/Singapore');
@@ -33,26 +33,28 @@ it('selects the same stable plan IDs across versions and distinct course dates',
 
 });
 it('makes follow-up creation visible, cancellable and still confirmation gated',async()=>{
+ vi.spyOn(Date,'now').mockReturnValue(Date.parse('2026-10-19T04:00:00Z'));
  vi.mocked(api.careTasks).mockResolvedValue([]);render(<CareTasksScreen regimens={[plan]}/>);
- await screen.findByText('No medication follow-ups recorded.');fireEvent.click(screen.getByRole('button',{name:'Add medication follow-up'}));
- expect(screen.getByLabelText('Follow-up title (required)').hasAttribute('required')).toBe(true);
- fireEvent.change(screen.getByLabelText('Follow-up title (required)'),{target:{value:'DEMO review'}});
- fireEvent.change(screen.getByLabelText('Date and time (required)'),{target:{value:'2026-10-20T08:00'}});
- fireEvent.click(screen.getByRole('button',{name:'Review follow-up'}));expect(api.createCareTask).not.toHaveBeenCalled();
+ await screen.findByText('No follow-ups in this view.');fireEvent.click(screen.getByRole('button',{name:'Add medication follow-up'}));
+ fireEvent.click(screen.getByRole('button',{name:'Review and save'}));
+ expect(screen.getByLabelText('Title (required)')).toBe(document.activeElement);
+ fireEvent.change(screen.getByLabelText('Title (required)'),{target:{value:'DEMO review'}});
+ fireEvent.change(screen.getByLabelText('Date (required)'),{target:{value:'2026-10-20'}});
+ fireEvent.change(screen.getByLabelText('Time (required)'),{target:{value:'08:00'}});
+ fireEvent.click(screen.getByRole('button',{name:'Review and save'}));expect(api.createCareTask).not.toHaveBeenCalled();
+ fireEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Back to edit'}));
  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Cancel'}));
- fireEvent.click(screen.getByRole('button',{name:'Cancel'}));
- expect(screen.queryByLabelText('Follow-up title (required)')).toBeNull();
- expect(api.createCareTask).not.toHaveBeenCalled();
+ expect(screen.queryByLabelText('Title (required)')).toBeNull();expect(api.createCareTask).not.toHaveBeenCalled();
  vi.mocked(api.createCareTask).mockImplementation(async input=>({...input,patient_id:'DEMO-owner',status:'open',source:'patient_reported',version:1,history:[],created_at:'2026-10-17T00:00:00Z',updated_at:'2026-10-17T00:00:00Z',demo_only:true}));
  fireEvent.click(screen.getByRole('button',{name:'Add medication follow-up'}));
- fireEvent.change(screen.getByLabelText('Follow-up title (required)'),{target:{value:'DEMO review'}});
- fireEvent.change(screen.getByLabelText('Date and time (required)'),{target:{value:'2026-10-20T08:00'}});
- fireEvent.change(screen.getByLabelText('Related medication (optional)'),{target:{value:plan.regimen_id}});
- fireEvent.click(screen.getByRole('button',{name:'Review follow-up'}));
- expect(api.createCareTask).not.toHaveBeenCalled();
- fireEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Confirm record'}));
- await waitFor(()=>expect(api.createCareTask).toHaveBeenCalledWith(expect.objectContaining({confirmed:true,regimen_id:plan.regimen_id,medication_id:plan.medication_id,due_at:new Date('2026-10-20T08:00').toISOString()})));
- await waitFor(()=>expect(screen.queryByRole('dialog')).toBeNull());
+ fireEvent.change(screen.getByLabelText('Title (required)'),{target:{value:'DEMO review'}});
+ fireEvent.change(screen.getByLabelText('Date (required)'),{target:{value:'2026-10-20'}});
+ fireEvent.change(screen.getByLabelText('Time (required)'),{target:{value:'08:00'}});
+ fireEvent.change(screen.getByLabelText('Linked medication plan (optional)'),{target:{value:plan.regimen_id}});
+ fireEvent.click(screen.getByRole('button',{name:'Review and save'}));expect(api.createCareTask).not.toHaveBeenCalled();
+ fireEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Confirm and save'}));
+ await waitFor(()=>expect(api.createCareTask).toHaveBeenCalledWith(expect.objectContaining({confirmed:true,regimen_id:plan.regimen_id,medication_id:plan.medication_id,due_at:'2026-10-20T00:00:00.000Z'})));
+ await waitFor(()=>expect(screen.queryByRole('dialog')).toBeNull());vi.restoreAllMocks();
 });
 it('keeps the health form visible and offers a focusable empty-state action',async()=>{
  vi.mocked(api.observations).mockResolvedValue([]);render(<HealthTrackingScreen medications={[]}/>);

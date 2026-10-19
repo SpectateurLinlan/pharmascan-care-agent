@@ -75,6 +75,8 @@ def test_scheduled_report_read_uses_occurrence_id_not_report_event_window():
     row = event.model_copy(update={"event_time": NOW - timedelta(seconds=1)}).model_dump(mode="json")
 
     def handler(request):
+        if request.url.path == "/rest/v1/dose_report_entries":
+            return httpx.Response(200, json=[], headers={"Content-Range": "*/0"})
         assert request.method == "GET" and request.url.path == "/rest/v1/dose_events"
         assert request.url.params["occurrence_id"] == "in.(" + str(event.occurrence_id) + ")"
         assert "event_time" not in request.url.params and "and" not in request.url.params

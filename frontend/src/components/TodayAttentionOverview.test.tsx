@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import {afterEach,expect,it,vi} from 'vitest';
+import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {act,cleanup,fireEvent,render,screen} from '@testing-library/react';
 import {api,type MedicationSummary} from '../api/client';
 import {TodayAttentionOverview} from './TodayAttentionOverview';
+beforeEach(()=>vi.spyOn(api,'doseFollowUps').mockResolvedValue({items:[{occurrence_id:'old-occ',regimen_id:'0',medication_id:'m0',medication_name:'Old dose',due_at:'2026-10-18T00:00:00Z',dose_amount:1,dose_unit:'tablet',report_id:null,intake_status:null,actual_administration_at:null,recorded_at:null,reason:null,notes:''}],has_more:false,timezone:'Asia/Singapore',as_of:'2026-10-18T04:00:00Z'}));
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.useRealTimers();});
 const medicines=['Old dose','Next dose','PRN'].map((name,index)=>({regimen_id:String(index),medication_id:`m${index}`,display_name:name,is_prn:index===2,dose_amount:1,dose_unit:'tablet',version_no:1,identity_status:'reviewed',source_backed:true} as MedicationSummary));
 it('removes expired and PRN plans from the attention list without claiming not taken',async()=>{
@@ -10,8 +11,9 @@ it('removes expired and PRN plans from the attention list without claiming not t
  render(<TodayAttentionOverview medications={medicines} focusRegimenId={null} onHistory={()=>undefined}>{medicine=><button>{medicine.display_name} report</button>}</TodayAttentionOverview>);
  expect(await screen.findByRole('button',{name:'Next dose report'})).toBeTruthy();
  expect(screen.queryByRole('button',{name:'Old dose report'})).toBeNull();
+ await screen.findByRole('button',{name:'Report dose status'});
  expect(document.querySelector('.today-unrecorded')?.textContent).toContain('Old dose');
- expect(document.querySelector('.today-unrecorded')?.textContent).toContain('Unrecorded does not mean missed.');
+ expect(document.querySelector('.today-unrecorded')?.textContent).toContain('Unreported means there is no confirmed patient report. It does not mean a dose was missed.');
  expect(document.querySelector('.today-prn')?.hasAttribute('open')).toBe(false);
  expect(document.querySelector('.today-prn')?.textContent).toContain('no daily required dose');
  expect(screen.queryByText(/reported not taking/)).toBeNull();

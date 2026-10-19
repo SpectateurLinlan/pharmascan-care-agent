@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import {afterEach,expect,it,vi} from 'vitest';
-import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {HealthTrackingScreen} from './HealthTrackingScreen';
 import {InformationScreen,PatientHub} from './PatientHub';
-import {MedicinesHub,AddMethodScreen,isPastCourse} from './MedicinesHub';
+import {MedicinesHub,isPastCourse} from './MedicinesHub';
 import {ReviewSummaryScreen} from './ReviewSummaryScreen';
-import {api,type HealthObservation,type MedicationSummary} from '../api/client';
+import {api,type HealthObservation,type MedicationSummary,type RegimenHistoryItem} from '../api/client';
 
 vi.mock('../api/client',()=>({ApiError:class extends Error{},api:{observations:vi.fn(),saveObservation:vi.fn(),deleteObservation:vi.fn(),reviewSummary:vi.fn(),agentUsage:vi.fn().mockResolvedValue({limit:20})}}));
 vi.mock('../api/auth',()=>({accountAuth:{account:async()=>({kind:'guest',email:null,verified:false})}}));
@@ -29,25 +29,45 @@ it('Me is an entry hierarchy with a separate account destination, not an expande
  fireEvent.click(screen.getByRole('button',{name:/About MediThread/}));expect(open).toHaveBeenLastCalledWith('about');
  fireEvent.click(screen.getByRole('button',{name:/Feedback/}));expect(open).toHaveBeenLastCalledWith('feedback');
 });
-it('Medicines has grouped database-backed entries and direct inline add methods',()=>{
+it('Medicines groups active plans and exposes the two direct medication entry actions',()=>{
  const open=vi.fn();const {unmount}=render(<MedicinesHub medications={[medication]} drafts={[]} versions={[]} setupCount={1} onOpen={open}/>);
  expect(screen.getByRole('heading',{name:'Currently taking'})).toBeTruthy();expect(screen.queryByLabelText('Medication name')).toBeNull();
+ expect(screen.getByText('1 medicine')).toBeTruthy();expect(screen.getByText('Source record')).toBeTruthy();
+ expect(screen.queryByText('Active, product not identified')).toBeNull();
  fireEvent.click(screen.getByRole('button',{name:/DEMO Metformin/}));expect(open).toHaveBeenCalledWith('medicine-detail','DEMO-regimen');
- fireEvent.click(screen.getByRole('button',{name:/Add medication/}));expect(open).not.toHaveBeenCalledWith('add-method');
- fireEvent.click(screen.getByRole('button',{name:/Read medication information/}));expect(open).toHaveBeenLastCalledWith('label');
- fireEvent.click(screen.getByRole('button',{name:/Add manually/}));expect(open).toHaveBeenLastCalledWith('manual');
+ expect(screen.queryByRole('button',{name:/^Add medication$/})).toBeNull();
+ const addPanel=screen.getByRole('region',{name:'Add medication'});expect(addPanel.querySelectorAll('.medication-add-action')).toHaveLength(2);
+ fireEvent.click(within(addPanel).getByRole('button',{name:/Scan medication document/}));expect(open).toHaveBeenLastCalledWith('label');
+ fireEvent.click(within(addPanel).getByRole('button',{name:/Add manually/}));expect(open).toHaveBeenLastCalledWith('manual');
  fireEvent.click(screen.getByRole('button',{name:/Regimen Records/}));expect(open).toHaveBeenCalledWith('past-medicines');
- fireEvent.click(screen.getByRole('button',{name:/Photos and evidence/}));expect(open).toHaveBeenCalledWith('gallery');
+ fireEvent.click(screen.getByRole('button',{name:/Medication Library/}));expect(open).toHaveBeenCalledWith('gallery');
  fireEvent.click(screen.getByRole('button',{name:/Finish medication setup/}));expect(open).toHaveBeenCalledWith('unfinished');
- unmount();render(<AddMethodScreen onOpen={open}/>);fireEvent.click(screen.getByRole('button',{name:/Read medication information/}));expect(open).toHaveBeenCalledWith('label');
- fireEvent.click(screen.getByRole('button',{name:/Add manually/}));expect(open).toHaveBeenCalledWith('manual');
- expect(isPastCourse({course_end_date:'2026-10-14'})).toBe(false);expect(isPastCourse({state:'active',course_end_date:'2026-10-14'})).toBe(false);expect(isPastCourse({state:'ended'})).toBe(true);
+ expect(document.querySelector('.current-medications-card')!.compareDocumentPosition(document.querySelector('.medication-add-section')!)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+ expect(document.querySelector('.medication-add-section')!.compareDocumentPosition(document.querySelector('.pending-medication-review')!)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+ expect(document.querySelector('.pending-medication-review')!.compareDocumentPosition(document.querySelector('.medicine-shortcuts')!)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+ unmount();
+ expect(isPastCourse({course_end_date:'2020-10-14'})).toBe(false);
+ expect(isPastCourse({state:'active',course_end_date:'2020-10-14'})).toBe(false);
+ expect(isPastCourse({state:'ended'})).toBe(true);
+ expect(isPastCourse({state:'superseded'})).toBe(true);
 });
-it.each([0,1,2,5,10])('Medicines shows all %i current plans and keeps three real shortcuts',count=>{
+it('keeps backend-active plans visible after a planned end date without inventing a history record',()=>{
+ render(<MedicinesHub medications={[{...medication,course_end_date:'2020-10-14'}]} drafts={[]} versions={[]} onOpen={vi.fn()}/>);
+ expect(document.querySelectorAll('.current-medications-card .medication-list-row')).toHaveLength(1);
+ expect(screen.getByRole('button',{name:/Regimen Records/}).textContent).toContain('0 courses');
+});
+it('shows the number of history cards rather than counting every old version or date-ended active plan',()=>{
+ const row=(regimen_id:string,state:string,supersedes_id:string|null,version_no:number):RegimenHistoryItem=>({regimen_id,display_name:'DEMO Metformin',medication_id:'DEMO-med',supersedes_id,version_no,state,effective_from:null,effective_to:null,course_start_date:'2020-01-01',course_end_date:'2020-02-01',dose_amount:500,dose_unit:'mg',food_instruction:null,is_prn:false,local_times:['20:00']});
+ const chain=[row('DEMO-v1','superseded',null,1),row('DEMO-v2','superseded','DEMO-v1',2),row('DEMO-v3','superseded','DEMO-v2',3),row('DEMO-v4','superseded','DEMO-v3',4),row('DEMO-v5','ended','DEMO-v4',5)];
+ const staleActive=row('DEMO-active','active',null,1);const open=vi.fn();
+ render(<MedicinesHub medications={[]} drafts={[]} versions={[...chain,staleActive]} setupCount={0} onOpen={open}/>);
+ const history=screen.getByRole('button',{name:/Regimen Records/});expect(history.textContent).toContain('2 courses');expect(history.textContent).not.toContain('6 courses');
+});
+it.each([0,1,2,5,10])('Medicines shows all %i current plans and keeps two management shortcuts',count=>{
  const medications=Array.from({length:count},(_,index)=>({...medication,medication_id:`DEMO-med-${index}`,regimen_id:`DEMO-regimen-${index}`,display_name:`DEMO Medicine ${index+1}`}));
  render(<MedicinesHub medications={medications} drafts={[]} versions={[]} setupCount={1} onOpen={vi.fn()}/>);
- expect(screen.getByRole('navigation',{name:'Medication management shortcuts'}).querySelectorAll('button')).toHaveLength(3);
- expect(document.querySelectorAll('.medicines-courses .ui-row')).toHaveLength(count);
+ expect(screen.getByRole('navigation',{name:'Medication management shortcuts'}).querySelectorAll('button')).toHaveLength(2);
+ expect(document.querySelectorAll('.current-medications-card .medication-list-row')).toHaveLength(count);
  for(let index=0;index<count;index++)expect(screen.getByText(`DEMO Medicine ${index+1}`,{exact:true})).toBeTruthy();
  if(count===0)expect(screen.getByText('No current medication plans.')).toBeTruthy();
 });
@@ -73,5 +93,5 @@ it('health review cancellation never saves; confirmation, edit and deletion are 
 it('periodic summary uses actual HTTP counts and patient descriptions instead of a static option card',async()=>{
  vi.mocked(api.reviewSummary).mockResolvedValue({period:'week',window_start:'2026-10-11T16:00:00Z',window_end:'2026-10-14T00:00:00Z',generated_at:'2026-10-14T00:00:00Z',timezone:'Asia/Singapore',medications:[],reported_taken:2,reported_not_taken:1,unsure:0,observations:[],questions:[],coverage_note:'No report is not a missed dose.'});
  render(<ReviewSummaryScreen period="week" regimens={[]}/>);await screen.findByText('No report is not a missed dose.');expect(api.reviewSummary).toHaveBeenCalledWith('week',undefined);
- expect(screen.getByText('2')).toBeTruthy();expect(screen.getByRole('button',{name:'Export summary'})).toBeTruthy();expect(screen.getByText(/No health notes yet/)).toBeTruthy();
+ expect(screen.getByText(/Patient reported taken:\s*2/)).toBeTruthy();expect(screen.getByRole('button',{name:'Export summary'})).toBeTruthy();expect(screen.getByText(/No health notes yet/)).toBeTruthy();
 });

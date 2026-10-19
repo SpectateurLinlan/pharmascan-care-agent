@@ -57,11 +57,22 @@ class MemoryCareRepository:
         with self._lock:
             previous = self._tasks.get((task.patient_id, task.id))
             if previous:
-                fields = {"category", "title", "medication_id", "regimen_id", "source"}
-                if previous.model_dump(include=fields) != task.model_dump(include=fields):
-                    raise ValidationError("Task key was already used for different details")
                 original = previous.history[0]
-                if task.source != "stock_estimate" and (original.due_at != task.due_at or original.notes != task.notes):
+                fields = {"category", "title", "medication_id", "regimen_id"}
+                if (
+                    previous.source != task.source
+                    or previous.historical_entry != task.historical_entry
+                    or any(
+                        getattr(original if key in original.model_fields_set else previous, key) != getattr(task, key)
+                        for key in fields
+                    )
+                ):
+                    raise ValidationError("Task key was already used for different details")
+                if task.source != "stock_estimate" and (
+                    original.due_at != task.due_at
+                    or original.notes != task.notes
+                    or original.reminder_minutes != task.reminder_minutes
+                ):
                     raise ValidationError("Task key was already used for different date or notes")
                 return previous
             task = task.model_copy(
@@ -73,6 +84,10 @@ class MemoryCareRepository:
                             due_at=task.due_at,
                             notes=task.notes,
                             recorded_at=task.created_at,
+                            historical_confirmed=task.historical_entry,
+                            **task.model_dump(
+                                include={"title", "category", "medication_id", "regimen_id", "reminder_minutes"}
+                            ),
                         )
                     ]
                 }
@@ -87,31 +102,41 @@ class MemoryCareRepository:
                 raise NotFoundError("Follow-up not found for this patient")
             for event in previous.history:
                 if event.id == change.id:
-                    if (
-                        event.status != change.status
-                        or event.notes != change.notes
-                        or (change.due_at and event.due_at != change.due_at)
+                    fields = change.model_fields_set - {"id", "confirmed", "historical_confirmed", "expected_version"}
+                    if any(
+                        getattr(event, key) != getattr(change, key)
+                        for key in fields
+                        if key != "due_at" or change.due_at is not None
                     ):
                         raise ValidationError("Update key already used for different details")
                     return previous
             if previous.version != change.expected_version:
                 raise ValidationError("Follow-up changed; reload before confirming")
-            if previous.status in ("completed", "cancelled"):
+            if previous.status in ("completed", "cancelled") and change.status != "open":
                 raise ValidationError("This follow-up is already closed")
             if len(previous.history) >= 100:
                 raise ValidationError("Follow-up history limit reached")
             due = change.due_at or previous.due_at
+            details = {
+                key: getattr(change, key) if key in change.model_fields_set else getattr(previous, key)
+                for key in ("title", "category", "medication_id", "regimen_id", "reminder_minutes", "notes")
+            }
             row = previous.model_copy(
                 update={
+                    **details,
                     "status": change.status,
                     "due_at": due,
-                    "notes": change.notes,
                     "version": previous.version + 1,
                     "updated_at": now,
                     "history": [
                         *previous.history,
                         TaskHistory(
-                            id=change.id, status=change.status, due_at=due, notes=change.notes, recorded_at=now
+                            id=change.id,
+                            status=change.status,
+                            due_at=due,
+                            recorded_at=now,
+                            historical_confirmed=change.historical_confirmed,
+                            **details,
                         ),
                     ],
                 }
@@ -138,8 +163,9 @@ class MemoryCareRepository:
 
 
 class SupabaseCareRepository:
-    def __init__(self, client: SupabaseDataClient):
+    def __init__(self, client: SupabaseDataClient, *, extended_tasks: bool = False):
         self._client = client
+        self._extended_tasks = extended_tasks
 
     def stock(self, patient_id: UUID, medication_id: UUID) -> list[StockTransaction]:
         self._client.check_patient(patient_id)
@@ -172,6 +198,8 @@ class SupabaseCareRepository:
         ]
 
     def create_task(self, task: CareTask) -> CareTask:
+        if not self._extended_tasks and (task.reminder_minutes != 0 or task.historical_entry):
+            raise ValidationError("Advanced follow-up settings are not enabled")
         self._client.check_patient(task.patient_id)
         row = self._client.request(
             "POST",
@@ -186,11 +214,23 @@ class SupabaseCareRepository:
         return CareTask.model_validate(row)
 
     def update_task(self, patient_id: UUID, task_id: UUID, change: TaskUpdate, now: datetime) -> CareTask:
+        if not self._extended_tasks:
+            advanced = change.model_fields_set & {"title", "category", "medication_id", "regimen_id"}
+            if (
+                advanced
+                or change.reminder_minutes not in (None, 0)
+                or ("reminder_minutes" in change.model_fields_set and change.reminder_minutes is None)
+                or change.historical_confirmed
+            ):
+                raise ValidationError("Advanced follow-up settings are not enabled")
         self._client.check_patient(patient_id)
         row = self._client.request(
             "POST",
             "/rest/v1/rpc/update_medication_care_task",
-            body={"p_task_id": str(task_id), "p_change": change.model_dump(mode="json", exclude={"confirmed"})},
+            body={
+                "p_task_id": str(task_id),
+                "p_change": change.model_dump(mode="json", exclude={"confirmed"}, exclude_unset=True),
+            },
         )
         return CareTask.model_validate(row)
 

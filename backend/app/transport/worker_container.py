@@ -35,8 +35,12 @@ def build_worker_dispatch(settings: Settings) -> NotificationDispatchService:
         # invalidating a session-held advisory lease. Supabase session pool uses5432.
         raise ValueError("Worker lease requires a direct or session-pooled DATABASE_URL, not transaction pool6543")
     clock = SystemClock()
-    jobs = PostgresNotificationJobs(database)
-    repos = build_postgres_repositories(database)
+    jobs = PostgresNotificationJobs(
+        database,
+        include_late_reports=settings.enable_late_dose_reports,
+        extended_tasks=settings.enable_care_task_followups,
+    )
+    repos = build_postgres_repositories(database, include_late_reports=settings.enable_late_dose_reports)
 
     @contextmanager
     def lease() -> Iterator[bool]:

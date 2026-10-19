@@ -10,14 +10,14 @@ export function ReminderMonitor({enabled,onReview,port}:{enabled:boolean;onRevie
  const dialog=useRef<HTMLElement|null>(null);
  useEffect(()=>{if(!alert)return;const previous=document.activeElement;dialog.current?.focus();return()=>{if(previous instanceof HTMLElement)previous.focus();};},[alert]);
  useEffect(()=>{active.current=alert;},[alert]);
- useEffect(()=>{if(!enabled||!api.reminderAlerts)return;let live=true;
-  async function refresh(){if(pending.current||document.visibilityState==='hidden'||(!active.current&&document.querySelector('[aria-modal="true"]')))return;pending.current=true;try{
-   const rows=await api.reminderAlerts();window.dispatchEvent(new Event('pharmascan:reminder-refresh'));if(!live||(!active.current&&document.querySelector('[aria-modal="true"]')))return;setNotice('');
+ useEffect(()=>{if(!enabled||!api.reminderAlerts)return;let live=true;let failures=0,nextAttemptAt=0;
+  async function refresh(){if(pending.current||Date.now()<nextAttemptAt||document.visibilityState==='hidden'||(!active.current&&document.querySelector('[aria-modal="true"]')))return;pending.current=true;try{
+   const rows=await api.reminderAlerts();if(!live)return;failures=0;nextAttemptAt=0;window.dispatchEvent(new Event('pharmascan:reminder-refresh'));if(!active.current&&document.querySelector('[aria-modal="true"]'))return;setNotice('');
    if(active.current){const current=rows.find(row=>row.key===active.current?.key);if(!current){active.current=null;setAlert(null);}else return;}
    const next=rows.find(row=>!shown.current.has(row.key)&&!sessionStorage.getItem('pharmascan.alert:'+row.key));
    if(next){shown.current.add(next.key);sessionStorage.setItem('pharmascan.alert:'+next.key,'shown');active.current=next;setAlert(next);setNotice('');
     if(notifications.support()==='granted')void notifications.notify('MediThread',language==='zh'?'您有已安排的用药需要查看。':'You have a scheduled medication to review.').catch(()=>undefined);}
-  }catch{if(live)setNotice('Could not refresh reminders. Your medication records have not changed.');}finally{pending.current=false;}}
+  }catch{if(live){failures=Math.min(failures+1,4);nextAttemptAt=Date.now()+Math.min(120000,15000*2**(failures-1));setNotice('Could not refresh reminders. Your medication records have not changed.');}}finally{pending.current=false;}}
   void refresh();const timer=setInterval(()=>void refresh(),15000);const wake=()=>void refresh();document.addEventListener('visibilitychange',wake);
   return()=>{live=false;clearInterval(timer);document.removeEventListener('visibilitychange',wake);};
  },[enabled,notifications,language]);

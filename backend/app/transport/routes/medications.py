@@ -18,8 +18,9 @@ from pydantic import BaseModel, ConfigDict
 from ...contracts.dose_display import DoseDisplay, DoseDisplayInput
 from ...contracts.draft_deletion import DraftDeletionResult, DraftKind
 from ...contracts.dto import FrequencyRuleDTO, RegimenDraftInput
+from ...contracts.medication_knowledge import MedicationUnderstanding
 from ...domain.dose_display import dose_display
-from ...domain.errors import NotFoundError, ProviderUnavailableError
+from ...domain.errors import NotFoundError, ProviderUnavailableError, ValidationError
 from ..auth import AuthenticatedPrincipal
 from ..deps import ApplicationContainer, get_container, get_principal
 from ..schemas import (
@@ -35,6 +36,27 @@ from ..schemas import (
 )
 
 router = APIRouter(prefix="/api", tags=["medications"])
+
+
+@router.get("/me/medications/{medication_id}/knowledge", response_model=MedicationUnderstanding)
+def medication_knowledge(
+    medication_id: UUID,
+    language: Literal["en", "zh"] = Query(default="en"),
+    principal: AuthenticatedPrincipal = Depends(get_principal),
+    container: ApplicationContainer = Depends(get_container),
+) -> MedicationUnderstanding:
+    """Read general knowledge through the existing source-grounded service."""
+    if container.medication_understanding is None:
+        raise ProviderUnavailableError("Medication knowledge is unavailable")
+    preferences = getattr(container, "preferences", None)
+    timezone = preferences.get(principal.patient_id).timezone if preferences else "Asia/Singapore"
+    return container.medication_understanding.explain(
+        patient_id=principal.patient_id,
+        medication_id=medication_id,
+        question="general_use",
+        language=language,
+        timezone=timezone,
+    )
 
 
 @router.post("/medications/dose-display", response_model=DoseDisplay)
@@ -158,9 +180,9 @@ def create_draft(
 ) -> DraftCreateResponse:
     """Create a draft. Missing required inputs keep it pending — never active."""
     patient_id = principal.patient_id
+    if payload.supersedes_regimen_id is not None and medication_id is None:
+        raise ValidationError("An existing medication is required for a plan version update")
     if medication_id is not None:
-        from ...domain.errors import ValidationError
-
         medication = container.enrollment.get_medication(patient_id, medication_id)
         if medication is None:
             raise NotFoundError("Medication not found")
@@ -183,6 +205,7 @@ def create_draft(
         patient_id=patient_id,
         draft=RegimenDraftInput(
             patient_edited=payload.patient_edited,
+            supersedes_regimen_id=payload.supersedes_regimen_id,
             medication_name=payload.medication_name,
             dose_amount=payload.dose_amount,
             dose_unit=payload.dose_unit,

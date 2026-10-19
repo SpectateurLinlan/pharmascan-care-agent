@@ -31,6 +31,10 @@ class SourcePreviewService:
             raise ProviderUnavailableError("Choose the source type yourself")
         return self._routing.route_image(content)
 
+    def route_image(self, image: bytes, *, demo_only: bool) -> ImageRoute:
+        """Expose the existing versioned input check to other application services."""
+        return self.route(content=image, consent=True, demo_only=demo_only)
+
     def preview(
         self,
         *,

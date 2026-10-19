@@ -161,6 +161,7 @@ export function EnrollScreen({
     const selectedTimes = normalisedTimes();
     return {
       patient_edited:Boolean(editFrom),
+      supersedes_regimen_id:editFrom?.state==='active'?editFrom.regimen_id:null,
       course_start_date: courseStart || null,
       course_end_date: courseEnd || null,
       ...(sourceSelection && sourceSelection.name.trim() === name.trim() ? { extraction_evidence: sourceSelection.preview } : {}),

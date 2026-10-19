@@ -152,6 +152,39 @@ def test_general_use_is_sourced_bilingual_and_not_personal_authority(clock):
     assert requests[0].extensions["timeout"]["read"] == 6
 
 
+def test_patient_knowledge_endpoint_returns_only_owned_source_grounded_knowledge(reviewed, wired):
+    from app.domain.errors import DomainError
+    from app.transport.auth import AuthenticatedPrincipal
+    from app.transport.deps import get_container, get_principal
+    from app.transport.error_mapping import domain_error_handler
+    from app.transport.routes.medications import router
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    service, patient, draft, requests = reviewed
+    wired.medication_understanding = service
+    app = FastAPI()
+    app.add_exception_handler(DomainError, domain_error_handler)
+    app.include_router(router)
+    app.dependency_overrides[get_container] = lambda: wired
+    app.dependency_overrides[get_principal] = lambda: AuthenticatedPrincipal(
+        patient_id=patient, subject="DEMO_ONLY", email=None, authenticated=True, mode="supabase"
+    )
+    with TestClient(app) as client:
+        response = client.get(f"/api/me/medications/{draft.medication.id}/knowledge?language=en")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["medication_id"] == str(draft.medication.id)
+        assert payload["general_knowledge"]["status"] == "matched"
+        assert payload["general_knowledge"]["sources"][0]["market"] == "US"
+        assert payload["general_knowledge"]["personal_dosing_authority"] is False
+        assert "dailymed.nlm.nih.gov" in payload["general_knowledge"]["sources"][0]["url"]
+        assert len(requests) == 1
+        foreign = client.get(f"/api/me/medications/{uuid4()}/knowledge?language=en")
+        assert foreign.status_code == 404
+        assert len(requests) == 1
+
+
 @pytest.mark.parametrize(
     "change",
     [
