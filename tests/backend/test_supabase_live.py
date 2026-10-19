@@ -25,8 +25,7 @@ from fastapi.testclient import TestClient
 pytestmark = pytest.mark.skipif(os.environ.get("RUN_SUPABASE_LIVE") != "1", reason="REAL LIVE opt-in required")
 
 
-@pytest.mark.skipif(os.environ.get("RUN_STAGE2_LIVE") != "1", reason="REAL LIVE personal Stage2 opt-in required")
-def test_live_personal_gallery_storage_embed_match_and_rls(course_live):
+def test_live_personal_gallery_storage_evidence_scope_and_rls(course_live):
     import io
 
     from PIL import Image, ImageDraw
@@ -86,39 +85,46 @@ def test_live_personal_gallery_storage_embed_match_and_rls(course_live):
     }
     reference = app.post(url, params=params, headers=upload_headers, content=photo)
     assert reference.status_code == 200, "Real private reference upload failed"
-    record = reference.json()
-    assert record["eligibility"] == "eligible", "Real Stage2 embedding is not usable"
+    result = reference.json()
+    record = result["photo"]
+    assert result["duplicate"] is False
+    assert record["eligibility"] == "associated"
+    assert record["eligibility_reason"] == "image_content_not_independently_validated_comparison_disabled"
     image_id = record["id"]
-    assert app.post(url, params=params, headers=upload_headers, content=photo).json()["id"] == image_id
+    repeated = app.post(url, params=params, headers=upload_headers, content=photo).json()
+    assert repeated["photo"]["id"] == image_id and repeated["duplicate"] is True
     assert app.get(f"/api/evidence/images/{image_id}", headers=headers).content == photo
     assert app.get(f"/api/evidence/images/{image_id}", headers=foreign_headers).status_code == 404
     # Omit every patient WHERE on the direct normal JWT regression.
     assert clients[1].rows("medication_images", id=f"eq.{image_id}") == []
     assert clients[1].rows("image_embeddings", image_id=f"eq.{image_id}") == []
     rows = app.get("/api/evidence/gallery", headers=headers).json()
-    assert next(row for row in rows if row["medication"]["id"] == draft["medication_id"])["eligible_count"] == 1
+    assert next(row for row in rows if row["medication"]["id"] == draft["medication_id"])["eligible_count"] == 0
     comparison = app.post(
         "/api/evidence/check-dose", params={"regimen_id": draft["regimen_id"]}, headers=upload_headers, content=photo
     )
     assert comparison.status_code == 200, "Real personal matching failed"
     run = comparison.json()
-    assert run["reference_ids"] == [image_id] and run["outcome"] is not None
-    assert run["decision"] in {"match", "unknown", "ambiguous"}
-    assert run["outcome"]["model_version"] and not run["safe_to_take"] and not run["ingestion_proven"]
+    assert run["reference_ids"] == [] and run["outcome"] is None
+    assert run["decision"] == "missing_reference"
+    assert not run["safe_to_take"] and not run["ingestion_proven"]
     assert clients[0].rows("recognition_runs", id=f"eq.{run['id']}")
     assert clients[0].rows("dose_events", regimen_id=f"eq.{draft['regimen_id']}") == []
-    for kind in ["package", "blister"]:
-        saved = app.post(
-            url, params={**params, "image_kind": kind, "for_comparison": "false"}, headers=upload_headers, content=photo
-        )
-        assert saved.status_code == 200 and saved.json()["eligibility"] == "associated"
+    duplicate_with_relabel = app.post(
+        url,
+        params={**params, "image_kind": "package", "for_comparison": "false"},
+        headers=upload_headers,
+        content=photo,
+    )
+    assert duplicate_with_relabel.status_code == 200 and duplicate_with_relabel.json()["duplicate"] is True
+    assert duplicate_with_relabel.json()["photo"]["image_kind"] == "loose_pill"
 
     assert app.post(f"/api/evidence/images/{image_id}/retire", headers=foreign_headers).status_code == 404
     retired = app.post(f"/api/evidence/images/{image_id}/retire", headers=headers)
     assert retired.status_code == 200, "Retirement rejected: " + retired.json().get("message", "unknown")
     assert retired.json()["eligibility"] == "ineligible"
     assert app.post(f"/api/evidence/images/{image_id}/retire", headers=headers).json() == retired.json()
-    assert clients[0].rows("image_embeddings", image_id=f"eq.{image_id}")
+    assert clients[0].rows("image_embeddings", image_id=f"eq.{image_id}") == []
     # Retiring preserves original evidence but removes it from current matching.
     no_reference = app.post(
         "/api/evidence/check-dose", params={"regimen_id": draft["regimen_id"]}, headers=upload_headers, content=photo

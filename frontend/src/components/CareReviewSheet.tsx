@@ -11,12 +11,13 @@ export function CareReviewSheet({proposal,onCancel,onSaved}:{proposal:CareReview
  const value=proposal.stock??proposal.barrier??proposal.task??proposal.task_update;
  const [note,setNote]=useState(proposal.stock?.note??proposal.barrier?.description??proposal.task?.notes??proposal.task_update?.notes??'');
  const [quantity,setQuantity]=useState(String(proposal.stock?.quantity??''));
+ const pastTask=!!proposal.task&&Date.parse(proposal.task.due_at)<Date.now();
  const date=(value:string)=>new Date(value).toLocaleString(language==='zh'?'zh-CN':'en-SG',{timeZone:preferences.timezone});
  async function save(){setBusy(true);setError(null);try{
   if(proposal.stock&&proposal.medication_id){await api.recordStock(proposal.medication_id,{...proposal.stock,quantity:Number(quantity),note,confirmed:true});}
   else if(proposal.barrier){await api.recordBarrier({...proposal.barrier,description:note,confirmed:true});}
-  else if(proposal.task){await api.createCareTask({...proposal.task,notes:note,confirmed:true});}
-  else if(proposal.task_update&&proposal.task_id){await api.updateCareTask(proposal.task_id,{...proposal.task_update,notes:note,confirmed:true});}
+  else if(proposal.task){if(pastTask)throw new Error(language==='zh'?'请在用药跟进中确认历史事项，并选择不提醒。':'Confirm historical entry with no reminder in Medication follow-ups.');await api.createCareTask({...proposal.task,...(proposal.task.historical_confirmed?{historical_confirmed:false}:{}),notes:note,confirmed:true});}
+  else if(proposal.task_update&&proposal.task_id){await api.updateCareTask(proposal.task_id,{...proposal.task_update,...(proposal.task_update.historical_confirmed?{historical_confirmed:false}:{}),notes:note,confirmed:true});}
   else throw new Error('Incomplete care proposal');
   onSaved();
  }catch(caught){setError(caught);}finally{setBusy(false);}}
@@ -25,8 +26,9 @@ export function CareReviewSheet({proposal,onCancel,onSaved}:{proposal:CareReview
  {proposal.stock?<><p>{t(proposal.stock.kind)} · {t(proposal.stock.unit)}</p><label className="field">{t('Quantity')}<input type="number" step="any" value={quantity} onChange={event=>setQuantity(event.target.value)}/></label><p>{t('Low-stock threshold')}: {proposal.stock.low_threshold} {t(proposal.stock.unit)}</p></>:null}
  {proposal.barrier?<><p>{t(proposal.barrier.category)}</p><p>{date(proposal.barrier.occurred_at)}</p><p>{t('Chosen support action')}: {proposal.barrier.chosen_action||t('Not specified')}</p></>:null}
  {proposal.task?<><p><strong>{proposal.task.title}</strong></p><p>{t(proposal.task.category)} · {date(proposal.task.due_at)}</p></>:null}
+ {pastTask?<p role="alert">{language==='zh'?'该事项时间已过去。请在用药跟进中新建事项，确认历史日期并选择不提醒。':'This task is in the past. Use New medication follow-up to confirm historical entry with no reminder.'}</p>:null}
  {proposal.task_update?<p>{t(proposal.task_update.status)} {proposal.task_update.due_at?date(proposal.task_update.due_at):''}</p>:null}
  <label className="field">{t('Your note')}<textarea maxLength={proposal.stock?500:1000} value={note} onChange={event=>setNote(event.target.value)}/></label>
- {error?<ErrorNotice error={error}/>:null}<div className="actions"><button className="primary" disabled={busy||!value||(proposal.stock!==null&&proposal.stock!==undefined&&(!quantity.trim()||!Number.isFinite(Number(quantity))))} onClick={()=>void save()}>{t('Confirm record')}</button><button disabled={busy} onClick={onCancel}>{t('Cancel')}</button></div>
+ {error?<ErrorNotice error={error}/>:null}<div className="actions"><button className="primary" disabled={busy||pastTask||!value||(proposal.stock!==null&&proposal.stock!==undefined&&(!quantity.trim()||!Number.isFinite(Number(quantity))))} onClick={()=>void save()}>{t('Confirm record')}</button><button disabled={busy} onClick={onCancel}>{t('Cancel')}</button></div>
  </BottomSheet>;
 }

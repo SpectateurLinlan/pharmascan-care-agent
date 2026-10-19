@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import re
 from collections.abc import Callable
 from contextlib import nullcontext
 from typing import Any
@@ -11,6 +13,8 @@ import httpx
 
 from ..config import validate_publishable_key
 from ..domain.errors import AuthenticationRequiredError, ProviderUnavailableError, RegimenOverlapError, ValidationError
+
+LOGGER = logging.getLogger(__name__)
 
 
 class SupabaseDataClient:
@@ -71,6 +75,32 @@ class SupabaseDataClient:
                 raise NotFoundError("Draft not found")
             if code == "P7502" or code == "23503":
                 raise ValidationError("This draft has protected or shared records and cannot be deleted.")
+            # Undefined columns / stale PostgREST function schemas are server
+            # deployment mismatches, not patient input errors. In particular,
+            # never tell a patient that their confirmed delete failed because
+            # they entered something incorrectly when the database contract
+            # is the part that needs repair.
+            if code in {"42P01", "42703", "42883", "PGRST202", "PGRST204", "PGRST205"}:
+                resource = path.removeprefix("/rest/v1/")
+                if not re.fullmatch(r"(?:rpc/)?[a-z][a-z0-9_]{0,100}", resource):
+                    resource = "redacted"
+                LOGGER.warning(
+                    "database_contract_unavailable operation=%s resource=%s provider_code=%s provider_status=%s",
+                    method if method in {"GET", "POST", "PATCH", "DELETE"} else "other",
+                    resource,
+                    code,
+                    response.status_code,
+                    extra={
+                        "dependency": "supabase_postgrest",
+                        "operation": method if method in {"GET", "POST", "PATCH", "DELETE"} else "other",
+                        "resource": resource,
+                        "provider_code": code,
+                        "provider_status": response.status_code,
+                    },
+                )
+                raise ProviderUnavailableError(
+                    "The database service is not ready for this request. Please try again later."
+                )
             if code == "P7501":
                 raise RegimenOverlapError()
             if response.status_code >= 500 or response.status_code == 429:

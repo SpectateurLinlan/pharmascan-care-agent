@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -29,6 +29,7 @@ from ..contracts.dto import (
 from ..contracts.enums import (
     FieldName,
     IdentityStatus,
+    OccurrenceStatus,
     RegimenState,
     RuleKind,
     SourceKind,
@@ -37,6 +38,8 @@ from ..contracts.enums import (
 from ..contracts.ports import (
     Clock,
     ConfirmationChallengeRepository,
+    DoseEventRepository,
+    DoseOccurrenceRepository,
     DoseRuleRepository,
     IdGenerator,
     PatientMedicationRepository,
@@ -81,6 +84,8 @@ class MedicationEnrollmentService:
         sources: SourceDocumentRepository,
         source_fields: SourceFieldRepository,
         dose_rules: DoseRuleRepository,
+        occurrences: DoseOccurrenceRepository | None = None,
+        events: DoseEventRepository | None = None,
         challenges: ConfirmationChallengeRepository,
         clock: Clock,
         ids: IdGenerator,
@@ -91,6 +96,8 @@ class MedicationEnrollmentService:
         self._sources = sources
         self._source_fields = source_fields
         self._dose_rules = dose_rules
+        self._occurrences = occurrences
+        self._events = events
         self._challenges = challenges
         self._clock = clock
         self._ids = ids
@@ -103,6 +110,12 @@ class MedicationEnrollmentService:
 
     def get_source(self, patient_id: UUID, source_id: UUID) -> SourceDocumentDTO | None:
         return self._sources.get(patient_id, source_id)
+
+    def list_source_fields(self, patient_id: UUID, source_id: UUID) -> list[SourceFieldDTO]:
+        """Return fields only after confirming the source belongs to this patient."""
+        if self._sources.get(patient_id, source_id) is None:
+            return []
+        return self._source_fields.list_for_source(patient_id, source_id)
 
     def get_medication(self, patient_id: UUID, medication_id: UUID) -> PatientMedicationDTO | None:
         return self._medications.get(patient_id, medication_id)
@@ -165,6 +178,30 @@ class MedicationEnrollmentService:
         """
         if not draft.medication_name.strip():
             raise ValidationError("medication_name is required")
+        if draft.frequency_rule is not None and draft.frequency_rule.kind == "interval":
+            from ..contracts.dto import IntervalAnchor
+            from ..domain.interval_schedule import interval_moments
+
+            frequency = draft.frequency_rule
+            if draft.course_start_date is None:
+                raise ValidationError("Enter the first-dose date for an interval schedule")
+            if len(frequency.local_times) > 1:
+                raise ValidationError("An interval schedule needs one first-dose time")
+            time = _normalise_local_time(frequency.local_times[0]) if frequency.local_times else "08:00"
+            anchor = IntervalAnchor(
+                local_date=draft.course_start_date,
+                local_time=time,
+                time_source="patient_entered" if frequency.local_times else "default_0800",
+            )
+            frequency = frequency.model_copy(update={"local_times": [time], "interval_anchor": anchor})
+            # Validate timezone/DST and interval bounds before any repository write.
+            interval_moments(
+                frequency.model_dump(mode="json"),
+                self._clock.now(),
+                self._clock.now(),
+                str(self._tz.local_tz(patient_id)),
+            )
+            draft = draft.model_copy(update={"frequency_rule": frequency})
         medication = self._medications.get(patient_id, existing_medication_id) if existing_medication_id else None
         if existing_medication_id and medication is None:
             raise NotFoundError("Owned medication not found")
@@ -185,7 +222,7 @@ class MedicationEnrollmentService:
                 expected = (
                     draft.dose_amount,
                     draft.dose_unit,
-                    draft.frequency_rule.model_dump() if draft.frequency_rule else None,
+                    draft.frequency_rule.model_dump(mode="json") if draft.frequency_rule else None,
                     draft.is_prn,
                     draft.route,
                     draft.food_instruction,
@@ -233,7 +270,18 @@ class MedicationEnrollmentService:
             product_id=medication.product_id if medication else None,
             course_start=draft.course_start_date,
             course_end=draft.course_end_date,
+            regimen_id=draft.supersedes_regimen_id,
         )
+        if draft.supersedes_regimen_id is not None:
+            if medication is None:
+                raise ValidationError("A plan version update must belong to an existing medication")
+            predecessor = self._regimens.get(patient_id, draft.supersedes_regimen_id)
+            if (
+                predecessor is None
+                or predecessor.patient_medication_id != medication.id
+                or predecessor.state != RegimenState.ACTIVE
+            ):
+                raise ValidationError("The active plan changed. Reload it before preparing an update.")
 
         now = self._clock.now()
         source_id = self._ids.new_id()
@@ -257,7 +305,7 @@ class MedicationEnrollmentService:
         if draft.dose_unit is not None:
             provided[FieldName.DOSE_UNIT.value] = draft.dose_unit
         if draft.frequency_rule is not None:
-            provided[FieldName.FREQUENCY_RULE.value] = draft.frequency_rule.model_dump()
+            provided[FieldName.FREQUENCY_RULE.value] = draft.frequency_rule.model_dump(mode="json")
         if draft.is_prn:
             provided[FieldName.IS_PRN.value] = True
         if draft.route is not None:
@@ -312,7 +360,7 @@ class MedicationEnrollmentService:
             state=state,
             dose_amount=draft.dose_amount,
             dose_unit=draft.dose_unit,
-            frequency_rule=(draft.frequency_rule.model_dump() if draft.frequency_rule else None),
+            frequency_rule=(draft.frequency_rule.model_dump(mode="json") if draft.frequency_rule else None),
             is_prn=draft.is_prn,
             route=draft.route,
             food_instruction=draft.food_instruction,
@@ -320,7 +368,7 @@ class MedicationEnrollmentService:
             effective_to=None,
             course_start_date=draft.course_start_date,
             course_end_date=draft.course_end_date,
-            supersedes_id=None,
+            supersedes_id=draft.supersedes_regimen_id,
             confirmation_challenge_id=None,
             created_at=now,
         )
@@ -592,7 +640,7 @@ class MedicationEnrollmentService:
             product_id=medication.product_id,
             course_start=regimen.course_start_date,
             course_end=regimen.course_end_date,
-            regimen_id=regimen_id,
+            regimen_id=regimen.supersedes_id or regimen_id,
         )
 
         challenge = self._challenges.get(patient_id, challenge_id)
@@ -608,7 +656,42 @@ class MedicationEnrollmentService:
             now=self._clock.now(),
         )
 
+        atomic_activate = getattr(self._regimens, "activate_version", None)
+        if atomic_activate is not None:
+            return atomic_activate(
+                patient_id=patient_id,
+                regimen_id=regimen_id,
+                challenge_id=challenge_id,
+                timezone=str(self._tz.local_tz(patient_id)),
+            )
+
         now = self._clock.now()
+        superseded_regimen_ids: list[UUID] = []
+        if regimen.supersedes_id is not None:
+            predecessor = self._regimens.get(patient_id, regimen.supersedes_id)
+            if (
+                predecessor is None
+                or predecessor.patient_medication_id != medication.id
+                or predecessor.state != RegimenState.ACTIVE
+            ):
+                raise ValidationError("The active plan changed. Review it again before confirming this version.")
+            # The in-memory adapter is explicitly simulated. The production
+            # Supabase adapter performs this whole transition in one SQL RPC.
+            self._regimens.update(
+                predecessor.model_copy(update={"state": RegimenState.SUPERSEDED, "effective_to": now})
+            )
+            superseded_regimen_ids.append(predecessor.id)
+            for rule in self._dose_rules.list_for_regimen(patient_id, predecessor.id):
+                if rule.enabled:
+                    self._dose_rules.update(rule.model_copy(update={"enabled": False}))
+            if self._occurrences is not None and self._events is not None:
+                end_of_time = datetime.max.replace(tzinfo=now.tzinfo)
+                for occurrence in self._occurrences.list_for_regimen(patient_id, predecessor.id, now, end_of_time):
+                    if (
+                        occurrence.status.value != "closed"
+                        and self._events.find_by_occurrence(patient_id, occurrence.id) is None
+                    ):
+                        self._occurrences.update(occurrence.model_copy(update={"status": OccurrenceStatus.CLOSED}))
         self._regimens.update(
             regimen.model_copy(
                 update={
@@ -629,7 +712,7 @@ class MedicationEnrollmentService:
         self._persist_dose_rules(patient_id=patient_id, regimen=regimen)
         return ActivationResultDTO(
             regimen=self._require_regimen(patient_id, regimen_id),
-            superseded_regimen_ids=[],
+            superseded_regimen_ids=superseded_regimen_ids,
         )
 
     def _persist_dose_rules(self, *, patient_id: UUID, regimen: RegimenVersionDTO) -> None:

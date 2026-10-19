@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {StrictMode} from 'react';
+import {act} from '@testing-library/react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { VoiceInput } from './VoiceInput';
 import { LanguageProvider, useLanguage } from '../language';
@@ -18,6 +19,21 @@ class Speech implements NativeRecognition {
   result(text:string) { this.onresult?.({resultIndex:0,results:[{isFinal:true,0:{transcript:text,confidence:0.4}}]}); this.onend?.(); }
 }
 afterEach(() => { cleanup(); localStorage.clear(); vi.resetAllMocks();vi.mocked(api.recentTurns).mockResolvedValue([]); vi.unstubAllGlobals(); vi.useRealTimers(); });
+it('Android aborted feedback expires and a retry accepts a transcript without auto-send',()=>{
+ vi.useFakeTimers();const speech=new Speech(),callback=vi.fn();
+ render(<VoiceInput provider={{create:()=>speech}} onTranscript={callback}/>);
+ fireEvent.click(screen.getByRole('button',{name:'Speak your message'}));
+ act(()=>speech.onerror?.({error:'aborted'}));
+ expect(screen.getByText(/Listening cancelled/)).toBeTruthy();
+ act(()=>vi.advanceTimersByTime(6001));expect(screen.queryByText(/Listening cancelled/)).toBeNull();
+ fireEvent.click(screen.getByRole('button',{name:'Speak your message'}));act(()=>speech.result('DEMO patient question'));
+ expect(callback).toHaveBeenCalledWith('DEMO patient question');expect(api.sendMessage).not.toHaveBeenCalled();
+});
+it('leaving the active conversation aborts the microphone and ignores its late result',()=>{
+ const speech=new Speech(),callback=vi.fn();const view=render(<VoiceInput provider={{create:()=>speech}} onTranscript={callback}/>);
+ fireEvent.click(screen.getByRole('button',{name:'Speak your message'}));view.rerender(<VoiceInput provider={{create:()=>speech}} onTranscript={callback} disabled/>);
+ act(()=>speech.result('DEMO stale conversation'));expect(callback).not.toHaveBeenCalled();expect(speech.abort).toHaveBeenCalled();
+});
 it('browser autoplay, stop, replay and language change never call cloud synthesis',async()=>{
  const events=new EventTarget(),utterances:SpeechSynthesisUtterance[]=[];
  const synthesis={cancel:vi.fn(),getVoices:()=>[{lang:'en-SG',localService:true},{lang:'zh-CN',localService:true}],speak:vi.fn((utterance:SpeechSynthesisUtterance)=>utterances.push(utterance)),addEventListener:events.addEventListener.bind(events),removeEventListener:events.removeEventListener.bind(events)};

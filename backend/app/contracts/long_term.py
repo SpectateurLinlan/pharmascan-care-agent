@@ -1,7 +1,7 @@
 """Public long-term care DTOs. Patient identity is never a request argument."""
 
 from datetime import datetime
-from typing import Literal, Protocol
+from typing import Annotated, Literal, Protocol
 from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
@@ -93,6 +93,9 @@ class StockStatus(CareDTO):
     label_quantities: list[LabelQuantity] = Field(default_factory=list)
 
 
+ReminderOffsets = list[Annotated[int, Field(strict=True, ge=0, le=10080)]]
+
+
 class CareTaskInput(CareDTO):
     id: UUID
     category: TaskCategory
@@ -101,6 +104,9 @@ class CareTaskInput(CareDTO):
     medication_id: UUID | None = None
     regimen_id: UUID | None = None
     notes: str = Field(default="", max_length=1000)
+    reminder_minutes: int | None = Field(default=0, ge=0, le=10080)
+    reminder_offsets: ReminderOffsets | None = Field(default=None, max_length=8)
+    historical_confirmed: bool = False
     confirmed: bool = False
 
 
@@ -110,7 +116,20 @@ class TaskUpdate(CareDTO):
     status: TaskStatus
     due_at: AwareDatetime | None = None
     notes: str = Field(default="", max_length=1000)
+    title: str | None = Field(default=None, min_length=1, max_length=160)
+    category: TaskCategory | None = None
+    medication_id: UUID | None = None
+    regimen_id: UUID | None = None
+    reminder_minutes: int | None = Field(default=None, ge=0, le=10080)
+    reminder_offsets: ReminderOffsets | None = Field(default=None, max_length=8)
+    historical_confirmed: bool = False
     confirmed: bool = False
+
+    @model_validator(mode="after")
+    def non_null_details(self):
+        if any(key in self.model_fields_set and getattr(self, key) is None for key in ("title", "category")):
+            raise ValueError("Title and task type cannot be cleared")
+        return self
 
 
 class TaskHistory(CareDTO):
@@ -119,6 +138,13 @@ class TaskHistory(CareDTO):
     due_at: datetime
     notes: str
     recorded_at: datetime
+    title: str | None = None
+    category: TaskCategory | None = None
+    medication_id: UUID | None = None
+    regimen_id: UUID | None = None
+    reminder_minutes: int | None = None
+    reminder_offsets: ReminderOffsets | None = Field(default=None, max_length=8)
+    historical_confirmed: bool = False
 
 
 class CareTask(CareDTO):
@@ -131,6 +157,9 @@ class CareTask(CareDTO):
     regimen_id: UUID | None = None
     status: TaskStatus = "open"
     notes: str = ""
+    reminder_minutes: int | None = Field(default=0, ge=0, le=10080)
+    reminder_offsets: ReminderOffsets | None = Field(default=None, max_length=8)
+    historical_entry: bool = False
     source: Literal["patient_reported", "stock_estimate"] = "patient_reported"
     version: int = 1
     history: list[TaskHistory] = Field(default_factory=list)

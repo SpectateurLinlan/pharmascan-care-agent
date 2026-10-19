@@ -265,6 +265,7 @@ def ensure_patient_profile(
 def _source_document(row: dict[str, Any]) -> SourceDocumentDTO:
     return SourceDocumentDTO(
         dose_basis=row.get("dose_basis"),
+        extraction_evidence=row.get("extraction_evidence"),
         id=_as_uuid(row["id"]),
         patient_id=_as_uuid(row["patient_id"]),
         source_kind=_enum(row["source_kind"]),
@@ -365,11 +366,14 @@ def _dose_event(row: dict[str, Any]) -> DoseEventDTO:
         ingestion_proven=row["ingestion_proven"],
         idempotency_key=row["idempotency_key"],
         created_at=_to_utc(row["created_at"]),
+        reported_late=row.get("reported_late", False),
+        actual_administration_at=row.get("actual_administration_at"),
     )
 
 
 def _session(row: dict[str, Any]) -> AgentSessionDTO:
     return AgentSessionDTO(
+        conversation_id=_as_uuid_or_none(row.get("conversation_id")),
         context=row.get("context", {}),
         id=_as_uuid(row["id"]),
         patient_id=_as_uuid(row["patient_id"]),
@@ -432,7 +436,8 @@ class PostgresSourceDocumentRepository:
             row = _one(
                 conn,
                 """
-                SELECT id, patient_id, source_kind, review_status, reviewed_at, demo_only, dose_basis
+                SELECT id, patient_id, source_kind, review_status, reviewed_at, demo_only, dose_basis,
+                       extraction_evidence
                   FROM public.source_documents
                  WHERE patient_id = %s AND id = %s
                 """,
@@ -448,8 +453,8 @@ class PostgresSourceDocumentRepository:
                 """
                 INSERT INTO public.source_documents
                     (id, patient_id, source_kind, is_synthetic, review_status,
-                     reviewed_at, checksum, demo_only, dose_basis)
-                VALUES (%s, %s, %s, true, %s, %s, %s, true, %s)
+                     reviewed_at, checksum, demo_only, dose_basis, extraction_evidence)
+                VALUES (%s, %s, %s, true, %s, %s, %s, true, %s, %s)
                 """,
                 (
                     document.id,
@@ -459,6 +464,9 @@ class PostgresSourceDocumentRepository:
                     document.reviewed_at,
                     synthetic_source_checksum(document.patient_id, document.id),
                     Jsonb(document.dose_basis.model_dump(mode="json")) if document.dose_basis else None,
+                    Jsonb(document.extraction_evidence.model_dump(mode="json"))
+                    if document.extraction_evidence
+                    else None,
                 ),
             )
 
@@ -947,6 +955,16 @@ class PostgresDoseRuleRepository:
                 ),
             )
 
+    def update(self, rule: DoseRuleDTO) -> None:
+        if rule.enabled:
+            raise ValidationError("An existing dose rule may only be disabled")
+        with self._session(rule.patient_id) as conn:
+            _run(
+                conn,
+                "UPDATE public.dose_rules SET enabled = false WHERE patient_id = %s AND id = %s",
+                (rule.patient_id, rule.id),
+            )
+
 
 class PostgresDoseOccurrenceRepository:
     """``DoseOccurrenceRepository`` over ``public.dose_occurrences``."""
@@ -1035,8 +1053,12 @@ class PostgresDoseEventRepository:
         "visual_status, ingestion_proven, idempotency_key, created_at"
     )
 
-    def __init__(self, session: SessionFactory) -> None:
+    def __init__(self, session: SessionFactory, *, include_late_reports: bool = False) -> None:
         self._session = session
+        self._read_table = "public.effective_dose_events" if include_late_reports else "public.dose_events"
+        self._read_columns = self._COLUMNS + (
+            ", reported_late, actual_administration_at" if include_late_reports else ""
+        )
 
     def find_by_idempotency_key(self, patient_id: UUID, key: str) -> DoseEventDTO | None:
         with self._session(patient_id) as conn:
@@ -1051,7 +1073,7 @@ class PostgresDoseEventRepository:
         with self._session(patient_id) as conn:
             row = _one(
                 conn,
-                f"SELECT {self._COLUMNS} FROM public.dose_events WHERE patient_id = %s AND occurrence_id = %s",
+                f"SELECT {self._read_columns} FROM {self._read_table} WHERE patient_id = %s AND occurrence_id = %s",
                 (patient_id, occurrence_id),
             )
         return _dose_event(row) if row else None
@@ -1060,7 +1082,7 @@ class PostgresDoseEventRepository:
         with self._session(patient_id) as conn:
             rows = _rows(
                 conn,
-                f"SELECT {self._COLUMNS} FROM public.dose_events "
+                f"SELECT {self._read_columns} FROM {self._read_table} "
                 "WHERE patient_id = %s AND event_time >= %s AND event_time < %s "
                 "ORDER BY event_time",
                 (patient_id, window_start, window_end),
@@ -1135,7 +1157,10 @@ class PostgresDoseEventRepository:
 class PostgresAgentSessionRepository:
     """``AgentSessionRepository`` over ``public.agent_sessions``."""
 
-    _COLUMNS = "id, patient_id, intent, state, pending_field_names, state_version, updated_at, expires_at, context"
+    _COLUMNS = (
+        "id, patient_id, intent, state, pending_field_names, "
+        "state_version, updated_at, expires_at, context, conversation_id"
+    )
 
     def __init__(self, session: SessionFactory) -> None:
         self._session = session
@@ -1167,8 +1192,8 @@ class PostgresAgentSessionRepository:
                 """
                 INSERT INTO public.agent_sessions
                     (id, patient_id, intent, state, pending_field_names, prompt_version,
-                     state_version, updated_at, expires_at, context, demo_only)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, true)
+                     state_version, updated_at, expires_at, context, conversation_id, demo_only)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, true)
                 """,
                 (
                     session.id,
@@ -1181,6 +1206,7 @@ class PostgresAgentSessionRepository:
                     session.updated_at,
                     session.expires_at,
                     Jsonb(session.context.model_dump(mode="json")),
+                    session.conversation_id,
                 ),
             )
 
@@ -1191,7 +1217,7 @@ class PostgresAgentSessionRepository:
                 """
                 UPDATE public.agent_sessions
                    SET intent = %s, state = %s, pending_field_names = %s,
-                       state_version = %s, updated_at = %s, expires_at = %s, context = %s
+                       state_version = %s, updated_at = %s, expires_at = %s, context = %s, conversation_id = %s
                  WHERE patient_id = %s AND id = %s
                 """,
                 (
@@ -1202,6 +1228,7 @@ class PostgresAgentSessionRepository:
                     session.updated_at,
                     session.expires_at,
                     Jsonb(session.context.model_dump(mode="json")),
+                    session.conversation_id,
                     session.patient_id,
                     session.id,
                 ),
@@ -1400,7 +1427,7 @@ class PostgresRepositories:
 
 
 def build_postgres_repositories(
-    database: PostgresDatabase, *, session: SessionFactory | None = None
+    database: PostgresDatabase, *, session: SessionFactory | None = None, include_late_reports: bool = False
 ) -> PostgresRepositories:
     """Construct the adapter bundle over one database target.
 
@@ -1423,7 +1450,7 @@ def build_postgres_repositories(
         regimens=PostgresRegimenVersionRepository(session),
         dose_rules=PostgresDoseRuleRepository(session),
         occurrences=PostgresDoseOccurrenceRepository(session),
-        events=PostgresDoseEventRepository(session),
+        events=PostgresDoseEventRepository(session, include_late_reports=include_late_reports),
         sessions=PostgresAgentSessionRepository(session),
         challenges=PostgresConfirmationChallengeRepository(session),
         traces=PostgresToolTraceRepository(session),

@@ -13,6 +13,7 @@ lexicographic order by filename, one transaction per file, abort on error.
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -143,9 +144,11 @@ def ensure_ledger(connection: psycopg.Connection) -> None:
 
 
 def applied_migrations(connection: psycopg.Connection) -> dict[str, str]:
-    """Return ``{version: sha256}`` for every migration already recorded."""
-    ensure_ledger(connection)
+    """Read recorded hashes without initializing or otherwise mutating the ledger."""
     with connection.cursor() as cursor:
+        cursor.execute("SELECT to_regclass('public.core_schema_migrations') AS ledger")
+        if cursor.fetchone()["ledger"] is None:
+            return {}
         cursor.execute(f"SELECT version, sha256 FROM public.{LEDGER_TABLE}")
         return {row["version"]: row["sha256"] for row in cursor.fetchall()}
 
@@ -161,6 +164,65 @@ def record_migration(connection: psycopg.Connection, migration: MigrationFile) -
             """,
             (migration.version, migration.name, migration.sha256),
         )
+
+
+def apply_recorded_migration(
+    connection: psycopg.Connection, migration: MigrationFile, *, prerequisites: tuple[MigrationFile, ...] = ()
+) -> bool:
+    """Atomically apply reviewed DDL and its exact hash. False means already applied.
+
+    Outer file transaction markers are execution wrappers, not hashed-file edits.
+    Refuse additional transaction commands rather than permitting an inner COMMIT
+    to escape the ledger transaction. Caller handles ambiguous connection loss by
+    inspecting objects/ledger, never by automatically retrying or rolling back.
+    """
+    if not connection.autocommit:
+        raise RuntimeError("recorded migrations require an idle autocommit connection")
+    if connection.info.transaction_status != psycopg.pq.TransactionStatus.IDLE:
+        raise RuntimeError("migration connection already has a transaction")
+    if hashlib.sha256(migration.sql.encode("utf-8")).hexdigest() != migration.sha256:
+        raise ValueError("Migration SQL does not match its reviewed hash")
+    body = migration.sql
+    # Mask quoted SQL/PLpgSQL bodies and comments before inspecting statement starts.
+    quoted = re.compile(
+        r"(?P<tag>\$(?:[A-Za-z_][A-Za-z_0-9]*)?\$).*?(?P=tag)|'(?:''|[^'])*'|"
+        r'"(?:""|[^"])*"|--[^\n]*|/\*.*?\*/',
+        re.S,
+    )
+    masked = quoted.sub(lambda match: " " * len(match[0]), body)
+    statements = [
+        (match.start(), match.end(), match[0].strip()) for match in re.finditer(r"[^;]+;?", masked) if match[0].strip()
+    ]
+    if statements and statements[0][2].upper() == "BEGIN;":
+        if statements[-1][2].upper() != "COMMIT;":
+            raise ValueError("Migration transaction wrapper is incomplete")
+        first, last = statements[0], statements[-1]
+        body = body[first[1] : last[0]]
+        statements = statements[1:-1]
+    if any(
+        re.match(
+            r"(?:BEGIN|COMMIT|ROLLBACK|ABORT|END|SAVEPOINT|RELEASE|START\s+TRANSACTION|PREPARE\s+TRANSACTION)\b",
+            value,
+            re.I,
+        )
+        for _, _, value in statements
+    ):
+        raise ValueError("Migration has unsupported transaction control")
+    with connection.transaction():
+        connection.execute("SELECT pg_advisory_xact_lock(7348261046)")
+        recorded = applied_migrations(connection)
+        if any(recorded.get(item.version) != item.sha256 for item in prerequisites):
+            raise ValueError("Previous migration missing or hash mismatch")
+        known = recorded.get(migration.version)
+        if known is not None:
+            if known != migration.sha256:
+                raise ValueError("Recorded migration hash mismatch")
+            return False
+        connection.execute(body)
+        record_migration(connection, migration)
+        if applied_migrations(connection).get(migration.version) != migration.sha256:
+            raise ValueError("Migration ledger hash could not be verified")
+    return True
 
 
 def table_exists(connection: psycopg.Connection, table: str) -> bool:

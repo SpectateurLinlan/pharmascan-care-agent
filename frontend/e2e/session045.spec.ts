@@ -33,7 +33,7 @@ test('controlled tour, in-place conversation, four roots and responsive patient 
 
 test('source-based count display and opt-in chat survive refresh without changing the plan',async({page})=>{
  page.setDefaultTimeout(12000);await page.goto('/');await page.getByRole('button',{name:'Skip for now'}).click();
- await page.locator('[data-guide="medicines"]').click();await page.getByRole('button',{name:/Add medication/}).click();await page.getByRole('button',{name:/Add manually/}).click();
+ await page.locator('[data-guide="medicines"]').click();await page.getByRole('heading',{name:/Add medication/}).waitFor();await page.getByRole('button',{name:/Add manually/}).click();
  await page.getByLabel('Medication name',{exact:true}).fill('DEMO Long-name Metformin extended-release reference');await page.getByLabel('Dose amount',{exact:true}).fill('1');
  await page.getByText('Product strength and original instructions',{exact:true}).click();await page.getByLabel('Strength per tablet or capsule').fill('500 mg');await page.getByLabel('Dosage form',{exact:true}).selectOption('tablet');await page.getByLabel('Formulation',{exact:true}).selectOption('modified_release');await page.getByLabel('Ingredient scope').selectOption('single');await page.getByLabel('Original dose instructions',{exact:true}).fill('Take 1 tablet daily');
  await page.getByLabel('I checked the strength, form and count against my original instructions.').check();await page.getByRole('button',{name:'Show total from these details'}).click();await expect(page.getByRole('status').filter({hasText:'Total per dose: 500 mg'})).toBeVisible();

@@ -30,6 +30,7 @@ class LabelSection(KnowledgeDTO):
 class LabelSource(KnowledgeDTO):
     source_name: Literal["openFDA Drug Label / SPL"] = "openFDA Drug Label / SPL"
     market: Literal["US"] = "US"
+    label_name: str | None = None
     set_id: UUID
     label_id: UUID
     version: str

@@ -281,7 +281,16 @@ class OpenFDAKnowledge:
                     status="no_reliable_match", reason="conflicting_label_uses", candidate_count=len(rows)
                 )
             # Evaluate all bounded candidates before picking reproducible, recent citations.
-            selected.sort(key=lambda row: (row.effective_time, row.set_id), reverse=True)
+            selected.sort(
+                key=lambda row: (
+                    matches(product.model_copy(update={"scope": "product"}), row)
+                    if product.scope == "ingredient"
+                    else True,
+                    row.effective_time,
+                    row.set_id,
+                ),
+                reverse=True,
+            )
             sources = []
             for row in selected[:2]:
                 sections = []
@@ -297,6 +306,8 @@ class OpenFDAKnowledge:
                         sections.append(LabelSection(field=field, text=content[:650], truncated=len(content) > 650))
                 sources.append(
                     LabelSource(
+                        label_name=" / ".join(dict.fromkeys(row.openfda.brand_name + row.openfda.generic_name))[:240]
+                        or None,
                         set_id=UUID(row.set_id),
                         label_id=UUID(row.id),
                         version=row.version,

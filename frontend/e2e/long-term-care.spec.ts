@@ -7,7 +7,7 @@ test.skip(process.env.RUN_LONG_TERM_DEMO!=='1','Live synthetic care journey opt-
 test('F Agent: patient-reported appointment proposal, new-session review and confirmed completion',async({page})=>{
  test.skip(process.env.RUN_GEMINI_FOLLOWUP_DEMO!=='1','Three bounded real Gemini follow-up turns opt-in');
  test.setTimeout(600000);page.setDefaultTimeout(60000);const root='../outputs/long-term-followup';mkdirSync(root,{recursive:true});
- await page.goto('/');await skipInitialGuide(page);await page.locator('[data-guide="medicines"]').click();await page.getByRole('button',{name:/Add medication/}).click();await page.getByRole('button',{name:/Add manually/}).click();
+ await page.goto('/');await skipInitialGuide(page);await page.locator('[data-guide="medicines"]').click();await page.getByRole('heading',{name:/Add medication/}).waitFor();await page.getByRole('button',{name:/Add manually/}).click();
  await page.getByLabel('Medication name',{exact:true}).fill('DEMO Follow-up Metformin 500 mg');await page.getByLabel('Dose amount',{exact:true}).fill('1');await page.getByLabel('Unit',{exact:true}).fill('tablet');await page.locator('#med-time-0').fill('20:00');
  await page.getByRole('button',{name:'Create draft',exact:true}).click();await page.getByRole('button',{name:'I have reviewed these details'}).click();await page.getByRole('button',{name:'Show me the summary to confirm'}).click();const activation=page.waitForResponse(response=>response.url().includes('/medications/activate'));await page.getByRole('button',{name:'Yes, save this medication'}).click();expect((await activation).status()).toBe(200);
  await page.locator('[data-guide="records"]').click();await page.getByRole('button',{name:'My health notes',exact:true}).click();await page.getByLabel('Describe how you feel').fill('DEMO I felt tired and want to discuss this at my medication review.');await page.getByRole('button',{name:'Review health note'}).click();await page.getByRole('dialog',{name:'Save this health note?'}).getByRole('button',{name:'Confirm record'}).click();await expect(page.getByText('Your health note was saved.')).toBeVisible();
@@ -29,7 +29,7 @@ test('Scenarios E/F: confirmed stock, refill, barriers, measurements, follow-up 
  const root=process.env.RUN_GEMINI_CARE_DEMO==='1'?'../outputs/long-term-care':'../outputs/long-term-care-ui';mkdirSync(root,{recursive:true});const errors:string[]=[];
  page.on('pageerror',error=>errors.push(error.message));
  await page.goto('/');await skipInitialGuide(page);
- await page.locator('[data-guide="medicines"]').click();await page.getByRole('button',{name:/Add medication/}).click();await page.getByRole('button',{name:/Add manually/}).click();
+ await page.locator('[data-guide="medicines"]').click();await page.getByRole('heading',{name:/Add medication/}).waitFor();await page.getByRole('button',{name:/Add manually/}).click();
  const name='DEMO Long-term Metformin 500 mg';
  await page.getByLabel('Medication name',{exact:true}).fill(name);await page.getByLabel('Dose amount',{exact:true}).fill('1');await page.getByLabel('Unit',{exact:true}).fill('tablet');await page.locator('#med-time-0').fill('20:00');
  await page.getByRole('button',{name:'Create draft',exact:true}).click();await page.getByRole('button',{name:'I have reviewed these details'}).click();await page.getByRole('button',{name:'Show me the summary to confirm'}).click();

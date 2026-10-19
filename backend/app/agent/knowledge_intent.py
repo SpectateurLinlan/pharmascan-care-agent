@@ -24,7 +24,11 @@ def medication_question(text: str) -> dict[str, str] | None:
         "how should i take" in lower
         or "怎么服用" in value
         or "怎么吃" in value
-        or re.search(r"\b(?:dose|amount per dose)\b|每次.*(?:用量|服用量)|每次服.*多少", value, re.I)
+        or re.search(
+            r"\b(?:dose|amount per dose)\b|how much.*(?:each time|per dose)|每次.*(?:用量|服用量|吃多少|服用多少)",
+            value,
+            re.I,
+        )
     ):
         question = "personal_instructions"
     if question is None:
@@ -35,7 +39,9 @@ def medication_question(text: str) -> dict[str, str] | None:
         match = re.fullmatch(r"what does (.+?) do", value, flags=re.I)
     if match:
         name = match.group(1).strip()
-        if not re.search(r"\b(?:this|it|my|these|first|second|third|taking|medicine|medication)\b", name, re.I):
+        if not re.search(
+            r"\b(?:this|it|my|these|those|they|them|first|second|third|taking|medicines?|medications?)\b", name, re.I
+        ):
             result["medication_name"] = name[:160]
     if question == "personal_instructions":
         match = re.fullmatch(r"how should i take (?:my )?(.+)", value, flags=re.I)

@@ -108,8 +108,9 @@ class QuotaAgent:
                 PROVIDER_LIMIT[turn.language]
                 if exc.category == "quota"
                 else (
-                    "AI assistance is temporarily unavailable. "
-                    "Your medication records and text actions remain available."
+                    "AI 助手暂时不可用；仍可查看已保存的记录。"
+                    if turn.language == "zh"
+                    else "AI assistance is temporarily unavailable. Your saved records remain available."
                 )
             )
             return replace(

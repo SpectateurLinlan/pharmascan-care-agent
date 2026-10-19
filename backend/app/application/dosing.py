@@ -148,7 +148,7 @@ class DoseScheduleService:
         for rule in self._rules.list_for_regimen(patient_id, regimen_id):
             if rule.rule_kind != RuleKind.SCHEDULED or not rule.enabled:
                 continue
-            for due_at in self._expand(rule, window_start, horizon_end, ZoneInfo(rule.timezone)):
+            for due_at in self._expand_regimen(regimen, rule, window_start, horizon_end):
                 course_day = due_at.astimezone(ZoneInfo(rule.timezone)).date()
                 if regimen.course_start_date and course_day < regimen.course_start_date:
                     continue
@@ -196,7 +196,7 @@ class DoseScheduleService:
             if rule.rule_kind != RuleKind.SCHEDULED or not rule.enabled:
                 continue
             zone = ZoneInfo(rule.timezone)
-            for moment in self._expand(rule, start, end, zone):
+            for moment in self._expand_regimen(regimen, rule, start, end):
                 day = moment.astimezone(zone).date()
                 if (
                     moment >= regimen.effective_from
@@ -206,6 +206,15 @@ class DoseScheduleService:
                 ):
                     moments.add(moment)
         return sorted(moments)
+
+    def _expand_regimen(
+        self, regimen: RegimenVersionDTO, rule: DoseRuleDTO, start: datetime, end: datetime
+    ) -> list[datetime]:
+        if (regimen.frequency_rule or {}).get("kind") == "interval":
+            from ..domain.interval_schedule import interval_moments
+
+            return interval_moments(regimen.frequency_rule, start, end, rule.timezone)
+        return self._expand(rule, start, end, ZoneInfo(rule.timezone))
 
     @staticmethod
     def _expand(rule: DoseRuleDTO, start: datetime, end: datetime, tz: ZoneInfo) -> list[datetime]:
@@ -273,7 +282,15 @@ class DoseScheduleService:
     def get_occurrence(self, patient_id: UUID, occurrence_id: UUID) -> DoseOccurrenceDTO | None:
         return self._occurrences.get(patient_id, occurrence_id)
 
-    def find_due(self, *, patient_id: UUID, regimen_id: UUID, at: datetime | None = None) -> DueDoseResultDTO:
+    def existing_occurrences(self, patient_id: UUID, regimen_id: UUID, start: datetime, end: datetime):
+        """Read persisted occurrences only; does not backfill a historical schedule."""
+        return sorted(
+            self._occurrences.list_for_regimen(patient_id, regimen_id, start, end), key=lambda row: row.due_at
+        )
+
+    def find_due(
+        self, *, patient_id: UUID, regimen_id: UUID, at: datetime | None = None, attention_only: bool = False
+    ) -> DueDoseResultDTO:
         """Return the earliest occurrence that has come due and has no report.
 
         An occurrence is *due* when its ``due_at`` is at or before ``at`` (an
@@ -293,6 +310,25 @@ class DoseScheduleService:
                 medication_display_name="",
                 is_prn=True,
             )
+        if attention_only:
+            from ..contracts.temporal import local_day_window
+            from ..domain.dose_attention import attention_deadline
+
+            day = moment.astimezone(self._tz.local_tz(patient_id)).date()
+            start, end = local_day_window(day, self._tz.local_tz(patient_id).key)
+            rows = sorted(
+                self._occurrences.list_for_regimen(patient_id, regimen_id, start, end), key=lambda row: row.due_at
+            )
+            for index, row in enumerate(rows):
+                following = rows[index + 1].due_at if index + 1 < len(rows) else None
+                if row.status != OccurrenceStatus.CLOSED and row.due_at <= moment < attention_deadline(
+                    row.due_at, following, end
+                ):
+                    return DueDoseResultDTO(occurrence=row, medication_display_name="")
+            upcoming = next(
+                (row.due_at for row in rows if row.status != OccurrenceStatus.CLOSED and row.due_at > moment), None
+            )
+            return DueDoseResultDTO(occurrence=None, medication_display_name="", next_due_at=upcoming)
         window = self._occurrences.list_for_regimen(
             patient_id, regimen_id, moment - self.DUE_LOOKBACK, moment + timedelta(seconds=1)
         )

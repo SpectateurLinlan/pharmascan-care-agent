@@ -6,11 +6,12 @@ application rules, not that PostgreSQL accepts the migration.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from uuid import UUID
 
 import pytest
-from app.contracts.dto import FrequencyRuleDTO, RegimenDraftInput
-from app.contracts.enums import FieldName, IdentityStatus, RegimenState
+from app.contracts.dto import DoseOccurrenceDTO, FrequencyRuleDTO, RegimenDraftInput
+from app.contracts.enums import FieldName, IdentityStatus, OccurrenceStatus, RegimenState
 from app.domain.errors import (
     ConfirmationRequiredError,
     IncompleteRegimenError,
@@ -84,9 +85,7 @@ def test_activation_requires_reviewed_source_and_explicit_confirmation(wired):
 
     # 1. Now review the source, but consume the confirmation so the explicit
     #    confirmation gate is the only thing left to fail.
-    wired.enrollment.review_source_fields(
-        patient_id=PATIENT, source_id=result.regimen.source_id
-    )
+    wired.enrollment.review_source_fields(patient_id=PATIENT, source_id=result.regimen.source_id)
 
     # 2. A fresh challenge that the patient has NOT confirmed -> blocked.
     unconfirmed, _ = wired.enrollment.request_activation_challenge(
@@ -139,9 +138,7 @@ def test_unreviewed_source_cannot_be_activated_even_with_confirmation(wired):
 
 
 def test_incomplete_regimen_cannot_activate_even_when_reviewed_and_confirmed(wired):
-    result = wired.enrollment.enroll_draft(
-        patient_id=PATIENT, draft=RegimenDraftInput(medication_name="Metformin")
-    )
+    result = wired.enrollment.enroll_draft(patient_id=PATIENT, draft=RegimenDraftInput(medication_name="Metformin"))
     challenge, _ = wired.enrollment.request_activation_challenge(
         patient_id=PATIENT,
         regimen_id=result.regimen.id,
@@ -161,7 +158,7 @@ def test_incomplete_regimen_cannot_activate_even_when_reviewed_and_confirmed(wir
         )
 
 
-def test_new_version_requires_stopping_previous_and_keeps_history(wired):
+def test_active_plan_can_be_superseded_without_stopping_and_keeps_history(wired):
     first = wired.enrollment.enroll_draft(patient_id=PATIENT, draft=_complete_draft())
     first_challenge, _ = wired.enrollment.request_activation_challenge(
         patient_id=PATIENT, regimen_id=first.regimen.id, session_id=UUID(int=303), session_state_version=1
@@ -176,15 +173,27 @@ def test_new_version_requires_stopping_previous_and_keeps_history(wired):
         session_state_version=1,
     )
 
-    # The app must not silently replace an active course, even when a new
-    # medication row or a different dose would previously bypass the guard.
+    old_rule = wired.dose_rules.list_for_regimen(PATIENT, first.regimen.id)[0]
+    future_occurrence = DoseOccurrenceDTO(
+        id=wired.ids.new_id(),
+        patient_id=PATIENT,
+        regimen_id=first.regimen.id,
+        rule_id=old_rule.id,
+        due_at=wired.clock.now() + timedelta(days=2),
+        status=OccurrenceStatus.SCHEDULED,
+        generation_key="DEMO-old-future-occurrence",
+    )
+    wired.occurrences.add(future_occurrence)
+
+    # An unlinked draft remains blocked; a reviewed successor explicitly names
+    # the active version it proposes to replace.
     with pytest.raises(RegimenOverlapError):
         wired.enrollment.enroll_draft(patient_id=PATIENT, draft=_complete_draft())
-    wired.enrollment.end_regimen(patient_id=PATIENT, regimen_id=first.regimen.id)
     second = wired.enrollment.enroll_draft(
         patient_id=PATIENT,
         existing_medication_id=first.medication.id,
         draft=RegimenDraftInput(
+            supersedes_regimen_id=first.regimen.id,
             medication_name="Amlodipine 5mg",
             dose_amount=2,
             dose_unit="tablet",
@@ -205,14 +214,21 @@ def test_new_version_requires_stopping_previous_and_keeps_history(wired):
         session_state_version=1,
     )
     assert activated.regimen.state == RegimenState.ACTIVE
-    assert activated.superseded_regimen_ids == []
+    assert activated.superseded_regimen_ids == [first.regimen.id]
     assert activated.regimen.version_no == 2
 
     # The historical version is still readable and unchanged.
     original = wired.regimens.get(PATIENT, first.regimen.id)
     assert original is not None
-    assert original.state == RegimenState.ENDED
+    assert original.state == RegimenState.SUPERSEDED
+    assert original.effective_to == activated.regimen.effective_from
     assert original.version_no == 1
+    assert wired.regimens.find_active_for_medication(PATIENT, first.medication.id).id == second.regimen.id
+    assert wired.dose_rules.list_for_regimen(PATIENT, first.regimen.id)[0].enabled is False
+    assert wired.occurrences.get(PATIENT, future_occurrence.id).status == OccurrenceStatus.CLOSED
+    successor_rules = wired.dose_rules.list_for_regimen(PATIENT, second.regimen.id)
+    assert {rule.local_times[0] for rule in successor_rules} == {"08:00", "20:00"}
+    assert all(rule.enabled for rule in successor_rules)
 
 
 def test_cross_patient_access_is_denied(wired):
@@ -224,9 +240,7 @@ def test_cross_patient_access_is_denied(wired):
     assert wired.sources.get(OTHER_PATIENT, result.regimen.source_id) is None
 
     with pytest.raises(NotFoundError):
-        wired.enrollment.review_source_fields(
-            patient_id=OTHER_PATIENT, source_id=result.regimen.source_id
-        )
+        wired.enrollment.review_source_fields(patient_id=OTHER_PATIENT, source_id=result.regimen.source_id)
 
 
 def test_reviewed_source_is_immutable(wired):
@@ -234,9 +248,7 @@ def test_reviewed_source_is_immutable(wired):
     wired.enrollment.review_source_fields(patient_id=PATIENT, source_id=result.regimen.source_id)
 
     with pytest.raises(ValidationError):
-        wired.enrollment.review_source_fields(
-            patient_id=PATIENT, source_id=result.regimen.source_id
-        )
+        wired.enrollment.review_source_fields(patient_id=PATIENT, source_id=result.regimen.source_id)
 
 
 def test_invalid_dose_and_prn_frequency_are_rejected(wired):
@@ -295,9 +307,7 @@ def test_prn_draft_requires_indication_guidance_not_a_schedule(wired):
     still come from the patient, never be invented."""
     result = wired.enrollment.enroll_draft(
         patient_id=PATIENT,
-        draft=RegimenDraftInput(
-            medication_name="Paracetamol PRN", dose_amount=1, dose_unit="tablet", is_prn=True
-        ),
+        draft=RegimenDraftInput(medication_name="Paracetamol PRN", dose_amount=1, dose_unit="tablet", is_prn=True),
     )
     assert result.regimen.state == RegimenState.PENDING_CLARIFICATION
     assert {m.field for m in result.missing_instructions} == {FieldName.FREQUENCY_RULE}

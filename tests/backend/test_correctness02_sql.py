@@ -92,6 +92,11 @@ def test_large_read_choice_metadata_respects_real_jsonb_bound_and_keeps_transcri
 
 
 def test_actual_sql_patient_reads_choices_knowledge_and_http_answer(db):
+    exercise_sql_patient_reads(db)
+
+
+def exercise_sql_patient_reads(db, *, model=None, first_question="Which medicines do I have?", write_report=True):
+    """Shared real-SQL acceptance path; optional model injection never changes facts/RLS."""
     import psycopg
     from psycopg.rows import dict_row
 
@@ -181,7 +186,7 @@ def test_actual_sql_patient_reads_choices_knowledge_and_http_answer(db):
         clock=clock,
     )
     conversation = ConversationService(
-        model=StubModel(), tools=tools, fallback=agent, sessions=repos.sessions, ids=root.ids
+        model=model or StubModel(), tools=tools, fallback=agent, sessions=repos.sessions, ids=root.ids
     )
     root.enrollment, root.schedule, root.self_report, root.registry, root.orchestrator = (
         enrollment,
@@ -211,17 +216,27 @@ def test_actual_sql_patient_reads_choices_knowledge_and_http_answer(db):
             assert response.status_code == 200, response.text
             data = response.json()
             rows.append(
-                {"user": text, "actual": data["message"], "traces": data["tool_traces"], "selection": selection}
+                {
+                    "user": text,
+                    "actual": data["message"],
+                    "traces": data["tool_traces"],
+                    "selection": selection,
+                    "mode": data["mode"],
+                    "actor": actor,
+                }
             )
             return data
 
-        listed = ask("Which medicines do I have?")
+        listed = ask(first_question)
         assert "AMLODIPINE" in listed["message"] and "METFORMIN HYDROCHLORIDE" in listed["message"]
         choice = ask("What is this medicine for?")["medication_choice"]
         assert len(choice["options"]) == 2
         selected = choice["options"][1]
         explained = ask(selected["label"], {"choice_id": choice["id"], "medication_id": selected["medication_id"]})
-        assert "glycemic control" in explained["message"] and "dailymed.nlm.nih.gov" in explained["message"]
+        assert "blood sugar" in explained["message"] and "https://" not in explained["message"]
+        assert (
+            "dailymed.nlm.nih.gov" in explained["tool_traces"][-1]["payload"]["general_knowledge"]["sources"][0]["url"]
+        )
         assert explained["tool_traces"][-1]["payload"]["medication_id"] == selected["medication_id"]
         saved = repos.sessions.get(A, session.id)
         assert (
@@ -244,6 +259,8 @@ def test_actual_sql_patient_reads_choices_knowledge_and_http_answer(db):
         assert db.execute("select count(*) from agent_sessions where id=%s", (session.id,)).fetchone() == (0,)
         assert db.execute("select count(*) from agent_tool_calls where session_id=%s", (session.id,)).fetchone() == (0,)
     assert db.execute("select count(*) from dose_events").fetchone() == (0,)
+    if not write_report:
+        return rows
     lines = [
         "# Actual Backend + Synthetic PostgreSQL — Correctness 02",
         "",
@@ -258,7 +275,7 @@ def test_actual_sql_patient_reads_choices_knowledge_and_http_answer(db):
     ]
     for i, row in enumerate(rows, 1):
         lines += [
-            f"## Turn {i + 1}" if False else f"## Turn {i}",
+            f"## Turn {i}",
             "",
             "User:",
             "> " + row["user"],

@@ -227,6 +227,8 @@ class RecordHistoryService:
                     event_id=event.id if event else None,
                     event_time=event.event_time if event else None,
                     submitted_at=event.created_at if event else None,
+                    reported_late=event.reported_late if event else False,
+                    actual_administration_at=event.actual_administration_at if event else None,
                     intake_status=str(event.intake_status) if event else None,
                     reported=event is not None,
                     kind=kind,

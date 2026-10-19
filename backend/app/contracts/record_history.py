@@ -65,6 +65,8 @@ class MedicationHistoryEntry(ReadModel):
     event_id: UUID | None
     event_time: datetime | None
     submitted_at: datetime | None
+    reported_late: bool = False
+    actual_administration_at: datetime | None = None
     intake_status: str | None
     reported: bool
     kind: Literal["scheduled", "unscheduled"]

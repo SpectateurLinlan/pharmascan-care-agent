@@ -47,7 +47,10 @@ from ..application.dosing import DoseScheduleService, SelfReportService
 from ..application.draft_deletion import DraftDeletionService
 from ..application.enrollment import MedicationEnrollmentService
 from ..application.evidence_enrollment import EvidenceEnrollmentService
+from ..application.late_reports import LateReportService
+from ..application.library_files import MedicationLibraryFileService
 from ..application.long_term import LongTermCareService
+from ..application.medication_understanding import MedicationUnderstandingService
 from ..application.observations import ObservationService
 from ..application.patient_feedback import FeedbackService
 from ..application.personal_gallery import PersonalGalleryService
@@ -74,6 +77,7 @@ from ..infrastructure.conversation_threads import MemoryConversationThreads, Sup
 from ..infrastructure.draft_deletion import MemoryDraftDeletion, SupabaseDraftDeletion
 from ..infrastructure.feedback_repos import MemoryFeedback, SupabaseFeedback
 from ..infrastructure.identifiers import RandomIdGenerator
+from ..infrastructure.late_report_repos import MemoryLateReports, SupabaseLateReports
 from ..infrastructure.memory_repos import (
     InMemoryAgentSessionRepository,
     InMemoryConfirmationChallengeRepository,
@@ -130,6 +134,7 @@ class ApplicationContainer:
     observations: ObservationService | None = None
     review_summary: ReviewSummaryService | None = None
     long_term: LongTermCareService | None = None
+    late_reports: LateReportService | None = None
     persistence: str = "simulated_in_memory"
     #: Which connection the patient repositories actually use. Reported by
     #: ``/api/health`` so the separation can be observed, not assumed.
@@ -142,11 +147,13 @@ class ApplicationContainer:
     source_preview: SourcePreviewService | None = None
     evidence_enrollment: EvidenceEnrollmentService | None = None
     gallery: PersonalGalleryService | None = None
+    library_files: MedicationLibraryFileService | None = None
     close_request: Callable[[], None] | None = None
     draft_deletion: DraftDeletionService | None = None
     record_history: RecordHistoryService | None = None
     conversation_history: ConversationHistoryService | None = None
     conversation_threads: ConversationThreadService | None = None
+    medication_understanding: MedicationUnderstandingService | None = None
 
 
 def _services(
@@ -174,6 +181,8 @@ def _services(
         sources=sources,
         source_fields=source_fields,
         dose_rules=dose_rules,
+        occurrences=occurrences,
+        events=events,
         challenges=challenges,
         clock=clock,
         ids=ids,
@@ -199,7 +208,12 @@ def _services(
     )
     reminders = (
         ReminderService(
-            repository=reminder_repo, occurrences=occurrences, regimens=regimens, clock=clock, tz_provider=tz_provider
+            repository=reminder_repo,
+            occurrences=occurrences,
+            regimens=regimens,
+            clock=clock,
+            tz_provider=tz_provider,
+            schedule=schedule,
         )
         if reminder_repo is not None
         else None
@@ -265,6 +279,7 @@ def build_container(
 
     from ..infrastructure.evidence_images import patient_reference_image, patient_source_image
     from ..infrastructure.evidence_repos import MemoryEvidenceRepository, MemoryImageStore
+    from ..infrastructure.library_files import MemoryMedicationLibraryFiles
 
     evidence_repo, image_store = MemoryEvidenceRepository(medications), MemoryImageStore()
     evidence_service = EvidenceEnrollmentService(
@@ -287,6 +302,14 @@ def build_container(
         normalize=patient_reference_image,
         clock=the_clock,
         ids=the_ids,
+        tz_provider=PreferenceTzProvider(preference_repo),
+    )
+    library_files_service = MedicationLibraryFileService(
+        repository=MemoryMedicationLibraryFiles(),
+        storage=image_store,
+        enrollment=enrollment,
+        clock=the_clock,
+        demo_only=True,
     )
     observations_service = ObservationService(MemoryObservations(), medications, the_clock)
     summary_service = ReviewSummaryService(enrollment, occurrences, events, observations_service, the_clock)
@@ -295,11 +318,31 @@ def build_container(
     )
     thread_repository = MemoryConversationThreads()
 
+    from time import monotonic
+
+    import httpx
+
+    from ..infrastructure.openfda_knowledge import OpenFDAKnowledge
+
+    knowledge_http = httpx.Client()
+    medication_understanding = MedicationUnderstandingService(
+        enrollment, OpenFDAKnowledge(knowledge_http, the_clock, monotonic=monotonic), the_clock
+    )
+
     def clear_chat_text(owner):
         sessions.clear_conversation_text(owner)
         thread_repository.clear(owner)
 
     return ApplicationContainer(
+        late_reports=LateReportService(
+            enrollment=enrollment,
+            schedule=schedule,
+            events=events,
+            repository=MemoryLateReports(store),
+            challenges=challenges,
+            clock=the_clock,
+            ids=the_ids,
+        ),
         draft_deletion=DraftDeletionService(MemoryDraftDeletion(store, evidence_repo, image_store)),
         record_history=RecordHistoryService(
             MemoryRecordHistory(store), enrollment, PreferenceService(preference_repo), the_clock
@@ -309,8 +352,11 @@ def build_container(
         ),
         conversation_history=ConversationHistoryService(MemoryConversationHistory(clear_chat_text), the_clock),
         long_term=long_term,
+        medication_understanding=medication_understanding,
+        close_request=knowledge_http.close,
         evidence_enrollment=evidence_service,
         gallery=gallery_service,
+        library_files=library_files_service,
         observations=observations_service,
         review_summary=summary_service,
         preferences=PreferenceService(preference_repo),
@@ -506,6 +552,10 @@ def build_supabase_container(
     key = settings.require_publishable_key()
     auth = build_auth_boundary(settings=settings)
     root = build_container(clock=clock, ids=ids, auth=auth)
+    if root.close_request is not None:
+        root.close_request()
+    root.close_request = None
+    root.medication_understanding = None
     root.store = None
     root.persistence = "supabase"
     root.patient_data_path = "supabase_user_jwt_rls"
@@ -529,12 +579,11 @@ def build_supabase_container(
         import httpx
 
         http = httpx.Client()
-        knowledge_http = None
+        knowledge_http = httpx.Client()
 
         def close_request() -> None:
             http.close()
-            if knowledge_http is not None:
-                knowledge_http.close()
+            knowledge_http.close()
 
         client = SupabaseDataClient(
             base_url=base_url,
@@ -560,7 +609,7 @@ def build_supabase_container(
                     prefer="resolution=ignore-duplicates,return=minimal",
                 )
                 preference_repo.get(principal.patient_id)
-            repos = build_supabase_repositories(client)
+            repos = build_supabase_repositories(client, include_late_reports=settings.enable_late_dose_reports)
             services = _services(
                 tz_provider=PreferenceTzProvider(preference_repo),
                 reminder_repo=SupabaseReminderRepository(client),
@@ -582,6 +631,7 @@ def build_supabase_container(
 
             from ..infrastructure.evidence_images import patient_reference_image, patient_source_image
             from ..infrastructure.evidence_repos import SupabaseEvidenceRepository, SupabaseImageStore
+            from ..infrastructure.library_files import SupabaseMedicationLibraryFiles
             from ..infrastructure.personal_vision import PersonalVisionGateway
             from ..infrastructure.stage2_schema import Stage2Contract
 
@@ -591,6 +641,14 @@ def build_supabase_container(
                 publishable_key=key,
                 access_token=principal.access_token,
                 patient_id=principal.patient_id,
+            )
+            pdf_store = SupabaseImageStore(
+                base_url=base_url,
+                publishable_key=key,
+                access_token=principal.access_token,
+                patient_id=principal.patient_id,
+                bucket_id="medication-sources",
+                content_type="application/pdf",
             )
             vision = None
             if settings.vision_api_base_url:
@@ -619,13 +677,28 @@ def build_supabase_container(
                 normalize=patient_reference_image,
                 clock=root.clock,
                 ids=ids or RandomIdGenerator(),
+                tz_provider=PreferenceTzProvider(preference_repo),
+            )
+            library_files_service = (
+                MedicationLibraryFileService(
+                    repository=SupabaseMedicationLibraryFiles(client),
+                    storage=pdf_store,
+                    enrollment=services[0],
+                    clock=root.clock,
+                )
+                if settings.enable_medication_library_files
+                else None
             )
             observations_service = ObservationService(SupabaseObservations(client), repos.medications, root.clock)
             summary_service = ReviewSummaryService(
                 services[0], repos.occurrences, repos.events, observations_service, root.clock
             )
             long_term = LongTermCareService(
-                SupabaseCareRepository(client),
+                SupabaseCareRepository(
+                    client,
+                    extended_tasks=settings.enable_care_task_followups,
+                    multiple_reminders=settings.enable_multiple_care_reminders,
+                ),
                 services[0],
                 repos.events,
                 observations_service,
@@ -633,15 +706,15 @@ def build_supabase_container(
                 root.clock,
                 repos.dose_rules,
             )
+            from time import monotonic
+
+            from ..infrastructure.openfda_knowledge import OpenFDAKnowledge
+
+            medication_understanding = MedicationUnderstandingService(
+                services[0], OpenFDAKnowledge(knowledge_http, root.clock, monotonic=monotonic), root.clock
+            )
             ai_agent = None
             if root.conversational_model:
-                from time import monotonic
-
-                from ..application.medication_understanding import MedicationUnderstandingService
-                from ..infrastructure.openfda_knowledge import OpenFDAKnowledge
-
-                # A distinct client prevents Supabase JWTs/cookies from reaching openFDA.
-                knowledge_http = httpx.Client()
                 conversation = ConversationService(
                     model=root.conversational_model,
                     tools=ModelTools(
@@ -652,9 +725,7 @@ def build_supabase_container(
                         observations=observations_service,
                         evidence_enrollment=evidence_service,
                         long_term=long_term,
-                        medication_understanding=MedicationUnderstandingService(
-                            services[0], OpenFDAKnowledge(knowledge_http, root.clock, monotonic=monotonic), root.clock
-                        ),
+                        medication_understanding=medication_understanding,
                         timezone=preference_repo.get(principal.patient_id).timezone,
                         clock=root.clock,
                     ),
@@ -671,9 +742,25 @@ def build_supabase_container(
             from ..infrastructure.push_subscriptions import SupabasePushSubscriptions
 
             return ApplicationContainer(
+                late_reports=(
+                    LateReportService(
+                        enrollment=services[0],
+                        schedule=services[1],
+                        events=repos.events,
+                        repository=SupabaseLateReports(client),
+                        challenges=repos.challenges,
+                        clock=root.clock,
+                        ids=root.ids,
+                    )
+                    if settings.enable_late_dose_reports
+                    else None
+                ),
                 draft_deletion=DraftDeletionService(SupabaseDraftDeletion(client, image_store)),
                 record_history=RecordHistoryService(
-                    SupabaseRecordHistory(client), services[0], PreferenceService(preference_repo), root.clock
+                    SupabaseRecordHistory(client, include_late_reports=settings.enable_late_dose_reports),
+                    services[0],
+                    PreferenceService(preference_repo),
+                    root.clock,
                 ),
                 conversation_threads=ConversationThreadService(
                     SupabaseConversationThreads(client), repos.sessions, root.clock, PreferenceService(preference_repo)
@@ -685,6 +772,7 @@ def build_supabase_container(
                 push_test=root.push_test,
                 evidence_enrollment=evidence_service,
                 gallery=gallery_service,
+                library_files=library_files_service,
                 observations=observations_service,
                 review_summary=summary_service,
                 ai_agent=ai_agent,
@@ -707,6 +795,7 @@ def build_supabase_container(
                     clock=root.clock,
                 ),
                 preferences=PreferenceService(preference_repo),
+                medication_understanding=medication_understanding,
                 close_request=close_request,
                 reminders=services[5],
                 store=None,

@@ -25,6 +25,30 @@ def adapter(handler):
     )
 
 
+def test_optional_027_column_is_not_selected_on_a_pre027_provider_and_extra_fields_are_normalized():
+    store = build_grouped_records_app().state.container.store
+    plan = next(iter(store.regimens.values())).model_dump(mode="json")
+    plan.pop("patient_edited")
+    plan["source_reviewed_at"] = NOW.isoformat()
+    plan["medication_name_field_id"] = str(fixture_id(999))
+
+    def handler(request):
+        assert request.url.params["select"] == "*"
+        assert request.url.params["patient_id"] == "eq." + str(OWNER)
+        return httpx.Response(200, json=[plan], headers={"Content-Range": "0-0/1"})
+
+    row = adapter(handler).plans(OWNER)[0]
+    assert not row.patient_edited and str(row.id) == plan["id"]
+
+
+def test_new_schema_preserves_patient_edited_instead_of_forcing_false():
+    store = build_grouped_records_app().state.container.store
+    plan = next(iter(store.regimens.values())).model_dump(mode="json")
+    plan["patient_edited"] = True
+    provider = adapter(lambda request: httpx.Response(200, json=[plan], headers={"Content-Range": "0-0/1"}))
+    assert provider.plans(OWNER)[0].patient_edited
+
+
 def test_provider_page_cap_is_filled_and_filters_are_owned_bounded_and_keyset():
     store = build_grouped_records_app().state.container.store
     rows = [row.model_dump(mode="json") for row in store.occurrences.values() if row.regimen_id == fixture_id(3)][:2]
@@ -51,6 +75,8 @@ def test_scheduled_report_read_uses_occurrence_id_not_report_event_window():
     row = event.model_copy(update={"event_time": NOW - timedelta(seconds=1)}).model_dump(mode="json")
 
     def handler(request):
+        if request.url.path == "/rest/v1/dose_report_entries":
+            return httpx.Response(200, json=[], headers={"Content-Range": "*/0"})
         assert request.method == "GET" and request.url.path == "/rest/v1/dose_events"
         assert request.url.params["occurrence_id"] == "in.(" + str(event.occurrence_id) + ")"
         assert "event_time" not in request.url.params and "and" not in request.url.params

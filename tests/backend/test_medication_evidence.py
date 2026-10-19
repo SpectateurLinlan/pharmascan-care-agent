@@ -1,12 +1,16 @@
 """AUTOMATED/SIMULATED evidence/provider tests; no live success claim."""
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier, Lock
 from uuid import UUID, uuid4
 
 import pytest
 from app.application.evidence_enrollment import EvidenceEnrollmentService, printed_regimen
 from app.application.personal_gallery import PersonalGalleryService
 from app.application.source_preview import SourcePreviewService
-from app.contracts.dto import FrequencyRuleDTO, RegimenDraftInput
+from app.contracts.dto import FrequencyRuleDTO, PatientMedicationDTO, RegimenDraftInput
+from app.contracts.enums import IdentityStatus
+from app.contracts.medication_evidence import ImageEmbedding, VisualReferenceSet
 from app.contracts.source_extraction import (
     ExtractedMedication,
     MedicationSourceExtractionDTO,
@@ -15,8 +19,8 @@ from app.contracts.source_extraction import (
     RegimenEvidence,
 )
 from app.contracts.vision import EmbeddingResult, MatchOutcome, ModelMetadata
-from app.domain.errors import NotFoundError, RegimenOverlapError, ValidationError
-from app.infrastructure.evidence_repos import MemoryEvidenceRepository, MemoryImageStore
+from app.domain.errors import NotFoundError, ProviderUnavailableError, RegimenOverlapError, ValidationError
+from app.infrastructure.evidence_repos import MemoryEvidenceRepository, MemoryImageStore, SupabaseEvidenceRepository
 
 PATIENT = UUID(int=100)
 OTHER = UUID(int=200)
@@ -134,6 +138,21 @@ def attach(service, task, image=b"DEMO package", kind="package"):
         medication_id=None,
         consent=True,
         demo_only=True,
+    )
+
+
+def mark_product_reviewed(service, task):
+    service.prepare_review(
+        patient_id=PATIENT,
+        task_id=task.id,
+        patient_reviewed=True,
+        distinct_product_confirmed=False,
+        draft=RegimenDraftInput(
+            medication_name="Metformin",
+            dose_amount=1,
+            dose_unit="tablet",
+            frequency_rule=FrequencyRuleDTO(kind="daily", local_times=["20:00"]),
+        ),
     )
 
 
@@ -305,19 +324,226 @@ def test_private_photos_types_duplicate_upload_and_historical_match(evidence, wi
         consent=True,
         demo_only=True,
     )
-    photo = gallery.upload(**kwargs)
-    assert photo.eligibility == "eligible" and len(repo.list(PATIENT, "embeddings")) == 1
-    assert gallery.upload(**kwargs).id == photo.id and vision.calls == 1
+    first = gallery.upload_with_status(**kwargs)
+    photo = first.photo
+    assert first.duplicate is False and photo.eligibility == "associated"
+    duplicate = gallery.upload_with_status(**{**kwargs, "image_kind": "package"})
+    assert duplicate.photo.id == photo.id and duplicate.duplicate is True
+    assert duplicate.photo.image_kind == "loose_pill"
+    assert len(repo.list(PATIENT, "embeddings")) == 0 and vision.calls == 0
     assert gallery.image(PATIENT, photo.id) == b"DEMO loose"
     with pytest.raises(NotFoundError):
         gallery.image(OTHER, photo.id)
     package = gallery.upload(**{**kwargs, "image": b"DEMO blister", "image_kind": "blister"})
-    assert package.eligibility == "associated" and vision.calls == 1
-    # A reviewed reference without an active regimen is historical evidence,
-    # never current-dose approval.
+    assert package.eligibility == "associated" and vision.calls == 0
+    other = gallery.upload(
+        **{**kwargs, "image": b"DEMO other evidence", "image_kind": "source", "for_comparison": False}
+    )
+    assert other.eligibility == "associated" and other.image_kind == "source" and vision.calls == 0
+    # A photo category selected by the patient cannot create a reference index.
     run = gallery.check(patient_id=PATIENT, regimen_id=None, image=b"DEMO query", consent=True, demo_only=True)
-    assert run.decision == "conflict" and run.outcome.decision == "match"
+    assert run.decision == "missing_reference" and run.outcome is None
     assert not run.safe_to_take and not run.ingestion_proven and not wired.store.events
+
+
+@pytest.mark.parametrize(
+    "content_type",
+    [
+        "synthetic packaging",
+        "synthetic dispensing label",
+        "synthetic loose pill",
+        "synthetic blister pack",
+        "synthetic ambiguous image",
+        "synthetic unknown image",
+    ],
+)
+def test_user_selected_loose_pill_never_activates_unvalidated_content(evidence, content_type):
+    service, gallery, repo, _, vision = evidence
+    task = attach(service, uuid4())
+    mark_product_reviewed(service, task)
+    before = vision.calls
+    image = synthetic_gallery_image(content_type)
+    photo = gallery.upload(
+        patient_id=PATIENT,
+        medication_id=task.medication_id,
+        image=image,
+        image_kind="loose_pill",
+        source_description="DEMO patient selected loose pill",
+        reviewed=True,
+        for_comparison=True,
+        consent=True,
+        demo_only=True,
+    )
+    assert photo.image_kind == "loose_pill"
+    assert photo.eligibility == "associated" and photo.reviewed is True
+    assert vision.calls == before
+    assert repo.get(PATIENT, "embeddings", photo.id) is None
+    assert gallery.list(PATIENT)[0]["eligible_count"] == 0
+
+
+def synthetic_gallery_image(content_type):
+    """Small labelled DEMO_ONLY drawings; never real patient or medication photos."""
+    from io import BytesIO
+
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGB", (240, 160), "#f4f2ec")
+    draw = ImageDraw.Draw(image)
+    draw.text((12, 12), "DEMO_ONLY", fill="#14534b")
+    if content_type == "synthetic packaging":
+        draw.rectangle((50, 45, 190, 140), outline="#14534b", width=4)
+        draw.text((68, 72), "PACK", fill="#14534b")
+    elif content_type == "synthetic dispensing label":
+        draw.rectangle((18, 42, 222, 145), fill="white", outline="#14534b", width=2)
+        draw.text((30, 60), "DEMO LABEL", fill="#14534b")
+        draw.text((30, 90), "NO PATIENT DATA", fill="#14534b")
+    elif content_type == "synthetic loose pill":
+        draw.ellipse((75, 52, 165, 135), fill="#fdfcf9", outline="#77736b", width=3)
+        draw.line((88, 90, 152, 90), fill="#77736b", width=2)
+    elif content_type == "synthetic blister pack":
+        draw.rounded_rectangle((28, 45, 212, 142), radius=10, fill="#d9dedb", outline="#77736b", width=3)
+        for x in (64, 120, 176):
+            for y in (77, 116):
+                draw.ellipse((x - 12, y - 12, x + 12, y + 12), fill="#fdfcf9", outline="#77736b")
+    elif content_type == "synthetic ambiguous image":
+        draw.ellipse((70, 48, 158, 128), outline="#77736b", width=3)
+        draw.rectangle((135, 68, 205, 130), outline="#14534b", width=3)
+    else:
+        draw.line((75, 55, 175, 135), fill="#77736b", width=8)
+        draw.line((175, 55, 75, 135), fill="#77736b", width=8)
+    stream = BytesIO()
+    image.save(stream, format="PNG")
+    return stream.getvalue()
+
+
+def test_no_validated_classifier_keeps_upload_as_evidence_only(evidence):
+    service, gallery, repo, _, vision = evidence
+    task = attach(service, uuid4())
+    mark_product_reviewed(service, task)
+
+    photo = gallery.upload(
+        patient_id=PATIENT,
+        medication_id=task.medication_id,
+        image=b"DEMO possible pill",
+        image_kind="loose_pill",
+        source_description="DEMO unknown content",
+        reviewed=True,
+        for_comparison=True,
+        consent=True,
+        demo_only=True,
+    )
+    assert photo.eligibility == "associated"
+    assert photo.eligibility_reason == "image_content_not_independently_validated_comparison_disabled"
+    assert vision.calls == 0 and repo.get(PATIENT, "embeddings", photo.id) is None
+
+
+def test_duplicate_uploads_are_idempotent_even_when_submitted_concurrently(evidence):
+    service, gallery, repo, _, vision = evidence
+    task = attach(service, uuid4())
+    mark_product_reviewed(service, task)
+    kwargs = dict(
+        patient_id=PATIENT,
+        medication_id=task.medication_id,
+        image=b"DEMO identical image",
+        image_kind="loose_pill",
+        source_description="DEMO patient sample",
+        reviewed=True,
+        for_comparison=True,
+        consent=True,
+        demo_only=True,
+    )
+    barrier = Barrier(2)
+    original_get = repo.get
+    checks = 0
+    check_lock = Lock()
+
+    def synchronized_get(patient_id, kind, record_id):
+        nonlocal checks
+        result = original_get(patient_id, kind, record_id)
+        if kind == "images":
+            with check_lock:
+                should_wait = checks < 2
+                checks += 1
+            if should_wait:
+                barrier.wait(timeout=2)
+        return result
+
+    repo.get = synchronized_get
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        rows = list(pool.map(lambda _: gallery.upload_with_status(**kwargs), range(2)))
+    assert rows[0].photo.id == rows[1].photo.id
+    assert sorted(row.duplicate for row in rows) == [False, True]
+    assert len([row for row in repo.list(PATIENT, "images") if row.checksum == rows[0].photo.checksum]) == 1
+    assert len(repo.list(PATIENT, "embeddings")) == 0
+    assert vision.calls == 0
+
+
+def test_identical_bytes_are_scoped_to_patient_and_medication_identity(evidence, wired):
+    service, gallery, repo, _, _ = evidence
+    first_task = attach(service, uuid4())
+    mark_product_reviewed(service, first_task)
+    same_name_other_product = PatientMedicationDTO(
+        id=uuid4(), patient_id=PATIENT, display_name="Metformin", identity_status=IdentityStatus.USER_REVIEWED_DOCUMENT
+    )
+    other_patient = PatientMedicationDTO(
+        id=uuid4(), patient_id=OTHER, display_name="Metformin", identity_status=IdentityStatus.USER_REVIEWED_DOCUMENT
+    )
+    wired.medications.add(same_name_other_product)
+    wired.medications.add(other_patient)
+    common = dict(
+        image=b"DEMO same bytes across identities",
+        image_kind="loose_pill",
+        source_description="DEMO patient sample",
+        reviewed=True,
+        for_comparison=True,
+        consent=True,
+        demo_only=True,
+    )
+    first = gallery.upload(patient_id=PATIENT, medication_id=first_task.medication_id, **common)
+    second = gallery.upload(patient_id=PATIENT, medication_id=same_name_other_product.id, **common)
+    third = gallery.upload(patient_id=OTHER, medication_id=other_patient.id, **common)
+    assert len({first.id, second.id, third.id}) == 3
+    assert sum(row.checksum == first.checksum for row in repo.list(PATIENT, "images")) == 2
+    assert len(repo.list(OTHER, "images")) == 1
+
+
+def test_supabase_duplicate_insert_uses_owner_scoped_atomic_conflict_handling(evidence):
+    _, gallery, _, _, _ = evidence
+    task = attach(evidence[0], uuid4())
+    image = gallery.upload(
+        patient_id=PATIENT,
+        medication_id=task.medication_id,
+        image=b"DEMO adapter conflict test",
+        image_kind="package",
+        source_description="DEMO synthetic source",
+        reviewed=False,
+        for_comparison=False,
+        consent=True,
+        demo_only=True,
+    )
+
+    class RequestClient:
+        def __init__(self):
+            self.responses = [[{"id": str(image.id)}], []]
+            self.requests = []
+
+        def check_patient(self, patient_id):
+            assert patient_id == PATIENT
+
+        def request(self, method, path, **kwargs):
+            self.requests.append((method, path, kwargs))
+            return self.responses.pop(0)
+
+    client = RequestClient()
+    repository = SupabaseEvidenceRepository(client, None)
+    assert repository.add_image_if_absent(image) is True
+    assert repository.add_image_if_absent(image) is False
+    assert len(client.requests) == 2
+    for method, path, kwargs in client.requests:
+        assert method == "POST" and path == "/rest/v1/medication_images"
+        assert kwargs["params"] == {"on_conflict": "patient_id,id"}
+        assert kwargs["prefer"] == "resolution=ignore-duplicates,return=representation"
+        assert kwargs["body"]["patient_id"] == str(PATIENT)
 
 
 def test_gallery_without_references_and_consent_denial(evidence, wired):
@@ -329,7 +555,7 @@ def test_gallery_without_references_and_consent_denial(evidence, wired):
     assert len(repo.list(PATIENT, "runs")) == 1 and not wired.store.events
 
 
-def reviewed_reference(evidence, wired):
+def reviewed_reference(evidence, wired, *, course_start_date=None, course_end_date=None):
     service, gallery, _, _, _ = evidence
     task = attach(service, uuid4())
     prepared = service.prepare_review(
@@ -339,6 +565,8 @@ def reviewed_reference(evidence, wired):
         distinct_product_confirmed=False,
         draft=RegimenDraftInput(
             medication_name="Metformin",
+            course_start_date=course_start_date,
+            course_end_date=course_end_date,
             dose_amount=1,
             dose_unit="tablet",
             frequency_rule=FrequencyRuleDTO(kind="daily", local_times=["20:00"]),
@@ -386,40 +614,55 @@ def test_personal_match_respects_persisted_source_conflict(evidence, wired):
     run = gallery.check(
         patient_id=PATIENT, regimen_id=task.draft_regimen_id, image=b"DEMO query", consent=True, demo_only=True
     )
-    assert run.decision == "conflict" and run.outcome.decision == "match"
-    assert "unresolved" in run.reason and not wired.store.events
+    assert run.decision == "missing_reference" and run.outcome is None
+    assert not run.safe_to_take and not wired.store.events
 
 
 def test_incompatible_embedding_does_not_call_match(evidence, wired):
     _, gallery, repo, _, vision = evidence
     _, photo = reviewed_reference(evidence, wired)
-    original = repo.get(PATIENT, "embeddings", photo.id)
-    # Explicitly simulated model upgrade; old references must not be mixed.
-    repo._records[("embeddings", photo.id)] = original.model_copy(
-        update={"result": original.result.model_copy(update={"embedding_space_id": "OTHER-space"})}
+    # Simulate a retained legacy row whose old classifier provenance does not
+    # qualify it under the current comparison boundary.
+    legacy = photo.model_copy(
+        update={
+            "eligibility": "eligible",
+            "eligibility_reason": "stage2_checked_loose_pill_patient_reviewed_reference_only",
+        }
     )
+    repo._records[("images", photo.id)] = legacy
+    model, embedded = vision.encode(b"DEMO legacy reference")
+    reference = VisualReferenceSet(
+        id=uuid4(), patient_id=PATIENT, medication_id=photo.medication_id, model=model, created_at=photo.created_at
+    )
+    embedding = ImageEmbedding(
+        id=photo.id,
+        patient_id=PATIENT,
+        medication_id=photo.medication_id,
+        image_id=photo.id,
+        reference_set_id=reference.id,
+        result=embedded,
+    )
+    repo.add_reference(legacy, reference, embedding)
+    vision.encode = lambda *_args: pytest.fail("Legacy content must not be encoded for comparison")
     vision.compare = lambda *args: pytest.fail("Incompatible references must never reach match")
     run = gallery.check(patient_id=PATIENT, regimen_id=None, image=b"DEMO query", consent=True, demo_only=True)
     assert run.decision == "missing_reference" and not run.reference_ids and run.outcome is None
-    assert "different model" in run.reason
+    assert repo.get(PATIENT, "images", photo.id).eligibility == "eligible"
+    assert repo.get(PATIENT, "images", photo.id).eligibility_reason == legacy.eligibility_reason
+    assert repo.get(PATIENT, "embeddings", photo.id) is not None
+    assert gallery.list(PATIENT)[0]["images"][0].eligibility == "associated"
+    assert gallery.list(PATIENT)[0]["eligible_count"] == 0
 
 
-@pytest.mark.parametrize("decision", ["unknown", "ambiguous"])
-def test_low_similarity_and_close_candidates_abstain(evidence, wired, decision):
+def test_legacy_comparison_candidate_is_never_sent_to_match(evidence, wired):
     _, gallery, _, _, vision = evidence
-    task, _ = reviewed_reference(evidence, wired)
-    vision.compare = lambda *args: MatchOutcome(
-        decision=decision, medication_id=None, score=0.2, threshold=0.894, margin=0.115
-    )
-    run = gallery.check(
-        patient_id=PATIENT, regimen_id=task.draft_regimen_id, image=b"DEMO query", consent=True, demo_only=True
-    )
-    assert run.decision == decision and not run.safe_to_take and not wired.store.events
+    reviewed_reference(evidence, wired)
+    vision.compare = lambda *args: pytest.fail("Unverified image type must not reach matching")
+    run = gallery.check(patient_id=PATIENT, regimen_id=None, image=b"DEMO query", consent=True, demo_only=True)
+    assert run.decision == "missing_reference" and run.outcome is None and not run.safe_to_take
 
 
 def test_stage2_failure_preserves_private_association_and_abstains(evidence, wired):
-    from app.domain.errors import ProviderUnavailableError
-
     _, gallery, _, _, vision = evidence
     task, _ = reviewed_reference(evidence, wired)
 
@@ -430,7 +673,7 @@ def test_stage2_failure_preserves_private_association_and_abstains(evidence, wir
     run = gallery.check(
         patient_id=PATIENT, regimen_id=task.draft_regimen_id, image=b"DEMO query", consent=True, demo_only=True
     )
-    assert run.decision == "unavailable" and not wired.store.events
+    assert run.decision == "missing_reference" and run.outcome is None and not wired.store.events
     photo = gallery.upload(
         patient_id=PATIENT,
         medication_id=task.medication_id,
@@ -442,12 +685,11 @@ def test_stage2_failure_preserves_private_association_and_abstains(evidence, wir
         consent=True,
         demo_only=True,
     )
-    assert photo.eligibility == "associated" and photo.eligibility_reason == "personal_embedding_unavailable"
+    assert photo.eligibility == "associated"
+    assert photo.eligibility_reason == "image_content_not_independently_validated_comparison_disabled"
 
 
 def test_storage_failure_does_not_commit_eligible_reference(evidence, wired):
-    from app.domain.errors import ProviderUnavailableError
-
     service, gallery, repo, _, _ = evidence
     task = attach(service, uuid4())
     before = len(repo.list(PATIENT, "images"))
@@ -491,10 +733,67 @@ def test_retire_reference_is_owned_retry_safe_and_retains_history(evidence, wire
         gallery.retire(OTHER, photo.id)
     retired = gallery.retire(PATIENT, photo.id)
     assert retired.eligibility == "ineligible" and gallery.retire(PATIENT, photo.id) == retired
-    assert repo.get(PATIENT, "embeddings", photo.id) and gallery.image(PATIENT, photo.id)
+    assert repo.get(PATIENT, "embeddings", photo.id) is None and gallery.image(PATIENT, photo.id)
     assert gallery.list(PATIENT)[0]["eligible_count"] == 0
     run = gallery.check(patient_id=PATIENT, regimen_id=None, image=b"DEMO query", consent=True, demo_only=True)
     assert run.decision == "missing_reference" and not wired.store.events
+
+
+def test_photo_metadata_change_fails_closed_and_preserves_original_bytes(evidence, wired):
+    _, gallery, repo, _, _ = evidence
+    _, photo = reviewed_reference(evidence, wired)
+    original = gallery.image(PATIENT, photo.id)
+    changed = gallery.manage_image(
+        PATIENT,
+        photo.id,
+        action="edit",
+        expected_version=photo.metadata_version,
+        image_kind="package",
+        source_description="DEMO package view",
+    )
+    assert changed.eligibility == "ineligible"
+    assert changed.eligibility_reason == "patient_metadata_changed"
+    assert gallery.image(PATIENT, photo.id) == original
+    assert repo.get(PATIENT, "embeddings", photo.id) is None
+    assert repo.audit_records[-1]["action"] == "edit"
+
+
+def test_remove_and_delete_photo_have_distinct_lifecycle_effects(evidence, wired):
+    _, gallery, repo, _, _ = evidence
+    _, photo = reviewed_reference(evidence, wired)
+    original = gallery.image(PATIENT, photo.id)
+    removed = gallery.manage_image(
+        PATIENT,
+        photo.id,
+        action="remove",
+        expected_version=photo.metadata_version,
+        confirmed=True,
+    )
+    assert removed.gallery_removed and removed.deleted_at is None
+    assert gallery.image(PATIENT, photo.id) == original
+    assert repo.get(PATIENT, "embeddings", photo.id) is None
+
+    deletable = gallery.upload(
+        patient_id=PATIENT,
+        medication_id=photo.medication_id,
+        image=b"DEMO independent photo for delete",
+        image_kind="loose_pill",
+        source_description="DEMO separate photo",
+        reviewed=True,
+        for_comparison=False,
+        consent=True,
+        demo_only=True,
+    )
+    deleted = gallery.manage_image(
+        PATIENT,
+        deletable.id,
+        action="delete",
+        expected_version=deletable.metadata_version,
+        confirmed=True,
+    )
+    assert deleted.deleted_at is not None and deleted.cleanup_pending is False
+    with pytest.raises(NotFoundError):
+        gallery.image(PATIENT, deletable.id)
 
 
 def test_new_course_uses_same_identity_and_preserves_previous_regimen(evidence, wired):
@@ -568,6 +867,64 @@ def test_gallery_flags_same_names_without_merging_distinct_identities(evidence, 
     assert service.get(PATIENT, task.id).product.strength == "500 mg" and not wired.store.events
 
 
+def test_medication_files_aggregate_only_explicit_enrollment_source_links(evidence, wired):
+    service, gallery, _, _, _ = evidence
+    task = attach(service, uuid4(), image=b"DEMO source image")
+
+    result = gallery.files(PATIENT, task.medication_id)
+    summary = next(row for row in gallery.list(PATIENT) if row["medication"].id == task.medication_id)
+
+    assert result["medication_id"] == str(task.medication_id)
+    assert len(result["files"]) == 1
+    file = result["files"][0]
+    assert file["format"] == "PNG"
+    assert file["purpose_tags"] == ["evidence", "enrollment_source"]
+    assert file["eligibility"] == "associated"
+    assert file["sources"][0]["id"] == str(task.source_ids[-1])
+    assert file["sources"][0]["extraction_evidence"]["extraction_model"] == "SIMULATED"
+    assert file["sources"][0]["image_ids"] == [file["image_id"]]
+    assert summary["source_document_count"] == len(task.source_ids)
+    plan = wired.enrollment.enroll_draft(
+        patient_id=PATIENT,
+        existing_medication_id=task.medication_id,
+        evidence_task_id=task.id,
+        draft=RegimenDraftInput(
+            medication_name="Metformin",
+            dose_amount=1,
+            dose_unit="tablet",
+            frequency_rule=FrequencyRuleDTO(kind="daily", local_times=["08:00"]),
+        ),
+    )
+    linked_source = next(
+        row
+        for row in gallery.files(PATIENT, task.medication_id)["source_records"]
+        if row["id"] == str(plan.regimen.source_id)
+    )
+    assert linked_source["regimen_ids"] == [str(plan.regimen.id)]
+    with pytest.raises(NotFoundError):
+        gallery.files(OTHER, task.medication_id)
+
+
+def test_medication_files_merge_exact_storage_object_only(evidence):
+    service, gallery, repo, _, _ = evidence
+    task = attach(service, uuid4(), image=b"DEMO exact path")
+    stored = repo.list(PATIENT, "images")[-1]
+    duplicate_record = stored.model_copy(update={"id": uuid4(), "source_id": None, "image_kind": "loose_pill"})
+    similar_name_other_file = stored.model_copy(
+        update={"id": uuid4(), "storage_path": stored.storage_path + ".other", "source_id": None}
+    )
+    repo.add("images", duplicate_record)
+    repo.add("images", similar_name_other_file)
+
+    files = gallery.files(PATIENT, task.medication_id)["files"]
+
+    assert len(files) == 2
+    exact = next(item for item in files if len(item["image_ids"]) == 2)
+    assert set(exact["image_ids"]) == {str(stored.id), str(duplicate_record.id)}
+    assert set(exact["purpose_tags"]) == {"evidence", "enrollment_source"}
+    assert exact["eligibility"] == "associated"
+
+
 def test_explicit_course_duration_requires_dates_and_never_uses_fill_expiry_or_supply(evidence):
     from datetime import date
 
@@ -598,3 +955,45 @@ def test_strength_in_printed_name_is_not_false_name_conflict_but_strength_still_
     label.strength = "1000 mg"
     conflict = attach(service, task.id, b"DEMO actual strength change", "pharmacy_label")
     assert conflict.status == "conflict" and conflict.conflicts[0].startswith("strength:")
+
+
+def test_gallery_current_plan_uses_injected_patient_calendar(evidence, wired):
+    from datetime import date
+
+    from app.application.timezone import FixedTzProvider
+
+    task, _ = reviewed_reference(evidence, wired, course_start_date=date(2026, 10, 13))
+    plan = wired.enrollment.get_regimen(PATIENT, task.draft_regimen_id)
+    _, _, repo, _, vision = evidence
+    gallery = PersonalGalleryService(
+        repository=repo,
+        storage=MemoryImageStore(),
+        vision=vision,
+        enrollment=wired.enrollment,
+        normalize=lambda image: image,
+        clock=wired.clock,
+        ids=wired.ids,
+        tz_provider=FixedTzProvider("America/Los_Angeles"),
+    )
+    # At this instant Singapore is Oct13, but this patient's calendar is Oct12.
+    run = gallery.check(patient_id=PATIENT, regimen_id=plan.id, image=b"DEMO query", consent=True, demo_only=True)
+    assert run.decision == "missing_reference" and run.outcome is None
+    assert not run.safe_to_take and not wired.store.events
+
+
+def test_gallery_elapsed_planned_end_is_historical_without_lifecycle_write(evidence, wired):
+    from datetime import timedelta
+
+    task, _ = reviewed_reference(
+        evidence,
+        wired,
+        course_start_date=wired.clock.now().date() + timedelta(days=1),
+        course_end_date=wired.clock.now().date() + timedelta(days=2),
+    )
+    wired.clock.advance(days=4)
+    plan = wired.enrollment.get_regimen(PATIENT, task.draft_regimen_id)
+    before = dict(wired.store.regimens)
+    entry = next(row for row in evidence[1].list(PATIENT) if row["medication"].id == task.medication_id)
+    assert entry["status"] == "historical"
+    assert wired.enrollment.get_regimen(PATIENT, plan.id).state.value == "active"
+    assert wired.store.regimens == before

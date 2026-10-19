@@ -3,6 +3,7 @@
 from pydantic import ValidationError as SchemaError
 
 from ..contracts.dto import DoseEventDTO, DoseOccurrenceDTO, PatientMedicationDTO, RegimenVersionDTO
+from ..contracts.late_reports import LateReportRecord
 from ..domain.errors import ProviderUnavailableError
 
 
@@ -45,20 +46,28 @@ class MemoryRecordHistory:
         return sorted(rows, key=lambda row: (row.event_time, row.id), reverse=True)[:limit]
 
     def reports(self, owner, occurrences, as_of):
+        from .late_report_repos import effective_memory_events
+
         return [
             row
-            for (patient, _), row in self._store.events.items()
-            if patient == owner and row.occurrence_id in occurrences and row.created_at <= as_of
+            for row in effective_memory_events(self._store, as_of)
+            if row.patient_id == owner and row.occurrence_id in occurrences
         ]
 
 
 class SupabaseRecordHistory:
-    def __init__(self, client):
+    def __init__(self, client, *, include_late_reports: bool = False):
         self._client = client
+        self._include_late_reports = include_late_reports
 
     def _decode(self, owner, dto, rows):
         try:
-            values = [dto.model_validate(row) for row in rows]
+            # PostgREST physical rows include provenance/creation columns that
+            # are not HTTP DTO fields. Normalize at this adapter boundary.
+            values = [
+                dto.model_validate({key: value for key, value in row.items() if key in dto.model_fields})
+                for row in rows
+            ]
         except SchemaError as error:
             raise ProviderUnavailableError("Invalid medication history response.") from error
         if any(row.patient_id != owner for row in values):
@@ -96,18 +105,19 @@ class SupabaseRecordHistory:
 
     def medications(self, owner):
         self._client.check_patient(owner)
-        fields = ",".join(PatientMedicationDTO.model_fields)
         return self._decode(
             owner,
             PatientMedicationDTO,
-            self._client.all_rows("patient_medications", patient_id=f"eq.{owner}", select=fields),
+            self._client.all_rows("patient_medications", patient_id=f"eq.{owner}", select="*"),
         )
 
     def plans(self, owner):
         self._client.check_patient(owner)
-        fields = ",".join(RegimenVersionDTO.model_fields)
+        # Optional DTO fields may belong to a later schema (patient_edited in
+        # 027). Read existing physical columns, preserving newer flags when
+        # present, instead of demanding uninstalled columns in SELECT.
         return self._decode(
-            owner, RegimenVersionDTO, self._client.all_rows("regimen_versions", patient_id=f"eq.{owner}", select=fields)
+            owner, RegimenVersionDTO, self._client.all_rows("regimen_versions", patient_id=f"eq.{owner}", select="*")
         )
 
     def _page(self, owner, table, dto, time, plans, start, end, as_of, before, limit, **extra):
@@ -121,7 +131,9 @@ class SupabaseRecordHistory:
             clauses.append(f"{time}.gte.{start.isoformat()}")
         filters = dict(
             patient_id=f"eq.{owner}",
-            select=",".join(dto.model_fields),
+            select=",".join(
+                key for key in dto.model_fields if key not in {"reported_late", "actual_administration_at"}
+            ),
             and_="(" + ",".join(clauses) + ")",
             order=f"{time}.desc,id.desc",
             limit=str(limit),
@@ -164,10 +176,40 @@ class SupabaseRecordHistory:
             patient_id=f"eq.{owner}",
             occurrence_id="in.(" + ",".join(map(str, occurrences)) + ")",
             created_at=f"lte.{as_of.isoformat()}",
-            select=",".join(DoseEventDTO.model_fields),
+            select=",".join(
+                key for key in DoseEventDTO.model_fields if key not in {"reported_late", "actual_administration_at"}
+            ),
             order="id.asc",
         )
         rows = self._batch("dose_events", filters, len(occurrences) + 1)
         if len(rows) > len(occurrences):
             raise ProviderUnavailableError("Record relationships could not be verified.")
-        return self._decode(owner, DoseEventDTO, rows)
+        self._decode(owner, DoseEventDTO, rows)
+        effective = {row["occurrence_id"]: row for row in rows}
+        if not self._include_late_reports:
+            return self._decode(owner, DoseEventDTO, list(effective.values()))
+        amendments = self._batch(
+            "dose_report_entries",
+            {
+                "patient_id": f"eq.{owner}",
+                "occurrence_id": filters["occurrence_id"],
+                "recorded_at": f"lte.{as_of.isoformat()}",
+                "select": "*",
+                "order": "version.asc,id.asc",
+            },
+            len(occurrences) * 100 + 1,
+        )
+        if len(amendments) > len(occurrences) * 100:
+            raise ProviderUnavailableError("Complete correction history could not be verified.")
+        validated = self._decode(owner, LateReportRecord, amendments)
+        for entry in validated:
+            if entry.occurrence_id not in occurrences:
+                raise ProviderUnavailableError("Correction occurrence could not be verified.")
+            row = entry.model_dump(mode="json")
+            effective[row["occurrence_id"]] = {
+                **row,
+                "event_time": row["recorded_at"],
+                "created_at": row["recorded_at"],
+                "reported_late": True,
+            }
+        return self._decode(owner, DoseEventDTO, list(effective.values()))

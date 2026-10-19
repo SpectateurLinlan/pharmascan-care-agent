@@ -70,7 +70,9 @@ export function EnrollScreen({
   const [courseDays,setCourseDays]=useState('');
   const [courseMode,setCourseMode]=useState<'days'|'end'>(editFrom?.course_end_date?'end':'days');
   const [foodInstruction,setFoodInstruction]=useState('');
-  const [frequency, setFrequency] = useState<'daily' | 'weekly'>('daily');
+  const [frequency, setFrequency] = useState<'daily' | 'weekly' | 'interval'>('daily');
+  const [everyHours,setEveryHours]=useState('');
+  const [firstTime,setFirstTime]=useState('');
   const [weekdays, setWeekdays] = useState<number[]>([]);
   //: The medication a re-commit belongs to. Set after the first successful
   //: draft so editing re-uses the product instead of registering a second one.
@@ -89,14 +91,14 @@ export function EnrollScreen({
   function clearEntryFields() {
     setName('');setDoseAmount('');setDoseUnit('tablet');setDoseBasis(emptyDoseBasis);
     setTimes(['08:00']);setIsPrn(false);setCourseStart('');setCourseEnd('');setCourseDays('');setCourseMode('days');
-    setFoodInstruction('');setFrequency('daily');setWeekdays([]);
+    setFoodInstruction('');setFrequency('daily');setWeekdays([]);setEveryHours('');setFirstTime('');
   }
 
-  useEffect(()=>{onDirtyChange?.(!activated&&Boolean(name||doseAmount||courseStart||courseEnd||courseDays||draft||foodInstruction||doseBasis.strength_text||doseBasis.instructions_text||isPrn||times.join(',')!=='08:00'));},[activated,name,doseAmount,courseStart,courseEnd,courseDays,draft,foodInstruction,doseBasis,isPrn,times,onDirtyChange]);
+  useEffect(()=>{onDirtyChange?.(!activated&&Boolean(name||doseAmount||courseStart||courseEnd||courseDays||draft||foodInstruction||doseBasis.strength_text||doseBasis.instructions_text||isPrn||frequency!=='daily'||everyHours||firstTime||times.join(',')!=='08:00'));},[activated,name,doseAmount,courseStart,courseEnd,courseDays,draft,foodInstruction,doseBasis,isPrn,times,frequency,everyHours,firstTime,onDirtyChange]);
   const prefilled=useRef<string|null>(null);
   useEffect(()=>{if(!editFrom||prefilled.current===editFrom.regimen_id)return;prefilled.current=editFrom.regimen_id;
     setDoseBasis(emptyDoseBasis);setCourseDays('');setCourseMode(editFrom?.course_end_date?'end':'days');
-    setFrequency(editFrom.frequency_rule?.kind==='weekly'?'weekly':'daily');setWeekdays(editFrom.frequency_rule?.days_of_week??[]);setName(editFrom.display_name);setDoseAmount(String(editFrom.dose_amount??''));setDoseUnit(editFrom.dose_unit??'');setTimes(editFrom.local_times.length?editFrom.local_times:['']);setIsPrn(editFrom.is_prn);setCourseStart(editFrom.course_start_date??'');setCourseEnd(editFrom.course_end_date??'');setFoodInstruction(editFrom.food_instruction??'');setStep('form');
+    setFrequency(editFrom.frequency_rule?.kind==='interval'?'interval':editFrom.frequency_rule?.kind==='weekly'?'weekly':'daily');setEveryHours(String(editFrom.frequency_rule?.every_hours??''));setFirstTime(editFrom.frequency_rule?.interval_anchor?.time_source==='default_0800'?'':editFrom.local_times[0]??'');setWeekdays(editFrom.frequency_rule?.days_of_week??[]);setName(editFrom.display_name);setDoseAmount(String(editFrom.dose_amount??''));setDoseUnit(editFrom.dose_unit??'');setTimes(editFrom.local_times.length?editFrom.local_times:['']);setIsPrn(editFrom.is_prn);setCourseStart(editFrom.course_start_date??'');setCourseEnd(editFrom.course_end_date??'');setFoodInstruction(editFrom.food_instruction??'');setStep('form');
   },[editFrom]);
   useEffect(() => { if (sourceSelection) { clearEntryFields();setName(sourceSelection.name);setTimes(['']);setStep('form'); } }, [sourceSelection]);
 
@@ -118,7 +120,7 @@ export function EnrollScreen({
       if(resumeRow){
         setCourseMode(resumeRow.course_end_date?'end':'days');
         setDoseBasis(emptyDoseBasis);setCourseDays('');
-        setFrequency(resumeRow.frequency_rule?.kind==='weekly'?'weekly':'daily');setWeekdays(resumeRow.frequency_rule?.days_of_week??[]);
+        setFrequency(resumeRow.frequency_rule?.kind==='interval'?'interval':resumeRow.frequency_rule?.kind==='weekly'?'weekly':'daily');setEveryHours(String(resumeRow.frequency_rule?.every_hours??''));setFirstTime(resumeRow.frequency_rule?.interval_anchor?.time_source==='default_0800'?'':resumeRow.local_times[0]??'');setWeekdays(resumeRow.frequency_rule?.days_of_week??[]);
         setName(resumeRow.display_name);setDoseAmount(String(resumeRow.dose_amount??''));setDoseUnit(resumeRow.dose_unit??'tablet');
         setTimes(resumeRow.local_times.length?resumeRow.local_times:['08:00']);setIsPrn(resumeRow.is_prn);
         setCourseStart(resumeRow.course_start_date??'');setCourseEnd(resumeRow.course_end_date??'');setFoodInstruction(resumeRow.food_instruction??'');
@@ -159,6 +161,7 @@ export function EnrollScreen({
     const selectedTimes = normalisedTimes();
     return {
       patient_edited:Boolean(editFrom),
+      supersedes_regimen_id:editFrom?.state==='active'?editFrom.regimen_id:null,
       course_start_date: courseStart || null,
       course_end_date: courseEnd || null,
       ...(sourceSelection && sourceSelection.name.trim() === name.trim() ? { extraction_evidence: sourceSelection.preview } : {}),
@@ -168,14 +171,15 @@ export function EnrollScreen({
       dose_unit: parsedAmount === null ? null : doseUnit.trim() || null,
       frequency_kind: isPrn ? null : frequency,
       frequency_days_of_week: frequency === 'weekly' ? weekdays : [],
-      frequency_local_times: isPrn ? [] : selectedTimes,
+      frequency_local_times: isPrn ? [] : frequency==='interval'?(firstTime?[firstTime]:[]):selectedTimes,
+      frequency_every_hours: !isPrn&&frequency==='interval'?Number(everyHours):null,
       is_prn: isPrn,
       food_instruction: [isPrn?'as needed':'',foodInstruction].filter(Boolean).join('; ')||null,
     };
   };
 
   const formBlocked = () =>
-    name.trim() === '' || (!!courseDays&&!courseEnd) || (frequency==='weekly'&&!isPrn&&!weekdays.length);
+    name.trim() === '' || (!!courseDays&&!courseEnd) || (frequency==='weekly'&&!isPrn&&!weekdays.length) || (!isPrn&&frequency==='interval'&&(!courseStart||!Number.isInteger(Number(everyHours))||Number(everyHours)<1||Number(everyHours)>720));
 
   /**
    * Commit: the single action that walks the real state machine.
@@ -186,7 +190,7 @@ export function EnrollScreen({
   const commit = () =>
     run(async () => {
       const selectedTimes = normalisedTimes();
-      if (!isPrn && selectedTimes.length === 0) {
+      if (!isPrn && frequency!=='interval' && selectedTimes.length === 0) {
         throw new Error('Add at least one time of day, or tick "only when needed".');
       }
       const created = await api.createDraft(draftInput(), medicationId ?? undefined);
@@ -236,6 +240,7 @@ export function EnrollScreen({
 
   const scheduleText=()=>{
     if(isPrn)return t('Only when needed');
+    if(frequency==='interval')return `${t('Every N hours')}: ${everyHours}; ${t('First dose time')}: ${firstTime||t('Default 08:00')}`;
     if(frequency==='weekly')return `${t('Selected weekdays')}: ${weekdays.map(day=>t(WEEKDAYS[day-1]??'')).join(', ')}`;
     return normalisedTimes().join(', ');
   };
@@ -287,9 +292,10 @@ export function EnrollScreen({
       <p className="notice" role="status">{courseMode==='days'&&courseEnd?`${t('Last day (inclusive)')}: ${courseEnd}`:courseMode==='end'&&courseDays?`${t('Number of days')}: ${courseDays}`:t('Enter a start date and either the number of days or the last day. The other value is calculated, including the last day.')}</p>
     </fieldset>
     <div className="field"><label htmlFor="food-instruction">{t('Food instructions')}</label><select id="food-instruction" value={foodInstruction} onChange={event=>setFoodInstruction(event.target.value)}><option value="">{t('Not specified')}</option>{['before food','after food','with food','without regard to food'].map(value=><option key={value} value={value}>{t(value)}</option>)}</select></div>
-    <div className="field"><label htmlFor={fieldId('med-frequency')}>{t('Schedule')}</label><select id={fieldId('med-frequency')} disabled={isPrn} value={frequency} onChange={event => setFrequency(event.target.value as 'daily' | 'weekly')}><option value="daily">{t('Every day')}</option><option value="weekly">{t('Selected weekdays')}</option></select></div>
+    <div className="field"><label htmlFor={fieldId('med-frequency')}>{t('Schedule')}</label><select id={fieldId('med-frequency')} disabled={isPrn} value={frequency} onChange={event => setFrequency(event.target.value as 'daily' | 'weekly' | 'interval')}><option value="daily">{t('Every day')}</option><option value="weekly">{t('Selected weekdays')}</option><option value="interval">{t('Every N hours')}</option></select></div>
+    {!isPrn&&frequency==='interval'?<fieldset className="field"><legend>{t('First dose time')}</legend><div className="grid-2 enrollment-fields"><div className="field"><label htmlFor={fieldId('interval-hours')}>{t('Interval in hours')}</label><input id={fieldId('interval-hours')} type="number" min="1" max="720" step="1" value={everyHours} onChange={event=>setEveryHours(event.target.value)}/></div><MedicationDate id={fieldId('first-time')} type="time" label={t('First dose time (optional)')} value={firstTime} onChange={setFirstTime}/></div><p className="notice">{t('When is the first dose? If left blank, 08:00 is used by default. The course start date is the first-dose date. Check both before confirming; this is not a report that you took it.')}</p></fieldset>:null}
     {!isPrn && frequency === 'weekly' ? <fieldset className="field"><legend>{t('Selected weekdays')}</legend>{WEEKDAYS.map((day,index)=><label key={day}><input type="checkbox" checked={weekdays.includes(index+1)} onChange={event => setWeekdays(current => event.target.checked ? [...current,index+1] : current.filter(value=>value!==index+1))} />{t(day)}</label>)}</fieldset> : null}
-    <fieldset className="field" disabled={isPrn}>
+    <fieldset className="field" disabled={isPrn} hidden={frequency==='interval'}>
       <legend>{t('Times of day')}</legend>
       <p className="notice" style={{ marginTop: 0 }}>
         {t('Add one entry per dose. Two entries (e.g. 08:00 and 20:00) means the medication is taken twice daily.')}
@@ -384,7 +390,7 @@ export function EnrollScreen({
 
       {challenge ? <BottomSheet title={t('Please check this before I save it')} busy={busy} onCancel={()=>setChallenge(null)}>
         <p className="confirm-what">{challenge.summary.medication_name}: {challenge.summary.dose_amount} {t(challenge.summary.dose_unit??'')}</p>
-        <p>{challenge.summary.is_prn?t('only when needed'):challenge.summary.frequency?.local_times.join(', ')}</p>
+        <p>{challenge.summary.is_prn?t('only when needed'):challenge.summary.frequency?.kind==='interval'?`${t('Every N hours')}: ${challenge.summary.frequency.every_hours}; ${t('First dose time')}: ${challenge.summary.frequency.interval_anchor?.time_source==='default_0800'?t('Default 08:00'):challenge.summary.frequency.interval_anchor?.local_time}`:challenge.summary.frequency?.local_times.join(', ')}</p>
         <p>{challenge.summary.course_start_date??t('Not specified')} → {challenge.summary.course_end_date??t('Not specified')}</p>
         <p className="notice">{t('Confirmation expires')} {new Date(challenge.expires_at).toLocaleTimeString()}</p>
         <div className="actions">

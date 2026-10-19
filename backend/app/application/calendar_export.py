@@ -3,6 +3,7 @@
 import hashlib
 from datetime import UTC, datetime, timedelta
 
+from ..contracts.long_term import CareTask
 from ..domain.errors import ValidationError
 from .reminder_plan import PlannedReminder
 
@@ -36,8 +37,10 @@ def _fold_line(line: str, *, max_octets: int = 75) -> list[str]:
     return parts
 
 
-def calendar_export(rows: list[PlannedReminder], *, now: datetime, lead_minutes: int) -> str:
-    if len(rows) > 500:
+def calendar_export(
+    rows: list[PlannedReminder], *, now: datetime, lead_minutes: int, tasks: list[CareTask] | None = None
+) -> str:
+    if len(rows) + len(tasks or []) > 500:
         raise ValidationError("Choose a smaller calendar window")
     stamp = now.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
     lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//MediThread//Reminder Export//EN", "CALSCALE:GREGORIAN"]
@@ -62,6 +65,39 @@ def calendar_export(rows: list[PlannedReminder], *, now: datetime, lead_minutes:
                 "END:VEVENT",
             ]
         )
+    for task in tasks or []:
+        due = task.due_at.astimezone(UTC)
+        uid = hashlib.sha256(("care-task:" + str(task.id)).encode()).hexdigest()
+        lines.extend(
+            [
+                "BEGIN:VEVENT",
+                f"UID:{uid}@pharmascan-care",
+                f"DTSTAMP:{stamp}",
+                f"DTSTART:{due.strftime('%Y%m%dT%H%M%SZ')}",
+                f"DTEND:{(due + timedelta(minutes=5)).strftime('%Y%m%dT%H%M%SZ')}",
+                f"SUMMARY:Medication follow-up: {_escape_text(task.title)}",
+                "CLASS:PRIVATE",
+                "DESCRIPTION:One-time import. Update or remove old events after task changes.",
+            ]
+        )
+        offsets = (
+            task.reminder_offsets
+            if task.reminder_offsets is not None
+            else ([] if task.reminder_minutes is None else [task.reminder_minutes])
+        )
+        for lead in sorted(set(offsets), reverse=True):
+            if due - timedelta(minutes=lead) <= now:
+                continue
+            lines.extend(
+                [
+                    "BEGIN:VALARM",
+                    "ACTION:DISPLAY",
+                    "DESCRIPTION:Medication follow-up",
+                    f"TRIGGER:-PT{lead}M",
+                    "END:VALARM",
+                ]
+            )
+        lines.append("END:VEVENT")
     lines.append("END:VCALENDAR")
     # RFC5545 requires physical lines to be folded at 75 octets, including
     # multi-byte patient medication names and the continuation whitespace.

@@ -23,6 +23,7 @@ class DoseReminderAlert(BaseModel):
     food_instruction: str | None
     due_at: datetime
     remind_at: datetime
+    expires_at: datetime
 
 
 class ReminderAlertService:
@@ -77,7 +78,8 @@ class ReminderAlertService:
                 if snooze and not snooze.is_due:
                     continue
                 reminder_time = snooze.remind_at if snooze else occurrence.due_at - timedelta(minutes=lead_minutes)
-                if reminder_time > now:
+                deadline = self._reminders.deadline(patient_id, occurrence)
+                if now >= deadline or reminder_time >= deadline or reminder_time > now:
                     continue
                 alerts.append(
                     DoseReminderAlert(
@@ -90,6 +92,7 @@ class ReminderAlertService:
                         food_instruction=regimen.food_instruction,
                         due_at=occurrence.due_at,
                         remind_at=reminder_time,
+                        expires_at=deadline,
                     )
                 )
         return sorted(alerts, key=lambda row: row.remind_at)

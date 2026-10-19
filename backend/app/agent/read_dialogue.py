@@ -11,15 +11,19 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 
+from ..application.medication_presentation import knowledge_scope
 from ..contracts.dto import AgentSessionDTO
 from ..contracts.enums import AgentIntent, ToolStatus
 from ..contracts.medication_dialogue import MedicationChoice, MedicationDialogue, MedicationOption
 from ..contracts.ports import IdGenerator
+from ..contracts.temporal import without_calendar_words
 from ..domain.errors import AuthenticationRequiredError, DomainError, ValidationError
 from .knowledge_intent import medication_question
+from .medication_resolution import comparative_option
 from .model_tools import ModelTools
 from .orchestrator import AgentTurn
-from .patient_read_reply import history_reply, medication_list_reply
+from .patient_read_reply import history_reply, knowledge_sources_reply, localized_form, medication_list_reply
+from .status_reply import status_reply
 from .tools import ToolResult
 
 
@@ -33,10 +37,20 @@ def named_options(text: str, options: list[MedicationOption]) -> list[Medication
         prefix = [row for row in options if normalized(row.display_name).startswith(value + " ")]
         if prefix:
             return prefix
-    return [
+    exact = [
         row
         for row in options
         if re.search(r"(?<![a-z0-9])" + re.escape(normalized(row.display_name)) + r"(?![a-z0-9])", value)
+    ]
+    # Only trusted ingredient identities from the current patient's tool result.
+    return [
+        row
+        for row in options
+        if row in exact
+        or any(
+            re.search(r"(?<![a-z0-9])" + re.escape(normalized(ingredient)) + r"(?![a-z0-9])", value)
+            for ingredient in row.ingredient_names
+        )
     ]
 
 
@@ -46,7 +60,14 @@ def resolve_options(text: str, options: list[MedicationOption], *, allow_order: 
     strength = re.search(r"(?<![\d.])\d+(?:\.\d+)?\s*(?:mg|mcg|毫克|微克)(?![a-z])", value)
     if strength:
         compact = re.sub(r"\s+", "", strength[0]).replace("毫克", "mg").replace("微克", "mcg")
-        found = [row for row in found or options if compact in re.sub(r"\s+", "", normalized(row.label))]
+        found = [
+            row
+            for row in found or options
+            if re.search(
+                r"(?<![\d.])" + re.escape(compact) + r"(?![a-z\d.])",
+                re.sub(r"\s+", "", normalized(row.label)),
+            )
+        ]
     if found:
         return found
     if allow_order:
@@ -78,6 +99,26 @@ def resolve_options(text: str, options: list[MedicationOption], *, allow_order: 
     return []
 
 
+def medication_candidate_version(rows: list[dict]) -> str:
+    """Shared current-catalogue fingerprint; labels and UI language are excluded."""
+    return hashlib.sha256(
+        json.dumps(
+            sorted(
+                (
+                    str(row["medication_id"]),
+                    str(row["regimen_id"]),
+                    row["display_name"],
+                    row.get("strength_text"),
+                    row.get("dosage_form"),
+                    tuple(row.get("ingredients", [])),
+                    json.dumps(row.get("comparison_basis"), sort_keys=True),
+                )
+                for row in rows
+            )
+        ).encode()
+    ).hexdigest()
+
+
 @dataclass(frozen=True)
 class ReadAnswer:
     message: str
@@ -97,12 +138,20 @@ class ReadDialogue:
         text = normalized(turn.text)
         previous = session.context.medication_dialogue or MedicationDialogue()
         question = medication_question(turn.text)
+        original = bool(
+            re.search(
+                r"(?:show|view|read).*original.*(?:instruction|label)|(?:查看|显示|看看).*(?:原文|原始.*(?:指示|标签))",
+                text,
+            )
+        )
+        if original:
+            question = {"question": "personal_instructions"}
         history = bool(
             re.search(
                 (
                     "\\bhistory\\b|\\brecords?\\b.*\\b(?:dose|medicine|medication)\\b|\\b(?:d"
-                    "ose|medication) records?\\b|report(?:ed)? taking|服药记录|服药自述|用药记录|吃过"
-                    "哪些药"
+                    "ose|medication) (?:records?|reports?)\\b|report(?:ed)? taking|服药记录|服药自述|用药记录|吃过"
+                    "哪些药|\\bdid i (?:take|report taking)\\b|\\bhave i (?:taken|reported taking)\\b"
                 ),
                 text,
             )
@@ -113,7 +162,7 @@ class ReadDialogue:
             text,
         ):
             history = True
-        health = bool(re.search(r"health (?:notes|observations|records)|健康(?:记录|观察|感受)", text))
+        health = bool(re.search(r"health (?:notes|observations|records|data)|健康(?:记录|观察|感受|数据)", text))
         listing = (
             bool(
                 re.search(
@@ -125,7 +174,7 @@ class ReadDialogue:
             and not history
             and not re.search(r"should|due|计划|需要|要吃|今天吃什么药", text)
         )
-        source = bool(re.search(r"\bsource|\bcitation|来源|依据", text))
+        source = bool(re.search(r"\bsource|\bcitation|(?:information|answer|that|this).*come from|来源|依据", text))
         identify = (
             bool(re.search(r"第.+是什么|what is the (?:first|second|third) one", text)) and not question and not source
         )
@@ -145,7 +194,9 @@ class ReadDialogue:
                 history,
                 health,
                 listing,
-                source and previous.topic == "medication" and (previous.listed or previous.subject_name),
+                source
+                and previous.topic == "medication"
+                and (previous.listed or previous.subject_name or previous.answered_medication_ids),
                 identify,
                 strengths,
                 compare and previous.listed,
@@ -200,11 +251,31 @@ class ReadDialogue:
                     str(data["patient_safe_summary"]), previous.model_copy(update={"topic": "other", "choice": None})
                 )
             if history:
+                status_question = re.search(
+                    r"^(?:did i (?:take|report taking)|have i (?:taken|reported taking))\s+(.+?)[?？.]*$",
+                    turn.text,
+                    re.I,
+                )
+                if status_question:
+                    target = without_calendar_words(status_question[1]).strip(" ?？.,")
+                    if target and target.casefold() not in {"it", "this", "that"}:
+                        execute("get_dose_status", {"medication_name": target})
+                        return answer(
+                            status_reply(results[-1], turn.language),
+                            previous.model_copy(update={"topic": "other", "choice": None}),
+                            intent=AgentIntent.DOSE_STATUS_QUERY,
+                        )
                 days = self._days(text, str(metadata["local_date"]))
                 params = {"days": days}
                 match = re.search(r"(?:history|records) (?:for|of) (.+?)[?？.]*$", turn.text, re.I)
                 if match:
-                    params["medication_name"] = match[1].strip(" ?？.")
+                    target = without_calendar_words(match[1])
+                    target = re.sub(
+                        r"\b(?:this|last) (?:week|month)\b|\b(?:past|last) \d+ days?\b", " ", target, flags=re.I
+                    )
+                    target = re.sub(r"\b(?:for|during|from|in)\b", " ", target, flags=re.I).strip(" ?？.,")
+                    if target:
+                        params["medication_name"] = target
                 elif (
                     session.context.last_intent == AgentIntent.MEDICATION_HISTORY.value
                     and previous.history_medication_id
@@ -241,26 +312,36 @@ class ReadDialogue:
                             and normalized(row["strength_text"]) not in normalized(row["display_name"])
                             else ""
                         )
-                        + (f" ({row['dosage_form']})" if row.get("dosage_form") else "")
+                        + (
+                            f" ({localized_form(str(row['dosage_form']), turn.language)})"
+                            if row.get("dosage_form")
+                            else ""
+                        )
                     )[:300],
                 )
                 for row in rows
             ]
-            version = hashlib.sha256(
-                json.dumps(
-                    sorted(
-                        (str(row.medication_id), str(row.regimen_id), row.label, tuple(row.ingredient_names))
-                        for row in options
-                    )
-                ).encode()
-            ).hexdigest()
+            version = medication_candidate_version(rows)
             state = MedicationDialogue(
                 listed=options[:10], conversation_id=session.conversation_id, candidate_version=version
             )
 
-            def clarify(q: str, prefix: str = ""):
+            def clarify(q: str, prefix: str = "", candidates: list[MedicationOption] | None = None):
                 target_name = question.get("medication_name") if question else pending.target_name if pending else None
-                candidates = resolve_options(target_name, options, allow_order=False) if target_name else options
+                candidates = (
+                    candidates
+                    if candidates is not None
+                    else (resolve_options(target_name, options, allow_order=False) if target_name else options)
+                )
+                if not target_name and candidates and len(candidates) < len(options):
+                    mentioned = {
+                        ingredient
+                        for row in candidates
+                        for ingredient in row.ingredient_names
+                        if normalized(ingredient) in text
+                    }
+                    if len(mentioned) == 1:
+                        target_name = mentioned.pop()
                 if not candidates:
                     return answer(prefix + medication_list_reply(listed.results[0], turn.language), state)
                 choice = MedicationChoice(
@@ -270,6 +351,7 @@ class ReadDialogue:
                     expires_at=now + timedelta(minutes=10),
                     options=candidates[:10],
                     target_name=target_name,
+                    include_original=original if question else bool(pending and pending.include_original),
                 )
                 message = prefix + ("您想了解哪一种药物？" if zh else "Which medicine do you mean?")
                 message += "\n" + "\n".join(f"{i}. {row.label}" for i, row in enumerate(choice.options, 1))
@@ -327,6 +409,15 @@ class ReadDialogue:
                     )
                 reliable_order = displayed if previous.candidate_version == version else []
                 selected = resolve_options(turn.text, reliable_order or options, allow_order=bool(reliable_order))
+                # A new question uses the full current catalogue, not stale pending choices.
+                if question:
+                    selected = resolve_options(turn.text, options, allow_order=False) or resolve_options(
+                        turn.text, reliable_order, allow_order=bool(reliable_order)
+                    )
+                if selected:
+                    selected = comparative_option(turn.text, selected, rows)
+                if source and not selected and previous.topic == "medication" and previous.candidate_version == version:
+                    selected = [row for row in options if row.medication_id in previous.answered_medication_ids]
                 if not selected and question and question.get("medication_name"):
                     target = question["medication_name"]
                     if not re.search(
@@ -355,16 +446,25 @@ class ReadDialogue:
                         for recent in reversed(session.context.recent_turns):
                             if re.search(r"健康|health|history|记录", recent.user, re.I):
                                 break
-                            found = named_options(recent.user, options)
+                            # Restored turns are text only, not verified medication
+                            # references. Resolve them against the current tool result,
+                            # including strength, and recover only a unique product.
+                            # An ambiguous ingredient must stop this scan so an older,
+                            # unrelated product is not guessed.
+                            found = resolve_options(recent.user, options, allow_order=False)
                             if len(found) == 1:
                                 selected = found
+                                break
+                            if len(found) > 1:
                                 break
                     if not selected and previous.subject_name and q == "general_use":
                         output = execute(
                             "get_medication_understanding", {"medication_name": previous.subject_name, "question": q}
                         )
                         return answer(
-                            str(output.data["patient_safe_summary"]),
+                            knowledge_sources_reply(output.data, turn.language)
+                            if source
+                            else str(output.data["patient_safe_summary"]),
                             state.model_copy(update={"subject_name": previous.subject_name}),
                         )
                 if not selected and len(options) == 1 and not session.context.referenced_medication_id:
@@ -379,6 +479,7 @@ class ReadDialogue:
                     )
                     if len(selected) > 3
                     else "",
+                    candidates=selected or None,
                 )
             if identify:
                 return answer(
@@ -407,11 +508,65 @@ class ReadDialogue:
                     selected[0] if len(selected) == 1 else None,
                 )
             summaries = []
+            matched_knowledge = False
+            evidence_groups: dict[tuple[str, str], tuple[list[str], str, int]] = {}
             for row in selected:
                 output = execute(
                     "get_medication_understanding", {"medication_id": str(row.medication_id), "question": q}
                 )
-                summaries.append(row.display_name + "\n" + str(output.data["patient_safe_summary"]))
+                summary = (
+                    knowledge_sources_reply(output.data, turn.language)
+                    if source
+                    else str(output.data["patient_safe_summary"])
+                )
+                if q == "personal_instructions" and (
+                    original or (not question and pending and pending.include_original)
+                ):
+                    instructions = output.data.get("personal_instructions") or {}
+                    raw = instructions.get("original_instructions")
+                    summary = (
+                        ("已核对的原始指示：\n" if zh else "Reviewed original instructions:\n") + raw
+                        if raw
+                        else (
+                            "没有可读取的已核对原始指示。" if zh else "No reviewed original instructions are available."
+                        )
+                    )
+                knowledge = output.data.get("general_knowledge")
+                matched_knowledge = matched_knowledge or bool(knowledge and knowledge.get("status") == "matched")
+                name = str(output.data.get("medication_name", ""))
+                prefix = name + ("：" if zh else ": ")
+                if q == "general_use" and not source:
+                    summary = summary.removesuffix("\n\n" + knowledge_scope(turn.language))
+                if (
+                    q == "general_use"
+                    and not compare
+                    and knowledge
+                    and knowledge.get("status") == "matched"
+                    and summary.startswith(prefix)
+                ):
+                    body = summary[len(prefix) :]
+                    # Share an identical sourced explanation, not a medication identity.
+                    # All original names/strengths/IDs and tool reads remain distinct.
+                    key = (
+                        body,
+                        json.dumps(
+                            {
+                                "sources": knowledge.get("sources", []),
+                                "ingredients": sorted(normalized(item) for item in row.ingredient_names)
+                                or [str(row.medication_id)],
+                            },
+                            sort_keys=True,
+                        ),
+                    )
+                    if key in evidence_groups:
+                        evidence_groups[key][0].append(name)
+                    else:
+                        evidence_groups[key] = ([name], prefix[len(name) :], len(summaries))
+                        summaries.append("")
+                else:
+                    summaries.append(summary)
+            for key, (names, separator, position) in evidence_groups.items():
+                summaries[position] = " / ".join(names) + separator + key[0]
             prefix = (
                 (
                     "以下分别来自标签的一般用途，不能据此判断药物可互换。\n"
@@ -424,7 +579,11 @@ class ReadDialogue:
                 if compare
                 else ""
             )
-            return answer(prefix + "\n\n".join(summaries), state, selected[0] if len(selected) == 1 else None)
+            state = state.model_copy(update={"answered_medication_ids": [row.medication_id for row in selected]})
+            message = prefix + "\n\n".join(summaries)
+            if q == "general_use" and not source and matched_knowledge:
+                message += "\n\n" + knowledge_scope(turn.language)
+            return answer(message, state, selected[0] if len(selected) == 1 else None)
         except AuthenticationRequiredError:
             raise
         except ValidationError:

@@ -16,6 +16,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from ..contracts.dto import (
+    ActivationResultDTO,
     AgentSessionDTO,
     ConfirmationChallengeDTO,
     DoseEventDTO,
@@ -27,7 +28,7 @@ from ..contracts.dto import (
     SourceFieldDTO,
     ToolTraceDTO,
 )
-from ..domain.errors import ConfirmationRequiredError, NotFoundError, ValidationError
+from ..domain.errors import ConfirmationRequiredError, NotFoundError, ProviderUnavailableError, ValidationError
 from .supabase_data import SupabaseDataClient
 
 T = TypeVar("T", bound=BaseModel)
@@ -172,6 +173,31 @@ class Regimens(Repository[RegimenVersionDTO]):
                 body.update(self.provenance(regimen))
         self.patch(regimen, body)
 
+    def activate_version(
+        self, *, patient_id: UUID, regimen_id: UUID, challenge_id: UUID, timezone: str
+    ) -> ActivationResultDTO:
+        """Atomically retire a predecessor, activate a version and replace its schedule."""
+        self.client.check_patient(patient_id)
+        result = self.client.request(
+            "POST",
+            "/rest/v1/rpc/activate_medication_regimen_version",
+            body={
+                "p_regimen_id": str(regimen_id),
+                "p_challenge_id": str(challenge_id),
+                "p_timezone": timezone,
+            },
+        )
+        if not isinstance(result, dict) or not isinstance(result.get("regimen"), dict):
+            raise ProviderUnavailableError("Supabase returned an invalid regimen activation result")
+        regimen = self.decode(result["regimen"])
+        superseded = result.get("superseded_regimen_ids")
+        if not isinstance(superseded, list):
+            raise ProviderUnavailableError("Supabase returned an invalid regimen transition result")
+        try:
+            return ActivationResultDTO(regimen=regimen, superseded_regimen_ids=superseded)
+        except ValueError:
+            raise ProviderUnavailableError("Supabase returned an invalid regimen transition result") from None
+
 
 class Rules(Repository[DoseRuleDTO]):
     def decode(self, row: dict) -> DoseRuleDTO:
@@ -199,6 +225,12 @@ class Rules(Repository[DoseRuleDTO]):
             demo_only=True,
         )
         self.client.request("POST", "/rest/v1/dose_rules", body=body)
+
+    def update(self, rule: DoseRuleDTO) -> None:
+        self.client.check_patient(rule.patient_id)
+        if rule.enabled:
+            raise ValidationError("An existing dose rule may only be disabled")
+        self.patch(rule, {"enabled": False})
 
 
 class Occurrences(Repository[DoseOccurrenceDTO]):
@@ -234,7 +266,11 @@ class Occurrences(Repository[DoseOccurrenceDTO]):
 
 class Events(Repository[DoseEventDTO]):
     def find_by_idempotency_key(self, patient_id: UUID, key: str) -> DoseEventDTO | None:
-        rows = self.list(patient_id, idempotency_key=f"eq.{key}")
+        self.client.check_patient(patient_id)
+        rows = [
+            self.decode(row)
+            for row in self.client.rows("dose_events", patient_id=f"eq.{patient_id}", idempotency_key=f"eq.{key}")
+        ]
         return rows[0] if rows else None
 
     def find_by_occurrence(self, patient_id: UUID, occurrence_id: UUID) -> DoseEventDTO | None:
@@ -260,7 +296,7 @@ class Events(Repository[DoseEventDTO]):
             raise ConfirmationRequiredError("Confirmed self-report challenge required")
         # BEFORE INSERT guard checks all bindings, locks and consumes the
         # challenge in the same transaction as the event write.
-        body = event.model_dump(mode="json")
+        body = event.model_dump(mode="json", exclude={"reported_late", "actual_administration_at"})
         body["confirmation_challenge_id"] = challenges[0]["id"]
         row = self.client.request("POST", "/rest/v1/rpc/record_confirmed_self_report", body={"p_event": body})
         return self.decode(row)
@@ -330,7 +366,9 @@ class SupabaseRepositories:
     traces: Traces
 
 
-def build_supabase_repositories(client: SupabaseDataClient) -> SupabaseRepositories:
+def build_supabase_repositories(
+    client: SupabaseDataClient, *, include_late_reports: bool = False
+) -> SupabaseRepositories:
     return SupabaseRepositories(
         Sources(client, "source_documents", SourceDocumentDTO),
         Fields(client, "source_fields", SourceFieldDTO),
@@ -338,7 +376,7 @@ def build_supabase_repositories(client: SupabaseDataClient) -> SupabaseRepositor
         Regimens(client, "regimen_versions", RegimenVersionDTO),
         Rules(client, "dose_rules", DoseRuleDTO),
         Occurrences(client, "dose_occurrences", DoseOccurrenceDTO),
-        Events(client, "dose_events", DoseEventDTO),
+        Events(client, "effective_dose_events" if include_late_reports else "dose_events", DoseEventDTO),
         Sessions(client, "agent_sessions", AgentSessionDTO),
         Challenges(client, "confirmation_challenges", ConfirmationChallengeDTO),
         Traces(client, "agent_tool_calls", ToolTraceDTO),

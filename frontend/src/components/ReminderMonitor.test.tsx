@@ -1,0 +1,53 @@
+// @vitest-environment jsdom
+import {afterEach,expect,it,vi} from 'vitest';
+import {act,cleanup,fireEvent,render,screen} from '@testing-library/react';
+import {api} from '../api/client';
+import {ReminderMonitor} from './ReminderMonitor';
+vi.mock('../api/client',()=>({ApiError:class extends Error{},api:{reminderAlerts:vi.fn(),snoozeReminder:vi.fn()}}));
+vi.mock('../language',()=>({useLanguage:()=>({language:'en',t:(s:string)=>s,preferences:{timezone:'Asia/Singapore'}})}));
+afterEach(()=>{cleanup();vi.useRealTimers();vi.resetAllMocks();sessionStorage.clear();localStorage.clear();});
+const port={kind:'noop' as const,support:()=> 'unsupported' as const,notify:vi.fn(),requestPermission:vi.fn()};
+it.each([15,30])('persists %i minute quiet time through remount and ignores stale polling, then expires offline',async minutes=>{
+ vi.useFakeTimers();const start=Date.parse('2026-10-19T00:00:00Z');vi.setSystemTime(start);
+ const row={key:'DEMO-occ:original',occurrence_id:'DEMO-occ',regimen_id:'DEMO-plan',medication_name:'DEMO only',dose_amount:1,dose_unit:'tablet',food_instruction:null,due_at:new Date(start).toISOString(),remind_at:new Date(start).toISOString(),expires_at:new Date(start+2*3600000).toISOString()};
+ vi.mocked(api.reminderAlerts).mockResolvedValue([row]);
+ vi.mocked(api.snoozeReminder).mockResolvedValue({demo_only:true,patient_id:'DEMO-only',occurrence_id:row.occurrence_id,remind_at:new Date(start+minutes*60000).toISOString()});
+ const first=render(<ReminderMonitor enabled onReview={vi.fn()} port={port}/>);
+ await act(async()=>{});expect(screen.getAllByRole('dialog')).toHaveLength(1);
+ await act(async()=>{fireEvent.click(screen.getByRole('button',{name:`${minutes} min later`}));});
+ expect(screen.queryByRole('dialog')).toBeNull();
+ first.unmount();sessionStorage.clear();
+ render(<ReminderMonitor enabled onReview={vi.fn()} port={port}/>);
+ await act(async()=>{await vi.advanceTimersByTimeAsync(15000);});expect(screen.queryByRole('dialog')).toBeNull();
+ vi.mocked(api.reminderAlerts).mockResolvedValue([{...row,key:'DEMO-occ:snoozed',remind_at:new Date(start+minutes*60000).toISOString()}]);
+ await act(async()=>{await vi.advanceTimersByTimeAsync(minutes*60000);});expect(screen.getAllByRole('dialog')).toHaveLength(1);
+ vi.mocked(api.reminderAlerts).mockRejectedValue(new Error('DEMO offline'));
+ await act(async()=>{await vi.advanceTimersByTimeAsync(2*3600000);});expect(screen.queryByRole('dialog')).toBeNull();
+});
+it('keeps one request in flight and backs off persistent failures before recovering',async()=>{
+ vi.useFakeTimers();vi.setSystemTime(new Date('2026-10-19T00:00:00Z'));
+ vi.mocked(api.reminderAlerts).mockRejectedValue(new Error('DEMO unavailable'));
+ await act(async()=>{render(<ReminderMonitor enabled onReview={vi.fn()} port={port}/>);});
+ expect(api.reminderAlerts).toHaveBeenCalledTimes(1);
+ expect(screen.getByRole('status').textContent).toContain('Could not refresh');
+ await act(async()=>{await vi.advanceTimersByTimeAsync(15000);});
+ expect(api.reminderAlerts).toHaveBeenCalledTimes(2);
+ await act(async()=>{await vi.advanceTimersByTimeAsync(15000);});
+ expect(api.reminderAlerts).toHaveBeenCalledTimes(2);
+ vi.mocked(api.reminderAlerts).mockResolvedValue([]);
+ await act(async()=>{await vi.advanceTimersByTimeAsync(15000);});
+ expect(api.reminderAlerts).toHaveBeenCalledTimes(3);
+ expect(screen.queryByRole('status')).toBeNull();
+ await act(async()=>{await vi.advanceTimersByTimeAsync(15000);});
+ expect(api.reminderAlerts).toHaveBeenCalledTimes(4);
+});
+it('does not overlap a slow request or update after unmount',async()=>{
+ vi.useFakeTimers();let resolve!:(rows:[])=>void;
+ vi.mocked(api.reminderAlerts).mockReturnValue(new Promise(r=>{resolve=r;}));
+ const {unmount}=render(<ReminderMonitor enabled onReview={vi.fn()} port={port}/>);
+ await act(async()=>{await vi.advanceTimersByTimeAsync(60000);});
+ expect(api.reminderAlerts).toHaveBeenCalledTimes(1);
+ unmount();await act(async()=>{resolve([]);});
+ await act(async()=>{await vi.advanceTimersByTimeAsync(30000);});
+ expect(api.reminderAlerts).toHaveBeenCalledTimes(1);
+});

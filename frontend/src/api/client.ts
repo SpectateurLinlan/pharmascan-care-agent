@@ -10,7 +10,8 @@ import type {DoseBasis,DoseDisplay} from './dose';
  * if a field is not returned by the backend it is not declared.
  */
 
-import { accessToken } from './auth';
+import { accessToken,existingAccessToken } from './auth';
+import { observeDiagnosticResponse } from './diagnosticContract';
 
 const CLIENT_STORAGE_KEY = 'pharmascan.client_id';
 
@@ -50,8 +51,8 @@ export function clientId(): string {
   return generated;
 }
 
-async function fetchResponse(path: string, init?: RequestInit): Promise<Response> {
-  const token = await accessToken();
+async function fetchResponse(path: string, init?: RequestInit,tokenProvider=accessToken): Promise<Response> {
+  const token = await tokenProvider();
   const controller=new AbortController();
   const abort=()=>controller.abort();
   if(init?.signal?.aborted)controller.abort();else init?.signal?.addEventListener('abort',abort,{once:true});
@@ -85,9 +86,22 @@ async function fetchResponse(path: string, init?: RequestInit): Promise<Response
     } catch {
       // Non-JSON error body: keep the generic message.
     }
+    observeDiagnosticResponse(path,response.status,Boolean(token),body.message);
     throw new ApiError(response.status, body);
   }
+  observeDiagnosticResponse(path,response.status,Boolean(token));
   return response;
+}
+
+export class DiagnosticSessionUnavailable extends Error {}
+/** Existing SDK session only: no anonymous bootstrap, arbitrary URLs or write methods. */
+export function readDiagnosticCounts(path:'/api/me/medications'|'/api/me/regimens'):Promise<Response>{
+ if(!['/api/me/medications','/api/me/regimens'].includes(path))throw new Error('Unsupported diagnostic endpoint');
+ return fetchResponse(path,{method:'GET',redirect:'error'},async()=>{
+  const token=await existingAccessToken();
+  if(!token)throw new DiagnosticSessionUnavailable();
+  return token;
+ });
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -96,7 +110,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export interface SpeechCapabilities { cloud_tts_allowed: boolean; available: boolean; provider: string; review_required: true; raw_audio_retained: false }
 export interface TranscriptResponse { text: string; provider: string; request_id: string; confidence: null; review_required: true }
-export interface RegimenHistoryItem { patient_edited?:boolean; frequency_rule?:MedicationSummary['frequency_rule'];regimen_id: string; display_name: string; version_no: number; state: string;
+export interface RegimenHistoryItem { patient_edited?:boolean; frequency_rule?:MedicationSummary['frequency_rule'];regimen_id: string; supersedes_id?:string|null; display_name: string; version_no: number; state: string;
   effective_from: string | null; effective_to: string | null; medication_id:string;course_start_date:string|null;course_end_date:string|null;
   dose_amount:number|null;dose_unit:string|null;food_instruction:string|null;is_prn:boolean;local_times:string[] }
 export interface PrintedEvidence {value:string;line:string}
@@ -139,7 +153,10 @@ export type ObservationInput=Pick<HealthObservation,'id'|'description'|'occurred
 export interface ReviewSummary {period:'week'|'month'|'course';window_start:string;window_end:string;generated_at:string;timezone:string;reported_taken:number;reported_not_taken:number;unsure:number;observations:HealthObservation[];questions:string[];coverage_note:string;
   medications:Array<{medication_id:string;regimen_id:string;name:string;version:number;state:string;is_prn:boolean;dose_amount:number|null;dose_unit:string|null;food_instruction:string|null;course_start:string|null;course_end:string|null;local_times:string[];recorded_occurrences:number;without_report:number}>}
 
-export interface HealthResponse {
+export interface HealthResponse {multiple_care_reminders_enabled?:boolean;
+  medication_library_files_enabled?: boolean;
+  late_dose_reports_enabled?: boolean;
+  care_task_followups_enabled?: boolean;
   runtime_contract?: string;
   status: 'ok';
   service: string;
@@ -160,7 +177,7 @@ export interface MedicationSummary {
   dose_basis?:DoseBasis|null;
   dose_amount?: number | null;
   dose_unit?: string | null;
-  frequency_rule?: {kind:string;local_times:string[];days_of_week:number[]} | null;
+  frequency_rule?: {kind:string;local_times:string[];days_of_week:number[];every_hours?:number|null;interval_anchor?:{local_date:string;local_time:string;time_source:'patient_entered'|'default_0800'}|null} | null;
   food_instruction?: string | null;
   course_start_date?: string | null;
   course_end_date?: string | null;
@@ -203,7 +220,7 @@ export interface ConfirmChallengeResponse {
     medication_name: string;
     dose_amount: number | null;
     dose_unit: string | null;
-    frequency: { kind: string; local_times: string[]; days_of_week: number[] } | null;
+    frequency: { kind: string; local_times: string[]; days_of_week: number[];every_hours?:number|null;interval_anchor?:{local_date:string;local_time:string;time_source:'patient_entered'|'default_0800'}|null } | null;
     is_prn: boolean;
     version_no: number;
     local_timezone: string;
@@ -283,7 +300,7 @@ export type MedicationHistoryRange='7'|'30'|'90'|'custom'|'all'|'plan';
 export interface HistoryMedication {id:string;display_name:string;product_id:string|null;identity_status:string}
 export interface HistoryPlan {patient_edited?:boolean;id:string;medication_id:string;supersedes_id:string|null;effective_from:string|null;effective_to:string|null;state:string;dose_amount:number|null;dose_unit:string|null;strength_text:string|null;dosage_form?:string|null;frequency?:{kind:string;local_times:string[];days_of_week:number[];every_hours:number|null}|null;is_prn?:boolean}
 export interface HistoryCatalogue {medications:HistoryMedication[];plans:HistoryPlan[]}
-export interface MedicationHistoryEntry {id:string;medication_id:string;regimen_id:string;display_name:string;sort_time:string;due_at:string|null;event_id:string|null;event_time:string|null;submitted_at:string|null;intake_status:string|null;reported:boolean;kind:'scheduled'|'unscheduled'}
+export interface MedicationHistoryEntry {id:string;medication_id:string;regimen_id:string;display_name:string;sort_time:string;due_at:string|null;event_id:string|null;event_time:string|null;submitted_at:string|null;reported_late?:boolean;actual_administration_at?:string|null;intake_status:string|null;reported:boolean;kind:'scheduled'|'unscheduled'}
 export interface MedicationHistoryPage {entries:MedicationHistoryEntry[];next_cursor:string|null;window_start:string|null;window_end:string;as_of:string;scope:'stored_records_only';missing_plan_start:boolean}
 export interface MedicationHistoryFilters {medication_id?:string;medication_name?:string;regimen_id?:string;range_kind:MedicationHistoryRange;start?:string;end?:string}
 
@@ -332,6 +349,7 @@ export interface ChatPhotoContext {
 
 export interface DraftInput {
   patient_edited?:boolean;
+  supersedes_regimen_id?:string|null;
   course_start_date?: string | null;
   course_end_date?: string | null;
   extraction_evidence?: SourcePreview;
@@ -339,7 +357,7 @@ export interface DraftInput {
   dose_basis?:DoseBasis|null;
   dose_amount?: number | null;
   dose_unit?: string | null;
-  frequency_kind?: 'daily' | 'weekly' | 'interval_hours' | null;
+  frequency_kind?: 'daily' | 'weekly' | 'interval' | 'interval_hours' | null;
   frequency_local_times?: string[];
   frequency_days_of_week?: number[];
   frequency_every_hours?: number | null;
@@ -352,19 +370,31 @@ export interface ReminderRecord { is_due?: boolean; occurrence_id: string; patie
 export interface PlannedReminder {occurrence_id:string;regimen_id:string;rule_id:string;medication_name:string;due_at:string;remind_at:string;slot:string}
 export interface PushSubscriptionInput {endpoint:string;keys:{p256dh:string;auth:string}}
 export interface PushSubscriptionRecord {id:string;enabled:boolean}
-export interface DoseReminderAlert {key:string;occurrence_id:string;regimen_id:string;medication_name:string;dose_amount:number|null;dose_unit:string|null;food_instruction:string|null;due_at:string;remind_at:string}
+export interface DoseReminderAlert {key:string;occurrence_id:string;regimen_id:string;medication_name:string;dose_amount:number|null;dose_unit:string|null;food_instruction:string|null;due_at:string;remind_at:string;expires_at?:string}
 
 export interface VisualCheckResult { decision:'unknown'|'ambiguous'|'unavailable'; selected_medication:string|null; comparison_available:false; reason:string; candidates:Array<{external_catalogue_id:string;display_name:string|null;visual_similarity:number|null;market:'US';strength:string|null}>; count_reliable:boolean; ingestion_proven:false; safe_to_take_confirmed:false; next_action:string }
 
-export interface EvidenceProduct {name:string;strength:string|null;dose_form:string|null;formulation:string|null;brand:string|null;ingredients:string[];category:'unknown'|'POM'|'P'|'GSL'|'supplement';verification:'source_supplied'|'patient_reviewed'}
+export interface EvidenceProduct {name:string;strength:string|null;dose_form:string|null;formulation:string|null;brand:string|null;manufacturer?:string|null;ingredients:string[];external_identifiers?:Record<string,string>;category:'unknown'|'POM'|'P'|'GSL'|'supplement';verification:'source_supplied'|'patient_reviewed'}
 export interface EvidenceDraft {patient_edited?:boolean;medication_name:string;dose_amount:number|null;dose_unit:string|null;frequency_rule:{kind:string;local_times:string[];days_of_week:number[];every_hours:number|null}|null;is_prn:boolean;route?:string|null;food_instruction:string|null;course_start_date?:string|null;course_end_date?:string|null}
 export interface EvidenceTask {id:string;medication_id:string;version:number;status:'pending_information'|'conflict'|'ready_for_review'|'draft_created';product:EvidenceProduct;product_missing?:string[];source_ids:string[];missing:string[];conflicts:string[];possible_duplicate_ids:string[];draft_regimen_id:string|null;suggested_regimen:EvidenceDraft|null}
-export interface GalleryImage {id:string;medication_id:string;image_kind:'loose_pill'|'package'|'blister'|'source';source_description:string;reviewed:boolean;eligibility:'associated'|'eligible'|'ineligible';eligibility_reason:string;created_at:string}
-export interface GalleryEntry {evidence_task_id?:string|null;similar_name_records?:number;medication:{id:string;display_name:string;identity_status:string};product:EvidenceProduct|null;status:'current'|'upcoming'|'historical'|'pending';regimens:Array<{id:string;state:string;version_no:number;course_start_date:string|null;course_end_date:string|null;dose_amount:number|null;dose_unit:string|null}>;images:GalleryImage[];eligible_count:number}
+export interface GalleryImage {id:string;medication_id:string;source_id?:string|null;image_kind:'loose_pill'|'package'|'blister'|'source';source_description:string;reviewed:boolean;eligibility:'associated'|'eligible'|'ineligible';eligibility_reason:string;created_at:string;metadata_version?:number;gallery_removed?:boolean;deleted_at?:string|null;cleanup_pending?:boolean}
+export interface GalleryUploadResult {photo:GalleryImage;duplicate:boolean}
+export interface GalleryEntry {evidence_task_id?:string|null;similar_name_records?:number;product_id?:string|null;source_document_count?:number;pdf_file_count?:number;file_count?:number;updated_at?:string|null;medication:{id:string;display_name:string;identity_status:string;product_id?:string|null};product:EvidenceProduct|null;status:'current'|'upcoming'|'historical'|'pending';regimens:Array<{id:string;state:string;version_no:number;effective_from?:string|null;effective_to?:string|null;course_start_date:string|null;course_end_date:string|null;dose_amount:number|null;dose_unit:string|null}>;images:GalleryImage[];eligible_count:number}
+export interface MedicationLibrarySource {id:string;source_kind:'package'|'pharmacy_label'|'prescription'|'mock_import'|'user_manual';review_status:'extracted'|'user_reviewed'|'professional_verified'|'rejected';reviewed_at:string|null;recorded_at:string|null;extraction_evidence:SourcePreview|null;fields:Array<{id:string;field_name:string;field_value:unknown;review_status:string;reviewed_at:string|null}>;regimen_ids:string[];image_ids:string[]}
+export interface MedicationLibraryFile {id:string;image_id:string|null;image_ids:string[];file_id?:string;name:string;original_filename?:string;format:'PNG'|'PDF';content_type:'image'|'pdf';photo_description:GalleryImage['image_kind']|null;purpose_tags:string[];created_at:string;eligibility:GalleryImage['eligibility'];eligibility_reason:string;sources:MedicationLibrarySource[];category?:'prescription'|'pharmacy_document'|'medication_instructions'|'other';description?:string;version?:number;byte_size?:number}
+export interface MedicationLibraryPdf {id:string;patient_id:string;medication_id:string;original_filename:string;display_title:string;category:'prescription'|'pharmacy_document'|'medication_instructions'|'other';description:string;content_type:'application/pdf';byte_size:number;uploaded_at:string;version:number;deleted_at:string|null;cleanup_pending:boolean;demo_only:true}
+export interface MedicationLibraryPdfUploadResult {file:MedicationLibraryPdf;duplicate:boolean}
+export interface MedicationFiles {medication_id:string;file_management_available?:boolean;files:MedicationLibraryFile[];source_records:MedicationLibrarySource[];regimens:Array<{id:string;version_no:number;state:string;source_id:string|null;course_start_date:string|null;course_end_date:string|null;effective_from:string|null;effective_to:string|null}>}
 export interface RecognitionEvidence {id:string;decision:'match'|'unknown'|'ambiguous'|'conflict'|'missing_reference'|'unavailable';reason:string;reference_ids:string[];outcome:{decision:string;medication_id:string|null;score:number|null;closest:{medication_id:string;name:string;score:number}|null}|null;safe_to_take:false;ingestion_proven:false}
+export interface MedicationKnowledge {clarification_required:boolean;medication_id:string|null;regimen_id:string|null;question:'general_use'|'personal_instructions'|'personal_reason';medication_name:string|null;patient_safe_summary:string;general_knowledge:{status:'matched'|'no_reliable_match'|'unavailable';reason:string;match_scope:'US_label_product_family'|'US_label_ingredient';candidate_count:number;sources:Array<{source_name:string;market:'US';set_id:string;label_id:string;version:string;effective_time:string;retrieved_at:string;url:string;api_url:string;sections:Array<{field:string;text:string;truncated:boolean}>}>;use_statement:string|null;use_statement_zh:string|null;translation_status:'controlled_translation'|'original_english_only';personal_dosing_authority:false;regulatory_note:string}|null;personal_instructions:null;personal_indication:null}
 
 export const api = {
+  medicationKnowledge:(id:string,language:'en'|'zh')=>request<MedicationKnowledge>(withClient(`/api/me/medications/${encodeURIComponent(id)}/knowledge`,{language})),
   refreshFollowUps:()=>request<import('./care').CareTask[]>(withClient('/api/me/care-tasks/refresh'),{method:'POST'}),
+  doseFollowUps:(includeReported=false)=>request<import('./doseFollowUps').DoseFollowUps>(withClient('/api/me/dose-follow-ups',{include_reported:String(includeReported)})),
+  lateReportHistory:(id:string)=>request<import('./doseFollowUps').DoseReportAudit>(withClient(`/api/me/doses/${encodeURIComponent(id)}/late-reports`)),
+  prepareLateReport:(id:string,values:import('./doseFollowUps').LateReportInput)=>request<import('./doseFollowUps').LateReportChallenge>(withClient(`/api/me/doses/${encodeURIComponent(id)}/late-report/challenge`),{method:'POST',body:JSON.stringify(values)}),
+  confirmLateReport:(id:string,challenge:import('./doseFollowUps').LateReportChallenge)=>request<import('./doseFollowUps').LateReportRecord>(withClient(`/api/me/doses/${encodeURIComponent(id)}/late-report`),{method:'POST',body:JSON.stringify({challenge_id:challenge.challenge_id,report:challenge.proposed})}),
   inventory:(id:string)=>request<import('./care').StockStatus>(withClient(`/api/me/inventory/${encodeURIComponent(id)}`)),
   recordStock:(id:string,values:import('./care').StockInput)=>request<import('./care').StockStatus>(withClient(`/api/me/inventory/${encodeURIComponent(id)}`),{method:'POST',body:JSON.stringify(values)}),
   careTasks:(actionable=false)=>request<import('./care').CareTask[]>(withClient('/api/me/care-tasks',{actionable:String(actionable)})),
@@ -380,9 +410,15 @@ export const api = {
   attachEvidence:(id:string,file:File,kind:'package'|'pharmacy_label'|'prescription',medicationId?:string,automaticallyRouted=false)=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${id}/sources`,{source_kind:kind,automatically_routed:String(automaticallyRouted),...(medicationId?{medication_id:medicationId}:{})}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'false'},body:file}),
   reviewEvidence:(id:string,draft:EvidenceDraft,distinct_product_confirmed:boolean,options:{product_category?:EvidenceProduct['category'];replace_active_plan?:boolean}={})=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${id}/review`),{method:'POST',body:JSON.stringify({...options,draft,patient_reviewed:true,distinct_product_confirmed})}),
   personalGallery:()=>request<GalleryEntry[]>(withClient('/api/evidence/gallery')),
+  medicationFiles:(id:string)=>request<MedicationFiles>(withClient(`/api/evidence/gallery/${encodeURIComponent(id)}/files`)),
   retireReference:(id:string)=>request<GalleryImage>(withClient(`/api/evidence/images/${id}/retire`),{method:'POST',body:JSON.stringify({})}),
+  manageReference:(id:string,values:{action:'edit'|'remove'|'delete';expected_version:number;image_kind?:GalleryImage['image_kind'];source_description?:string;confirmed?:boolean})=>request<GalleryImage>(withClient(`/api/evidence/images/${id}`),{method:'PATCH',body:JSON.stringify(values)}),
   referencePhoto:async(id:string)=>(await fetchResponse(withClient(`/api/evidence/images/${id}`))).blob(),
-  addReference:(medicationId:string,file:File,kind:'loose_pill'|'package'|'blister',source:string,reviewed:boolean,compare:boolean)=>request<GalleryImage>(withClient(`/api/evidence/gallery/${medicationId}/images`,{image_kind:kind,source_description:source,reviewed:String(reviewed),for_comparison:String(compare)}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'false'},body:file}),
+  uploadLibraryPdf:(medicationId:string,file:File,category:MedicationLibraryPdf['category'],description:string)=>request<MedicationLibraryPdfUploadResult>(withClient(`/api/evidence/gallery/${encodeURIComponent(medicationId)}/pdfs`,{filename:file.name,category,description}),{method:'POST',headers:{'Content-Type':'application/pdf'},body:file}),
+  libraryPdf:async(id:string,disposition:'inline'|'attachment'='inline')=>(await fetchResponse(withClient(`/api/evidence/library-files/${encodeURIComponent(id)}`,{disposition}))).blob(),
+  updateLibraryPdf:(id:string,values:{expected_version:number;title:string;category:MedicationLibraryPdf['category'];description:string})=>request<MedicationLibraryPdf>(withClient(`/api/evidence/library-files/${encodeURIComponent(id)}`),{method:'PATCH',body:JSON.stringify(values)}),
+  deleteLibraryPdf:(id:string)=>request<{deleted:true}>(withClient(`/api/evidence/library-files/${encodeURIComponent(id)}`,{confirmed:'true'}),{method:'DELETE'}),
+  addReference:(medicationId:string,file:File,kind:GalleryImage['image_kind'],source:string,reviewed:boolean,compare:boolean)=>request<GalleryUploadResult>(withClient(`/api/evidence/gallery/${medicationId}/images`,{image_kind:kind,source_description:source,reviewed:String(reviewed),for_comparison:String(compare)}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'false'},body:file}),
   checkPersonalDose:(file:File,regimenId:string|null)=>request<RecognitionEvidence>(withClient('/api/evidence/check-dose',regimenId?{regimen_id:regimenId}:{}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'false'},body:file}),
   conversationHistory:(before?:string)=>request<ConversationPage>(withClient('/api/agent/history',before?{before}:{})),
   conversations:(before?:string)=>request<{entries:ConversationSummary[];next_before:string|null}>(withClient('/api/agent/conversations',before?{before}:{})),
@@ -482,8 +518,9 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
-  dueDose: (regimenId: string) =>
-    request<DueDoseResponse>(withClient('/api/doses/due', { regimen_id: regimenId })),
+  todayAttention: () => request<{as_of:string;local_date:string;timezone:string;plans:Array<{regimen_id:string;state:'pending'|'upcoming'|'unrecorded'|'recorded'|'as_needed'|'not_scheduled'|'unavailable';unrecorded_times:string[];next_due_at?:string|null}>}>(withClient('/api/me/today-attention')),
+  dueDose: (regimenId: string, attentionOnly = false) =>
+    request<DueDoseResponse>(withClient('/api/doses/due', { regimen_id: regimenId, ...(attentionOnly?{attention_only:'true'}:{}) })),
 
   requestReportChallenge: (occurrenceId: string, payload: {
     regimen_id: string;

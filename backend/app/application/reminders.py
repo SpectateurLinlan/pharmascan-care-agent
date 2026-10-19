@@ -1,12 +1,15 @@
 """Persist an occurrence-bound snooze preference; never modify regimen/intake."""
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+from ..contracts.dto import DoseOccurrenceDTO
 from ..contracts.enums import OccurrenceStatus, RegimenState
 from ..contracts.ports import Clock, DoseOccurrenceRepository, RegimenVersionRepository
 from ..contracts.reminders import ReminderDTO, ReminderRepository, ReminderStatusDTO
+from ..domain.dose_attention import attention_deadline
 from ..domain.errors import NotFoundError, ValidationError
+from .dosing import DoseScheduleService
 from .timezone import LOCAL_TZ_PROVIDER, LocalTzProvider
 
 
@@ -19,9 +22,25 @@ class ReminderService:
         regimens: RegimenVersionRepository,
         clock: Clock,
         tz_provider: LocalTzProvider | None = None,
+        schedule: DoseScheduleService | None = None,
     ) -> None:
         self._repository, self._occurrences, self._regimens, self._clock = repository, occurrences, regimens, clock
         self._tz = tz_provider or LOCAL_TZ_PROVIDER
+        self._schedule = schedule
+
+    def deadline(self, patient_id: UUID, occurrence: DoseOccurrenceDTO) -> datetime:
+        """Original occurrence attention boundary; snoozes never move it."""
+        if self._schedule is None:
+            raise ValidationError("Reminder schedule is unavailable")
+        zone = self._tz.local_tz(patient_id)
+        end = (
+            occurrence.due_at.astimezone(zone).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        ).astimezone(UTC)
+        moments = self._schedule.planned_instants(
+            patient_id=patient_id, regimen_id=occurrence.regimen_id, start=occurrence.due_at, end=end
+        )
+        following = next((moment for moment in moments if moment > occurrence.due_at), None)
+        return attention_deadline(occurrence.due_at, following, end)
 
     def snooze(self, *, patient_id: UUID, occurrence_id: UUID, minutes: int) -> ReminderDTO:
         if not 1 <= minutes <= 1440:
@@ -37,6 +56,11 @@ class ReminderService:
             and self._clock.now().astimezone(self._tz.local_tz(patient_id)).date() > regimen.course_end_date
         ):
             raise ValidationError("This recorded course has ended; review the current plan")
+        if self._clock.now() + timedelta(minutes=minutes) >= self.deadline(patient_id, occurrence):
+            raise ValidationError(
+                "The requested snooze reaches the original reminder deadline. "
+                "You can still record this dose in Records."
+            )
         return self._repository.save(
             ReminderDTO(
                 patient_id=patient_id,
@@ -51,6 +75,10 @@ class ReminderService:
         for row in rows:
             occurrence = self._occurrences.get(patient_id, row.occurrence_id)
             if occurrence is not None and occurrence.status != OccurrenceStatus.CLOSED:
+                if self._clock.now() >= self.deadline(patient_id, occurrence) or row.remind_at >= self.deadline(
+                    patient_id, occurrence
+                ):
+                    continue
                 regimen = self._regimens.get(patient_id, occurrence.regimen_id)
                 if regimen is not None and regimen.state == RegimenState.ACTIVE:
                     if (

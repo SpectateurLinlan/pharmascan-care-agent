@@ -14,11 +14,13 @@ export function VoiceInput({ onTranscript, provider, disabled = false }: {
   const mounted = useRef(false);
   useEffect(() => {
     mounted.current = true;
-    return () => { mounted.current = false; if (timer.current) clearTimeout(timer.current); current.current?.abort(); };
+    return () => { mounted.current = false; if (timer.current) clearTimeout(timer.current); const active=current.current; current.current=null; active?.abort(); };
   }, []);
+  useEffect(()=>{if(!notice)return;const expiry=window.setTimeout(()=>setNotice(''),6000);return()=>window.clearTimeout(expiry);},[notice]);
+  useEffect(()=>{if(!disabled)return;if(timer.current)clearTimeout(timer.current);const active=current.current;current.current=null;active?.abort();setState('idle');setNotice('');},[disabled]);
   function cancel() {
     if (timer.current) clearTimeout(timer.current);
-    current.current?.abort(); current.current = null; setState('idle'); setNotice('Listening cancelled. You can still type.');
+    const active=current.current; current.current = null; active?.abort(); setState('idle'); setNotice('Listening cancelled. You can still type.');
   }
   /**
    * One tap reaches the browser's own microphone prompt.
@@ -32,8 +34,11 @@ export function VoiceInput({ onTranscript, provider, disabled = false }: {
   function start() {
     if (!speech.current || disabled) return;
     setNotice(''); setState('requesting');
-    const active = speech.current.create(); current.current = active;
+    let active:NativeRecognition;
+    try{active=speech.current.create();}catch{setState('idle');setNotice('Microphone could not start. Please type instead.');return;}
+    current.current = active;
     let transcript = ''; let failed = false;
+    const segments=new Map<number,string>();
     active.lang = preferences.speech_locale; active.continuous = false; active.interimResults = true; active.maxAlternatives = 1;
     const live = () => mounted.current && current.current === active;
     active.onstart = () => { if (live()) setState('listening'); };
@@ -42,8 +47,9 @@ export function VoiceInput({ onTranscript, provider, disabled = false }: {
       if (!live() || failed) return;
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
-        if (result?.isFinal) transcript += result[0].transcript;
+        if (result?.isFinal) segments.set(i,result[0].transcript);
       }
+      transcript=[...segments.entries()].sort(([a],[b])=>a-b).map(([,text])=>text).join('');
       if (transcript.trim()) { onTranscript(transcript.trim()); setState('review'); setNotice('Review or edit, then Send.'); }
     };
     active.onerror = event => { if (live()) { failed = true; if (timer.current) clearTimeout(timer.current); current.current = null; active.abort(); setNotice(recognitionError(event.error)); setState('idle'); } };
@@ -56,7 +62,7 @@ export function VoiceInput({ onTranscript, provider, disabled = false }: {
     };
     timer.current = setTimeout(() => {
       if (!live()) return;
-      active.abort(); current.current = null; setState('idle'); setNotice('Listening timed out. Try again or type.');
+      current.current = null; active.abort(); setState('idle'); setNotice('Listening timed out. Try again or type.');
     }, 30000);
     try { active.start(); } catch { failed = true; cancel(); setNotice('Microphone could not start. Please type instead.'); }
   }

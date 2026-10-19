@@ -34,9 +34,12 @@ export function createAuthGateway(environment:AuthEnvironment,factory:(url:strin
  const client=url&&key?factory(url,key):null;let signingIn:Promise<string>|null=null;
  const required=()=>{if(!client)throw new AccountError('Email sign in is unavailable in this local demo.');return client;};
  async function guarded<R extends {error:unknown}>(action:()=>Promise<R>):Promise<R>{try{const result=await action();if(result.error)scrub(result.error);return result;}catch(error){if(error instanceof AccountError)throw error;return scrub(error);}}
- async function getAccessToken():Promise<string|null>{
+ async function getExistingAccessToken():Promise<string|null>{
   if(!client)return null;let result:Awaited<ReturnType<Driver['getSession']>>;try{result=await guarded(()=>client.getSession());}finally{cleanCallbackUrl();}const data=result.data;
-  if(data.session)return data.session.access_token;
+  return data.session?.access_token??null;
+ }
+ async function getAccessToken():Promise<string|null>{
+  if(!client)return null;const token=await getExistingAccessToken();if(token)return token;
   if(!signingIn)signingIn=(async()=>{const response=await guarded(()=>client.signInAnonymously({options:{data:{demo_only:true}}}));if(!response.data.session)throw new AccountError('Anonymous sign-in unavailable');return response.data.session.access_token;})().finally(()=>{signingIn=null;});
   return signingIn;
  }
@@ -52,10 +55,11 @@ export function createAuthGateway(environment:AuthEnvironment,factory:(url:strin
     if(prior!==undefined&&prior!==next&&!(prior===null&&session?.user.is_anonymous)){prior=next;listener();}else prior=next;});
    return ()=>data.subscription.unsubscribe();},
  };
- return {getAccessToken,accountPort};
+ return {getAccessToken,getExistingAccessToken,accountPort};
 }
 export function createAccessTokenProvider(environment:AuthEnvironment){return createAuthGateway(environment).getAccessToken;}
 const environment=(import.meta as ImportMeta & {env:AuthEnvironment}).env;
 const gateway=createAuthGateway(environment);
 export const accessToken=gateway.getAccessToken;
+export const existingAccessToken=gateway.getExistingAccessToken;
 export const accountAuth=gateway.accountPort;

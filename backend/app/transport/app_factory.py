@@ -7,6 +7,7 @@ local development only. No route module imports a repository directly.
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,6 +24,7 @@ from .routes import doses as dose_routes
 from .routes import evidence as evidence_routes
 from .routes import feedback as feedback_routes
 from .routes import health as health_routes
+from .routes import late_reports as late_report_routes
 from .routes import long_term as long_term_routes
 from .routes import medications as medication_routes
 from .routes import patient_records as patient_record_routes
@@ -38,6 +40,17 @@ LOGGER = logging.getLogger("pharmascan.transport")
 
 def create_app(container: ApplicationContainer | None = None, settings: Settings | None = None) -> FastAPI:
     """Build the ASGI app. Pass a container to inject a test double."""
+    effective_settings = settings or (Settings.from_env() if container is None else None)
+    wired = container or build_container_from_settings(effective_settings)
+    if wired.persistence == "postgres":
+        raise ValueError("Administrative PostgreSQL containers cannot serve patient HTTP requests")
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        yield
+        if wired.close_request is not None and wired.patient_factory is None:
+            await run_in_threadpool(wired.close_request)
+
     app = FastAPI(
         title="MediThread Agent API",
         version="0.1.0",
@@ -46,13 +59,29 @@ def create_app(container: ApplicationContainer | None = None, settings: Settings
             "Persistence and agent routing are reported honestly per response; "
             "configured Gemini tools and Stage2 visual evidence preserve deterministic safety and user RLS."
         ),
+        lifespan=lifespan,
     )
-
-    effective_settings = settings or (Settings.from_env() if container is None else None)
-    wired = container or build_container_from_settings(effective_settings)
-    if wired.persistence == "postgres":
-        raise ValueError("Administrative PostgreSQL containers cannot serve patient HTTP requests")
     app.state.container = wired
+    # Public, non-sensitive release capabilities; read the same injected
+    # configuration used by the patient factory, not a second dotenv load.
+    app.state.medication_library_files_enabled = (
+        effective_settings.enable_medication_library_files
+        if effective_settings is not None and wired.persistence == "supabase"
+        else wired.library_files is not None
+    )
+    app.state.multiple_care_reminders_enabled = bool(
+        effective_settings and effective_settings.enable_multiple_care_reminders
+    )
+    app.state.care_task_followups_enabled = (
+        effective_settings.enable_care_task_followups
+        if effective_settings is not None and wired.persistence == "supabase"
+        else True
+    )
+    app.state.late_dose_reports_enabled = (
+        effective_settings.enable_late_dose_reports
+        if effective_settings is not None and wired.persistence == "supabase"
+        else wired.late_reports is not None
+    )
 
     @app.middleware("http")
     async def request_resources(request, call_next):
@@ -99,6 +128,7 @@ def create_app(container: ApplicationContainer | None = None, settings: Settings
     app.include_router(caregiver_routes.router)
     app.include_router(patient_record_routes.router)
     app.include_router(long_term_routes.router)
+    app.include_router(late_report_routes.router)
 
     LOGGER.info("PharmaScan Care transport created (persistence=%s)", wired.persistence)
     return app

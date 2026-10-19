@@ -41,7 +41,7 @@ from typing import Any, Protocol
 from uuid import UUID
 
 from ..config import validate_publishable_key
-from ..domain.errors import AuthenticationRequiredError
+from ..domain.errors import AuthenticationRequiredError, ProviderUnavailableError
 
 #: Header the browser sends; never logged, never echoed.
 AUTHORIZATION_HEADER = "authorization"
@@ -107,15 +107,18 @@ class SupabaseAuthApiVerifier:
             with urllib.request.urlopen(request, timeout=self._timeout) as response:  # noqa: S310
                 payload = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
-            # 401/403 => the token is not valid. Never include the token.
-            raise AuthenticationRequiredError(
-                f"Access token rejected by the identity provider (HTTP {exc.code})"
-            ) from exc
+            if exc.code in (401, 403):
+                raise AuthenticationRequiredError(
+                    f"Access token rejected by the identity provider (HTTP {exc.code})"
+                ) from None
+            # An identity-service outage/configuration error is not evidence
+            # that this patient's existing session was rejected.
+            raise ProviderUnavailableError("Identity verification service is temporarily unavailable.") from None
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-            raise AuthenticationRequiredError("Could not verify the access token with the identity provider") from exc
+            raise ProviderUnavailableError("Identity verification service is temporarily unavailable.") from exc
 
         if not isinstance(payload, dict) or not payload.get("id"):
-            raise AuthenticationRequiredError("Identity provider returned no subject")
+            raise ProviderUnavailableError("Identity verification returned an invalid response.")
         return {"sub": str(payload["id"]), "email": payload.get("email")}
 
 

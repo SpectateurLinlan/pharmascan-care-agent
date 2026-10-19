@@ -102,6 +102,8 @@ def wired(store: InMemoryStore, clock: FixedClock):
         sources=sources,
         source_fields=source_fields,
         dose_rules=dose_rules,
+        occurrences=occurrences,
+        events=events,
         challenges=challenges,
         clock=clock,
         ids=ids,

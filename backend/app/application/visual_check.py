@@ -75,5 +75,7 @@ class VisualCheckService:
             if unclear
             else "No eligible reviewed personal reference is available for comparison",
             candidates=evidence.candidates,
-            count_reliable=evidence.detection.provider_count_reliable,
+            # Stage2's count flag is not independent validation. The known
+            # one-pill/two-box regression still forbids automated dose counts.
+            count_reliable=False,
         )

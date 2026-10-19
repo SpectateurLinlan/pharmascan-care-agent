@@ -19,6 +19,7 @@ class PlannedReminder(BaseModel):
     due_at: datetime
     remind_at: datetime
     slot: str = "scheduled"
+    expires_at: datetime | None = None
 
 
 class ReminderPlanService:
@@ -53,7 +54,8 @@ class ReminderPlanService:
                     snooze = snoozes.get(occurrence.id)
                     remind_at = snooze.remind_at if snooze else occurrence.due_at - timedelta(minutes=lead_minutes)
                     # Expired notifications must not be replayed after a long outage.
-                    if remind_at < now - timedelta(minutes=15):
+                    deadline = self._reminders.deadline(patient_id, occurrence)
+                    if now >= deadline or remind_at >= deadline or remind_at < now - timedelta(minutes=15):
                         continue
                     result.append(
                         PlannedReminder(
@@ -63,6 +65,7 @@ class ReminderPlanService:
                             medication_name=medication.display_name,
                             due_at=occurrence.due_at,
                             remind_at=remind_at,
+                            expires_at=deadline,
                             slot=snooze.remind_at.isoformat() if snooze else "scheduled",
                         )
                     )

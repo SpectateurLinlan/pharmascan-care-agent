@@ -9,7 +9,7 @@ import type {AccountPort} from '../api/auth';
 vi.mock('../api/client',()=>({ApiError:class extends Error{},api:{reminderAlerts:vi.fn(),snoozeReminder:vi.fn(),createDraft:vi.fn(),reviewDraft:vi.fn(),requestChallenge:vi.fn(),doseDisplay:vi.fn()}}));
 afterEach(()=>{cleanup();sessionStorage.clear();vi.useRealTimers();vi.resetAllMocks();});
 it('automatically prompts after server due status, even without notification permission, and deduplicates',async()=>{
- vi.useFakeTimers();const notify=vi.fn();const row={key:'DEMO-occurrence:time',occurrence_id:'DEMO-occurrence',regimen_id:'DEMO-regimen',medication_name:'DEMO Metformin',dose_amount:500,dose_unit:'mg',food_instruction:'after food',due_at:'2026-10-14T12:00:00Z',remind_at:'2026-10-14T12:00:00Z'};
+ vi.useFakeTimers();vi.setSystemTime(new Date('2026-10-14T12:00:00Z'));const notify=vi.fn();const row={key:'DEMO-occurrence:time',occurrence_id:'DEMO-occurrence',regimen_id:'DEMO-regimen',medication_name:'DEMO Metformin',dose_amount:500,dose_unit:'mg',food_instruction:'after food',due_at:'2026-10-14T12:00:00Z',remind_at:'2026-10-14T12:00:00Z'};
  vi.mocked(api.reminderAlerts).mockResolvedValueOnce([]).mockResolvedValue([row]);
  await act(async()=>{render(<ReminderMonitor enabled onReview={vi.fn()} port={{kind:'noop',support:()=> 'denied',requestPermission:async()=> 'denied',notify}}/>);});
  expect(screen.queryByRole('dialog')).toBeNull();await act(async()=>{await vi.advanceTimersByTimeAsync(15000);});

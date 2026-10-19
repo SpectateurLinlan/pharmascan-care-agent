@@ -505,6 +505,19 @@ class EvidenceEnrollmentService:
                     "or confirm this is a different product."
                 )
             )
+        if (
+            task.suggested_regimen
+            and task.suggested_regimen.frequency_rule
+            and task.suggested_regimen.frequency_rule.kind == "interval"
+        ):
+            return (
+                "首次服药日期和时间是什么？请在计划核对表中填写；时间留空时默认使用 08:00，并会标明默认值。"
+                "核对确认前不会激活计划。"
+                if language == "zh"
+                else "What are the first-dose date and time? Enter them in the plan review form. "
+                "A blank time defaults to 08:00 and is labelled as a default. "
+                "The plan is not activated until you review and confirm."
+            )
         if task.missing:
             if task.suggested_regimen and task.suggested_regimen.dose_amount and task.suggested_regimen.dose_unit:
                 return (

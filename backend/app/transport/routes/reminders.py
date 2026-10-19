@@ -88,10 +88,22 @@ def calendar(
     rows = container.reminder_plan.upcoming(
         principal.patient_id, lead_minutes=preference.reminder_lead_minutes, days=days
     )
-    if not rows:
+    from datetime import timedelta
+
+    now = container.clock.now()
+    tasks = (
+        [
+            task
+            for task in container.long_term.actionable_tasks(principal.patient_id, preference.timezone)
+            if now <= task.due_at < now + timedelta(days=days)
+        ]
+        if container.long_term
+        else []
+    )
+    if not rows and not tasks:
         raise ValidationError("No confirmed timed medication plan is available for calendar export")
     return Response(
-        calendar_export(rows, now=container.clock.now(), lead_minutes=preference.reminder_lead_minutes),
+        calendar_export(rows, now=container.clock.now(), lead_minutes=preference.reminder_lead_minutes, tasks=tasks),
         media_type="text/calendar",
         headers={"Content-Disposition": "attachment; filename=pharmascan-reminders.ics", "Cache-Control": "no-store"},
     )

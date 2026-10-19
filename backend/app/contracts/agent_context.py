@@ -1,9 +1,10 @@
 """Versioned short-lived context, not permanent patient facts or vector memory."""
 
-from typing import Literal
+from datetime import date, datetime
+from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SerializerFunctionWrapHandler, model_serializer
 
 from .medication_dialogue import MedicationDialogue
 
@@ -41,6 +42,21 @@ class CareClarification(BaseModel):
     ]
 
 
+class PendingIntervalEnrollment(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    medication_name: str = Field(min_length=1, max_length=160)
+    every_hours: int = Field(ge=1, le=720)
+    dose_amount: float | None = None
+    dose_unit: str | None = Field(default=None, max_length=40)
+    course_start_date: date | None = None
+    course_end_date: date | None = None
+    route: str | None = Field(default=None, max_length=40)
+    food_instruction: str | None = Field(default=None, max_length=200)
+    local_time: str | None = Field(default=None, pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+    use_default: bool = False
+    expires_at: datetime
+
+
 class AgentContext(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     version: Literal[1] = 1
@@ -56,3 +72,11 @@ class AgentContext(BaseModel):
     recent_turns: list[RecentTurn] = Field(default_factory=list, max_length=6)
     conversation_summary: str = Field(default="", max_length=600)
     medication_dialogue: MedicationDialogue | None = None
+    pending_interval_enrollment: PendingIntervalEnrollment | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize_context(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        data = handler(self)
+        if self.pending_interval_enrollment is None:
+            data.pop("pending_interval_enrollment", None)
+        return data

@@ -38,6 +38,7 @@ export async function mockPatientApp(page:Page,historyEnabled=true,identity?:{to
   }
   else if(path==='/api/me/dose-history')body={entries:events,item_count:events.length,note:'demo_only'};
   else if(path==='/api/doses/due'){const id=new URL(request.url()).searchParams.get('regimen_id');const medication=patientMedications.find(row=>row.regimen_id===id)??patientMedications[0];body={occurrence_id:'DEMO-occurrence',regimen_id:id,medication_display_name:medication?.display_name??'DEMO medicine',dose_description:'1 tablet',due_at:'2026-10-17T00:00:00Z',is_prn:false,visual_status:'not_checked',ingestion_proven:false};}
+  else if(path==='/api/me/today-attention')body={as_of:'2026-10-17T00:00:00Z',local_date:'2026-10-17',timezone:'Asia/Singapore',plans:patientMedications.map(row=>({regimen_id:row.regimen_id,state:row.is_prn?'as_needed':'pending',unrecorded_times:[]}))};
   else if(path==='/api/me/review-summary')body=report;
   else if(path==='/api/evidence/tasks'){sourceReads++;body=[task];}
   else if(path===`/api/evidence/tasks/${task.id}`)body=task;

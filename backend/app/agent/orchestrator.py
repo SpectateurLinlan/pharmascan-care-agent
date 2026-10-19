@@ -324,6 +324,154 @@ class AgentOrchestrator:
             raise NotFoundError(f"Agent session {session_id} not found for this patient")
         return self._mark_awaiting_confirmation(session)
 
+    def interval_enrollment_turn(self, *, patient_id: UUID, session_id: UUID, turn: AgentTurn) -> AgentReply | None:
+        """Collect an interval anchor in this owned live session; never activate a plan."""
+        import re
+
+        from ..contracts.agent_context import PendingIntervalEnrollment
+
+        session = self.get_session(patient_id=patient_id, session_id=session_id)
+        if session is None or session.state == "expired" or turn.photo_context:
+            return None
+        pending = session.context.pending_interval_enrollment
+        requested = turn.slots.get("frequency_kind") in {"interval", "interval_hours"} and not turn.slots.get("is_prn")
+        if turn.slots.get("interval_time_collected"):
+            return None
+        if not pending and not requested:
+            return None
+        text = turn.text.strip()
+        clock = re.fullmatch(r"(?:首次(?:服药)?时间[：:]?\s*)?([01]?\d|2[0-3])[:：]([0-5]\d)", text)
+        dates = re.fullmatch(r"\d{4}-\d{2}-\d{2}", text)
+        default = text.casefold() in {
+            "skip",
+            "use default",
+            "use default time",
+            "默认",
+            "使用默认时间",
+            "跳过",
+            "不填写",
+        }
+        if pending and not requested and not (clock or dates or default):
+            # Changing topic/cancelling discards the pending action, not clinical history.
+            self._sessions.update(
+                session.model_copy(
+                    update={"context": session.context.model_copy(update={"pending_interval_enrollment": None})}
+                )
+            )
+            return None
+        if pending and self._clock.now() >= pending.expires_at:
+            self._sessions.update(
+                session.model_copy(
+                    update={"context": session.context.model_copy(update={"pending_interval_enrollment": None})}
+                )
+            )
+            return AgentReply(
+                message="首次时间核对已过期，请重新填写计划。没有激活药物。"
+                if turn.language == "zh"
+                else "The first-dose request expired. Reopen the plan; nothing was activated.",
+                intent=AgentIntent.MEDICATION_ENROLLMENT,
+                session_id=session_id,
+                session_state=session.state,
+            )
+        if requested:
+            if len(turn.slots.get("frequency_local_times", [])) > 1:
+                return AgentReply(
+                    message="请只填写一个首次服药时间。" if turn.language == "zh" else "Enter one first-dose time.",
+                    intent=AgentIntent.MEDICATION_ENROLLMENT,
+                    session_id=session_id,
+                    session_state=session.state,
+                )
+            pending = PendingIntervalEnrollment(
+                medication_name=str(turn.slots.get("medication_name", "")),
+                every_hours=turn.slots.get("frequency_every_hours"),
+                dose_amount=turn.slots.get("dose_amount"),
+                dose_unit=turn.slots.get("dose_unit"),
+                course_start_date=turn.slots.get("course_start_date"),
+                course_end_date=turn.slots.get("course_end_date"),
+                route=turn.slots.get("route"),
+                food_instruction=turn.slots.get("food_instruction"),
+                local_time=(turn.slots.get("frequency_local_times") or [None])[0],
+                expires_at=self._clock.now() + timedelta(minutes=10),
+            )
+        elif clock:
+            pending = pending.model_copy(update={"local_time": f"{int(clock[1]):02d}:{clock[2]}", "use_default": False})
+        elif default:
+            pending = pending.model_copy(update={"local_time": "08:00", "use_default": True})
+        elif dates:
+            from datetime import date
+
+            try:
+                pending = pending.model_copy(update={"course_start_date": date.fromisoformat(text)})
+            except ValueError:
+                pass  # Keep the explicit date request below; no invalid date is persisted.
+        if pending.local_time and pending.course_start_date:
+            self._sessions.update(
+                session.model_copy(
+                    update={"context": session.context.model_copy(update={"pending_interval_enrollment": None})}
+                )
+            )
+            reply = self.handle_turn(
+                patient_id=patient_id,
+                session_id=session_id,
+                turn=AgentTurn(
+                    text=turn.text,
+                    language=turn.language,
+                    slots={
+                        **turn.slots,
+                        "medication_name": pending.medication_name,
+                        "frequency_kind": "interval",
+                        "frequency_every_hours": pending.every_hours,
+                        "frequency_local_times": [] if pending.use_default else [pending.local_time],
+                        "course_start_date": pending.course_start_date,
+                        "course_end_date": pending.course_end_date,
+                        "route": pending.route,
+                        "food_instruction": pending.food_instruction,
+                        "dose_amount": pending.dose_amount,
+                        "dose_unit": pending.dose_unit,
+                        "interval_time_collected": True,
+                    },
+                ),
+            )
+            from dataclasses import replace
+
+            note = (
+                ("首次时间：默认 08:00。" if pending.use_default else f"首次时间：{pending.local_time}。")
+                if turn.language == "zh"
+                else ("First dose: default 08:00. " if pending.use_default else f"First dose: {pending.local_time}. ")
+            )
+            return replace(reply, message=note + reply.message)
+        message = (
+            (
+                "首次服药时间是什么？请填写 HH:MM；不填写时默认使用 08:00，可回复‘使用默认时间’。"
+                "这不代表已经服药，计划仍须核对确认。"
+                if turn.language == "zh"
+                else "What time is the first dose? Enter HH:MM; if left blank, the default is 08:00. "
+                "Reply 'use default time' to skip. This is not an intake report; "
+                "the plan still needs review and confirmation."
+            )
+            if not pending.local_time
+            else (
+                "请填写首次服药日期（YYYY-MM-DD），以便计算每隔几小时的计划；不会使用今天猜测。"
+                if turn.language == "zh"
+                else "Enter the first-dose date (YYYY-MM-DD) to anchor the interval; I will not guess today."
+            )
+        )
+        context = record_context(
+            session.context,
+            text=turn.patient_text,
+            message=message,
+            intent=AgentIntent.MEDICATION_ENROLLMENT.value,
+            language=turn.language,
+            results=[],
+        ).model_copy(update={"pending_interval_enrollment": pending})
+        self._sessions.update(session.model_copy(update={"context": context}))
+        return AgentReply(
+            message=message,
+            intent=AgentIntent.MEDICATION_ENROLLMENT,
+            session_id=session_id,
+            session_state=session.state,
+        )
+
     def handle_turn(self, *, patient_id: UUID, session_id: UUID, turn: AgentTurn) -> AgentReply:
         session = self._sessions.get(patient_id, session_id)
         if session is None:
@@ -391,6 +539,9 @@ class AgentOrchestrator:
                 session_state=session.state,
                 mode="deterministic_degraded",
             )
+        interval_reply = self.interval_enrollment_turn(patient_id=patient_id, session_id=session_id, turn=turn)
+        if interval_reply is not None:
+            return interval_reply
         clarification = session.context.awaiting_clarification
         if clarification:
             query = turn.text.lower().strip().removeprefix("the ").strip(" .?!")
@@ -672,6 +823,8 @@ class AgentOrchestrator:
                     is_prn=bool(turn.slots.get("is_prn", False)),
                     route=turn.slots.get("route"),
                     food_instruction=turn.slots.get("food_instruction"),
+                    course_start_date=turn.slots.get("course_start_date"),
+                    course_end_date=turn.slots.get("course_end_date"),
                 )
             # A confirmed summary was shown and the patient approved it.
             if (
@@ -895,10 +1048,17 @@ class AgentOrchestrator:
                 return prefix + last.clarification_question
             if last.payload.get("item_count") == 0 and "No dose" in last.clarification_question:
                 return prefix + last.clarification_question
-        return prefix + "Done. " + _summarise(last)
+        return prefix + _summarise(last)
 
 
 def _summarise(result: ToolResult) -> str:
+    if result.tool_name == ToolName.ENROLL_MEDICATION_DRAFT and result.payload.get("interval_anchor"):
+        anchor = result.payload["interval_anchor"]
+        label = "default 08:00" if anchor["time_source"] == "default_0800" else anchor["local_time"]
+        return (
+            f"Draft saved for review. First dose: {anchor['local_date']} {label}. "
+            "Review the complete plan in the enrollment form and explicitly confirm activation. No intake was recorded."
+        )
     if result.tool_name == ToolName.RECORD_SELF_REPORT:
         return "Recorded as reported by you — this does not prove the medication was taken."
     if result.tool_name == ToolName.LIST_ACTIVE_MEDICATIONS:

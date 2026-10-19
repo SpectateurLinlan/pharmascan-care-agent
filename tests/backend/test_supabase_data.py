@@ -10,7 +10,7 @@ import pytest
 from app.config import ConfigError, Settings
 from app.domain.errors import AuthenticationRequiredError, ProviderUnavailableError, ValidationError
 from app.infrastructure.supabase_data import SupabaseDataClient
-from app.infrastructure.supabase_repos import build_supabase_repositories
+from app.infrastructure.supabase_repos import Regimens, build_supabase_repositories
 from app.transport.auth import AuthBoundary, StaticTokenVerifier
 from app.transport.container import build_container_from_settings
 
@@ -192,3 +192,59 @@ def test_occurrence_generation_ignores_only_same_owned_key_without_updating_hist
     assert len(requests) == 1 and requests[0].method == "POST"
     assert requests[0].url.params["on_conflict"] == "patient_id,generation_key"
     assert requests[0].headers["Prefer"] == "resolution=ignore-duplicates,return=minimal"
+
+
+def test_successor_activation_calls_owner_scoped_atomic_rpc_and_decodes_result():
+    from datetime import UTC, datetime
+
+    from app.contracts.dto import RegimenVersionDTO
+    from app.contracts.enums import RegimenState
+
+    predecessor_id = UUID(int=20)
+    regimen = RegimenVersionDTO(
+        id=UUID(int=21),
+        patient_id=OWNER,
+        patient_medication_id=UUID(int=22),
+        source_id=UUID(int=23),
+        version_no=2,
+        state=RegimenState.ACTIVE,
+        dose_amount=2,
+        dose_unit="tablet",
+        frequency_rule={"kind": "daily", "local_times": ["08:00"]},
+        is_prn=False,
+        route=None,
+        food_instruction=None,
+        effective_from=datetime(2026, 10, 19, tzinfo=UTC),
+        effective_to=None,
+        supersedes_id=predecessor_id,
+        confirmation_challenge_id=UUID(int=24),
+        created_at=datetime(2026, 10, 19, tzinfo=UTC),
+    )
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        assert request.url.path.endswith("/rpc/activate_medication_regimen_version")
+        return httpx.Response(
+            200,
+            json={
+                "regimen": regimen.model_dump(mode="json"),
+                "superseded_regimen_ids": [str(predecessor_id)],
+            },
+        )
+
+    activated = Regimens(client_for(handler), "regimen_versions", RegimenVersionDTO).activate_version(
+        patient_id=OWNER,
+        regimen_id=regimen.id,
+        challenge_id=regimen.confirmation_challenge_id,
+        timezone="Asia/Singapore",
+    )
+    import json
+
+    assert json.loads(requests[0].content) == {
+        "p_regimen_id": str(regimen.id),
+        "p_challenge_id": str(regimen.confirmation_challenge_id),
+        "p_timezone": "Asia/Singapore",
+    }
+    assert activated.regimen == regimen
+    assert activated.superseded_regimen_ids == [predecessor_id]

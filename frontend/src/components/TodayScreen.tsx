@@ -57,12 +57,13 @@ export function describeDueStatus(
 export function TodayScreen({
   medications,
   onChanged, onFeeling,
-  reminderPort, compact = false, onMedicines, onHistory, onVisualCheck, focusRegimenId, showTitle = true,
+  reminderPort, compact = false, onMedicines, onHistory, onVisualCheck, focusRegimenId, showTitle = true, onInteractionChange,
 }: {
   medications: MedicationSummary[];
   onChanged: () => void; onFeeling?:()=>void;
   focusRegimenId?: string|null;
   showTitle?:boolean;
+  onInteractionChange?:(regimen:string,locked:boolean)=>void;
   onVisualCheck?: (regimenId:string|null) => void; reminderPort?: ReminderPort; compact?: boolean; onMedicines?: () => void; onHistory?: () => void;
 }) {
   const {language,t}=useLanguage();
@@ -80,6 +81,7 @@ export function TodayScreen({
     challenge: ReportChallengeResponse; occurrenceId: string | null; choice: string; key: string;
   } | null>(null);
   const [reminderPermission, setReminderPermission] = useState<ReminderSupport>('default');
+  useEffect(()=>{if(!selected)return;onInteractionChange?.(selected.regimen_id,busy||confirmation!==null);return()=>onInteractionChange?.(selected.regimen_id,false);},[selected,busy,confirmation,onInteractionChange]);
 
   const reminders: ReminderPort =
     reminderPort ??
@@ -105,7 +107,7 @@ export function TodayScreen({
     let live = true;
 
     const refresh = () => { if (document.visibilityState === 'hidden') return;
-      void api.dueDose(selected.regimen_id).then(value => { if (live) {setDue(value);setError(null);} }).catch(caught => { if (live) setError(caught); });
+      void api.dueDose(selected.regimen_id,true).then(value => { if (live) {setDue(value);setError(null);} }).catch(caught => { if (live) setError(caught); });
     };
     refresh(); const poll=setInterval(refresh,15000); document.addEventListener('visibilitychange',refresh);
     return () => { live = false; clearInterval(poll); document.removeEventListener('visibilitychange',refresh); };

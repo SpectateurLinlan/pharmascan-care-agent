@@ -18,6 +18,25 @@ A = UUID("d00d0000-0000-4000-8000-000000000001")
 B = UUID("d00d0000-0000-4000-8000-000000000002")
 
 
+def initialize_platform(c):
+    """Local Supabase platform shims, not business-table or RLS substitutes."""
+    c.execute("""
+     CREATE SCHEMA auth; CREATE SCHEMA storage; CREATE SCHEMA extensions;
+     CREATE TABLE auth.users(id uuid PRIMARY KEY);
+     CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
+      SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+     GRANT USAGE ON SCHEMA auth TO authenticated,anon;
+     GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated,anon;
+     CREATE TABLE storage.buckets(id text PRIMARY KEY,name text,public boolean DEFAULT false,
+      file_size_limit bigint,allowed_mime_types text[]);
+     CREATE TABLE storage.objects(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bucket_id text,
+      name text,owner uuid,metadata jsonb);
+     ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+     CREATE FUNCTION storage.foldername(text) RETURNS text[] LANGUAGE sql IMMUTABLE AS $$
+      SELECT string_to_array($1,'/') $$;
+    """)
+
+
 @pytest.fixture(scope="module")
 def db():
     import psycopg
@@ -32,21 +51,7 @@ def db():
                 admin.execute(sql.SQL("CREATE ROLE {} NOLOGIN").format(sql.Identifier(role)))
         admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
     with psycopg.connect(f"postgresql://postgres@127.0.0.1:55439/{name}", autocommit=True) as c:
-        c.execute("""
-         CREATE SCHEMA auth; CREATE SCHEMA storage; CREATE SCHEMA extensions;
-         CREATE TABLE auth.users(id uuid PRIMARY KEY);
-         CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
-          SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
-         GRANT USAGE ON SCHEMA auth TO authenticated,anon;
-         GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated,anon;
-         CREATE TABLE storage.buckets(id text PRIMARY KEY,name text,public boolean DEFAULT false,
-          file_size_limit bigint,allowed_mime_types text[]);
-         CREATE TABLE storage.objects(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bucket_id text,
-          name text,owner uuid,metadata jsonb);
-         ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
-         CREATE FUNCTION storage.foldername(text) RETURNS text[] LANGUAGE sql IMMUTABLE AS $$
-          SELECT string_to_array($1,'/') $$;
-        """)
+        initialize_platform(c)
         for path in sorted(Path("supabase/migrations").glob("*.sql")):
             try:
                 c.execute(path.read_text(encoding="utf-8"))
@@ -120,6 +125,18 @@ def test_empty_only_rollback_and_atomic_reapply(db):
         assert db.execute("select to_regclass('public.conversations')").fetchone()[0] is None
         raise Rollback()
     assert db.execute("select to_regclass('public.conversations')").fetchone()[0] is not None
+
+
+def test_postgres_session_repository_preserves_real_thread_link(db):
+    from app.infrastructure.postgres_db import PostgresDatabase
+    from app.infrastructure.postgres_repos import build_postgres_repositories
+
+    conversation, session = seeded(db)
+    repositories = build_postgres_repositories(
+        PostgresDatabase(dsn=f"postgresql://postgres@127.0.0.1:55439/{db.info.dbname}")
+    )
+    restored = repositories.sessions.get(A, session)
+    assert restored and restored.conversation_id == conversation
 
 
 def test_rls_claims_full_messages_and_idempotency(db):

@@ -42,7 +42,7 @@ test('source-only count, supplement cancellation and assistant alignment stay co
  const {errors,writes,getSourceReads}=await mockPatientApp(page);
  await page.goto('/e2e/patient-feedback.html?shell=1');
  await page.locator('[data-guide="medicines"]').click();
- await expect(page.getByRole('button',{name:/Finish medication setup/})).toContainText('1 awaiting review');
+ await expect(page.getByRole('button',{name:/Finish medication setup/})).toContainText('1 medication setup needs review');
  await page.getByRole('button',{name:/Finish medication setup/}).click();
  await expect(page.getByRole('button',{name:/DEMO source medicine/})).toBeVisible();
  await expect(page.getByText('No unfinished medication setup.')).toHaveCount(0);
