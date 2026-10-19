@@ -1,0 +1,348 @@
+{
+  "scripts/start_dev.py": {
+    "purpose": "启动现有FastAPI与Vite开发服务并检查端口",
+    "run": "python scripts/start_dev.py --help；本地开发时运行",
+    "effects": "启动本地子进程；不部署、不执行数据库迁移",
+    "publication": "公共可复用入口，可审核提交；凭据和生成的本地产物不提交",
+    "validity": "现行入口；本轮执行证据见发布报告，未运行有副作用的生产命令"
+  },
+  "scripts/run_patient_api.py": {
+    "purpose": "Render患者API严格配置入口及资源检查",
+    "run": "python scripts/run_patient_api.py --check-resources；服务正常启动见Render配置",
+    "effects": "读取进程配置，拒绝患者服务持有工作端私钥或管理员数据库凭据",
+    "publication": "公共可复用入口，可审核提交；凭据和生成的本地产物不提交",
+    "validity": "现行入口；本轮执行证据见发布报告，未运行有副作用的生产命令"
+  },
+  "scripts/db.py": {
+    "purpose": "数据库状态/迁移/契约CLI",
+    "run": "python scripts/db.py status；migrate --only VERSION须明确审批",
+    "effects": "migrate写Schema及ledger；读取ledger本轮已去除隐式DDL；需DATABASE_URL",
+    "publication": "公共可复用入口，可审核提交；凭据和生成的本地产物不提交",
+    "validity": "现行入口；本轮执行证据见发布报告，未运行有副作用的生产命令"
+  },
+  "scripts/db_integration.py": {
+    "purpose": "真实数据库合成用户/记录与RLS测试",
+    "run": "python scripts/db_integration.py；只用经批准隔离目标",
+    "effects": "写Auth与合成患者表及清理；不是只读命令，需数据库凭据",
+    "publication": "公共可复用入口，可审核提交；凭据和生成的本地产物不提交",
+    "validity": "现行入口；本轮执行证据见发布报告，未运行有副作用的生产命令"
+  },
+  "scripts/create_vapid_keys.py": {
+    "purpose": "创建VAPID密钥对",
+    "run": "python scripts/create_vapid_keys.py；没有--help保护，会实际生成",
+    "effects": "写Git忽略的本地敏感密钥；禁止未经授权生成或提交",
+    "publication": "公共可复用入口，可审核提交；凭据和生成的本地产物不提交",
+    "validity": "现行入口；本轮执行证据见发布报告，未运行有副作用的生产命令"
+  },
+  "scripts/run_reminders.py": {
+    "purpose": "提醒投影及工作端CLI",
+    "run": "python scripts/run_reminders.py --help；先审核目标",
+    "effects": "可能更新提醒或发送通知；需工作端凭据及当次授权",
+    "publication": "公共可复用入口，可审核提交；凭据和生成的本地产物不提交",
+    "validity": "现行入口；本轮执行证据见发布报告，未运行有副作用的生产命令"
+  },
+  "scripts/generate_gallery_demo.py": {
+    "purpose": "生成合成demo图库图片",
+    "run": "python scripts/generate_gallery_demo.py --help",
+    "effects": "写本地demo图片，不建立已确认药物身份",
+    "publication": "公共可复用入口，可审核提交；凭据和生成的本地产物不提交",
+    "validity": "现行入口；本轮执行证据见发布报告，未运行有副作用的生产命令"
+  },
+  "scripts/stage2_contract_diff.py": {
+    "purpose": "比较仓库保存的Stage2 0.8和0.10契约",
+    "run": "python scripts/stage2_contract_diff.py；无CLI",
+    "effects": "读本地OpenAPI，写差异JSON；无外部请求",
+    "publication": "公共可复用入口，可审核提交；凭据和生成的本地产物不提交",
+    "validity": "现行入口；本轮执行证据见发布报告，未运行有副作用的生产命令"
+  },
+  "scripts/stage2_v010_smoke.py": {
+    "purpose": "真实Stage2合成图片smoke",
+    "run": "python scripts/stage2_v010_smoke.py；无CLI，直接调用外部服务",
+    "effects": "外部识别与本地产物，需获授权调用；禁止患者真实照片",
+    "publication": "公共可复用入口，可审核提交；凭据和生成的本地产物不提交",
+    "validity": "现行入口；本轮执行证据见发布报告，未运行有副作用的生产命令"
+  },
+  "scripts/qa/database_contracts.py": {
+    "purpose": "显式READ ONLY迁移/列/函数/权限核查",
+    "run": "python scripts/qa/database_contracts.py --production-read-only",
+    "effects": "需既有凭据；仅数据库元数据、目标身份哈希；写本地脱敏JSON",
+    "publication": "公共可复用入口，可审核提交；凭据和生成的本地产物不提交",
+    "validity": "现行入口；本轮执行证据见发布报告，未运行有副作用的生产命令"
+  },
+  "scripts/maintenance/consolidate_repository.py": {
+    "purpose": "经哈希验证的显式重复文件整理",
+    "run": "python scripts/maintenance/consolidate_repository.py；--apply才实际整理",
+    "effects": "本轮已应用；删除证明重复的备份/安装包，移动私有运维；无Git/DB操作",
+    "publication": "公共可复用入口，可审核提交；凭据和生成的本地产物不提交",
+    "validity": "现行入口；本轮执行证据见发布报告，未运行有副作用的生产命令"
+  },
+  "scripts/maintenance/update_file_catalog.py": {
+    "purpose": "第一方文件客观索引与人工描述分离",
+    "run": "python scripts/maintenance/update_file_catalog.py；检查加--check",
+    "effects": "只读文件，写FILE_CATALOG.md和file_index.json；不覆盖人工metadata",
+    "publication": "公共可复用入口，可审核提交；凭据和生成的本地产物不提交",
+    "validity": "现行入口；本轮执行证据见发布报告，未运行有副作用的生产命令"
+  },
+  "internal/operations/database/apply_threads_026.py": {
+    "purpose": "按用途归位的历史私有database运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/database/audit_gallery_duplicates.py": {
+    "purpose": "按用途归位的历史私有database运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/database/session045_supabase_perf.py": {
+    "purpose": "按用途归位的历史私有database运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/database/thread_db_preflight.py": {
+    "purpose": "按用途归位的历史私有database运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/database/verify_gallery_schema.py": {
+    "purpose": "按用途归位的历史私有database运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/database/verify_threads_026.py": {
+    "purpose": "按用途归位的历史私有database运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/database/_probe.py": {
+    "purpose": "按用途归位的历史私有database运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/database/_probe2.py": {
+    "purpose": "按用途归位的历史私有database运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/database/_probe3.py": {
+    "purpose": "按用途归位的历史私有database运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/database/_probe4.py": {
+    "purpose": "按用途归位的历史私有database运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/database/_probe5.py": {
+    "purpose": "按用途归位的历史私有database运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/database/_probe6.py": {
+    "purpose": "按用途归位的历史私有database运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/database/_probe7.py": {
+    "purpose": "按用途归位的历史私有database运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/development/check_dev_reload.py": {
+    "purpose": "按用途归位的历史私有development运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/diagnostics/scan_gallery_secrets.py": {
+    "purpose": "按用途归位的历史私有diagnostics运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/diagnostics/scan_ux_secrets.py": {
+    "purpose": "按用途归位的历史私有diagnostics运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/evidence/correctness02_finalize_evidence.py": {
+    "purpose": "按用途归位的历史私有evidence运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/evidence/report_correctness01.py": {
+    "purpose": "按用途归位的历史私有evidence运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/push/execute_authorized_push_once.py": {
+    "purpose": "按用途归位的历史私有push运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/push/push_binding_readonly.py": {
+    "purpose": "按用途归位的历史私有push运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/push/push_current_http_readonly.py": {
+    "purpose": "按用途归位的历史私有push运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/push/PUSH_ONE_SHOT_PREPARED.sql": {
+    "purpose": "按用途归位的历史私有push运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/push/push_production_readonly.py": {
+    "purpose": "按用途归位的历史私有push运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "internal/operations/push/push_scope_readonly.py": {
+    "purpose": "按用途归位的历史私有push运维/验收资料",
+    "run": "先读源码与历史报告；非当前发布命令，未经具体授权禁止执行",
+    "effects": "可能读取敏感配置或操作数据库；database默认保护，push一次性入口须当次批准",
+    "publication": "本地私有，禁止公开提交/上传；优先正式tests/qa入口",
+    "validity": "历史工具，非当前发布入口；未按当前Schema/场景重新执行"
+  },
+  "tests/backend/accept_release_gemini.py": {
+    "purpose": "显式真实Provider验收；合成患者/本地存储、真实外部服务",
+    "run": "python -m tests.backend.accept_release_gemini --help；实际调用须--run-live及对应批准参数",
+    "effects": "真实外部调用；Gemini沿用累计线请求预算；不写生产患者；SQL入口仅localhost",
+    "publication": "验收源码可审核提交；实际输出/凭据不自动公开",
+    "validity": "现行入口；本轮执行证据见发布报告，未运行有副作用的生产命令"
+  },
+  "tests/backend/accept_release_multimodal.py": {
+    "purpose": "显式真实Provider验收；合成患者/本地存储、真实外部服务",
+    "run": "python -m tests.backend.accept_release_multimodal --help；实际调用须--run-live及对应批准参数",
+    "effects": "真实外部调用；Gemini沿用累计线请求预算；不写生产患者；SQL入口仅localhost",
+    "publication": "验收源码可审核提交；实际输出/凭据不自动公开",
+    "validity": "现行入口；本轮执行证据见发布报告，未运行有副作用的生产命令"
+  },
+  "frontend/src/components/TodayScreen.tsx": {
+    "purpose": "Today实际页面，组合助手及今日待操作",
+    "related": "backend/app/application/today_attention.py; tests/backend/test_today_attention.py"
+  },
+  "frontend/src/components/HistoryScreen.tsx": {
+    "purpose": "Records真实筛选/分页/失败恢复",
+    "related": "backend/app/application/record_history.py; frontend/e2e/records-today.spec.ts"
+  },
+  "frontend/src/components/AssistantScreen.tsx": {
+    "purpose": "Today与Workspace共享会话/输入控制",
+    "related": "backend/app/agent/conversation.py; frontend/e2e/correctness02-choices.spec.ts"
+  },
+  "backend/app/agent/read_dialogue.py": {
+    "purpose": "有界只读澄清/指代/来源/历史规划",
+    "related": "tests/backend/test_correctness02_boundaries.py"
+  },
+  "backend/app/application/draft_deletion.py": {
+    "purpose": "患者作用域安全草稿删除/幂等",
+    "related": "tests/backend/test_draft_deletion_sql.py; supabase/migrations/202610180027_draft_deletion.sql"
+  },
+  "scripts/qa/render_release_evidence.py": {
+    "purpose": "由实际捕获输出和人工核对生成问答Markdown",
+    "run": "python scripts/qa/render_release_evidence.py",
+    "effects": "只读合成JSON并写报告；不调用模型、不生成理想回复",
+    "publication": "公共可复用入口，可审核提交；凭据和生成的本地产物不提交",
+    "validity": "现行入口；本轮执行证据见发布报告，未运行有副作用的生产命令"
+  },
+  ".python-version": {
+    "purpose": "本地/托管Python工具链版本提示",
+    "related": "pyproject.toml"
+  },
+  "pyproject.toml": {
+    "purpose": "唯一Python依赖/构建/Ruff/Pytest及独立Dispatcher配置",
+    "related": "deploy/README.md"
+  },
+  "frontend/package.json": {
+    "purpose": "前端npm依赖及启动/测试/构建命令",
+    "related": "frontend/package-lock.json"
+  },
+  "frontend/package-lock.json": {
+    "purpose": "可重复npm安装/平台可选依赖锁定",
+    "related": "frontend/package.json"
+  },
+  "AGENTS.md": {
+    "purpose": "根目录本地工程/医疗安全/Git审批规则；保留且不公开上传",
+    "related": "docs/ARCHITECTURE.md"
+  },
+  "frontend/vercel.json": {
+    "purpose": "前端API代理与SPA回退",
+    "related": "deploy/README.md"
+  },
+  "tests/backend/accept_release_gemini_sql.py": {
+    "purpose": "显式真实Provider验收；隔离PG/RLS、缓存公开标签",
+    "run": "python -m tests.backend.accept_release_gemini_sql --help；实际调用须--run-live及对应批准参数",
+    "effects": "真实外部调用；Gemini沿用累计线请求预算；不写生产患者；SQL入口仅localhost",
+    "publication": "验收源码可审核提交；实际输出/凭据不自动公开",
+    "validity": "现行入口；本轮执行证据见发布报告，未运行有副作用的生产命令"
+  },
+  "tests/backend/accept_release_gallery.py": {
+    "purpose": "真实Stage2个人参考embedding/match与本地图库撤销/隔离验收",
+    "run": "python -m tests.backend.accept_release_gallery --run-live；使用已生成合成图片",
+    "effects": "外部模型请求；本地内存私有存储，绝不写生产Storage/患者；自匹配不证明药物身份",
+    "publication": "测试入口可审核提交；本地响应与凭据不提交",
+    "validity": "现行入口；本轮执行证据见发布报告，未运行有副作用的生产命令"
+  },
+  "tests/backend/accept_release_schema.py": {
+    "purpose": "已保存生产只读元数据与本机026及029目标结构/权限实际对账",
+    "run": "python -m tests.backend.accept_release_schema --run-isolated；需要本机THREADS_TEST_DSN及生产元数据快照",
+    "effects": "只在本机创建隔离数据库/重建授权及迁移；不连生产、不读患者",
+    "publication": "验收脚本可审核提交；元数据/本机DB输出不自动发布",
+    "validity": "本轮已执行；平台对象单独保留，不作为应用删除目标"
+  },
+  "supabase/migrations/202610180029_patient_table_privileges.sql": {
+    "purpose": "新增029：收紧实际发现的匿名/认证默认宽权限，保留受控列级授权及业务RPC",
+    "related": "tests/backend/test_release_privileges_sql.py; status/RELEASE_READINESS_20261018.md",
+    "run": "仅当次生产审批后按027/028/029顺序执行；本机隔离测试已通过",
+    "effects": "修改ACL及当前迁移owner未来表默认权限；不修改患者行/RLS策略；需要数据库管理员权限",
+    "publication": "版本化迁移可审查提交，生产执行单独批准",
+    "validity": "本轮新增；生产PENDING"
+  }
+}

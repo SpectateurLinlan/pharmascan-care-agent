@@ -59,20 +59,17 @@ MediThread 将药物资料、患者自述记录和待咨询问题整理在同一
 
 ## 工作原理
 
-```mermaid
-flowchart LR
-    A[患者<br/>文字或设备支持的语音] --> B[React + TypeScript]
-    B --> C[FastAPI]
-    C --> D[有界 Gemini Agent]
-    D --> E[受限工具集]
-    E --> F[应用服务<br/>安全规则与权限校验]
-    C --> F
-    F --> G[(Supabase<br/>Auth + PostgreSQL + Storage)]
-    F --> H[药品说明与<br/>视觉证据适配器]
-    F --> I[敏感操作由患者确认]
-```
+### 系统架构
 
-Agent 负责理解问题和选择工具；应用服务负责患者数据归属、用药计划规则及敏感操作确认。数据模型明确区分药物身份、产品规格、用药计划版本、计划服药时点与患者自述事件。
+![MediThread 系统架构：患者应用、已认证 FastAPI、Agent 工具、安全服务、Supabase 与外部服务](docs/images/medithread-system-architecture.png)
+
+**图 1：系统组件与信任边界。** React 患者应用通过已认证的 FastAPI 访问业务服务。受限 Agent 工具和应用服务执行患者归属、来源核验及用药计划规则；Supabase 保存患者所属记录与私有文件，Gemini、Stage2 和 openFDA 通过后端集成访问。个人用药指示来自已核对的计划，不能由一般药品说明代替。
+
+### Agent 流程与长期上下文
+
+![MediThread Agent 流程：患者意图、类型化工具、校验、患者确认、持久化、审计与后续跟进](docs/images/medithread-agent-workflow.png)
+
+**图 2：从患者请求到后续跟进。** Agent 理解请求，通过类型化工具查询已授权记录。只读请求可以直接返回有依据的解释；敏感修改必须先通过校验，再由患者独立确认，之后才进行可安全重试的保存与审计。后续跟进重新查询当前授权记录；有界聊天上下文支持连续对话，但不替代可信的医疗业务记录。
 
 实现细节见[系统架构](docs/ARCHITECTURE.md)、[API 契约](docs/API_CONTRACTS.md)、[数据模型](docs/DATA_MODEL.md)和[安全与评估](docs/SAFETY_AND_EVALUATION.md)。
 
@@ -144,3 +141,5 @@ pharmascan-care-agent/
 MediThread 的早期开发名称为 *PharmaScan Care*，仓库目录及部分工程记录保留了这一名称。
 
 **项目源代码**：[Apache-2.0](LICENSE) · [NOTICE](NOTICE) · [第三方许可和数据条款](docs/legal/THIRD_PARTY_NOTICES.md)
+
+维护导航：[Repository Guide](docs/REPOSITORY_GUIDE.md) · [逐文件目录](docs/FILE_CATALOG.md)。

@@ -10,9 +10,9 @@
 
 <p align="center">
   <a href="https://medithread.vercel.app"><strong>Open MediThread ↗</strong></a>
-  &nbsp;·&nbsp;
+   · 
   <a href="#what-you-can-do">Explore features</a>
-  &nbsp;·&nbsp;
+   · 
   <a href="#run-locally">Run locally</a>
 </p>
 
@@ -28,14 +28,14 @@ MediThread brings medication information, patient-reported records and follow-up
 
 ## What you can do
 
-| | Capability | In MediThread |
-|:--:|---|---|
-| 01 | **Understand medicines** | Ask about general medication uses and review available drug-label information with its source. |
-| 02 | **Manage medication plans** | Enrol medicines, review source documents and confirmed instructions, and view current or previous regimens. |
-| 03 | **Keep a dose record** | Report **taken**, **not taken** or **unsure**; revisit the history and record barriers to taking medication. |
-| 04 | **Track health and follow-ups** | Capture measurements, symptoms, supply concerns, refills and medication-related follow-up tasks. |
-| 05 | **Talk with the assistant** | Ask by text or supported voice input, use medication context and return to saved conversations. |
-| 06 | **Prepare for a care review** | Bring together medication changes, dose reports, observations and questions in an exportable summary. |
+|    | Capability                            | In MediThread                                                                                                                  |
+| :-: | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 01 | **Understand medicines**        | Ask about general medication uses and review available drug-label information with its source.                                 |
+| 02 | **Manage medication plans**     | Enrol medicines, review source documents and confirmed instructions, and view current or previous regimens.                    |
+| 03 | **Keep a dose record**          | Report **taken**, **not taken** or **unsure**; revisit the history and record barriers to taking medication. |
+| 04 | **Track health and follow-ups** | Capture measurements, symptoms, supply concerns, refills and medication-related follow-up tasks.                               |
+| 05 | **Talk with the assistant**     | Ask by text or supported voice input, use medication context and return to saved conversations.                                |
+| 06 | **Prepare for a care review**   | Bring together medication changes, dose reports, observations and questions in an exportable summary.                          |
 
 **A record is not an assumption.** An unreported scheduled dose is *unrecorded*, not automatically *missed*. General drug information is presented separately from a patient's reviewed instructions.
 
@@ -43,12 +43,12 @@ MediThread brings medication information, patient-reported records and follow-up
 
 Four care pages and a dedicated assistant workspace support the daily workflow.
 
-| Area | Purpose |
-|---|---|
-| **Today** | See today's schedule, report doses and check follow-ups without leaving the daily view. |
-| **Medicines** | Review medication identity, product details, source evidence, regimens and supply information. |
-| **Records** | Browse dose events, health observations, medication difficulties and review summaries. |
-| **Me** | Manage account details, preferences, accessibility and conversation-history settings. |
+| Area                | Purpose                                                                                         |
+| ------------------- | ----------------------------------------------------------------------------------------------- |
+| **Today**     | See today's schedule, report doses and check follow-ups without leaving the daily view.         |
+| **Medicines** | Review medication identity, product details, source evidence, regimens and supply information.  |
+| **Records**   | Browse dose events, health observations, medication difficulties and review summaries.          |
+| **Me**        | Manage account details, preferences, accessibility and conversation-history settings.           |
 | **Assistant** | Ask questions across medication and self-care topics, with separate saved conversation threads. |
 
 ### Conversations that can continue
@@ -59,35 +59,32 @@ Medication facts that can change, such as the active regimen, are retrieved agai
 
 ## How it works
 
-```mermaid
-flowchart LR
-    A[Patient<br/>Text or supported voice] --> B[React + TypeScript]
-    B --> C[FastAPI]
-    C --> D[Bounded Gemini agent]
-    D --> E[Allowlisted tools]
-    E --> F[Application services<br/>Safety and authorization]
-    C --> F
-    F --> G[(Supabase<br/>Auth + PostgreSQL + Storage)]
-    F --> H[Drug-label and<br/>visual evidence adapters]
-    F --> I[Patient confirmation<br/>for sensitive actions]
-```
+### System architecture
 
-The agent interprets questions and selects tools. Application services enforce patient ownership, medication-plan rules and confirmation before sensitive changes. Medication identity, product strength, regimen versions, planned occurrences and patient-reported events remain separate in the data model.
+![MediThread system architecture: patient app, authenticated FastAPI, agent tools, safety services, Supabase and external providers](docs/images/medithread-system-architecture.png)
+
+**Figure 1 — Components and trust boundaries.** The React patient app uses authenticated FastAPI services. Allowlisted agent tools and application services enforce patient ownership, source validation and medication-plan rules. Supabase holds patient-owned records and private files; Gemini, Stage2 and openFDA are accessed through backend integrations. Personal instructions come from reviewed regimens, not general drug-label knowledge.
+
+### Agent workflow and long-term context
+
+![MediThread agent workflow: patient intent, typed tools, validation, patient confirmation, persistence, audit and follow-up](docs/images/medithread-agent-workflow.png)
+
+**Figure 2 — From a request to follow-up.** The agent interprets a request and queries authorised records through typed tools. Read-only requests can return grounded explanations; sensitive changes require validation and independent patient confirmation before retry-safe persistence and audit. Later follow-ups query current authorised records. Bounded conversation context supports continuity without replacing the clinical source of truth.
 
 See the [architecture](docs/ARCHITECTURE.md), [API contracts](docs/API_CONTRACTS.md), [data model](docs/DATA_MODEL.md) and [safety evaluation](docs/SAFETY_AND_EVALUATION.md).
 
 ## Technology
 
-| Layer | Technologies |
-|---|---|
-| **Patient app** | React 18, TypeScript, Vite |
-| **Backend** | Python, FastAPI, Pydantic v2 |
-| **Identity & data** | Supabase Auth, PostgreSQL with RLS, private Storage |
-| **AI assistant** | Gemini tool calling, bounded context, deterministic safety checks |
-| **Medication information** | Source-linked openFDA drug labels |
-| **Visual workflows** | Document/OCR flows, personal photo references, external Stage2 adapter |
-| **Speech** | Browser speech recognition and synthesis; optional Tencent integration |
-| **Hosting** | Vercel web app, Render API, separate Web Push dispatcher |
+| Layer                            | Technologies                                                           |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| **Patient app**            | React 18, TypeScript, Vite                                             |
+| **Backend**                | Python, FastAPI, Pydantic v2                                           |
+| **Identity & data**        | Supabase Auth, PostgreSQL with RLS, private Storage                    |
+| **AI assistant**           | Gemini tool calling, bounded context, deterministic safety checks      |
+| **Medication information** | Source-linked openFDA drug labels                                      |
+| **Visual workflows**       | Document/OCR flows, personal photo references, external Stage2 adapter |
+| **Speech**                 | Browser speech recognition and synthesis; optional Tencent integration |
+| **Hosting**                | Vercel web app, Render API, separate Web Push dispatcher               |
 
 ## Development status
 
@@ -144,3 +141,5 @@ pharmascan-care-agent/
 MediThread was previously developed under the working title *PharmaScan Care*, which remains in the repository name and older engineering records.
 
 **Project source: [Apache-2.0](LICENSE) · [NOTICE](NOTICE) · [Third-party licenses and data terms](docs/legal/THIRD_PARTY_NOTICES.md)
+
+Maintainer navigation: [Repository Guide](docs/REPOSITORY_GUIDE.md) · [File Catalog](docs/FILE_CATALOG.md).
