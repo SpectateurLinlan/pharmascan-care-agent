@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 from app.contracts.model import ModelProviderError
-from app.infrastructure.gemini_model import GeminiModel, gemini_http_options
+from app.infrastructure.gemini_model import GeminiModel, bounded_retry_response, gemini_http_options
 from google import genai
 from google.genai import errors, types
 
@@ -111,6 +111,38 @@ def test_sdk_owns_one_bounded_503_retry_without_replaying_tools(recover, caplog)
         assert len(requests) == 2 and requests[0] == requests[1]
         assert "PRIVATE_PROVIDER_DETAIL" not in caplog.text
         assert options["timeout"] == 12000 and options["retry_options"]["attempts"] == 1
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"Retry-After": "120"},
+        {"retry-after-ms": "120000"},
+        {"Date": "Mon, 19 Oct 2026 00:00:00 GMT", "Retry-After": "Mon, 19 Oct 2026 00:02:00 GMT"},
+    ],
+)
+def test_real_sdk_defers_long_cooldown_without_sleeping_or_retrying(headers):
+    calls = []
+
+    def respond(request):
+        calls.append(request.method)
+        return httpx.Response(503, headers=headers, json={"error": {"message": "PRIVATE"}})
+
+    options = gemini_http_options()
+    options["base_url"] = "https://sdk.example.invalid"
+    options["client_args"] = {**options["client_args"], "transport": httpx.MockTransport(respond)}
+    model = GeminiModel(
+        model="gemini-3.5-flash-lite",
+        client_factory=lambda: genai.Client(api_key="DEMO-only", http_options=options),
+    )
+    with pytest.raises(ModelProviderError) as error:
+        model.create(history=[], tools=[], instruction="DEMO retry deadline")
+    assert error.value.category == "unavailable"
+    assert calls == ["POST"]
+
+
+def test_short_cooldown_is_left_to_sdk_without_overriding_server_backoff():
+    bounded_retry_response(httpx.Response(503, headers={"Retry-After": "1"}))
 
 
 @pytest.mark.parametrize("status,category", [(429, "quota"), (503, "unavailable"), (None, "timeout")])

@@ -23,7 +23,7 @@ from app.agent.conversation import ConversationService  # noqa: E402
 from app.application.ai_quota import QuotaAgent  # noqa: E402
 from app.application.medication_understanding import MedicationUnderstandingService  # noqa: E402
 from app.config import Settings  # noqa: E402
-from app.infrastructure.gemini_model import GeminiModel, gemini_http_options  # noqa: E402
+from app.infrastructure.gemini_model import GeminiModel, bounded_retry_response, gemini_http_options  # noqa: E402
 from app.infrastructure.memory_quota import MemoryQuota  # noqa: E402
 from app.infrastructure.memory_repos import InMemoryAgentSessionRepository  # noqa: E402
 from app.infrastructure.openfda_knowledge import OpenFDAKnowledge  # noqa: E402
@@ -224,7 +224,12 @@ def run(maximum: int, targeted: bool = False, after_fix: bool = False):
                 model=settings.gemini_model,
                 client_factory=lambda: genai.Client(
                     api_key=settings.gemini_api_key,
-                    http_options={**gemini_http_options(), "httpx_client": httpx.Client(transport=budget, timeout=12)},
+                    http_options={
+                        **gemini_http_options(),
+                        "httpx_client": httpx.Client(
+                            transport=budget, timeout=12, event_hooks={"response": [bounded_retry_response]}
+                        ),
+                    },
                 ),
             )
             conversation = ConversationService(

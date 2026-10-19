@@ -3,6 +3,7 @@
 import json
 import logging
 from collections.abc import Callable
+from email.utils import parsedate_to_datetime
 
 import httpx
 from google import genai
@@ -14,6 +15,35 @@ from ..contracts.model import FunctionCall, ModelProviderError, ModelReply
 LOGGER = logging.getLogger(__name__)
 
 
+def bounded_retry_response(response: httpx.Response) -> None:
+    """Honor a long server cooldown by deferring, never sleeping past the UI budget.
+
+    SDK attempt-count retry ignores max_delay for Retry-After headers. Raising a
+    domain error in the public HTTP hook is not a transport error and is not retried.
+    HTTP-date delays use the server Date header, not a guessed patient clock.
+    """
+    if response.status_code not in {429, 502, 503, 504}:
+        return
+    header = response.headers.get("retry-after")
+    milliseconds = response.headers.get("retry-after-ms")
+    if not header and not milliseconds:
+        return
+    try:
+        if milliseconds:
+            delay = float(milliseconds) / 1000
+        elif header and header.isdigit():
+            delay = float(header)
+        elif header and response.headers.get("date"):
+            delay = (parsedate_to_datetime(header) - parsedate_to_datetime(response.headers["date"])).total_seconds()
+        else:
+            delay = float("inf")
+    except (ValueError, TypeError, OverflowError):
+        delay = float("inf")
+    if not 0 <= delay <= 2:
+        LOGGER.warning("Gemini server cooldown deferred status=%s", response.status_code)
+        raise ModelProviderError("quota" if response.status_code == 429 else "unavailable")
+
+
 def gemini_http_options() -> dict:
     """One SDK-owned retry, never an orchestration/tool replay.
 
@@ -22,6 +52,7 @@ def gemini_http_options() -> dict:
     return {
         "api_version": "v1",
         "timeout": 12000,
+        "client_args": {"event_hooks": {"response": [bounded_retry_response]}},
         "retry_options": {
             "attempts": 1,
             "initial_delay": 0.75,

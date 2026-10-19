@@ -10,7 +10,7 @@ import json
 import httpx
 from google import genai
 
-from .accept_release_gemini import OUT, GeminiModel, Settings, WireBudget
+from .accept_release_gemini import OUT, GeminiModel, Settings, WireBudget, bounded_retry_response, gemini_http_options
 from .test_conversation_threads_sql import db
 from .test_correctness02_sql import exercise_sql_patient_reads
 
@@ -24,10 +24,10 @@ def run():
         client_factory=lambda: genai.Client(
             api_key=settings.gemini_api_key,
             http_options={
-                "api_version": "v1",
-                "timeout": 20000,
-                "retry_options": {"attempts": 1},
-                "httpx_client": httpx.Client(transport=budget, timeout=20),
+                **gemini_http_options(),
+                "httpx_client": httpx.Client(
+                    transport=budget, timeout=12, event_hooks={"response": [bounded_retry_response]}
+                ),
             },
         ),
     )
