@@ -189,7 +189,7 @@ function CompanionApp() {
       {tab==='privacy'||tab==='conversations'||tab==='about'?<InformationScreen ownerId={guideOwner} kind={tab} onConversationCleared={()=>setConversationClearRevision(value=>value+1)} onHistory={()=>setTab('records')}/>:null}
       {tab==='caregivers'?<CaregiversScreen/>:null}
       {tab==='settings'?<SettingsScreen/>:null}
-      {tab==='reminder-settings'||tab==='language-settings'||tab==='accessibility'?<SettingsScreen section={tab==='reminder-settings'?'reminders':tab==='language-settings'?'language':'accessibility'}/>:null}
+      {tab==='reminder-settings'||tab==='language-settings'||tab==='accessibility'?<SettingsScreen section={tab==='reminder-settings'?'reminders':tab==='language-settings'?'language':'accessibility'} onOpenCareTask={taskId=>setTab('care-tasks',{task:taskId})} multipleCareRemindersEnabled={health?.multiple_care_reminders_enabled===true}/>:null}
       {tab==='feedback'?<FeedbackScreen/>:null}
 
     </>}

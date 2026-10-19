@@ -1,6 +1,8 @@
 """Authenticated reminder preferences; app active/reopen delivery only."""
 
+from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query, Response
 from fastapi.responses import JSONResponse
@@ -76,7 +78,12 @@ def plan(
 
 @router.get("/calendar")
 def calendar(
-    days: int = Query(default=30, ge=1, le=31),
+    range_name: str | None = Query(default=None, alias="range"),
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    include_medications: bool = Query(default=True),
+    include_tasks: bool = Query(default=True),
+    days: int | None = Query(default=None, ge=1, le=31),
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ):
@@ -84,24 +91,58 @@ def calendar(
 
     if container.reminder_plan is None or container.preferences is None:
         raise ProviderUnavailableError("Calendar export unavailable")
+    if not include_medications and not include_tasks:
+        raise ValidationError("Select medication reminders, Care Task reminders, or both.")
+    if range_name is not None and days is not None:
+        raise ValidationError("Choose one calendar range option.")
     preference = container.preferences.get(principal.patient_id)
-    rows = container.reminder_plan.upcoming(
-        principal.patient_id, lead_minutes=preference.reminder_lead_minutes, days=days
-    )
-    from datetime import timedelta
-
     now = container.clock.now()
+    zone = ZoneInfo(preference.timezone)
+    today = now.astimezone(zone).date()
+    selected_range = range_name or ("custom_days" if days is not None else "30")
+    full_remaining_course = selected_range == "remaining"
+    if selected_range == "30":
+        window_start, window_end = today, today + timedelta(days=29)
+    elif selected_range == "90":
+        window_start, window_end = today, today + timedelta(days=89)
+    elif selected_range == "custom_days":
+        window_start, window_end = today, today + timedelta(days=(days or 30) - 1)
+    elif selected_range == "custom":
+        if start_date is None or end_date is None:
+            raise ValidationError("Choose a start and end date for the custom range.")
+        if end_date < start_date:
+            raise ValidationError("The end date must be on or after the start date.")
+        if (end_date - start_date).days + 1 > 366:
+            raise ValidationError("Custom calendar ranges cannot exceed 366 days.")
+        if start_date < today:
+            raise ValidationError("Calendar exports can only include today or future dates.")
+        window_start, window_end = start_date, end_date
+    elif full_remaining_course:
+        window_start, window_end = today, None
+    else:
+        raise ValidationError("Choose a supported calendar range.")
+
+    rows, effective_end = container.reminder_plan.calendar_export_rows(
+        principal.patient_id,
+        lead_minutes=preference.reminder_lead_minutes,
+        start_date=window_start,
+        end_date=window_end,
+        full_remaining_course=full_remaining_course,
+        include_medications=include_medications,
+    )
+    task_window_start = max(now, datetime.combine(window_start, time.min, tzinfo=zone)).astimezone(UTC)
+    task_window_end = datetime.combine(effective_end + timedelta(days=1), time.min, tzinfo=zone).astimezone(UTC)
     tasks = (
         [
             task
             for task in container.long_term.actionable_tasks(principal.patient_id, preference.timezone)
-            if now <= task.due_at < now + timedelta(days=days)
+            if task_window_start <= task.due_at < task_window_end
         ]
-        if container.long_term
+        if container.long_term and include_tasks
         else []
     )
     if not rows and not tasks:
-        raise ValidationError("No confirmed timed medication plan is available for calendar export")
+        raise ValidationError("No upcoming calendar events match the selected options.")
     return Response(
         calendar_export(rows, now=container.clock.now(), lead_minutes=preference.reminder_lead_minutes, tasks=tasks),
         media_type="text/calendar",

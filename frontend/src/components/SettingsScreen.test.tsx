@@ -3,7 +3,7 @@ import {afterEach,expect,it,vi} from 'vitest';
 import {cleanup,render,screen} from '@testing-library/react';
 import {SettingsScreen} from './SettingsScreen';
 vi.mock('../api/client',()=>({api:{speechCapabilities:vi.fn().mockResolvedValue({cloud_tts_allowed:false})}}));
-vi.mock('./ReminderSettings',()=>({ReminderSettings:()=> <div data-testid="reminder-editor"/>}));
+vi.mock('./ReminderSettings',()=>({ReminderSettings:()=> <div data-testid="reminder-editor"/>,CalendarExportAction:()=> <button type="button">Export Calendar</button>}));
 afterEach(cleanup);
 it('keeps language, text size and reminder controls on their own settings routes',()=>{
  const view=render(<SettingsScreen/>);
@@ -18,5 +18,6 @@ it('keeps language, text size and reminder controls on their own settings routes
  expect(screen.queryByTestId('reminder-editor')).toBeNull();
  view.rerender(<SettingsScreen section="reminders"/>);
  expect(screen.getByTestId('reminder-editor')).toBeTruthy();
+ expect(screen.getByRole('button',{name:'Export Calendar'})).toBeTruthy();
  expect(screen.queryByRole('slider')).toBeNull();
 });

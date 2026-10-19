@@ -33,7 +33,7 @@ export function NotificationInvitation({ownerId,onSettings}:{ownerId:string;onSe
   <p>{t('Would you like notifications on this device? You can set them up later in Me → Settings.')}</p>
   <div className="actions"><button className="primary" disabled={busy||!config?.available} onClick={()=>{
    setBusy(true);void enableWebPush(config??undefined).then(dismiss).catch(setError).finally(()=>setBusy(false));
-  }}>{t('Enable on this device')}</button><button disabled={busy} onClick={dismiss}>{t('Later')}</button><button disabled={busy} onClick={()=>{dismiss();onSettings();}}>{t('View notification guide')}</button></div>
+  }}>{t('Enable on this device')}</button><button disabled={busy} onClick={dismiss}>{t('Later')}</button><button disabled={busy} onClick={()=>{dismiss();onSettings();}}>{t('Set Up Device Notifications')}</button></div>
   {config?.available===false?<p>{t('Web Push is not configured on this server.')}</p>:null}
   {error?<ErrorNotice error={error}/>:null}
  </Callout>;

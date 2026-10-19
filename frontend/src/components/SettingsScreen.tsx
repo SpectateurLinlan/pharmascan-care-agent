@@ -1,6 +1,6 @@
 import {useEffect,useState} from 'react';
 import {useLanguage} from '../language';
-import {ReminderSettings} from './ReminderSettings';
+import {CalendarExportAction,ReminderSettings} from './ReminderSettings';
 import {api} from '../api/client';
 import {TextSizeSlider} from './TextSizeSlider';
 import {Screen} from '../ui/primitives';
@@ -12,25 +12,25 @@ import {Screen} from '../ui/primitives';
  * hidden blocks, so a patient arriving from Me sees where they are and what
  * belongs together.
  */
-export function SettingsScreen({section='all'}:{section?:'all'|'language'|'accessibility'|'reminders'}){
+export function SettingsScreen({section='all',onOpenCareTask,multipleCareRemindersEnabled=false}:{section?:'all'|'language'|'accessibility'|'reminders';onOpenCareTask?:(taskId:string)=>void;multipleCareRemindersEnabled?:boolean}){
  const {language,setLanguage,t,preferences,updatePreferences,ttsProvider,setTtsProvider,speechRate,setSpeechRate}=useLanguage();
  const [cloudAllowed,setCloudAllowed]=useState(false);
  useEffect(()=>{let live=true;if(api.speechCapabilities)void api.speechCapabilities().then(cap=>{if(live)setCloudAllowed(cap.cloud_tts_allowed);}).catch(()=>{if(live)setCloudAllowed(false);});return()=>{live=false;};},[]);
 
  const titles:Record<'all'|'language'|'accessibility'|'reminders',string>={
-  all:'Usage preferences',language:'Language and speech',accessibility:'Text size',reminders:'Medication reminders and notifications',
+  all:'Usage preferences',language:'Language and speech',accessibility:'Text size',reminders:'Reminders & Notifications',
  };
  const leads:Record<'all'|'language'|'accessibility'|'reminders',string>={
   all:'Choose your language, voice and text size.',
   language:'Choose your language and voice preferences.',
   accessibility:'Choose a comfortable text size.',
-  reminders:'When the app prompts you about a dose, and how that reaches you.',
+  reminders:'Manage medication reminders, care tasks and device notifications.',
  };
  const showLanguage=section==='all'||section==='language';
  const showAccessibility=section==='all'||section==='accessibility';
  const showReminders=section==='reminders';
 
- return <Screen title={titles[section]} lead={leads[section]}>
+ return <Screen title={titles[section]} lead={showReminders?undefined:leads[section]} headerTrailing={showReminders?<CalendarExportAction/>:undefined} className={showReminders?'ui-screen--reminders':undefined}>
   {showLanguage?<>
    <section className="card">
     <h2 className="card__title">{t('Preferred language')}</h2>
@@ -46,6 +46,7 @@ export function SettingsScreen({section='all'}:{section?:'all'|'language'|'acces
     <label className="field">{t('Speech playback')}<select aria-label={t('Speech playback')} value={ttsProvider} onChange={event=>setTtsProvider(event.target.value==='tencent'&&cloudAllowed?'tencent':'browser')}><option value="browser">{t('Browser voice (default)')}</option><option value="tencent" disabled={!cloudAllowed}>{t('Cloud voice (usage charges may apply)')}</option></select></label>
     <label className="field">{t('Speech speed')}<input aria-label={t('Speech speed')} type="range" min="0.7" max="1.2" step="0.05" value={speechRate} onChange={event=>setSpeechRate(Number(event.target.value))}/>{speechRate.toFixed(2)}x</label>
     <p className="notice">{t('Browser voices depend on your device and may use an online service. Cloud voice requires explicit selection and server permission. Selection resets to browser on reload.')}</p>
+    <p className="notice">{t('Language, voice and text size are saved to your account. Voice provider and speaking speed are temporary browser settings and reset when you reload.')}</p>
     <p className="notice">{t('Voice input uses your browser’s speech service, which may be online. Your browser asks for microphone permission the first time; audio is not saved. Review the transcript before sending.')}</p>
    </section>
   </>:null}
@@ -55,9 +56,6 @@ export function SettingsScreen({section='all'}:{section?:'all'|'language'|'acces
    <TextSizeSlider/>
   </section>:null}
 
-  {showReminders?<section className="card">
-   <h2 className="card__title">{t('Reminders')}</h2>
-   <ReminderSettings/>
-  </section>:null}
+  {showReminders?<ReminderSettings {...(onOpenCareTask?{onOpenCareTask}:{})} multipleCareRemindersEnabled={multipleCareRemindersEnabled}/>:null}
  </Screen>;
 }

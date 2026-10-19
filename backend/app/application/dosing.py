@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 from zoneinfo import ZoneInfo
 
 from ..contracts.dto import (
@@ -206,6 +206,61 @@ class DoseScheduleService:
                 ):
                     moments.add(moment)
         return sorted(moments)
+
+    def calendar_occurrences(
+        self, *, patient_id: UUID, regimen_id: UUID, start: datetime, end: datetime, limit: int = 501
+    ) -> list[DoseOccurrenceDTO]:
+        """Project scheduled occurrences for export without persisting new rows.
+
+        Existing occurrence IDs and closed statuses are retained. Events that have
+        never been materialised receive a deterministic projection ID so repeated
+        exports keep stable ICS UIDs without writing patient schedule data.
+        """
+        regimen = self._require_regimen(patient_id, regimen_id)
+        if regimen.state != RegimenState.ACTIVE or regimen.is_prn or regimen.effective_from is None:
+            return []
+        if end <= start:
+            raise ValidationError("Calendar schedule range must end after it starts.")
+        projected: list[DoseOccurrenceDTO] = []
+        rules = [
+            rule
+            for rule in self._rules.list_for_regimen(patient_id, regimen_id)
+            if rule.rule_kind == RuleKind.SCHEDULED and rule.enabled
+        ]
+        chunk_start = start
+        while chunk_start < end:
+            chunk_end = min(chunk_start + timedelta(days=366), end)
+            for rule in rules:
+                zone = ZoneInfo(rule.timezone)
+                for due_at in self._expand_regimen(regimen, rule, chunk_start, chunk_end):
+                    course_day = due_at.astimezone(zone).date()
+                    if (
+                        due_at < regimen.effective_from
+                        or (regimen.effective_to is not None and due_at >= regimen.effective_to)
+                        or (regimen.course_start_date is not None and course_day < regimen.course_start_date)
+                        or (regimen.course_end_date is not None and course_day > regimen.course_end_date)
+                    ):
+                        continue
+                    key = f"{regimen_id}:{rule.id}:{due_at.astimezone(UTC).isoformat()}"
+                    occurrence = self._occurrences.find_by_generation_key(patient_id, key)
+                    if occurrence is None:
+                        occurrence = DoseOccurrenceDTO(
+                            id=uuid5(NAMESPACE_URL, key),
+                            patient_id=patient_id,
+                            regimen_id=regimen_id,
+                            rule_id=rule.id,
+                            due_at=due_at,
+                            status=OccurrenceStatus.SCHEDULED,
+                            generation_key=key,
+                        )
+                    projected.append(occurrence)
+                    if len(projected) > limit:
+                        raise ValidationError(
+                            "Calendar export exceeds 500 events. Choose a shorter date range "
+                            "or remove an export category."
+                        )
+            chunk_start = chunk_end
+        return sorted(projected, key=lambda row: (row.due_at, str(row.rule_id)))
 
     def _expand_regimen(
         self, regimen: RegimenVersionDTO, rule: DoseRuleDTO, start: datetime, end: datetime

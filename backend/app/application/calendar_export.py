@@ -41,7 +41,9 @@ def calendar_export(
     rows: list[PlannedReminder], *, now: datetime, lead_minutes: int, tasks: list[CareTask] | None = None
 ) -> str:
     if len(rows) + len(tasks or []) > 500:
-        raise ValidationError("Choose a smaller calendar window")
+        raise ValidationError(
+            "Calendar export exceeds 500 events. Choose a shorter date range or remove an export category."
+        )
     stamp = now.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
     lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//MediThread//Reminder Export//EN", "CALSCALE:GREGORIAN"]
     for row in rows:

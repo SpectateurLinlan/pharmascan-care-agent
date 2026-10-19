@@ -368,6 +368,13 @@ export interface DraftInput {
 
 export interface ReminderRecord { is_due?: boolean; occurrence_id: string; patient_id: string; remind_at: string; demo_only: true }
 export interface PlannedReminder {occurrence_id:string;regimen_id:string;rule_id:string;medication_name:string;due_at:string;remind_at:string;slot:string}
+export interface CalendarExportOptions {
+  range:'30'|'90'|'remaining'|'custom';
+  start_date?:string;
+  end_date?:string;
+  include_medications:boolean;
+  include_tasks:boolean;
+}
 export interface PushSubscriptionInput {endpoint:string;keys:{p256dh:string;auth:string}}
 export interface PushSubscriptionRecord {id:string;enabled:boolean}
 export interface DoseReminderAlert {key:string;occurrence_id:string;regimen_id:string;medication_name:string;dose_amount:number|null;dose_unit:string|null;food_instruction:string|null;due_at:string;remind_at:string;expires_at?:string}
@@ -433,7 +440,16 @@ export const api = {
   deleteObservation:(id:string)=>request<{deleted:true}>(withClient(`/api/me/health-observations/${id}`),{method:'DELETE'}),
   reviewSummary:(period:'week'|'month'|'course',regimenId?:string)=>request<ReviewSummary>(withClient('/api/me/review-summary',{period,...(regimenId?{regimen_id:regimenId}:{})})),
   reminderPlan:()=>request<PlannedReminder[]>(withClient('/api/reminders/plan')),
-  reminderCalendar:async()=>(await fetchResponse(withClient('/api/reminders/calendar'))).blob(),
+  reminderCalendar:async(options?:CalendarExportOptions)=>{
+    const query=options?{
+      range:options.range,
+      ...(options.start_date?{start_date:options.start_date}:{}),
+      ...(options.end_date?{end_date:options.end_date}:{}),
+      include_medications:String(options.include_medications),
+      include_tasks:String(options.include_tasks),
+    }:undefined;
+    return (await fetchResponse(withClient('/api/reminders/calendar',query))).blob();
+  },
   pushConfig:()=>request<{available:boolean;public_key:string|null;test_available?:boolean}>(withClient('/api/reminders/push/config')),
   currentPush:(value:PushSubscriptionInput)=>request<PushSubscriptionRecord|null>(withClient('/api/reminders/push/current'),{method:'POST',body:JSON.stringify(value)}),
   testPush:(id:string,requestId:string)=>request<{status:'sent'|'temporary'|'expired_subscription'|'provider_rejected'|'invalid_subscription'|'uncertain_delivery'}>(withClient('/api/reminders/push/test'),{method:'POST',body:JSON.stringify({subscription_id:id,request_id:requestId})}),
