@@ -489,6 +489,14 @@ details > * + * {
   flex: 1 1 8rem;
 }
 
+.today-medication-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+  margin-top: var(--s-3);
+}
+
 /* --- standalone sign-in ---------------------------------------------------
  * Rendered without the app shell: no tabs, no rail, no composer. The guest
  * path is a first-class action, not a fallback hidden behind a link. */
@@ -1960,6 +1968,189 @@ button.danger:hover:not(:disabled) {
   color: var(--brand);
 }
 
+/* About page: a readable product overview with the existing calm clinical tokens. */
+.about-page {
+  width: min(100%, 68rem);
+  margin-inline: auto;
+  display: grid;
+  gap: clamp(var(--s-5), 3vw, var(--s-8));
+  color: var(--ink);
+}
+.about-hero { display:flex; align-items:center; gap:var(--s-4); }
+.about-hero img { width:3rem; height:3rem; object-fit:contain; flex:none; }
+.about-hero h1 { margin:0; font-size:var(--fs-h1); line-height:1.15; }
+.about-tagline { margin:var(--s-1) 0 0; color:var(--ink-2); }
+.about-lead { max-width:68ch; margin:calc(-1 * var(--s-4)) 0 0; font-size:var(--fs-h3); line-height:1.55; }
+.about-section { display:grid; gap:var(--s-3); }
+.about-section > h2, .about-trust h2 { margin:0; font-size:var(--fs-h2); }
+.about-features { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--s-3); }
+.about-feature { min-width:0; display:grid; grid-template-columns:auto minmax(0,1fr); gap:var(--s-3); align-items:start; padding:var(--s-4); border:1px solid var(--line); border-radius:var(--r-md); background:var(--surface); }
+.about-feature > .app-icon { width:1.25rem; height:1.25rem; color:var(--brand); }
+.about-feature h3, .about-workflow h3, .about-trust h3, .about-roadmap h3 { margin:0; font-size:var(--fs-body); }
+.about-feature p, .about-workflow p, .about-trust p, .about-roadmap p { margin:var(--s-1) 0 0; color:var(--ink-2); font-size:var(--fs-small); line-height:1.55; }
+.about-workflow { list-style:none; padding:0; margin:0; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:var(--s-4); counter-reset:about-step; }
+.about-workflow li { min-width:0; display:grid; grid-template-columns:auto minmax(0,1fr); gap:var(--s-3); align-items:start; }
+.about-workflow li > span { width:1.75rem; height:1.75rem; display:grid; place-items:center; border-radius:50%; background:var(--brand-50); color:var(--brand); font-weight:var(--fw-strong); }
+.about-trust { display:grid; gap:var(--s-4); padding:var(--s-5); border:1px solid var(--line); border-radius:var(--r-md); background:var(--surface-2); }
+.about-trust__heading { display:flex; align-items:center; gap:var(--s-2); color:var(--brand); }
+.about-trust__heading .app-icon { width:1.25rem; height:1.25rem; }
+.about-trust__grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--s-4); }
+.about-roadmap { display:grid; }
+.about-roadmap > article { display:grid; grid-template-columns:7.5rem minmax(0,1fr); gap:var(--s-4); align-items:start; padding-block:var(--s-4); border-top:1px solid var(--line); }
+.about-status { justify-self:start; padding:.2rem .6rem; border-radius:999px; background:var(--brand-50); color:var(--brand); font-size:var(--fs-small); font-weight:var(--fw-strong); }
+.about-status--exploring { background:var(--surface-2); color:var(--ink-2); }
+.about-product dl { margin:0; }
+.about-product dl > div { display:grid; grid-template-columns:minmax(10rem,1fr) minmax(0,2fr); gap:var(--s-4); padding-block:var(--s-3); border-top:1px solid var(--line); }
+.about-product dt { font-weight:var(--fw-strong); }
+.about-product dd { margin:0; color:var(--ink-2); }
+.about-links { display:flex; flex-wrap:wrap; gap:var(--s-2); padding-top:var(--s-2); }
+.about-links button { min-height:var(--tap-lg); display:inline-flex; align-items:center; gap:var(--s-2); padding:0 var(--s-3); border:1px solid var(--line); border-radius:var(--r-sm); background:var(--surface); color:var(--brand); }
+.about-links button .app-icon { width:1rem; height:1rem; }
+@media (max-width: 42rem) {
+  .about-features { grid-template-columns:minmax(0,1fr); }
+  .about-workflow, .about-trust__grid { grid-template-columns:minmax(0,1fr); }
+  .about-roadmap > article { grid-template-columns:minmax(0,1fr); gap:var(--s-2); }
+  .about-product dl > div { grid-template-columns:minmax(0,1fr); gap:var(--s-1); }
+}
+
+.reminder-settings {
+  display: grid;
+  gap: var(--s-4);
+}
+
+.reminder-settings__section {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.reminder-settings__section > .card__title,
+.reminder-settings__subsection h3 {
+  margin-block: 0;
+}
+
+.reminder-settings__hint {
+  margin-block: 0;
+  color: var(--ink-2);
+}
+
+.reminder-settings__subsection {
+  display: grid;
+  gap: var(--s-2);
+  padding-block-start: var(--s-3);
+  border-top: 1px solid var(--line);
+}
+
+.reminder-settings__subsection ul {
+  display: grid;
+  gap: var(--s-2);
+  margin: 0;
+  padding-inline-start: 1.25rem;
+}
+
+.reminder-task-list {
+  list-style: none;
+  padding-inline-start: 0 !important;
+}
+
+.reminder-task-row {
+  display: grid;
+  gap: var(--s-2);
+  align-items: center;
+  padding-block: var(--s-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.reminder-task-row__details {
+  display: grid;
+  gap: .2rem;
+  min-width: 0;
+}
+
+.reminder-task-row__details strong,
+.reminder-task-row__details span {
+  overflow-wrap: anywhere;
+}
+
+.reminder-task-row__details span {
+  color: var(--ink-2);
+  font-size: var(--fs-small);
+}
+
+.reminder-task-row__action {
+  justify-self: start;
+}
+
+.device-notification-summary {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.device-notification-summary p {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s-2);
+  margin: 0;
+}
+
+.notification-capability {
+  color: var(--warning-ink, #835a17);
+  font-weight: var(--fw-medium);
+}
+
+.notification-capability--available {
+  color: var(--success-ink, #185b4e);
+}
+
+.push-setup-flow {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.push-setup-flow > p {
+  margin-block: 0;
+}
+
+.push-setup-steps {
+  display: grid;
+  gap: var(--s-3);
+  margin-block: 0;
+  padding-inline-start: 1.4rem;
+}
+
+.push-setup-steps li {
+  padding-inline-start: .25rem;
+}
+
+.push-setup-steps li strong,
+.push-setup-steps li span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.push-setup-steps li span {
+  margin-block-start: .2rem;
+  color: var(--ink-2);
+}
+
+.push-test-action,
+.push-test-receipt {
+  display: grid;
+  justify-items: start;
+  gap: var(--s-2);
+}
+
+.push-test-action p,
+.push-test-receipt p {
+  margin: 0;
+}
+
+.push-test-receipt > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
 .push-status {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -1989,6 +2180,170 @@ button.danger:hover:not(:disabled) {
 .push-devices button {
   display: block;
   margin-top: var(--s-2);
+}
+
+.push-management-section {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+  padding-block: var(--s-2);
+  border-top: 1px solid var(--line, #dce3e1);
+}
+
+.push-management-section > h3,
+.push-account-wide-action h3 {
+  margin: 0;
+  font-size: var(--fs-body);
+}
+
+.push-management-section > p,
+.push-account-wide-action p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.push-management-section > summary {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  cursor: pointer;
+  font-weight: var(--fw-strong);
+}
+
+.push-management-section > summary:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+  border-radius: var(--r-sm);
+}
+
+.push-current-device,
+.push-devices li > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-width: 0;
+}
+
+.push-current-device > *,
+.push-devices li > div > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.push-devices li {
+  display: grid;
+  gap: var(--s-2);
+  padding-block: var(--s-2);
+  border-bottom: 1px solid var(--line, #dce3e1);
+}
+
+.push-devices li > div span {
+  color: var(--ink-2);
+}
+
+.push-account-wide-action {
+  padding: var(--s-3);
+  border: 1px solid var(--line, #dce3e1);
+  border-radius: var(--r-md);
+}
+
+.push-account-wide-action [role="group"] {
+  display: grid;
+  justify-items: start;
+  gap: var(--s-2);
+}
+
+.push-account-wide-action [role="alert"] {
+  color: var(--danger-ink, #8a3030);
+}
+
+.push-action-error {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-2);
+  border: 1px solid var(--danger-ink, #8a3030);
+  color: var(--danger-ink, #8a3030);
+}
+
+.push-action-error > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.reminder-settings { gap: var(--s-3); }
+.reminder-settings__section { gap: var(--s-2); }
+.reminder-settings__subsection { gap: var(--s-1); padding-block-start: var(--s-2); }
+.reminder-settings__subsection h3 { font-size: var(--fs-body); }
+.reminder-control-row { display:flex; align-items:center; justify-content:space-between; gap:var(--s-3); min-height:var(--tap); }
+.reminder-control-row__copy { display:grid; gap:2px; min-width:0; }
+.reminder-control-row__copy strong { font-weight:var(--fw-strong); }
+.reminder-control-row__copy span,.reminder-settings__hint,.reminder-status { color:var(--ink-2); font-size:var(--fs-small); }
+.reminder-control-row__copy span { overflow-wrap:anywhere; }
+.patient-switch { position:relative; flex:0 0 3.25rem; width:3.25rem; min-width:3.25rem; min-height:2.75rem; display:inline-flex; align-items:center; justify-content:flex-start; padding:0 .3rem; border:0; border-radius:var(--r-pill); background:var(--ink-3); color:white; transition:background-color .16s ease; }
+.patient-switch span { display:block; width:1.2rem; height:1.2rem; border-radius:50%; background:white; box-shadow:0 1px 3px rgb(0 0 0 / .2); transition:transform .16s ease; }
+.patient-switch[aria-checked="true"] { background:var(--brand); }
+.patient-switch[aria-checked="true"] span { transform:translateX(1.45rem); }
+.patient-switch:hover:not(:disabled),.patient-switch:active:not(:disabled) { background:var(--ink-3); }
+.patient-switch[aria-checked="true"]:hover:not(:disabled),.patient-switch[aria-checked="true"]:active:not(:disabled) { background:var(--brand); }
+.patient-switch:focus-visible { outline:3px solid var(--focus); outline-offset:2px; }
+.patient-switch:disabled { cursor:wait; opacity:.72; }
+.reminder-lead-control { display:flex; align-items:center; justify-content:space-between; gap:var(--s-3); min-height:var(--tap); color:var(--ink-2); font-size:var(--fs-small); }
+.reminder-lead-control select { width:auto; min-width:min(12rem,52%); min-height:var(--tap); }
+.reminder-disclosure { display:flex; align-items:center; justify-content:space-between; gap:var(--s-3); width:100%; min-height:var(--tap); padding:var(--s-1) 0; border:0; background:transparent; color:var(--ink); text-align:start; font-weight:var(--fw-medium); }
+.reminder-disclosure:hover,.reminder-link:hover { color:var(--brand); }
+.reminder-disclosure:focus-visible,.reminder-link:focus-visible { outline:3px solid var(--focus); outline-offset:2px; border-radius:var(--r-sm); }
+.reminder-disclosure__body ul { list-style:none; padding-inline-start:0; }
+.reminder-disclosure__body li,.reminder-task-list li { display:flex; align-items:center; justify-content:space-between; gap:var(--s-3); min-width:0; padding-block:var(--s-2); border-top:1px solid var(--line); }
+.reminder-disclosure__body li strong,.reminder-disclosure__body li span { display:block; overflow-wrap:anywhere; }
+.reminder-disclosure__body li span,.reminder-task-list li span { color:var(--ink-2); font-size:var(--fs-caption); }
+.reminder-link { display:inline-flex; align-items:center; justify-content:center; gap:var(--s-1); width:auto; min-width:var(--tap); min-height:var(--tap); padding-inline:var(--s-2); border:0; background:transparent; color:var(--brand); white-space:nowrap; }
+.reminder-task-summary { display:flex; align-items:center; justify-content:space-between; gap:var(--s-2); min-height:var(--tap); }
+.reminder-task-summary > span { min-width:0; overflow-wrap:anywhere; color:var(--ink-2); font-size:var(--fs-small); }
+.reminder-task-list { margin:0; }
+.reminder-task-list li > div { display:grid; min-width:0; }
+.reminder-task-list li strong { overflow-wrap:anywhere; }
+.reminder-settings__error { margin:0; color:var(--danger-ink,var(--ink)); }
+.calendar-export-action { display:flex; flex-direction:column; align-items:flex-start; gap:2px; min-width:0; }
+.calendar-export-action button { width:auto; min-height:var(--tap); padding-inline:var(--s-3); white-space:nowrap; }
+.calendar-export-action > span { color:var(--ink-2); font-size:var(--fs-caption); }
+.calendar-export-dialog { gap:var(--s-3); }
+.calendar-export-dialog__hint { margin:0; color:var(--ink-2); font-size:var(--fs-small); }
+.calendar-export-dialog form { display:grid; gap:var(--s-3); min-width:0; }
+.calendar-export-options { display:grid; gap:var(--s-1); min-width:0; margin:0; padding:0; border:0; }
+.calendar-export-options legend { margin-block-end:var(--s-1); font-weight:var(--fw-medium); }
+.calendar-export-options label { display:flex; align-items:center; gap:var(--s-2); min-height:var(--tap); min-width:0; }
+.calendar-export-options input { flex:0 0 auto; width:1.1rem; height:1.1rem; margin:0; accent-color:var(--brand); }
+.calendar-export-options--content { padding-block-start:var(--s-2); border-block-start:1px solid var(--line); }
+.calendar-export-dates { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--s-3); }
+.calendar-export-dates label { display:grid; gap:var(--s-1); min-width:0; color:var(--ink-2); font-size:var(--fs-small); }
+.calendar-export-dates input { width:100%; min-width:0; min-height:var(--tap); }
+.calendar-export-dialog__error { margin:0; color:var(--danger-ink,var(--ink)); font-size:var(--fs-small); }
+.calendar-export-dialog__actions { justify-content:flex-end; }
+.calendar-export-dialog__actions > button { flex:0 1 auto; min-width:7rem; min-height:var(--tap); }
+.device-notification-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; gap:var(--s-2); padding-block-start:var(--s-1); }
+.device-notification-action { display:inline-flex; align-items:center; justify-content:center; gap:var(--s-2); align-self:start; width:100%; min-width:0; min-height:3.25rem; padding:var(--s-2) var(--s-3); font-size:var(--fs-small); line-height:1.25; white-space:normal; }
+.device-notification-action svg { flex:0 0 1.125rem; width:1.125rem; height:1.125rem; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+.device-notification-actions__reason { grid-column:1/-1; margin:0; color:var(--ink-2); font-size:var(--fs-caption); line-height:1.4; overflow-wrap:anywhere; }
+.notification-warning { margin:0; padding:var(--s-2) var(--s-3); border-radius:var(--r-sm); background:var(--surface-2); color:var(--ink-2); font-size:var(--fs-small); }
+.reminder-status { margin:0; }
+@media (max-width: 47.99rem) {
+ .ui-screen--reminders .ui-screen__head { grid-template-columns:minmax(0,1fr); align-items:start; }
+ .ui-screen--reminders .ui-screen__head h1,.ui-screen--reminders .ui-screen__head-trailing { grid-column:1; grid-row:auto; }
+ .ui-screen--reminders .calendar-export-action { align-items:flex-start; text-align:start; }
+ .device-notification-actions { grid-template-columns:minmax(0,1fr); }
+ .calendar-export-dates { grid-template-columns:minmax(0,1fr); }
+ .calendar-export-dialog__actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .calendar-export-dialog__actions > button { width:100%; min-width:0; }
+}
+
+@media (min-width: 640px) {
+  .reminder-task-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
 }
 
 /* ==== responsive ========================================================== */

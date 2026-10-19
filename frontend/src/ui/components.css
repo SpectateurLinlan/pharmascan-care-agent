@@ -159,10 +159,10 @@
 }
 
 /* --- Me and Records page compositions ----------------------------------- */
-.ui-screen--me {
+.ui-screen.ui-screen--me {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  align-items: start;
+  align-items: stretch;
 }
 
 .ui-screen--me > .identity-card,
@@ -185,6 +185,13 @@
 .period-actions.records-summary-actions button { flex: 0 1 auto; width: auto; min-width: min(100%, 8rem); max-width: 100%; }
 
 @container (min-width: 38rem) {
+  .ui-screen.ui-screen--me { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ui-screen--me > .identity-card,
+  .ui-screen--me > .me-app-info { grid-column: 1 / -1; }
+  .ui-screen--me > .me-category { grid-column: auto; display: flex; flex-direction: column; }
+  .ui-screen--me > .me-category--privacy { grid-column: 1 / -1; }
+  .ui-screen--me > .me-category .ui-rows { flex: 1; }
+  .ui-screen--me > .me-category--privacy .ui-rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .records-navigation-group.entry-group > .ui-rows {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: var(--s-3);
@@ -193,13 +200,14 @@
 }
 
 @container (min-width: 58rem) {
-  .ui-screen--me {
-    grid-template-columns: repeat(12, minmax(0, 1fr));
+  .ui-screen.ui-screen--me {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .ui-screen--me > .me-category {
-    grid-column: span 4;
-  }
+  .ui-screen--me > .me-category,
+  .ui-screen--me > .me-category--privacy { grid-column: auto; }
+  .ui-screen--me > .me-category--privacy .ui-rows { grid-template-columns: minmax(0, 1fr); }
+  .ui-screen--me > .me-app-info { grid-column: 1 / -1; }
 }
 
 /* --- pill (status and verification) --------------------------------------- */
@@ -385,6 +393,9 @@
 
 /* Page-owned navigation grids must not inherit the generic auto-fit layout. */
 .me-app-info.entry-group > .ui-rows { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
+.ui-screen--me > .me-category { min-width: 0; }
+.ui-screen--me > .me-category .ui-row { min-width: 0; }
+.ui-screen--me > .me-app-info .ui-row { min-height: 56px; }
 .me-app-info .ui-row, .records-navigation-group .ui-row { border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--s-3); }
 .records-navigation-group.entry-group > .ui-rows { gap: var(--s-3); align-items: start; }
 .me-category .ui-row { gap: var(--s-3); }
@@ -484,6 +495,11 @@
 .ui-screen--medicines .ui-screen__head h1,
 .ui-screen--medicines .ui-screen__head .ui-screen__lead { grid-column:1; }
 .ui-screen--medicines .ui-screen__head-trailing { grid-column:2; grid-row:1 / span 2; }
+.ui-screen--reminders .ui-screen__head { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; column-gap:var(--s-3); }
+.ui-screen--reminders .ui-screen__head h1 { grid-column:1; }
+.ui-screen--reminders .ui-screen__head-trailing { grid-column:2; grid-row:1; }
+.ui-screen--reminders .calendar-export-action { align-items:flex-end; text-align:end; }
+.ui-screen--reminders .calendar-export-action > span { max-width:22rem; }
 .medicines-header-icon { display:grid; place-items:center; width:2.75rem; height:2.75rem; border-radius:50%; background:var(--brand-100); color:var(--brand); }
 .medicines-header-icon .app-icon { width:1.35rem; height:1.35rem; }
 .current-medications-card { width:100%; }
