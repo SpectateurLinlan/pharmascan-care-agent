@@ -21,6 +21,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--loop", action="store_true")
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--synthetic-only", action="store_true")
     parser.add_argument("--limit", type=int, default=50, choices=range(1, 51))
     parser.add_argument("--budget", type=float, default=20)
     args = parser.parse_args()
@@ -30,7 +31,7 @@ def main() -> int:
     ):
         print("Web Push disabled or incomplete VAPID configuration; no jobs sent.")
         return 2
-    dispatch = build_worker_dispatch(settings)
+    dispatch = build_worker_dispatch(settings, synthetic_only=args.synthetic_only)
     while True:
         result = dispatch.run(limit=args.limit, budget_seconds=args.budget)
         print(

@@ -20,6 +20,7 @@ from ..infrastructure.dispatch_process import DispatchTimeout, DispatchUnavailab
 def create_dispatcher_app(
     *,
     runner: DispatchRunner | None = None,
+    synthetic_runner: DispatchRunner | None = None,
     token: str | None = None,
     settings: Settings | None = None,
     monotonic: Callable[[], float] = time.monotonic,
@@ -32,6 +33,9 @@ def create_dispatcher_app(
     if not credential or len(credential) < 32 or not credential.isascii():
         raise ValueError("PUSH_DISPATCH_TOKEN must be a dedicated ASCII secret of at least 32 characters")
     worker = runner or ProcessDispatchRunner()
+    scoped_worker = synthetic_runner or (
+        ProcessDispatchRunner(synthetic_only=True) if effective and effective.push_synthetic_patient_id else None
+    )
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.router.redirect_slashes = False
     logger = logging.getLogger("pharmascan.dispatch")
@@ -42,6 +46,7 @@ def create_dispatcher_app(
         return JSONResponse({"status": "ok"}, headers={"Cache-Control": "no-store"})
 
     @app.post("/internal/notifications/dispatch")
+    @app.post("/internal/notifications/dispatch-synthetic")
     async def dispatch(request: Request):
         correlation = request_ids().hex
         started = monotonic()
@@ -59,7 +64,8 @@ def create_dispatcher_app(
             )
 
         stamp = request.headers.get("x-dispatch-timestamp", "")
-        message = f"POST\n/internal/notifications/dispatch\n{stamp}".encode()
+        synthetic = request.url.path == "/internal/notifications/dispatch-synthetic"
+        message = f"POST\n{request.url.path}\n{stamp}".encode()
         signature = hmac.new(credential.encode(), message, hashlib.sha256).hexdigest()
         supplied = request.headers.get("x-dispatch-signature", "")
         if (
@@ -74,18 +80,22 @@ def create_dispatcher_app(
             return reply(400, {"error": {"code": "INVALID_INPUT"}})
         if request.headers.get("content-length", "0") not in ("0", "2") or await request.body() not in (b"", b"{}"):
             return reply(400, {"error": {"code": "EMPTY_BODY_REQUIRED"}})
+        selected_worker = scoped_worker if synthetic else worker
+        if selected_worker is None:
+            return reply(404, {"error": {"code": "NOT_ENABLED"}})
         try:
-            result = await run_in_threadpool(worker.run)
+            result = await run_in_threadpool(selected_worker.run)
         except DispatchTimeout:
             return reply(504, {"error": {"code": "DISPATCH_TIMEOUT"}})
         except DispatchUnavailable:
             return reply(503, {"error": {"code": "DISPATCH_UNAVAILABLE"}})
         logger.info(
-            "dispatch_result correlation=%s outcome=%s processed=%d profiles=%d",
+            "dispatch_result correlation=%s outcome=%s processed=%d profiles=%d synthetic=%s",
             correlation,
             result.status,
             result.processed,
             result.profiles,
+            synthetic,
         )
         return reply(200, result.model_dump())
 

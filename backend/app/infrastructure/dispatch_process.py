@@ -17,9 +17,10 @@ class DispatchUnavailable(Exception):
 
 
 class ProcessDispatchRunner:
-    def __init__(self, *, execute: Callable = subprocess.run, root: Path | None = None):
+    def __init__(self, *, execute: Callable = subprocess.run, root: Path | None = None, synthetic_only: bool = False):
         self._execute = execute
         self._root = root
+        self._synthetic_only = synthetic_only
 
     def run(self) -> DispatchResult:
         # Vercel's Python build may vendor this package separately from the
@@ -28,7 +29,9 @@ class ProcessDispatchRunner:
         root = self._root or Path(__file__).resolve().parents[3]
         try:
             result = self._execute(
-                [sys.executable, str(root / "scripts/run_reminders.py"), "--json", "--limit", "5", "--budget", "20"],
+                [sys.executable, str(root / "scripts/run_reminders.py"), "--json"]
+                + (["--synthetic-only"] if self._synthetic_only else [])
+                + ["--limit", "5", "--budget", "20"],
                 cwd=root,
                 capture_output=True,
                 text=True,

@@ -3,6 +3,7 @@
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from uuid import UUID
 
 from ..application.dosing import DoseScheduleService
 from ..application.notification_dispatch import NotificationDispatchService
@@ -19,10 +20,18 @@ from ..infrastructure.postgres_repos import build_postgres_repositories
 from ..infrastructure.web_push import WebPushProvider, validate_vapid
 
 
-def build_worker_dispatch(settings: Settings) -> NotificationDispatchService:
+def build_worker_dispatch(settings: Settings, *, synthetic_only: bool = False) -> NotificationDispatchService:
     """Only this worker root reads privileged DB credentials; adapters are injected."""
     if not settings.enable_web_push:
         raise ValueError("Web Push disabled")
+    scope = None
+    if synthetic_only:
+        if not settings.push_synthetic_patient_id:
+            raise ValueError("Synthetic dispatcher account is not configured")
+        try:
+            scope = UUID(settings.push_synthetic_patient_id)
+        except ValueError:
+            raise ValueError("Synthetic dispatcher account configuration is invalid") from None
     validate_vapid(settings.vapid_public_key, settings.vapid_private_key, settings.vapid_subject)
     database = PostgresDatabase(
         dsn=settings.require_database_url(),
@@ -40,6 +49,8 @@ def build_worker_dispatch(settings: Settings) -> NotificationDispatchService:
         include_late_reports=settings.enable_late_dose_reports,
         extended_tasks=settings.enable_care_task_followups,
         multiple_reminders=settings.enable_multiple_care_reminders,
+        patient_scope=scope,
+        synthetic_only=synthetic_only,
     )
     repos = build_postgres_repositories(database, include_late_reports=settings.enable_late_dose_reports)
 

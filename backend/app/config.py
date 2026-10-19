@@ -109,6 +109,7 @@ class Settings:
     vapid_private_key: str | None = field(default=None, repr=False)
     vapid_subject: str | None = field(default=None, repr=False)
     push_dispatch_token: str | None = field(default=None, repr=False)
+    push_synthetic_patient_id: str | None = field(default=None, repr=False)
     tts_provider: str = "browser"
     stt_provider: str = "browser"
     enable_speech: bool = False
@@ -184,6 +185,7 @@ class Settings:
             vapid_private_key=read("VAPID_PRIVATE_KEY"),
             vapid_subject=read("VAPID_SUBJECT"),
             push_dispatch_token=read("PUSH_DISPATCH_TOKEN"),
+            push_synthetic_patient_id=read("PUSH_SYNTHETIC_PATIENT_ID"),
             tts_provider=tts_provider,
             stt_provider=stt_provider,
             enable_speech=(read("ENABLE_SPEECH") or "").lower() in {"1", "true", "yes"},

@@ -24,9 +24,13 @@ class PostgresNotificationJobs:
         include_late_reports: bool = False,
         extended_tasks: bool = False,
         multiple_reminders: bool = False,
+        synthetic_only: bool = False,
     ):
         self._database = database
         self._scope = patient_scope
+        self._synthetic_only = synthetic_only
+        if synthetic_only and patient_scope is None:
+            raise ValueError("Synthetic dispatch requires a server-configured account")
         if multiple_reminders and not extended_tasks:
             raise ValueError("Multiple reminders require extended task support")
         # Fixed allowlisted relations, selected only by injected release capabilities.
@@ -47,14 +51,36 @@ class PostgresNotificationJobs:
                 (SELECT DISTINCT unnest(coalesce(t.reminder_offsets,CASE WHEN t.reminder_minutes IS NULL
                     THEN '{}'::integer[] ELSE ARRAY[t.reminder_minutes] END)) AS reminder_minutes) offsets)"""
 
+    def _verify_synthetic(self, conn) -> None:
+        if (
+            self._synthetic_only
+            and not conn.execute(
+                "SELECT EXISTS(SELECT 1 FROM auth.users WHERE id=%s "
+                "AND raw_app_meta_data @> '{\"demo_only\":true}'::jsonb)",
+                (self._scope,),
+            ).fetchone()["exists"]
+        ):
+            raise ValueError("Synthetic dispatch account is not admin-verified demo_only")
+
+    def _verify_owner(self, patient_id: UUID) -> None:
+        if self._scope is not None and patient_id != self._scope:
+            raise ValueError("Dispatch account scope mismatch")
+
     def patients(self) -> list[dict]:
         with self._database.transaction() as conn:
-            return conn.execute("""SELECT p.* FROM public.patient_profiles p WHERE p.reminders_enabled
+            self._verify_synthetic(conn)
+            return conn.execute(
+                """SELECT p.* FROM public.patient_profiles p WHERE p.reminders_enabled
+                AND (%s::uuid IS NULL OR p.user_id=%s)
                 AND EXISTS(SELECT 1 FROM public.push_subscriptions s WHERE s.patient_id=p.user_id AND s.enabled)
-                ORDER BY p.user_id LIMIT 500""").fetchall()
+                ORDER BY p.user_id LIMIT 500""",
+                (self._scope, self._scope),
+            ).fetchall()
 
     def sync(self, patient_id: UUID, rows: list[PlannedReminder], now: datetime) -> None:
+        self._verify_owner(patient_id)
         with self._database.transaction() as conn:
+            self._verify_synthetic(conn)
             # One worker instance materializes this patient's projection at a time.
             conn.execute("SELECT 1 FROM public.patient_profiles WHERE user_id=%s FOR UPDATE", (patient_id,))
             conn.execute(
@@ -93,7 +119,9 @@ class PostgresNotificationJobs:
         No Gemini polling, no new scheduler and no patient-facing admin access.
         Task dates are explicitly supplied/confirmed, never clinical targets.
         """
+        self._verify_owner(patient_id)
         with self._database.transaction() as conn:
+            self._verify_synthetic(conn)
             conn.execute("SELECT 1 FROM public.patient_profiles WHERE user_id=%s FOR UPDATE", (patient_id,))
             conn.execute(
                 """UPDATE public.notification_deliveries SET status='cancelled'
@@ -130,6 +158,7 @@ class PostgresNotificationJobs:
 
     def claim(self, now: datetime) -> Delivery | None:
         with self._database.transaction() as conn:
+            self._verify_synthetic(conn)
             # An interrupted send may already have reached the push provider.
             # Fail closed instead of retrying ambiguous deliveries after a crash.
             conn.execute(
@@ -245,6 +274,15 @@ class PostgresNotificationJobs:
 
     def finish(self, delivery: Delivery, result: DeliveryResult, now: datetime) -> None:
         with self._database.transaction() as conn:
+            self._verify_synthetic(conn)
+            if (
+                self._scope is not None
+                and not conn.execute(
+                    "SELECT 1 FROM public.notification_deliveries WHERE id=%s AND patient_id=%s AND subscription_id=%s",
+                    (delivery.id, self._scope, delivery.subscription_id),
+                ).fetchone()
+            ):
+                raise ValueError("Dispatch delivery scope mismatch")
             # Match scheduler lock order: owner/profile before delivery rows.
             if result.status == "expired_subscription":
                 conn.execute(
