@@ -446,9 +446,16 @@ class ReadDialogue:
                         for recent in reversed(session.context.recent_turns):
                             if re.search(r"健康|health|history|记录", recent.user, re.I):
                                 break
-                            found = named_options(recent.user, options)
+                            # Restored turns are text only, not verified medication
+                            # references. Resolve them against the current tool result,
+                            # including strength, and recover only a unique product.
+                            # An ambiguous ingredient must stop this scan so an older,
+                            # unrelated product is not guessed.
+                            found = resolve_options(recent.user, options, allow_order=False)
                             if len(found) == 1:
                                 selected = found
+                                break
+                            if len(found) > 1:
                                 break
                     if not selected and previous.subject_name and q == "general_use":
                         output = execute(

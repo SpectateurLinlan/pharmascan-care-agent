@@ -352,11 +352,39 @@ def assess(h, kind, data, target=None):
                     issues.append("Source: no reliable matched label")
                 else:
                     source_only = bool(re.search(r"source|citation|来源|依据", row["user"], re.I))
-                    # Verified translated facts remain required; source-only followups must not repeat uses.
+                    # The current patient presentation changes the attribution/subject only;
+                    # all clinical qualifiers must survive. Sources are public structured
+                    # traces rendered by AnswerSources, not necessarily inline prose URLs.
                     use = knowledge.get("use_statement_zh") if "美国标签" in message else None
                     use = use or knowledge["use_statement"]
+                    if knowledge.get("use_statement_zh") and "美国标签" in message:
+                        use = re.sub(r"^(?:该|所引)美国标签列出的(?:一个)?用途是", "一般用途：", use)
+                    else:
+                        indication = re.fullmatch(r".+? (?:is|are) indicated (?:for|as) (.+)", use, re.I | re.S)
+                        if indication:
+                            use = indication[1]
+                            for prefix in [
+                                "the treatment of ",
+                                "an adjunct to diet and exercise to improve glycemic control ",
+                            ]:
+                                if use.startswith(prefix):
+                                    use = use.removeprefix(prefix)
+                                    break
+                    public_sources = [
+                        source
+                        for trace in data.get("tool_traces", [])
+                        for source in (trace.get("payload") or {}).get("general_knowledge", {}).get("sources", [])
+                    ]
                     if (not source_only and use not in message) or not all(
-                        source["url"] in message for source in knowledge["sources"]
+                        source["url"] in message
+                        or any(
+                            all(
+                                public.get(key) == source.get(key)
+                                for key in ["url", "set_id", "version", "effective_time"]
+                            )
+                            for public in public_sources
+                        )
+                        for source in knowledge["sources"]
                     ):
                         issues.append("Final: source facts/citation omitted")
             elif kind == "plan":
@@ -397,6 +425,61 @@ def assess(h, kind, data, target=None):
     ):
         issues.append("Final: range/stale limitation not explained")
     return issues
+
+
+@pytest.mark.parametrize("defect", ["missing_public_citation", "missing_population_qualifier"])
+def test_knowledge_acceptance_rejects_missing_public_evidence_or_clinical_qualifiers(defect):
+    h = build_harness()
+    try:
+        data = h.ask("What is amlodipine generally used for?")
+        assert not assess(h, "knowledge", data, "amlodipine")
+        if defect == "missing_public_citation":
+            data = {**data, "tool_traces": []}
+        else:
+            data = {
+                **data,
+                "message": data["message"].replace("adults and children 6 years of age and older", "people"),
+            }
+        assert "Final: source facts/citation omitted" in assess(h, "knowledge", data, "amlodipine")
+    finally:
+        h.close()
+
+
+def test_restore_resolves_pronoun_from_unique_current_medication_context():
+    h = build_harness()
+    try:
+        target = next(
+            row for row in h.root.enrollment.list_medications(OWNER) if row.display_name == "Amlodipine 10 mg"
+        )
+        h.ask("What is Amlodipine 10 mg used for?")
+        h.restore()
+
+        data = h.ask("What is it used for?")
+
+        reads = [row for row in h.rows[-1]["tools"] if row["tool"] == "get_medication_understanding"]
+        assert len(reads) == 1
+        assert reads[0]["parameters"]["medication_id"] == str(target.id)
+        assert data.get("medication_choice") is None
+        assert not assess(h, "knowledge", data, "Amlodipine 10 mg")
+    finally:
+        h.close()
+
+
+def test_restore_keeps_ingredient_level_ambiguity_and_requests_choice():
+    h = build_harness()
+    try:
+        h.ask("What is amlodipine generally used for?")
+        h.restore()
+
+        data = h.ask("What is it used for?")
+
+        assert not any(row["tool"] == "get_medication_understanding" for row in h.rows[-1]["tools"])
+        assert not assess(h, "choice", data)
+        labels = [row["label"] for row in data["medication_choice"]["options"]]
+        assert any("Amlodipine 5 mg" in label for label in labels)
+        assert any("Amlodipine 10 mg" in label for label in labels)
+    finally:
+        h.close()
 
 
 def run_scene(name, goal, steps):

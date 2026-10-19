@@ -34,7 +34,7 @@ from app.infrastructure.postgres_migrations import (  # noqa: E402
     CORE_TABLES,
     RLS_REQUIRED_TABLES,
     applied_migrations,
-    apply_migration,
+    apply_recorded_migration,
     discover_migrations,
     ensure_ledger,
     existing_core_tables,
@@ -86,11 +86,9 @@ def cmd_status(args: argparse.Namespace) -> int:
 def cmd_migrate(args: argparse.Namespace) -> int:
     """Apply every committed migration that has not been applied yet.
 
-    Order is lexicographic by filename. Each file carries its own
-    ``BEGIN``/``COMMIT`` on an autocommit connection, so a partially applied
-    file can never be recorded as applied. A migration whose recorded hash no
-    longer matches the file on disk is reported and skipped rather than
-    silently re-run.
+    Order is lexicographic by filename. Reviewed DDL and its ledger record
+    commit together under the migration lock. A hash mismatch stops the run;
+    a connection error requires inspection rather than an automatic retry.
     """
     settings = _settings()
     database = _database(settings)
@@ -119,8 +117,9 @@ def cmd_migrate(args: argparse.Namespace) -> int:
                 print(f"already applied {target.label}")
                 return 0
             try:
-                apply_migration(connection, target)
-                record_migration(connection, target)
+                apply_recorded_migration(
+                    connection, target, prerequisites=tuple(m for m in migrations if m.version < target.version)
+                )
             except Exception as exc:  # noqa: BLE001 - redact all provider/DDL values
                 print(f"FAILED {target.label}: {type(exc).__name__}")
                 return 4
@@ -162,26 +161,25 @@ def cmd_migrate(args: argparse.Namespace) -> int:
                         "outcome": "hash_mismatch",
                     }
                 )
-                continue
+                return 3
 
             print(f"applying {migration.label} (sha256 {migration.sha256[:12]}...)")
             try:
-                apply_migration(connection, migration)
-            except Exception as exc:  # noqa: BLE001 - reported verbatim, no secrets
-                message = str(exc).strip().splitlines()[0]
-                print(f"FAILED {migration.label}: {type(exc).__name__}: {message}")
+                apply_recorded_migration(
+                    connection, migration, prerequisites=tuple(m for m in migrations if m.version < migration.version)
+                )
+            except Exception as exc:  # noqa: BLE001 - exception type only, no provider values
+                print(f"FAILED {migration.label}: {type(exc).__name__}; stop and inspect ledger/object state")
                 results.append(
                     {
                         "migration": migration.label,
                         "sha256": migration.sha256,
                         "outcome": "failed",
                         "error_type": type(exc).__name__,
-                        "error": message,
                     }
                 )
                 _write_report(database, results, applied=False)
                 return 4
-            record_migration(connection, migration)
             results.append(
                 {
                     "migration": migration.label,
