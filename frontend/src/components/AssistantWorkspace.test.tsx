@@ -28,7 +28,7 @@ it('creates a real new session only on request, preserves the unsent draft, and 
  expect(screen.getByRole('textbox')).toHaveProperty('value','');expect(api.sendMessage).not.toHaveBeenCalled();
  fireEvent.click(screen.getByRole('button',{name:'Return to unsent conversation'}));expect(screen.getByRole('textbox')).toHaveProperty('value','DEMO retained draft');
  fireEvent.click(screen.getByRole('button',{name:'Conversation history'}));await screen.findByText('Saving is off. No saved messages are available.');
- fireEvent.click(screen.getByRole('button',{name:'Back to current conversation'}));expect(screen.getByRole('textbox')).toHaveProperty('value','DEMO retained draft');
+ expect(screen.queryByRole('button',{name:'Back to current conversation'})).toBeNull();expect(screen.getByRole('textbox')).toHaveProperty('value','DEMO retained draft');
 });
 
 it('opens a saved exchange read-only without replacing the current session or draft',async()=>{
@@ -36,6 +36,7 @@ it('opens a saved exchange read-only without replacing the current session or dr
  vi.mocked(api.conversationHistory).mockResolvedValue({entries:[entry],next_before:null});render(<Host/>);
  fireEvent.click(screen.getByRole('button',{name:'Open full chat'}));fireEvent.change(screen.getByRole('textbox'),{target:{value:'DEMO current draft'}});
  fireEvent.click(screen.getByRole('button',{name:'Conversation history'}));await screen.findByText('DEMO saved question');
+ expect(screen.queryByRole('button',{name:'Back to current conversation'})).toBeNull();
  fireEvent.click(screen.getByRole('button',{name:/DEMO saved question/}));expect(screen.getByText('DEMO saved answer')).toBeTruthy();
  expect(screen.queryByRole('textbox')).toBeNull();expect(screen.queryByRole('navigation',{name:'Assistant tasks'})).toBeNull();
  fireEvent.click(screen.getByRole('button',{name:'Back to current conversation'}));expect(screen.getByRole('textbox')).toHaveProperty('value','DEMO current draft');expect(localStorage.getItem('pharmascan.agent-session')).toBeNull();expect(api.sendMessage).not.toHaveBeenCalled();

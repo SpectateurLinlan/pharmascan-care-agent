@@ -6,7 +6,7 @@ import {useLanguage} from '../language';
 import {ErrorNotice} from './primitives';
 
 /** Stable conversations resume through their public API; unlinked legacy exchanges stay read-only. */
-export function ConversationHistoryBrowser({revision,onSelect,onCurrent,selectedId,onConversationSelect,conversationId,onNew,disabled=false}:{revision:number;onSelect:(entry:ConversationEntry)=>void;onCurrent?:()=>void;selectedId?:string|null;onConversationSelect?:(id:string)=>void;conversationId?:string|null;onNew?:()=>void;disabled?:boolean}){
+export function ConversationHistoryBrowser({revision,onSelect,selectedId,onConversationSelect,conversationId,onNew,disabled=false}:{revision:number;onSelect:(entry:ConversationEntry)=>void;selectedId?:string|null;onConversationSelect?:(id:string)=>void;conversationId?:string|null;onNew?:()=>void;disabled?:boolean}){
  const {t,language,preferences}=useLanguage();
  const [rows,setRows]=useState<ConversationEntry[]>([]),[cursor,setCursor]=useState<string|null>(null);
  const [threads,setThreads]=useState<ConversationSummary[]>([]),[threadCursor,setThreadCursor]=useState<string|null>(null);
@@ -21,7 +21,6 @@ export function ConversationHistoryBrowser({revision,onSelect,onCurrent,selected
  return <aside id="assistant-conversation-history" className="conversation-history-browser" aria-label={t('Saved messages')}>
   {onNew?<button className="history-new" disabled={disabled} onClick={onNew}><Icon name="plus"/>{t('New conversation')}</button>:null}
   <h2>{t('Conversation history')}</h2>
-  {onCurrent?<button type="button" className="history-current" disabled={disabled} onClick={onCurrent}>{t('Back to current conversation')}</button>:null}
   <p>{t('Saved conversations can be reopened and continued. Older unlinked exchanges remain read-only.')}</p>
   {threads.map((thread,index)=><section key={thread.id} className="history-date-group">{index===0||localDateKey(threads[index-1]!.updated_at,preferences.timezone)!==localDateKey(thread.updated_at,preferences.timezone)?<h3>{localDateKey(thread.updated_at,preferences.timezone)===localDateKey(now.toISOString(),preferences.timezone)?t('Today'):localDateKey(thread.updated_at,preferences.timezone)}</h3>:null}<button className="history-entry" data-conversation-id={thread.id} disabled={disabled} aria-pressed={conversationId===thread.id} onClick={()=>onConversationSelect?.(thread.id)}><span>{thread.title}</span><time>{time(thread.updated_at)}</time></button></section>)}
   {threadCursor?<button disabled={loading} onClick={async()=>{setLoading(true);try{const page=await api.conversations(threadCursor);setThreads(previous=>[...previous,...page.entries.filter(row=>!previous.some(old=>old.id===row.id))]);setThreadCursor(page.next_before);}catch(caught){setError(caught);}finally{setLoading(false);}}}>{t('Load earlier conversations')}</button>:null}
