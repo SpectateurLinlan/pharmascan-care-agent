@@ -12,11 +12,16 @@ afterEach(()=>{cleanup();vi.restoreAllMocks();vi.resetAllMocks();});
 const plan:RegimenHistoryItem={regimen_id:'DEMO-old',medication_id:'DEMO-med',display_name:'DEMO medicine 5 mg',version_no:1,state:'superseded',effective_from:'2026-10-01T23:00:00Z',effective_to:'2026-10-10T00:00:00Z',course_start_date:'2026-10-01',course_end_date:'2026-10-31',dose_amount:1,dose_unit:'tablet',food_instruction:null,is_prn:false,local_times:['08:00']};
 it('labels plan changes by effective time, not a new treatment course or product strength',()=>{
  const label=regimenLabel(plan,key=>key,'en-SG','Asia/Singapore');
- expect(label).toContain('Dose: 1 tablet');expect(label).toContain('2 Oct 2026');expect(label).toContain('Previous plan');
+ expect(label).toContain('Dose: 1 tablet');expect(label).toContain('2 Oct 2026');expect(label).toContain('Superseded');
  expect(label).not.toMatch(/version|Course|strength: 1/i);
  const changed={...plan,regimen_id:'DEMO-current',version_no:2,state:'active',effective_from:'2026-10-10T00:00:00Z'};
  expect(regimenLabel(changed,key=>key,'en-SG','Asia/Singapore')).not.toBe(label);
  expect(changed.course_start_date).toBe(plan.course_start_date);
+});
+it('uses the expired label for a past planned end date without changing active lifecycle data',()=>{
+ const expired={...plan,regimen_id:'DEMO-expired',state:'active',course_end_date:'2004-01-01'};
+ expect(regimenLabel(expired,key=>key,'en-SG','Asia/Singapore')).toContain('Course Expired');expect(expired.state).toBe('active');
+ expect(regimenLabel({...plan,regimen_id:'DEMO-ended',state:'ended'},key=>key,'en-SG','Asia/Singapore')).toContain('Terminated');
 });
 it('keeps all four dose states distinct, without inferring a missed dose',()=>{
  const values=['reported_taken','reported_not_taken','unsure',null].map(intakeLabel);

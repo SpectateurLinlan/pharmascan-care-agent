@@ -104,10 +104,31 @@ it('allows continuing the selected saved task while discarding the earlier pendi
 const photo:GalleryImage={id:'DEMO-image',medication_id:'DEMO-med',image_kind:'loose_pill',source_description:'DEMO reviewed sample',reviewed:true,eligibility:'eligible',eligibility_reason:'patient_reviewed_visual_reference_only',created_at:'2026-10-15T00:00:00Z'};
 const entry:GalleryEntry={evidence_task_id:'DEMO-task',medication:{id:'DEMO-med',display_name:'DEMO Metformin',identity_status:'user_reviewed_document'},product:task.product,status:'current',regimens:[{id:'DEMO-regimen',state:'active',version_no:1,course_start_date:'2026-10-15',course_end_date:'2026-10-21',dose_amount:1,dose_unit:'tablet'}],images:[photo],eligible_count:1};
 function fileResponse(row:GalleryEntry):MedicationFiles{return{file_management_available:true,medication_id:row.medication.id,files:row.images.map(image=>({id:image.id,image_id:image.id,image_ids:[image.id],name:image.source_description,format:'PNG',content_type:'image',photo_description:image.image_kind,purpose_tags:['evidence',...(image.eligibility==='eligible'?['appearance_reference' as const]:[])],created_at:image.created_at,eligibility:image.eligibility,eligibility_reason:image.eligibility_reason,sources:[]})),source_records:[],regimens:[]};}
+const detailEndedPlan:RegimenHistoryItem={regimen_id:'DEMO-stopped',medication_id:'DEMO-med',supersedes_id:null,display_name:'DEMO Metformin',version_no:1,state:'ended',effective_from:null,effective_to:'2026-10-18T00:00:00Z',course_start_date:'2026-10-01',course_end_date:'2026-10-31',dose_amount:1,dose_unit:'tablet',food_instruction:null,is_prn:false,local_times:['08:00']};
 it('groups by product, reads private thumbnails, keeps course history and has no dose-check action',async()=>{
  mocks();vi.mocked(api.personalGallery).mockResolvedValue([entry]);vi.mocked(api.medicationFiles).mockResolvedValue(fileResponse(entry));vi.mocked(api.referencePhoto).mockResolvedValue(new Blob(['DEMO'],{type:'image/png'}));const sources=vi.fn();render(<PersonalGalleryScreen onSources={sources}/>);
  await screen.findByRole('button',{name:/DEMO Metformin/});expect(screen.queryByText('Medication courses')).toBeNull();fireEvent.click(screen.getByRole('button',{name:/DEMO Metformin/}));await screen.findByAltText('Pill reference photo');expect(api.referencePhoto).toHaveBeenCalledWith(photo.id);fireEvent.click(screen.getByRole('button',{name:'Source information and review'}));expect(sources).toHaveBeenCalledWith('DEMO-task');
  expect(screen.queryByRole('button',{name:'Check this dose'})).toBeNull();expect(screen.getByText(/2026-10-15/)).toBeTruthy();
+});
+it('labels stopped, expired and superseded courses distinctly in the Gallery in English and Chinese',async()=>{
+ mocks();const galleryEntry={...entry,regimens:[{id:'DEMO-stopped',state:'ended',version_no:2,course_start_date:'2026-10-01',course_end_date:'2026-10-31',dose_amount:1,dose_unit:'tablet'},{id:'DEMO-expired',state:'active',version_no:1,course_start_date:'2026-09-01',course_end_date:'2004-01-01',dose_amount:1,dose_unit:'tablet'},{id:'DEMO-superseded',state:'superseded',version_no:1,course_start_date:null,course_end_date:null,dose_amount:1,dose_unit:'tablet'}]};
+ vi.mocked(api.personalGallery).mockResolvedValue([galleryEntry]);vi.mocked(api.medicationFiles).mockResolvedValue(fileResponse(galleryEntry));
+ const view=render(<PersonalGalleryScreen initialMedicationId="DEMO-med"/>);
+ expect(await screen.findAllByText('Terminated',{exact:true})).not.toHaveLength(0);expect(screen.getByText('Course Expired',{exact:true})).toBeTruthy();expect(screen.getByText('Superseded',{exact:true})).toBeTruthy();
+ vi.spyOn(api,'updatePreferences').mockResolvedValue({patient_id:'DEMO-patient',preferred_language:'zh',speech_locale:'zh-CN',text_size:'standard',voice_enabled:false,tts_autoplay:false,reminder_lead_minutes:0,timezone:'Asia/Singapore',created_at:'2026-10-19T00:00:00Z',updated_at:'2026-10-19T00:00:00Z'});
+ function SwitchLanguage(){const {setLanguage}=useLanguage();return <button type="button" onClick={()=>setLanguage('zh')}>DEMO Chinese</button>;}
+ view.unmount();render(<LanguageProvider><SwitchLanguage/><PersonalGalleryScreen initialMedicationId="DEMO-med"/></LanguageProvider>);fireEvent.click(screen.getByRole('button',{name:'DEMO Chinese'}));
+ expect(await screen.findByText('\u5df2\u7ec8\u6b62')).toBeTruthy();expect(screen.getByText('\u5df2\u5230\u671f')).toBeTruthy();expect(screen.getByText('\u5df2\u88ab\u66ff\u4ee3')).toBeTruthy();
+});
+it('labels a stopped course in Medication Detail using the shared English and Chinese mapping',async()=>{
+ mocks();vi.mocked(api.medicationHistory).mockResolvedValue({entries:[],next_cursor:null,window_start:null,window_end:'2026-10-19T00:00:00Z',as_of:'2026-10-19T00:00:00Z',scope:'stored_records_only',missing_plan_start:false});
+ vi.mocked(api.inventory).mockResolvedValue({medication_id:'DEMO-med',unit:null,last_confirmed_stock:null,last_confirmed_at:null,estimated_remaining:null,daily_requirement:null,estimated_days:null,low_stock:false,estimate_note:'DEMO synthetic inventory',transactions:[]});
+ const props={row:detailEndedPlan,onHistory:vi.fn(),onGallery:vi.fn(),onCheck:vi.fn()};const view=render(<MedicationDetail {...props}/>);
+ expect(await screen.findAllByText('Terminated',{exact:true})).toHaveLength(2);
+ vi.spyOn(api,'updatePreferences').mockResolvedValue({patient_id:'DEMO-patient',preferred_language:'zh',speech_locale:'zh-CN',text_size:'standard',voice_enabled:false,tts_autoplay:false,reminder_lead_minutes:0,timezone:'Asia/Singapore',created_at:'2026-10-19T00:00:00Z',updated_at:'2026-10-19T00:00:00Z'});
+ function SwitchLanguage(){const {setLanguage}=useLanguage();return <button type="button" onClick={()=>setLanguage('zh')}>DEMO Chinese</button>;}
+ view.unmount();render(<LanguageProvider><SwitchLanguage/><MedicationDetail {...props}/></LanguageProvider>);fireEvent.click(screen.getByRole('button',{name:'DEMO Chinese'}));
+ expect(await screen.findAllByText('\u5df2\u7ec8\u6b62')).toHaveLength(2);
 });
 it('opens the exact medication ID when names are identical and does not merge gallery identities',async()=>{
  mocks();const other={...entry,evidence_task_id:'DEMO-other-task',medication:{...entry.medication,id:'DEMO-other-med'},images:[]};vi.mocked(api.personalGallery).mockResolvedValue([entry,other]);

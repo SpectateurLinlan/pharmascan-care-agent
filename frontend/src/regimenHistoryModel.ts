@@ -30,3 +30,14 @@ export function plannedStartPending(row:{state:string;course_start_date:string|n
  const today=new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
  return row.state==='active'&&!!row.course_start_date&&row.course_start_date>today;
 }
+
+/** Presentation label only; it never changes the stored regimen lifecycle. */
+export function regimenStatusLabelKey(row:{state:string;course_start_date:string|null;course_end_date:string|null},timeZone:string,now=new Date()){
+ if(plannedEndElapsed(row,timeZone,now))return 'Course Expired';
+ if(plannedStartPending(row,timeZone,now))return 'Upcoming course';
+ if(row.state==='active')return 'Currently Tracked';
+ if(row.state==='ended')return 'Terminated';
+ if(row.state==='superseded')return 'Superseded';
+ if(row.state==='draft'||row.state==='pending_clarification')return 'Plan awaiting review';
+ return row.state;
+}

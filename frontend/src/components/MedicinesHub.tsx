@@ -1,6 +1,7 @@
 import {api,type MedicationHistoryPage,type MedicationSummary,type RegimenHistoryItem,type GalleryEntry,type MedicationKnowledge} from '../api/client';
 import {useEffect,useRef,useState} from 'react';
 import {useLanguage} from '../language';
+import {regimenStatusLabelKey} from '../regimenHistoryModel';
 import {ErrorNotice} from './primitives';
 import {BottomSheet} from './BottomSheet';
 import {InventoryPanel} from './InventoryPanel';
@@ -85,14 +86,14 @@ export function MedicationDetail({row,summary,onHistory,onGallery,onCheck,onEdit
  const form=product?.product?.dose_form??(basis?.form&&basis.form!=='unknown'?basis.form:null);
  const frequency=summary?.frequency_rule??row.frequency_rule;
  const plannedTimes=row.is_prn?t('As needed'):row.local_times.length?row.local_times.join(', '):t('Not recorded');
- const status=row.state==='active'?'Current regimen':row.state==='ended'||row.state==='superseded'?'Historical regimen':row.state;
+ const status=regimenStatusLabelKey(row,preferences.timezone);
  const locale=language==='zh'?'zh-SG':'en-SG';
  const latest=history?.entries.slice(0,3)??[];
  const reported=history?.entries.filter(item=>item.reported)??[];
  const countsComplete=Boolean(history&&!history.next_cursor);
  const relatedPlanVersions=regimenVersionChain(row,versions);
  return <Screen title={row.display_name}>
-  <div className="medication-detail-status"><StatusPill tone={row.state==='active'?'ok':'quiet'} label={row.state==='active'?'Current regimen':row.state==='ended'||row.state==='superseded'?'Historical regimen':row.state}/>{row.state==='active'&&summary?.identity_status==='unverified'?<VerificationBadge state={row.state} identityStatus={summary.identity_status}/>:null}{row.patient_edited?<span className="tag">{t('Patient-edited plan')}</span>:null}</div>
+  <div className="medication-detail-status"><StatusPill tone={row.state==='active'&&status!=='Course Expired'?'ok':'quiet'} label={t(status)}/>{row.state==='active'&&summary?.identity_status==='unverified'?<VerificationBadge state={row.state} identityStatus={summary.identity_status}/>:null}{row.patient_edited?<span className="tag">{t('Patient-edited plan')}</span>:null}</div>
 
   <section className="card medication-detail-section" aria-labelledby="current-plan-title">
    <h2 id="current-plan-title" className="card__title">{t('Current medication plan')}</h2>
