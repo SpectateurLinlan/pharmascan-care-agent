@@ -36,12 +36,12 @@ it('Medicines has grouped database-backed entries and direct inline add methods'
  fireEvent.click(screen.getByRole('button',{name:/Add medication/}));expect(open).not.toHaveBeenCalledWith('add-method');
  fireEvent.click(screen.getByRole('button',{name:/Read medication information/}));expect(open).toHaveBeenLastCalledWith('label');
  fireEvent.click(screen.getByRole('button',{name:/Add manually/}));expect(open).toHaveBeenLastCalledWith('manual');
- fireEvent.click(screen.getByRole('button',{name:/Past courses/}));expect(open).toHaveBeenCalledWith('past-medicines');
+ fireEvent.click(screen.getByRole('button',{name:/Regimen Records/}));expect(open).toHaveBeenCalledWith('past-medicines');
  fireEvent.click(screen.getByRole('button',{name:/Photos and evidence/}));expect(open).toHaveBeenCalledWith('gallery');
  fireEvent.click(screen.getByRole('button',{name:/Finish medication setup/}));expect(open).toHaveBeenCalledWith('unfinished');
  unmount();render(<AddMethodScreen onOpen={open}/>);fireEvent.click(screen.getByRole('button',{name:/Read medication information/}));expect(open).toHaveBeenCalledWith('label');
  fireEvent.click(screen.getByRole('button',{name:/Add manually/}));expect(open).toHaveBeenCalledWith('manual');
- expect(isPastCourse({course_end_date:'2026-10-14'},'2026-10-14')).toBe(false);expect(isPastCourse({course_end_date:'2026-10-14'},'2026-10-15')).toBe(true);
+ expect(isPastCourse({course_end_date:'2026-10-14'})).toBe(false);expect(isPastCourse({state:'active',course_end_date:'2026-10-14'})).toBe(false);expect(isPastCourse({state:'ended'})).toBe(true);
 });
 it.each([0,1,2,5,10])('Medicines shows all %i current plans and keeps three real shortcuts',count=>{
  const medications=Array.from({length:count},(_,index)=>({...medication,medication_id:`DEMO-med-${index}`,regimen_id:`DEMO-regimen-${index}`,display_name:`DEMO Medicine ${index+1}`}));

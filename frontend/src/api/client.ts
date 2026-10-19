@@ -96,7 +96,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export interface SpeechCapabilities { cloud_tts_allowed: boolean; available: boolean; provider: string; review_required: true; raw_audio_retained: false }
 export interface TranscriptResponse { text: string; provider: string; request_id: string; confidence: null; review_required: true }
-export interface RegimenHistoryItem { patient_edited?:boolean; frequency_rule?:MedicationSummary['frequency_rule'];regimen_id: string; display_name: string; version_no: number; state: string;
+export interface RegimenHistoryItem { patient_edited?:boolean; frequency_rule?:MedicationSummary['frequency_rule'];regimen_id: string; supersedes_id?:string|null; display_name: string; version_no: number; state: string;
   effective_from: string | null; effective_to: string | null; medication_id:string;course_start_date:string|null;course_end_date:string|null;
   dose_amount:number|null;dose_unit:string|null;food_instruction:string|null;is_prn:boolean;local_times:string[] }
 export interface PrintedEvidence {value:string;line:string}

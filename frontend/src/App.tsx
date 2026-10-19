@@ -1,3 +1,4 @@
+import {RegimenHistoryScreen} from './components/RegimenHistoryScreen';
 import {BottomSheet} from './components/BottomSheet';
 import {accountDisplayName} from './accountPresentation';
 import {Icon,type IconName} from './components/Icon';
@@ -11,7 +12,7 @@ import { AssistantScreen } from './components/AssistantScreen';
 import { EnrollScreen } from './components/EnrollScreen';
 import { HistoryScreen } from './components/HistoryScreen';
 import {MedicinesHub,AddMethodScreen,MedicationDetail,isPastCourse,type MedicineDestination} from './components/MedicinesHub';
-import {PatientHub,ProfileScreen,InformationScreen,Entry,type MeDestination} from './components/PatientHub';
+import {PatientHub,ProfileScreen,InformationScreen,type MeDestination} from './components/PatientHub';
 import {HealthTrackingScreen} from './components/HealthTrackingScreen';
 import {ReviewSummaryScreen} from './components/ReviewSummaryScreen';
 import {CareTasksScreen,CareTaskSummary} from './components/CareTasksScreen';
@@ -129,7 +130,7 @@ function CompanionApp() {
   const openAssistant=(contextual=true)=>{setAssistantSlots(contextual&&['medicine-detail','medicines','records'].includes(tab)?{source_page:tab,...(tab==='medicine-detail'&&detail?{regimen_id:detail.regimen_id,medication_id:detail.medication_id}:{}),navigation_nonce:crypto.randomUUID()}:{});setTab('assistant');};
   const viewTodayMedication=()=>{setTab('today');requestAnimationFrame(()=>requestAnimationFrame(()=>document.getElementById('today-medication')?.scrollIntoView({behavior:'smooth',block:'start'})));};
   const calendarDate=new Intl.DateTimeFormat('en-CA',{timeZone:preferences.timezone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-  const currentMedications=medications?.medications.filter(row=>!isPastCourse(row,calendarDate)&&(!row.course_start_date||row.course_start_date<=calendarDate))??[];
+  const currentMedications=medications?.medications.filter(row=>!isPastCourse(row)&&(!row.course_start_date||row.course_start_date<=calendarDate))??[];
   const guideVisible=guideOpen&&!loading&&!fatal&&Boolean(medications)&&tab==='today';
   return <div className={standaloneSignIn?'app companion signin-shell':'app companion'} data-root-surface={assistantSurface?'true':undefined}><div data-app-content>
     <a className="skip-link" href="#main-content">{t('Skip to content')}</a>
@@ -154,7 +155,7 @@ function CompanionApp() {
       {tab==='manual'?<div><EnrollScreen onDirtyChange={setManualDirty} resumeRegimenId={resumeId} resumeRow={versions.find(row=>row.regimen_id===resumeId)??null} sourceSelection={sourceSelection} sessionId={sessionId} medications={medications} onChanged={refreshMedications}/></div>:null}
       <div data-page="edit-medication" hidden={tab!=='edit-medication'}>{editTarget?<EnrollScreen onActivated={id=>{setDetailId(id);goBack();}} editFrom={editTarget} sessionId={sessionId} medications={medications} onChanged={refreshMedications}/>:tab==='edit-medication'?<Card title="Choose a medication"><button onClick={()=>setTab('medicines')}>{t('Medicines')}</button></Card>:null}</div>
       {tab==='unfinished'?<PendingEvidenceTasks entries={setupEntries} error={setupError} onRetry={()=>void refreshMedications()} onContinue={id=>{setEvidenceTaskId(id);setTab('label');}} onResume={id=>{setResumeId(id);setTab('manual');}}/>:null}
-      {tab==='past-medicines'?<Card title="Past courses">{versions.filter(row=>isPastCourse(row,calendarDate)).map(row=><Entry key={row.regimen_id} title={row.display_name} hint={`${row.course_start_date??t('Not specified')} → ${row.course_end_date??t('Not specified')}`} onClick={()=>openMedicine('medicine-detail',row.regimen_id)}/>)}{!versions.some(row=>isPastCourse(row,calendarDate))?<p>{t('No past courses yet.')}</p>:null}</Card>:null}
+      <RegimenHistoryScreen regimens={versions} active={tab==='past-medicines'} onOpen={id=>openMedicine('medicine-detail',id)}/>
       {tab==='medicine-detail'&&!detail?<Card title="Choose a medication"><button onClick={()=>setTab('medicines')}>{t('Medicines')}</button></Card>:null}
       {tab==='medicine-detail'&&detail?<MedicationDetail versions={versions} summary={medications?.medications.find(row=>row.regimen_id===detail.regimen_id)} onAssistant={openAssistant} onChanged={refreshMedications} onEdit={()=>{setEditTarget(detail);setTab('edit-medication');}} row={detail} onHistory={()=>setTab('records')} onGallery={()=>setTab('gallery')} onCheck={()=>{setVisualRegimen(detail.regimen_id);setTab('check');}}/>:null}
       {tab==='gallery'?<PersonalGalleryScreen onSources={id=>{setEvidenceTaskId(id);setTab('label');}} onCheck={id=>{setVisualRegimen(id);setTab('check');}}/>:null}

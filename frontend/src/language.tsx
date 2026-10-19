@@ -728,3 +728,37 @@ Object.assign(translations, {
  'No health notes yet. You can record how you feel from Health notes.':'您还没有健康感受记录。可进入“我的健康感受”记录。',
  'Follow-up title (required)':'跟进事项名称（必填）','Date and time (required)':'日期和时间（必填）','Your note (optional)':'备注（可选）','Choose the follow-up time in your device time zone.':'按当前设备时区选择跟进时间。',
 });
+
+Object.assign(translations, {
+ 'Search medication name':'\u641c\u7d22\u836f\u7269\u540d\u79f0',
+ 'Filter by status':'\u6309\u72b6\u6001\u7b5b\u9009',
+ 'Sort regimens':'\u7597\u7a0b\u6392\u5e8f',
+ 'All History':'\u5168\u90e8\u5386\u53f2',
+ 'Ended':'\u5df2\u7ed3\u675f',
+ 'Superseded':'\u5df2\u88ab\u66ff\u4ee3',
+ 'Most Recently Ended':'\u6700\u8fd1\u7ed3\u675f',
+ 'Oldest Ended':'\u6700\u65e9\u7ed3\u675f',
+ 'Most Recently Started':'\u6700\u8fd1\u5f00\u59cb',
+ 'Name A-Z':'\u540d\u79f0 A-Z',
+ 'Name Z-A':'\u540d\u79f0 Z-A',
+ 'to':'\u81f3',
+ 'End date not recorded':'\u672a\u8bb0\u5f55\u7ed3\u675f\u65e5\u671f',
+ 'Start date not recorded':'\u672a\u8bb0\u5f55\u5f00\u59cb\u65e5\u671f',
+ 'View Regimen Details':'\u67e5\u770b\u7597\u7a0b\u8be6\u60c5',
+ 'No regimens match these filters.':'\u6ca1\u6709\u7b26\u5408\u7b5b\u9009\u6761\u4ef6\u7684\u7597\u7a0b。',
+ 'No ended regimens yet.':'\u6682\u65e0\u5df2\u7ed3\u675f\u7684\u7597\u7a0b。',
+ 'Try changing the search or status filter.':'\u8bf7\u66f4\u6539\u641c\u7d22\u6216\u72b6\u6001\u7b5b\u9009\u6761\u4ef6。',
+ 'Regimens appear here after they have ended or been superseded.':'\u7597\u7a0b\u7ed3\u675f\u6216\u88ab\u66ff\u4ee3\u540e\u4f1a\u663e\u793a\u5728\u8fd9\u91cc。',
+ '{count} plan versions':'\u5305\u542b {count} \u4e2a\u8ba1\u5212\u7248\u672c',
+
+});
+Object.assign(translations, {
+ 'Regimen Records':'疗程记录',
+ 'All Courses':'全部疗程',
+ 'Currently Tracked':'当前追踪',
+ 'Review currently tracked and ended courses, including their plan versions.':'查看当前追踪及已结束的疗程与计划版本。',
+ 'Planned end date passed; still tracked':'计划结束日期已过，仍在追踪',
+ 'No regimen records yet.':'暂无疗程记录。',
+ 'Reviewed courses appear here; unfinished setup remains in medication review.':'已核对疗程显示在这里；未完成设置请前往药物核对。',
+ 'Plan versions':'个计划版本',
+});

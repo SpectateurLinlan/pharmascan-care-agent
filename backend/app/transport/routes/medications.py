@@ -46,6 +46,7 @@ def display_total(payload: DoseDisplayInput, principal: AuthenticatedPrincipal =
 class RegimenHistoryItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
     regimen_id: UUID
+    supersedes_id: UUID | None = None
     display_name: str
     patient_edited: bool = False
     version_no: int
@@ -75,6 +76,7 @@ def regimen_history(
                 RegimenHistoryItem(
                     patient_edited=regimen.patient_edited,
                     regimen_id=regimen.id,
+                    supersedes_id=regimen.supersedes_id,
                     display_name=medication.display_name,
                     version_no=regimen.version_no,
                     state=str(regimen.state),

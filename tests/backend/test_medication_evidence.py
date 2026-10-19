@@ -329,7 +329,7 @@ def test_gallery_without_references_and_consent_denial(evidence, wired):
     assert len(repo.list(PATIENT, "runs")) == 1 and not wired.store.events
 
 
-def reviewed_reference(evidence, wired, *, course_start_date=None):
+def reviewed_reference(evidence, wired, *, course_start_date=None, course_end_date=None):
     service, gallery, _, _, _ = evidence
     task = attach(service, uuid4())
     prepared = service.prepare_review(
@@ -340,6 +340,7 @@ def reviewed_reference(evidence, wired, *, course_start_date=None):
         draft=RegimenDraftInput(
             medication_name="Metformin",
             course_start_date=course_start_date,
+            course_end_date=course_end_date,
             dose_amount=1,
             dose_unit="tablet",
             frequency_rule=FrequencyRuleDTO(kind="daily", local_times=["20:00"]),
@@ -623,3 +624,21 @@ def test_gallery_current_plan_uses_injected_patient_calendar(evidence, wired):
     run = gallery.check(patient_id=PATIENT, regimen_id=plan.id, image=b"DEMO query", consent=True, demo_only=True)
     assert run.decision == "conflict" and run.outcome.decision == "match"
     assert not run.safe_to_take and not wired.store.events
+
+
+def test_gallery_elapsed_planned_end_remains_current_without_lifecycle_write(evidence, wired):
+    from datetime import timedelta
+
+    task, _ = reviewed_reference(
+        evidence,
+        wired,
+        course_start_date=wired.clock.now().date() + timedelta(days=1),
+        course_end_date=wired.clock.now().date() + timedelta(days=2),
+    )
+    wired.clock.advance(days=4)
+    plan = wired.enrollment.get_regimen(PATIENT, task.draft_regimen_id)
+    before = dict(wired.store.regimens)
+    entry = next(row for row in evidence[1].list(PATIENT) if row["medication"].id == task.medication_id)
+    assert entry["status"] == "current"
+    assert wired.enrollment.get_regimen(PATIENT, plan.id).state.value == "active"
+    assert wired.store.regimens == before

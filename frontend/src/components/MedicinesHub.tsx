@@ -1,3 +1,4 @@
+import {regimenCourseGroups} from '../regimenHistoryModel';
 import {api,type DoseHistoryResponse,type MedicationSummary,type RegimenHistoryItem} from '../api/client';
 import {useEffect,useState,useRef} from 'react';
 import {useLanguage} from '../language';
@@ -11,7 +12,7 @@ import {EmptyState, Row, RowGroup, Screen, VerificationBadge} from '../ui/primit
 
 export type MedicineDestination='add-method'|'past-medicines'|'unfinished'|'gallery'|'medicine-detail'|'label'|'manual';
 
-export function isPastCourse(row:{state?:string;course_end_date?:string|null},today:string){return (row.state!==undefined&&['ended','superseded'].includes(row.state))||Boolean(row.course_end_date&&row.course_end_date<today);}
+export function isPastCourse(row:{state?:string;course_end_date?:string|null}){return row.state!==undefined&&['ended','superseded'].includes(row.state);}
 
 /** Review state plus the schedule, so a patient can see what is safe to act on. */
 function summaryHint(row:MedicationSummary,t:(value:string)=>string){
@@ -21,9 +22,9 @@ function summaryHint(row:MedicationSummary,t:(value:string)=>string){
 export function MedicinesHub({medications,versions,onOpen,setupCount=null}:{medications:MedicationSummary[];drafts:RegimenHistoryItem[];setupCount?:number|null;versions:RegimenHistoryItem[];onOpen:(page:MedicineDestination,regimenId?:string)=>void}){
  const {t,preferences}=useLanguage();const choices=useRef<HTMLDivElement>(null);
  const today=new Intl.DateTimeFormat('en-CA',{timeZone:preferences.timezone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
- const current=medications.filter(row=>!isPastCourse(row,today)&&(!row.course_start_date||row.course_start_date<=today));
- const upcoming=medications.filter(row=>!isPastCourse(row,today)&&row.course_start_date&&row.course_start_date>today);
- const pastCount=versions.filter(row=>isPastCourse(row,today)).length;
+ const current=medications.filter(row=>!isPastCourse(row)&&(!row.course_start_date||row.course_start_date<=today));
+ const upcoming=medications.filter(row=>!isPastCourse(row)&&row.course_start_date&&row.course_start_date>today);
+ const pastCount=regimenCourseGroups(versions).length;
  const badge=(row:MedicationSummary)=><VerificationBadge sourceBacked={row.source_backed} identityStatus={row.identity_status}/>;
  return <Screen
   className="ui-screen--medicines"
@@ -37,7 +38,7 @@ export function MedicinesHub({medications,versions,onOpen,setupCount=null}:{medi
    <button onClick={()=>onOpen('manual')}><Icon name="clipboard"/><span>{t('Add manually')}</span></button>
   </div>
   <nav className="medicine-shortcuts" aria-label={t('Medication management shortcuts')}>
-   <button className="medicine-shortcut" onClick={()=>onOpen('past-medicines')}><span className="ui-row__icon"><Icon name="clipboard"/></span><span className="ui-row__text"><strong className="ui-row__title">{t('Past courses')}</strong><small className="ui-row__hint">{pastCount} {t('courses')}</small></span><span className="ui-row__end"><Icon name="chevron-right"/></span></button>
+   <button className="medicine-shortcut" onClick={()=>onOpen('past-medicines')}><span className="ui-row__icon"><Icon name="clipboard"/></span><span className="ui-row__text"><strong className="ui-row__title">{t('Regimen Records')}</strong><small className="ui-row__hint">{pastCount} {t('courses')}</small></span><span className="ui-row__end"><Icon name="chevron-right"/></span></button>
    <button className="medicine-shortcut" onClick={()=>onOpen('gallery')}><span className="ui-row__icon"><Icon name="image"/></span><span className="ui-row__text"><strong className="ui-row__title">{t('Photos and evidence')}</strong><small className="ui-row__hint">{t('Manage source photos and evidence')}</small></span><span className="ui-row__end"><Icon name="chevron-right"/></span></button>
    <button className="medicine-shortcut" onClick={()=>onOpen('unfinished')}><span className="ui-row__icon"><Icon name="alert"/></span><span className="ui-row__text"><strong className="ui-row__title">{t('Finish medication setup')}</strong><small className="ui-row__hint">{setupCount===null?t('View saved source registrations'):`${setupCount} ${t('awaiting review')}`}</small></span><span className="ui-row__end"><Icon name="chevron-right"/></span></button>
   </nav>

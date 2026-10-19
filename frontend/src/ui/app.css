@@ -2508,3 +2508,26 @@ button.danger:disabled {
  .conversation-workspace .composer-row .voice-inline { grid-column: 3; }
  .conversation-workspace .composer-row .composer-send { grid-column: 4; }
 }
+
+.regimen-history-page { max-width:58rem; margin-inline:auto; }
+.regimen-history-header h1 { margin:0; font-size:var(--fs-h1); }
+.regimen-history-header p { margin:var(--s-1) 0 0; color:var(--ink-2); }
+.regimen-history-controls { display:grid; grid-template-columns:minmax(15rem,2fr) repeat(2,minmax(11rem,1fr)); align-items:end; gap:var(--s-3); margin-block:var(--s-4); }
+.regimen-history-controls .field { align-content:start; gap:var(--s-1); }
+.regimen-history-controls input,.regimen-history-controls select { min-height:2.75rem; }
+.regimen-history-list { display:grid; gap:var(--s-3); }
+.regimen-history-card { display:grid; gap:var(--s-3); width:100%; min-height:7rem; padding:var(--s-3) var(--s-4); color:var(--ink); text-align:left; border:1px solid var(--line); border-radius:var(--r-md); background:var(--surface); }
+.regimen-history-card__header { display:flex; align-items:center; justify-content:space-between; gap:var(--s-3); min-width:0; }
+.regimen-history-card__header > strong { min-width:0; overflow-wrap:anywhere; font-size:var(--fs-h3); }
+.regimen-history-badge { flex:0 0 auto; padding:.2rem .55rem; border-radius:999px; color:var(--ink-2); background:var(--surface-2); font-size:var(--fs-caption); font-weight:var(--fw-strong); }
+.regimen-history-badge--ended { color:var(--ink-2); background:var(--surface-2); }
+.regimen-history-badge--superseded { color:var(--ink-2); background:var(--surface-2); }
+.regimen-history-card__date { display:flex; align-items:center; gap:var(--s-2); color:var(--ink-2); font-size:var(--fs-caption); }
+.regimen-history-card__date .app-icon { width:1rem; height:1rem; flex:0 0 auto; }
+.regimen-history-card__versions { color:var(--ink-2); font-size:var(--fs-caption); }
+.regimen-history-card__action { display:flex; align-items:center; justify-content:space-between; gap:var(--s-2); min-height:2.5rem; color:var(--brand-strong); font-size:var(--fs-caption); }
+@media(max-width:640px){
+ .regimen-history-controls { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .regimen-history-search { grid-column:1/-1; }
+ .regimen-history-card { padding:var(--s-3); }
+}
