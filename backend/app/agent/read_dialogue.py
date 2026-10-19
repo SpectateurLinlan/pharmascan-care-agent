@@ -99,6 +99,26 @@ def resolve_options(text: str, options: list[MedicationOption], *, allow_order: 
     return []
 
 
+def medication_candidate_version(rows: list[dict]) -> str:
+    """Shared current-catalogue fingerprint; labels and UI language are excluded."""
+    return hashlib.sha256(
+        json.dumps(
+            sorted(
+                (
+                    str(row["medication_id"]),
+                    str(row["regimen_id"]),
+                    row["display_name"],
+                    row.get("strength_text"),
+                    row.get("dosage_form"),
+                    tuple(row.get("ingredients", [])),
+                    json.dumps(row.get("comparison_basis"), sort_keys=True),
+                )
+                for row in rows
+            )
+        ).encode()
+    ).hexdigest()
+
+
 @dataclass(frozen=True)
 class ReadAnswer:
     message: str
@@ -174,7 +194,9 @@ class ReadDialogue:
                 history,
                 health,
                 listing,
-                source and previous.topic == "medication" and (previous.listed or previous.subject_name),
+                source
+                and previous.topic == "medication"
+                and (previous.listed or previous.subject_name or previous.answered_medication_ids),
                 identify,
                 strengths,
                 compare and previous.listed,
@@ -299,22 +321,7 @@ class ReadDialogue:
                 )
                 for row in rows
             ]
-            version = hashlib.sha256(
-                json.dumps(
-                    sorted(
-                        (
-                            str(row["medication_id"]),
-                            str(row["regimen_id"]),
-                            row["display_name"],
-                            row.get("strength_text"),
-                            row.get("dosage_form"),
-                            tuple(row.get("ingredients", [])),
-                            json.dumps(row.get("comparison_basis"), sort_keys=True),
-                        )
-                        for row in rows
-                    )
-                ).encode()
-            ).hexdigest()
+            version = medication_candidate_version(rows)
             state = MedicationDialogue(
                 listed=options[:10], conversation_id=session.conversation_id, candidate_version=version
             )

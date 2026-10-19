@@ -1,8 +1,10 @@
 """Data-driven patient renderers. Stored times and reports never prove ingestion."""
 
+import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from ..application.medication_presentation import knowledge_scope
 from .tools import ToolResult
 
 
@@ -85,11 +87,76 @@ def knowledge_sources_reply(data: dict, language: str) -> str:
     lines.append(
         "链接和原文见回答依据；来源商品不代表您持有的具体产品。"
         if language == "zh"
-        else (
-            "Links and excerpts are in Sources; source brands do not identify your particular product."
-        )
+        else ("Links and excerpts are in Sources; source brands do not identify your particular product.")
     )
     return "\n".join(lines)
+
+
+def medication_knowledge_batch_reply(reads: list[dict], listed: list[dict], language: str) -> str:
+    """Retain every executed knowledge result; share only equivalent ingredient evidence.
+
+    `listed` is the current turn's patient-scoped catalogue, supplied only for an
+    explicit plural request. Sharing general uses never merges products or doses.
+    """
+    groups: dict[tuple[str, str], tuple[list[str], str]] = {}
+    covered: set[str] = set()
+    matched = False
+    for data in reads:
+        name = str(data.get("medication_name") or "")
+        prefix = name + ("：" if language == "zh" else ": ")
+        summary = str(data["patient_safe_summary"]).removesuffix("\n\n" + knowledge_scope(language))
+        body = summary.removeprefix(prefix)
+        knowledge = data.get("general_knowledge") or {}
+        matched = matched or knowledge.get("status") == "matched"
+        medication_id = str(data.get("medication_id") or "")
+        row = next((item for item in listed if str(item["medication_id"]) == medication_id), None)
+        names = [name]
+        covered.add(medication_id)
+        basis = row.get("comparison_basis") if row else None
+        ingredients = sorted(str(item).casefold() for item in row.get("ingredients", [])) if row else []
+        if (
+            row
+            and ingredients
+            and basis
+            and basis.get("form")
+            and basis.get("route")
+            and basis.get("release") in {"standard", "modified_release", "enteric"}
+            and knowledge.get("status") == "matched"
+            and knowledge.get("match_scope") == "US_label_ingredient"
+        ):
+            related = [
+                item
+                for item in listed
+                if item.get("comparison_basis") == basis
+                and sorted(str(value).casefold() for value in item.get("ingredients", [])) == ingredients
+            ]
+            names = [str(item["display_name"]) for item in related]
+            covered.update(str(item["medication_id"]) for item in related)
+        key = (
+            body,
+            json.dumps(
+                {"sources": knowledge.get("sources", []), "identity": ingredients or [medication_id or name]},
+                sort_keys=True,
+            ),
+        )
+        if key not in groups:
+            groups[key] = ([], body)
+        for label in names:
+            if label not in groups[key][0]:
+                groups[key][0].append(label)
+    message = "\n\n".join(
+        " / ".join(names) + ("：" if language == "zh" else ": ") + body for names, body in groups.values()
+    )
+    missing = [str(row["display_name"]) for row in listed if str(row["medication_id"]) not in covered]
+    if missing:
+        message += (
+            "\n\n本次尚未取得以下登记的适用用途证据："
+            if language == "zh"
+            else "\n\nApplicable use evidence was not obtained for these entries: "
+        ) + ", ".join(missing)
+    if matched:
+        message += "\n\n" + knowledge_scope(language)
+    return message
 
 
 def history_reply(results: list[ToolResult], language: str) -> str:

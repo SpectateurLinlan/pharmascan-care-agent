@@ -30,7 +30,8 @@ from .knowledge_intent import medication_question
 from .memory import bounded_text, record_context
 from .model_tools import ModelTools, model_tool_schemas
 from .orchestrator import AgentOrchestrator, AgentReply, AgentTurn
-from .read_dialogue import ReadAnswer, ReadDialogue
+from .patient_read_reply import medication_knowledge_batch_reply
+from .read_dialogue import ReadAnswer, ReadDialogue, medication_candidate_version
 from .tools import ToolResult
 
 INSTRUCTION = """You are MediThread, a bounded medication companion, not a prescriber.
@@ -383,6 +384,8 @@ class ConversationService:
         tools_used = 0
         evidence_summary = None
         full_review_summary = None
+        knowledge_reads: dict[str, dict] = {}
+        knowledge_is_current_summary = False
         text = turn.text.lower()
         review_requested = (
             any(word in text for word in ("prepare", "preparing"))
@@ -444,6 +447,27 @@ class ConversationService:
                         # Source tasks may still be unreviewed: do not decorate
                         # them with the model's generic "reviewed record" prefix.
                         message = evidence_summary
+                        if knowledge_is_current_summary and full_review_summary is None:
+                            plural_uses = bool(
+                                re.search(
+                                    r"\bevery\b|\beach\b|\ball\b|\bmedicines\b|\bmedications\b|这些|各个|分别|各自",
+                                    turn.text,
+                                    re.I,
+                                )
+                            )
+                            listed = (
+                                [
+                                    item
+                                    for result in results
+                                    if result.tool_name == ToolName.LIST_ACTIVE_MEDICATIONS
+                                    for item in result.payload.get("medications", [])
+                                ]
+                                if plural_uses
+                                else []
+                            )
+                            message = medication_knowledge_batch_reply(
+                                list(knowledge_reads.values()), listed, turn.language
+                            )
                     elif results:
                         # Medication facts use the deterministic grounded renderer.
                         message = grounded_message(
@@ -471,6 +495,42 @@ class ConversationService:
                         language=turn.language,
                         results=results,
                     )
+                    if knowledge_is_current_summary:
+                        catalogue = [
+                            item
+                            for result in results
+                            if result.tool_name == ToolName.LIST_ACTIVE_MEDICATIONS
+                            for item in result.payload.get("medications", [])
+                        ]
+                        ids = [
+                            UUID(str(data["medication_id"]))
+                            for data in knowledge_reads.values()
+                            if data.get("medication_id")
+                        ]
+                        context = bounded_context(
+                            context.model_copy(
+                                update={
+                                    "medication_dialogue": MedicationDialogue(
+                                        conversation_id=session.conversation_id,
+                                        candidate_version=medication_candidate_version(catalogue),
+                                        answered_medication_ids=ids[:3],
+                                        subject_name=next(iter(knowledge_reads.values())).get("medication_name")
+                                        if len(knowledge_reads) == 1 and not ids
+                                        else None,
+                                    ),
+                                    # A plural answer does not establish one unique pronoun referent.
+                                    **(
+                                        {
+                                            "referenced_medication_id": None,
+                                            "referenced_regimen_id": None,
+                                            "referenced_occurrence_id": None,
+                                        }
+                                        if len(knowledge_reads) > 1
+                                        else {}
+                                    ),
+                                }
+                            )
+                        )
                     self._sessions.update(saved.model_copy(update={"context": context}))
                     return AgentReply(
                         message=message,
@@ -498,6 +558,13 @@ class ConversationService:
                     results.extend(executed.results)
                     if "patient_safe_summary" in executed.data:
                         current_summary = str(executed.data["patient_safe_summary"])
+                        knowledge_is_current_summary = (
+                            call.name == "get_medication_understanding"
+                            and executed.data.get("question") == "general_use"
+                        )
+                        if knowledge_is_current_summary:
+                            key = str(executed.data.get("medication_id") or executed.data.get("medication_name"))
+                            knowledge_reads[key] = executed.data
                         if call.name in ("prepare_medication_review", "get_longitudinal_summary"):
                             full_review_summary = current_summary
                         # A subsequent narrow read must not erase verified

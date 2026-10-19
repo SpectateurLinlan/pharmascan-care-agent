@@ -310,3 +310,10 @@
 - **APPROVED / PASS local scoped:** concise complete EN/ZH lists; shared sourced ingredient explanations without identity merging; readable reviewed plan dose/time; default-collapsed source brand/version/link/original text; exact relevant medication options; conservative unique stronger-product resolution; click/text continuation; new-intent interruption; stable trusted IDs across language changes; explicit faithful original-instruction requests.
 - Implementation: existing MedicationUnderstandingService, ReadDialogue/Registry and AnswerSources. New optional clarification flag defaults false; no database schema, retrieval-provider or sensitive-write contract change.
 - Acceptance/evidence: twelve-row matrix and actual before/after outputs in `outputs/REAL_GEMINI_RELEASE_QA.md` (`Patient Experience Refinement`); 227 backend /2 source unit /4 actual local browser checks. New Gemini, PostgreSQL, hosted deployment and physical-device runs are **NOT RUN** for this presentation refinement.
+
+
+### 2026-10-19 Final Provider acceptance supplement
+
+- **PASS scoped after repair:** actual Gemini multi-tool results preserve all sourced medicines; subsequent source queries retain trusted references; deterministic5/10mg clarification, structured continuation, stronger-product resolution and yesterday interruption verified in the same configured Agent. Initial two FAILED replies remain in the actual transcript.
+- Model gemini-3.5-flash-lite;15new HTTP requests,76cumulative, live openFDA (including Adapter cache), synthetic local memory patient. No real PostgreSQL/hosted/device rerun. Patient source/product/dose boundaries and confirmation policy unchanged. Evidence: `Final Provider Integration` in outputs/REAL_GEMINI_RELEASE_QA.md.
+- **Release scope:** only committed Agent/previous release fixes may be published. Current uncommitted medication-management/gallery/inventory work is not included; successor activation depends on unverified030. Full-workspace readiness must not be inferred from this Agent acceptance.
