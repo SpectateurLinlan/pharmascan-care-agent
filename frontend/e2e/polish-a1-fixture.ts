@@ -1,6 +1,8 @@
 /** Real App and browser layout; synthetic authenticated HTTP only, no live writes. */
 import {expect,type Page} from '@playwright/test';
-import type {MedicationSummary,RegimenHistoryItem,ReviewSummary,DoseHistoryEntry} from '../src/api/client';
+import type {DueDoseResponse,MedicationSummary,RegimenHistoryItem,ReviewSummary,DoseHistoryEntry} from '../src/api/client';
+import type {CareTask} from '../src/api/care';
+import type {DoseFollowUps} from '../src/api/doseFollowUps';
 export async function mockPatientApp(page:Page,historyEnabled=true,identity?:{token:string;owner:string}){
  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
  const token=identity?.token??'DEMO.synthetic-session-token',owner=identity?.owner??'d00d0000-0000-4000-8000-000000000001';
@@ -16,6 +18,11 @@ export async function mockPatientApp(page:Page,historyEnabled=true,identity?:{to
  let sourceReads=0;const writes:string[]=[];
  const prefs={display_name:'Guest',preferred_language:'en',speech_locale:'en-SG',text_size:'standard',text_scale_percent:100,voice_enabled:false,tts_autoplay:false,conversation_history_enabled:historyEnabled,reminder_lead_minutes:0,reminders_enabled:false,timezone:'Asia/Singapore'};
  let patientMedications:MedicationSummary[]=[];
+ let dueDoseOverrides:Partial<DueDoseResponse>={};
+ let capabilities={late_dose_reports_enabled:false,care_task_followups_enabled:false,multiple_care_reminders_enabled:false};
+ let doseFollowUpSnapshot:DoseFollowUps={items:[],has_more:false,as_of:'2026-10-17T00:00:00Z',timezone:'Asia/Singapore'};
+ let careTaskSnapshot:CareTask[]=[];
+ let todaySnapshot={as_of:'2026-10-17T00:00:00Z',local_date:'2026-10-17',timezone:'Asia/Singapore'};
  let plans:RegimenHistoryItem[]=[],events:DoseHistoryEntry[]=[];
  let report:ReviewSummary={period:'week',window_start:'2026-10-10T00:00:00Z',window_end:'2026-10-17T00:00:00Z',generated_at:'2026-10-17T00:00:00Z',timezone:'Asia/Singapore',medications:[],reported_taken:0,reported_not_taken:0,unsure:0,observations:[],questions:[],coverage_note:'No report is not a missed dose.'};
  const reads:string[]=[];
@@ -25,7 +32,7 @@ export async function mockPatientApp(page:Page,historyEnabled=true,identity?:{to
   let body:unknown=[];
   if(request.method()==='GET')reads.push(request.url());
   if(request.method()!=='GET')writes.push(path);
-  if(path==='/api/health')body={status:'ok',runtime_contract:'patient-ux-reminders-v1'};
+  if(path==='/api/health')body={status:'ok',runtime_contract:'patient-ux-reminders-v1',...capabilities};
   else if(path==='/api/demo/start')body={session_id:'DEMO-session',patient_id:owner};
   else if(path==='/api/me/preferences'){if(request.method()==='PUT')Object.assign(prefs,request.postDataJSON());body=prefs;}
   else if(path==='/api/me/medications')body={medications:patientMedications,item_count:patientMedications.length,note:'DEMO'};
@@ -37,8 +44,10 @@ export async function mockPatientApp(page:Page,historyEnabled=true,identity?:{to
    body={entries:rows.slice(offset,offset+5),next_cursor:rows.length>offset+5?String(offset+5):null,window_start:null,window_end:'2026-10-17T12:00:00Z',as_of:'2026-10-17T12:00:00Z',scope:'stored_records_only',missing_plan_start:false};
   }
   else if(path==='/api/me/dose-history')body={entries:events,item_count:events.length,note:'demo_only'};
-  else if(path==='/api/doses/due'){const id=new URL(request.url()).searchParams.get('regimen_id');const medication=patientMedications.find(row=>row.regimen_id===id)??patientMedications[0];body={occurrence_id:'DEMO-occurrence',regimen_id:id,medication_display_name:medication?.display_name??'DEMO medicine',dose_description:'1 tablet',due_at:'2026-10-17T00:00:00Z',is_prn:false,visual_status:'not_checked',ingestion_proven:false};}
-  else if(path==='/api/me/today-attention')body={as_of:'2026-10-17T00:00:00Z',local_date:'2026-10-17',timezone:'Asia/Singapore',plans:patientMedications.map(row=>({regimen_id:row.regimen_id,state:row.is_prn?'as_needed':'pending',unrecorded_times:[]}))};
+  else if(path==='/api/doses/due'){const id=new URL(request.url()).searchParams.get('regimen_id');const medication=patientMedications.find(row=>row.regimen_id===id)??patientMedications[0];body={occurrence_id:'DEMO-occurrence',regimen_id:id,medication_display_name:medication?.display_name??'DEMO medicine',dose_description:'1 tablet',due_at:'2026-10-17T00:00:00Z',is_prn:false,visual_status:'not_checked',ingestion_proven:false,...dueDoseOverrides};}
+  else if(path==='/api/me/today-attention')body={...todaySnapshot,plans:patientMedications.map(row=>({regimen_id:row.regimen_id,state:row.is_prn?'as_needed':'pending',unrecorded_times:[]}))};
+  else if(path==='/api/me/dose-follow-ups')body=doseFollowUpSnapshot;
+  else if(path==='/api/me/care-tasks/refresh')body=careTaskSnapshot;
   else if(path==='/api/me/review-summary')body=report;
   else if(path==='/api/evidence/tasks'){sourceReads++;body=[task];}
   else if(path===`/api/evidence/tasks/${task.id}`)body=task;
@@ -48,5 +57,5 @@ export async function mockPatientApp(page:Page,historyEnabled=true,identity?:{to
   else if(path==='/api/speech/capabilities')body={cloud_tts_allowed:false};
   await route.fulfill({json:body});
  });
- return {errors,writes,reads,prefs,getSourceReads:()=>sourceReads,setMedications:(rows:MedicationSummary[])=>{patientMedications=rows;},setPlans:(rows:RegimenHistoryItem[])=>{plans=rows;},setEvents:(rows:DoseHistoryEntry[])=>{events=rows;},setReport:(value:ReviewSummary)=>{report=value;}};
+ return {errors,writes,reads,prefs,getSourceReads:()=>sourceReads,setCapabilities:(value:Partial<typeof capabilities>)=>{capabilities={...capabilities,...value};},setTodayDate:(as_of:string,local_date:string)=>{todaySnapshot={as_of,local_date,timezone:'Asia/Singapore'};},setDoseFollowUps:(value:DoseFollowUps)=>{doseFollowUpSnapshot=value;},setDueDose:(value:Partial<DueDoseResponse>)=>{dueDoseOverrides=value;},setCareTasks:(value:CareTask[])=>{careTaskSnapshot=value;},setMedications:(rows:MedicationSummary[])=>{patientMedications=rows;},setPlans:(rows:RegimenHistoryItem[])=>{plans=rows;},setEvents:(rows:DoseHistoryEntry[])=>{events=rows;},setReport:(value:ReviewSummary)=>{report=value;}};
 }

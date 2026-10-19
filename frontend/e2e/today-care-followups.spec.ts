@@ -11,9 +11,9 @@ for(const language of ['en','zh'] as const){
   await page.request.put('/api/me/preferences',{headers:{Authorization:'Bearer DEMO.correctness02-synthetic-token'},data:{preferred_language:language,text_scale_percent:100}});
   const c=(en:string,zh:string)=>language==='zh'?zh:en;
   await page.goto('/#today');
-  const followups=page.getByRole('region',{name:c('Recent dose reports','近期服药情况')});
-  await expect(followups.getByText(c('Unreported means there is no confirmed patient report. It does not mean a dose was missed.','尚未记录表示系统没有收到经您确认的服药自述，不等于未服用。'))).toBeVisible();
-  const dose=followups.getByRole('button',{name:c('Report dose status','补记服药情况')}).first();await dose.click();
+  const followups=page.getByRole('region',{name:c("Today's confirmation",'今日待确认')});
+  await expect(followups.getByText(c('Not recorded does not mean not taken.','未记录不代表未服药。'))).toBeVisible();
+  const dose=followups.getByRole('button',{name:c('Record status','记录情况')}).first();await dose.click();
   const dialog=page.getByRole('dialog');await dialog.getByRole('radio').nth(language==='en'?1:2).check();
   await dialog.getByRole('button',{name:c('Review report','核对自述'),exact:true}).click();await expect(dialog.getByRole('combobox')).toBeFocused();
   await dialog.getByRole('combobox').selectOption('forgot_to_record');await dialog.getByRole('button',{name:c('Review report','核对自述'),exact:true}).click();
@@ -76,8 +76,8 @@ test('no active medicines still exposes and confirms existing ended-plan follow-
  const headers={Authorization:'Bearer DEMO.correctness02-synthetic-token'};
  await page.request.put('/api/me/preferences',{headers,data:{preferred_language:'en'}});
  expect((await (await page.request.get('/api/me/medications',{headers})).json() as {medications:unknown[]}).medications).toEqual([]);
- await page.goto('/#today');const section=page.getByRole('region',{name:'Recent dose reports'});
- await section.getByRole('button',{name:'Report dose status'}).first().click();const dialog=page.getByRole('dialog');
+ await page.goto('/#today');const section=page.getByRole('region',{name:"Today's confirmation"});
+ await section.getByRole('button',{name:'Record status'}).first().click();const dialog=page.getByRole('dialog');
  await dialog.getByRole('radio').nth(2).check();await dialog.getByRole('combobox').selectOption('forgot_to_record');
  await dialog.getByRole('button',{name:'Review report',exact:true}).click();await expect(dialog.getByText('Review your report')).toBeVisible();
  const saved=page.waitForResponse(response=>response.request().method()==='POST'&&/\/late-report$/.test(new URL(response.url()).pathname));

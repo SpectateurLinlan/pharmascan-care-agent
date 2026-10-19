@@ -11,7 +11,7 @@ it('removes expired and PRN plans from the attention list without claiming not t
  render(<TodayAttentionOverview medications={medicines} focusRegimenId={null} onHistory={()=>undefined}>{medicine=><button>{medicine.display_name} report</button>}</TodayAttentionOverview>);
  expect(await screen.findByRole('button',{name:'Next dose report'})).toBeTruthy();
  expect(screen.queryByRole('button',{name:'Old dose report'})).toBeNull();
- await screen.findByRole('button',{name:'Report dose status'});
+ await screen.findByRole('button',{name:'Record status'});
  expect(document.querySelector('.today-unrecorded')?.textContent).toContain('Old dose');
  expect(document.querySelector('.today-unrecorded')?.textContent).toContain('Not recorded does not mean not taken.');
  expect(document.querySelector('.today-prn')?.hasAttribute('open')).toBe(false);
@@ -30,6 +30,21 @@ it('keeps today medication visible when there are no eligible late reports',asyn
  vi.spyOn(api,'doseFollowUps').mockResolvedValue({items:[{occurrence_id:'yesterday',regimen_id:'0',medication_id:'m0',medication_name:'Old dose',due_at:'2026-10-18T15:00:00Z',dose_amount:1,dose_unit:'tablet',report_id:null,intake_status:null,actual_administration_at:null,recorded_at:null,reason:null,notes:''}],has_more:false,timezone:'Asia/Singapore',as_of:'2026-10-19T04:00:00Z'});
  render(<TodayAttentionOverview medications={medicines.slice(0,1)} focusRegimenId={null} onHistory={()=>undefined}>{medicine=><button>{medicine.display_name} schedule</button>}</TodayAttentionOverview>);
  expect(await screen.findByRole('button',{name:'Old dose schedule'})).toBeTruthy();expect(await screen.findByText('No eligible doses to report today.')).toBeTruthy();expect(screen.queryByRole('button',{name:'Report dose status'})).toBeNull();
+});
+it('groups confirmation, patient-local date and medication schedule in one compact Today card',async()=>{
+ vi.spyOn(api,'todayAttention').mockResolvedValue({as_of:'2026-10-18T16:30:00Z',local_date:'2026-10-19',timezone:'Asia/Singapore',plans:[{regimen_id:'0',state:'upcoming',next_due_at:'2026-10-19T00:00:00Z',unrecorded_times:[]}]});
+ vi.spyOn(api,'doseFollowUps').mockResolvedValue({items:[
+  {occurrence_id:'today-one',regimen_id:'0',medication_id:'m0',medication_name:'Today dose',due_at:'2026-10-18T16:00:00Z',dose_amount:1,dose_unit:'tablet',report_id:null,intake_status:null,actual_administration_at:null,recorded_at:null,reason:null,notes:''},
+  {occurrence_id:'yesterday',regimen_id:'0',medication_id:'m0',medication_name:'Previous dose',due_at:'2026-10-18T15:00:00Z',dose_amount:1,dose_unit:'tablet',report_id:null,intake_status:null,actual_administration_at:null,recorded_at:null,reason:null,notes:''},
+ ],has_more:false,timezone:'Asia/Singapore',as_of:'2026-10-18T16:30:00Z'});
+ render(<TodayAttentionOverview medications={medicines.slice(0,1)} focusRegimenId={null} onHistory={vi.fn()}>{medicine=><p>{medicine.display_name}</p>}</TodayAttentionOverview>);
+ const card=await screen.findByRole('region',{name:"Today's medication"});
+ expect(card.classList.contains('card')).toBe(true);
+ expect(card.querySelector('time')?.getAttribute('dateTime')).toBe('2026-10-19');
+ expect(await screen.findByRole('heading',{name:"Today's confirmation"})).toBeTruthy();
+ expect(card.querySelector('.today-unrecorded__count')?.textContent).toBe('1 item');
+ expect(screen.getByText('Today dose')).toBeTruthy();expect(screen.queryByText('Previous dose')).toBeNull();
+ expect(card.querySelectorAll('.today-overview.card')).toHaveLength(0);
 });
 it('keeps an unsupported schedule visible for review instead of inventing a time or empty day',async()=>{
  vi.spyOn(api,'todayAttention').mockResolvedValue({as_of:'2026-10-18T04:00:00Z',local_date:'2026-10-18',timezone:'Asia/Singapore',plans:[{regimen_id:'0',state:'unavailable',unrecorded_times:[]}]});

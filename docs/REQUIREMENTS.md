@@ -631,3 +631,51 @@ Owner explicitly retained the synthetic-only gate. IMPLEMENTED LOCAL: fixed /int
 Production Cron remains absent/inactive; no production dispatch or sends. Current source is uncommitted and undeployed. Minimal deployment/account/device approval and exact bounded synthetic production procedure: docs/SYNTHETIC_REMINDER_DISPATCH.md. Owner will handle Git publication; no staged/committed/pushed/deployed changes. Synthetic account marker, configuration, test records and notification sends still require explicit approval. Normal production scheduler activation remains separately gated on successful scoped hosted/device acceptance and monitoring. Existing034 and working medication features unchanged.
 
 Additional unchanged-runtime regression:24 Render deployment tests PASS, bringing focused local/mock checks to76. Final real isolated PostgreSQL remains18 PASS; Ruff lint/format and diff checks PASS. Hosted synthetic dispatch and real device receipt remain NOT VERIFIED.
+
+
+### 2026-10-20 Today compact medication card visual follow-up
+
+Owner supplement: align the Today content below the embedded Assistant with the supplied compact reference. PASS local: medication card now uses the patient-zone date from the server-provided today-attention.as_of, a dynamic today-confirmation count, concise dose rows and the Records navigation; matching occurrence IDs from the late-report and due-dose APIs are shown once, while existing report, plan and photo-check paths remain available. Care Task summary retains direct Add Follow-up, real pending/overdue counts, bounded actionable rows and calendar navigation. No API, schedule, eligibility or patient-data changes.
+
+Evidence: focused Vitest 24/24; Playwright synthetic Auth/API 4/4 including EN/ZH at390/1280 and no horizontal overflow; TypeScript, affected source ESLint, git diff --check and Impeccable detector passed. Browser date, subscriptions/tasks and Auth were synthetic fixtures; hosted/patient-data visual behavior NOT VERIFIED. Exact evidence screenshot outputs are ignored local QA artifacts, not production captures.
+
+
+### 2026-10-20 Records summary priority and medication-history entry supplement
+
+| Behavior | Status | Direct evidence and boundary |
+|---|---|---|
+| Summary is the first Records content module, uses the approved pale-green surface, and its period actions use Chinese labels in Chinese mode | **PASS — local synthetic component** | `RecordsOverview.test.tsx` verifies order, green emphasis class, and 本周 / 本月 / 按用药计划 after selecting Chinese. |
+| Pending medication reports are hidden until the accessible disclosure is opened | **PASS — local synthetic component** | The same test verifies native details starts closed, exposes the disclosure label, and opens on activation. `LateDoseFollowUps` keeps its existing API and report/correction flows. |
+| Medication history is accessed through a compact card; opening it shows the existing search, medication, plan, date filters and paginated history | **PARTIAL — component and navigation tests; browser integration NOT VERIFIED** | The card calls the existing `medication-records` child route, which renders the existing `HistoryScreen` and API. Vitest checks card activation and the route's Back path. The focused Chromium history spec was attempted but its hard-coded `127.0.0.1:5182` precondition failed: no listener was present; Playwright defaulted to `127.0.0.1:5174`. No authenticated backend or patient data was used. |
+| Existing dose history and correction APIs/data remain unchanged | **PASS — code boundary** | Only presentation and frontend navigation changed. No API, eligibility rule, schedule, backend, migration or patient record changed. |
+| Verification | **PASS — local frontend checks / PARTIAL browser** | Focused Vitest: 59 passed across Records overview, late-report, history filtering/pagination and navigation suites; TypeScript and affected ESLint passed. The Playwright journey did not run past its environment assertion. `git diff --check` and visual detector results are recorded in the handoff. |
+
+The browser acceptance gap is environmental, not evidence of a production API limitation. Repeat the focused journey after starting the project's expected local API proxy on port 5182 or update the test harness to the supported synthetic-only setup; do not infer real-account behavior from the component tests.
+
+
+### 2026-10-20 Assistant history sidebar action refinement
+
+| Behavior | Status | Direct evidence and boundary |
+|---|---|---|
+| Remove the redundant “Back to current conversation” action from the history sidebar while keeping the active composer visible | **PASS — local synthetic component** | `AssistantWorkspace.test.tsx` opens the history sidebar and verifies that this button is absent while the current draft remains in the composer. |
+| Preserve navigation out of a selected saved, read-only exchange and preserve unsent draft recovery | **PASS — local synthetic component** | The selected-history article retains its own return action; existing coverage verifies it restores the current draft. The separate “Return to unsent conversation” action remains. |
+| Verification | **PASS — local frontend** | Focused AssistantWorkspace Vitest: 10 passed; TypeScript, affected ESLint and `git diff --check` passed. No backend, history API, retention, or patient data changed. |
+
+### 2026-10-20 Medication reports disclosure and reporting-window clarification
+
+| Behavior | Status | Direct evidence and boundary |
+|---|---|---|
+| Make the Records pending-dose disclosure clearly interactive and keyboard operable | **PASS ? local component** | Native `<details>/<summary>` remains the control; the whole summary is a tinted, focus-visible card with helper copy and a stateful chevron. Focused `RecordsOverview.test.tsx` verifies collapsed/expanded behavior and Chinese helper copy. |
+| State the existing maximum reporting lookback and retain server eligibility checks | **PASS ? code-level contract; no rule changed** | `LateReportService.occurrence` accepts only an existing scheduled occurrence no older than seven days, and also checks the patient-owned plan, source review and course applicability. API `can_report` remains authoritative; no backend/API change was made. |
+| Treat an expired/unreported dose as ?missed? automatically | **NOT IMPLEMENTED ? clinical data rule** | `AGENTS.md` requires missing ? missed, and MT-CARE-03 preserves explicit patient-reported status. Expired/unreported items remain unreported; the patient may report `reported_not_taken` through the supported workflow when eligible. Automatic classification needs a separate explicit product/safety decision and data-contract review. |
+| Verification scope | **PASS — local frontend** | RecordsOverview.test.tsx: 2 passed; TypeScript, affected ESLint and `git diff --check` passed. No live account, API, or production behavior was exercised. |
+
+### 2026-10-20 Records action balance and pending-report disclosure supplement
+
+| Behavior | Status | Direct evidence and boundary |
+|---|---|---|
+| Keep the three summary actions compact, left-starting and visually distinct from the pale-green summary surface | **PASS — local browser** | Actual browser screenshots at 390×844 and 844×390 show bounded, equal-width white controls with readable dark labels; they wrap at phone width and remain on one row in landscape. |
+| Show a report/correction action only when the API explicitly says `can_report: true` | **PASS — local synthetic browser + component** | Five synthetic occurrences yielded two action buttons and three review-only explanations. Existing report and correction interaction remains; no API eligibility rule changed. |
+| Expand pending occurrences in one step without a nested help disclosure or a second “view all” action | **PASS — local synthetic browser + component** | One native Records disclosure reveals the bounded server list, inline eligibility guidance and all returned occurrences. Focused component tests: 21 passed across `RecordsOverview` and `CareFollowUps`. |
+| Preserve responsive Records and child-screen behavior in both orientations and at 150% text size | **PASS — local synthetic browser** | `e2e/records-layout.spec.ts`: 2 EN/ZH browser journeys passed against `http://localhost:5173`, covering 390×844, 844×390, child routes, 150% text, bounds and no horizontal overflow. Auth/API and records were intercepted DEMO_ONLY fixtures; hosted/patient-data behavior NOT VERIFIED. |
+| Verification | **PASS — local frontend** | TypeScript, ESLint, production build, Impeccable detector (`[]`) and `git diff --check` passed. Build retains the existing >500 kB JS chunk advisory. No backend/API/DTO/schema, eligibility, schedule or patient-data change. |

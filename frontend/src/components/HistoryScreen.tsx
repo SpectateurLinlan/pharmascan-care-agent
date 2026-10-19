@@ -57,8 +57,8 @@ export function HistoryScreen({initialFilters,scopedTitle}:{initialFilters?:Medi
  function chooseMedicine(value:string){change({range_kind:filters.range_kind==='plan'?'30':filters.range_kind,...(value?{medication_name:historyName(value)}:{}),...(filters.range_kind==='custom'?{start:filters.start??'',end:filters.end??''}:{})});}
  function choosePlan(value:string){const next={...filters};delete next.regimen_id;if(!value&&next.range_kind==='plan')next.range_kind='30';if(value)next.regimen_id=value;change(next);}
  function chooseRange(value:MedicationHistoryRange){const next={...filters,range_kind:value};delete next.start;delete next.end;change(next);}
-  return <Card title={scoped?(scopedTitle??t('Medication history')):'My medication records'} {...(!scoped?{hint:'View saved dose reports and past scheduled doses by medicine and date.'}:{})}><div className="record-history">
-   <div className={`record-history__filters record-history__filters--grouped${scoped?' record-history__filters--scoped':''}`}>
+  return <Card {...(scoped?{title:scopedTitle??t('Medication history')}:{})}><div className="record-history">
+   <fieldset className="record-history__filter-group"><legend>{t('Filter records')}</legend><div className={`record-history__filters record-history__filters--grouped${scoped?' record-history__filters--scoped':''}`}>
     {!scoped?<>
    <div className="field record-history__search"><label htmlFor="history-search">{t('Search medicines')}</label><input id="history-search" type="search" value={search} onChange={event=>setSearch(event.target.value)} placeholder={t('Search medicine names')} aria-describedby="history-search-count"/>
     {search?<button type="button" onClick={()=>{setSearch('');document.getElementById('history-search')?.focus();}}>{t('Clear search')}</button>:null}
@@ -75,7 +75,7 @@ export function HistoryScreen({initialFilters,scopedTitle}:{initialFilters?:Medi
     {(['7','30','90'] as const).map(days=><option key={days} value={days}>{t(`Last ${days} days`)}</option>)}<option value="custom">{t('Custom dates')}</option><option value="all">{t('All available history')}</option>{selectedPlan?<option value="plan">{t('Selected plan effective period')}</option>:null}
    </select></div>
    {filters.range_kind==='custom'?<div className="record-history__dates"><label>{t('Start date')}<input type="date" value={filters.start??''} onChange={event=>change({...filters,start:event.target.value})}/></label><label>{t('End date')}<input type="date" min={filters.start} value={filters.end??''} onChange={event=>change({...filters,end:event.target.value})}/></label></div>:null}
-   </div>
+   </div></fieldset>
    {scoped&&filters.regimen_id?<button type="button" onClick={()=>{const next={...filters};delete next.regimen_id;change(next);}}>{t('Include earlier plan versions')}</button>:null}
   <p className="notice">{t('Only stored dose reports and already generated past scheduled doses are shown. Missing schedules are not generated here; future doses are excluded.')}</p>
   {!valid?<p role="status">{t('Choose a valid start and end date.')}</p>:null}
@@ -83,9 +83,9 @@ export function HistoryScreen({initialFilters,scopedTitle}:{initialFilters?:Medi
   {error?<div className="record-history__error" role="alert"><p>{t('Could not load medication history. Please retry.')}</p><button type="button" onClick={()=>setRetry(value=>value+1)}>{t('Retry history query')}</button></div>:null}
   {loading?<p role="status">{t('Loading your history...')}</p>:null}
   {page&&!entries.length&&!loading?<p>{t('No records in this range.')}</p>:null}
-  {page?<p role="status">{t('Displayed records')}: {entries.length}</p>:null}
-  <ul className="history">{entries.map(row=><li key={row.id}><div><strong>{row.display_name}</strong><p>{t(row.due_at?'Scheduled time':'Event time')}: {date(row.sort_time)}</p><small>{planName(row.regimen_id)}</small>
-   {row.reported?<details><summary>{t('Report timestamps')}</summary>{row.event_time?<p>{t('Event time')}: {date(row.event_time)}</p>:null}{row.actual_administration_at?<p>{language==='zh'?'患者自述实际服用时间':'Patient-reported administration time'}: {date(row.actual_administration_at)}</p>:null}{row.submitted_at?<p>{t('Submitted at')}: {date(row.submitted_at)}</p>:null}<p>{t('A report does not establish actual ingestion time.')}</p></details>:null}</div><span>{t(intakeLabel(row.reported?row.intake_status:null))}</span></li>)}</ul>
+  {page?<div className="record-history__results-heading"><h3>{t('Dose reports')}</h3><p role="status">{t('Displayed records')}: {entries.length}</p></div>:null}
+  <ul className="history">{entries.map(row=><li key={row.id}><div><strong>{row.display_name}</strong><p>{t(row.due_at?'Scheduled time':'Event time')}: <time dateTime={row.sort_time}>{date(row.sort_time)}</time></p><small>{planName(row.regimen_id)}</small>
+   {row.reported?<details><summary>{t('Report timestamps')}</summary>{row.event_time?<p>{t('Event time')}: {date(row.event_time)}</p>:null}{row.actual_administration_at?<p>{language==='zh'?'患者自述实际服用时间':'Patient-reported administration time'}: {date(row.actual_administration_at)}</p>:null}{row.submitted_at?<p>{t('Submitted at')}: {date(row.submitted_at)}</p>:null}<p>{t('A report does not establish actual ingestion time.')}</p></details>:null}</div><span className="record-history__status">{t(intakeLabel(row.reported?row.intake_status:null))}</span></li>)}</ul>
   {page?.next_cursor?<button className="record-history__more" disabled={loading} onClick={()=>void more()}>{t('Load more records')}</button>:null}
  </div></Card>;
 }

@@ -642,3 +642,17 @@ Owner explicitly retained the synthetic-only gate. IMPLEMENTED LOCAL: fixed /int
 Production Cron remains absent/inactive; no production dispatch or sends. Current source is uncommitted and undeployed. Minimal deployment/account/device approval and exact bounded synthetic production procedure: docs/SYNTHETIC_REMINDER_DISPATCH.md. Owner will handle Git publication; no staged/committed/pushed/deployed changes. Synthetic account marker, configuration, test records and notification sends still require explicit approval. Normal production scheduler activation remains separately gated on successful scoped hosted/device acceptance and monitoring. Existing034 and working medication features unchanged.
 
 Additional unchanged-runtime regression:24 Render deployment tests PASS, bringing focused local/mock checks to76. Final real isolated PostgreSQL remains18 PASS; Ruff lint/format and diff checks PASS. Hosted synthetic dispatch and real device receipt remain NOT VERIFIED.
+
+
+### 2026-10-20 Today compact medication card follow-up
+
+- IMPLEMENTED LOCAL: Today uses the patient-local date from the existing server as_of, compact confirmation count/rows and one outer medication card; identical occurrence IDs shared by the existing dose and late-report reads no longer render duplicate dose actions. My Medicines and photo check stay available, and Care Task summary actions/data remain unchanged.
+- Evidence: focused Vitest24/24; synthetic browser EN/ZH at390/1280, overflow and screenshot inspection4/4; TypeScript, affected source ESLint, diff check and Impeccable detector PASS. No API, scheduling, eligibility, database, or patient-record changes.
+- Hosted patient data and runtime rendering NOT VERIFIED. Synthetic Auth/API browser evidence does not establish a deployed or real-account result.
+
+
+### 2026-10-20 Records owner supplement — summary actions and pending-report hierarchy
+
+IMPLEMENTED LOCAL: the three summary actions are compact, left-starting, equal-width white controls with readable dark text on the pale-green summary card. Pending occurrences now have one native disclosure; eligibility guidance is inline, the server-bounded result set is visible after that single expansion, and only `can_report === true` rows expose a report/correction button. Ineligible rows remain review-only. Backend/API eligibility and missing-dose semantics are unchanged.
+
+Evidence: 21 focused Vitest cases PASS; synthetic Auth/API Chromium EN/ZH journeys PASS at390×844,844×390 and 150% text, including child routes, bounds and no horizontal overflow; typecheck, lint, build, Impeccable detector and diff check PASS. The 5173 browser used DEMO_ONLY intercepted data. Hosted/real-account behavior remains NOT VERIFIED. No new deferred implementation was introduced; no Git, DB, deployment or patient-data operation.

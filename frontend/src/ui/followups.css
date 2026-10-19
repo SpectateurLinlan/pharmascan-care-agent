@@ -24,3 +24,46 @@
 .today-unrecorded--compact{margin-top:.75rem}.today-unrecorded--compact .today-unrecorded__note{margin:.25rem 0;color:#526763;font-size:.92rem}.today-dose-list{list-style:none;margin:.5rem 0;padding:0;display:grid;gap:.35rem}.today-dose-list li{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.65rem 0;border-top:1px solid #e2e4df}.today-dose-list li>div{display:grid;gap:.15rem;min-width:0}.today-dose-list li>div span{color:#526763;font-size:.9rem}.today-dose-list .text-button{flex:none}
 @media(max-width:600px){.care-task-page__header{align-items:flex-start}.care-task-page__header .primary{min-height:2.75rem;flex:none}.care-view-switch{display:grid;grid-template-columns:1fr 1fr}.care-view-switch button{min-height:2.75rem}.care-status-filter--desktop{display:none}.care-status-filter__mobile{display:grid;gap:.35rem}.care-status-filter__mobile select{width:100%;min-height:2.75rem}.care-calendar__grid{gap:.1rem}.care-calendar__day{min-height:2.8rem;padding:.15rem}.care-calendar__legend{justify-content:flex-start;gap:.6rem;flex-wrap:wrap}.today-dose-list li{align-items:flex-start}.today-dose-list .text-button{min-height:2.75rem}}
 @media(max-width:420px){.care-flow .followup-grid {grid-template-columns:1fr}}
+
+/* Today uses one medication surface with compact confirmation and schedule rows. */
+.today-attention{display:grid;gap:.55rem;min-width:0}
+.today-attention__heading{display:flex;align-items:center;justify-content:space-between;gap:.75rem}
+.today-attention__heading h2{margin:0;font-size:1.25rem}
+.today-attention__heading time{color:#526763;font-size:.9rem;font-variant-numeric:tabular-nums}
+.today-attention .today-unrecorded--compact{margin:0;padding:.7rem 0 0;border:0;border-top:1px solid #e2e4df;border-radius:0;background:transparent}
+.today-unrecorded--compact .today-unrecorded__header h3{font-size:1rem}
+.today-unrecorded__count{flex:none;color:#526763;font-size:.9rem}
+.today-unrecorded--compact .today-unrecorded__note{margin:.15rem 0;color:#526763;font-size:.82rem}
+.today-unrecorded--compact .today-dose-list{margin:.25rem 0 0}
+.today-unrecorded--compact .today-dose-list li{min-height:2.8rem;padding:.4rem 0}
+.today-dose-list__action{display:inline-flex;align-items:center;gap:.45rem;flex:none;min-height:2.75rem;padding:.25rem .4rem;border:0;background:transparent;color:#087565;font:inherit;cursor:pointer}
+.today-dose-list__action span,.today-records-link span{font-size:1.15rem}
+.today-dose-list__action:focus-visible,.today-records-link:focus-visible,.care-summary__add:focus-visible,.care-summary__calendar:focus-visible{outline:3px solid #087565;outline-offset:2px}
+.today-records-link{display:flex;align-items:center;justify-content:flex-end;gap:.5rem;width:100%;min-height:2.75rem;padding:.35rem 0;border:0;background:transparent;color:#087565;font:inherit;text-align:start;cursor:pointer}
+.today-schedule-empty{margin:.15rem 0;color:#526763}
+.today-overview--embedded{min-width:0}
+.today-overview--embedded .medicine-current .card{padding:.65rem 0 0}
+.today-overview--embedded .dose-head{gap:.2rem}
+.today-overview--embedded .dose-name{font-size:1.05rem;line-height:1.35}
+.today-overview--embedded .dose-plan,.today-overview--embedded .dose-strength{font-size:.85rem}
+.today-overview--embedded .dose-details{display:none}
+.today-overview--embedded .dose-report{gap:.35rem;padding-top:.55rem}
+.today-overview--embedded .dose-report__choices .choice{min-height:2.6rem}
+.today-overview--embedded .dose-secondary-action{min-height:2.5rem}
+.today-attention .today-medication-shortcuts{gap:.2rem 1rem;margin-top:.2rem;padding-top:.45rem;border-top:1px solid #e2e4df}
+.today-attention .today-medication-shortcuts .text-button{display:inline-flex;align-items:center;min-height:2.5rem;padding:0 .2rem;border:0;border-radius:0;background:transparent;color:#087565;font:inherit;text-decoration:underline;text-underline-offset:.16em}
+.care-summary{gap:.35rem}
+.care-summary__header{min-height:2.6rem}
+.care-summary__add{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;padding:.25rem .35rem;border:0;background:transparent;color:#087565;font:inherit}
+.care-summary__add .app-icon,.care-summary__calendar .app-icon{width:1.1rem;height:1.1rem}
+.care-summary__counts{margin:.1rem 0 .25rem}
+.care-summary .care-list{gap:0;margin:.1rem 0}
+.care-summary .care-list li+li{border-top:1px solid #e2e4df}
+.care-summary .care-list__button{min-height:3.1rem;gap:.2rem;padding:.45rem .15rem;border:0;border-radius:0;background:transparent}
+.care-summary .care-list__heading{align-items:center}
+.care-summary .care-list__heading strong{font-weight:600}
+.care-summary .care-list__meta{font-size:.86rem}
+.care-summary__empty{margin:.15rem 0}
+.care-summary__calendar{display:flex;align-items:center;gap:.55rem;width:100%;min-height:2.75rem;margin-top:.2rem;padding:.45rem 0;border:0;border-top:1px solid #e2e4df;border-radius:0;background:transparent;color:#087565;font:inherit;text-align:start;cursor:pointer}
+.care-summary__calendar .app-icon:last-child{margin-inline-start:auto;color:#526763}
+@media(max-width:600px){.today-attention__heading h2{font-size:1.15rem}.today-dose-list__action{gap:.2rem;padding-inline:.15rem;font-size:.9rem}.care-summary__header{align-items:center}.care-summary__add{min-height:2.75rem}}

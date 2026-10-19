@@ -8,6 +8,7 @@ import {FollowUpError} from './FollowUpError';
 import {BottomSheet} from './BottomSheet';
 import {CareTaskForm} from './CareTaskForm';
 import {careCopy,careLabel} from './followUpCopy';
+import {Icon} from './Icon';
 import '../ui/followups.css';
 
 export {taskView};
@@ -34,12 +35,12 @@ export function CareTaskSummary({onOpen,medications=[],regimens=[],extended=true
  const when=(value:string)=>{const instant=Date.parse(value);return Number.isFinite(instant)?new Date(instant).toLocaleString(language==='zh'?'zh-CN':'en-SG',{timeZone:preferences.timezone,month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):t('Date unavailable');};
  let today='';try{today=localFields(new Date(now).toISOString(),preferences.timezone).date;}catch{/* Leave date selection to the patient when the saved zone is unavailable. */}
  return <section className="card care-summary" aria-labelledby="today-care-tasks-title">
-  <header className="care-summary__header"><h2 id="today-care-tasks-title" className="card__title">{t('Medication follow-ups')}</h2><button type="button" className="care-summary__add" onClick={()=>setEditing(true)}><span aria-hidden="true">&#43;</span> {t('Add Follow-up')}</button></header>
+  <header className="care-summary__header"><h2 id="today-care-tasks-title" className="card__title">{t('Medication follow-ups')}</h2><button type="button" className="care-summary__add" onClick={()=>setEditing(true)}><Icon name="plus"/>{t('Add Follow-up')}</button></header>
   {error?<FollowUpError error={error} kind="read"/>:rows===null?<p role="status">{t('Loading follow-ups\u2026')}</p>:<>
    <div className="care-summary__counts"><span className="care-status">{t('Pending')} {pending}</span><span className="care-status care-status--overdue">{t('Overdue')} {overdue}</span></div>
    {visible.length?<ul className="care-list care-list--compact">{visible.map(row=><li key={row.id}><button className="care-list__button" onClick={()=>onOpen(row.id)}><span className="care-list__heading"><strong>{row.source==='stock_estimate'?t(row.title):row.title}</strong><span className={`care-status care-status--${taskView(row,now)}`}>{taskView(row,now)==='overdue'?t('Overdue'):t('Pending')}</span></span><span className="care-list__meta">{when(row.due_at)}{row.medication_id?` / ${medications.find(med=>med.medication_id===row.medication_id)?.display_name??''}`:''}</span></button></li>)}</ul>:<p className="care-summary__empty">{t('No pending medication follow-ups.')}</p>}
   </>}
-  <button type="button" className="care-summary__calendar" onClick={()=>onOpen()}>{t('View calendar and all follow-ups')} </button>
+  <button type="button" className="care-summary__calendar" onClick={()=>onOpen()}><Icon name="calendar"/>{t('View calendar and all follow-ups')}<Icon name="chevron-right"/></button>
   {editing?<CareTaskForm multiple={multiple} extended={extended} initialDate={today} regimens={regimens} onCancel={()=>setEditing(false)} onSaved={()=>setEditing(false)}/>:null}
  </section>;
 }

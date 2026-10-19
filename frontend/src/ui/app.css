@@ -3109,7 +3109,6 @@ button.history-info-row { display: grid; grid-template-columns: auto minmax(0, 1
 .conversation-workspace .conversation-history-browser h2 { font-size: var(--fs-body); margin: 0; }
 .conversation-workspace .conversation-history-browser > p { font-size: var(--fs-caption); line-height: 1.5; margin: 0; }
 .conversation-workspace .history-new { display: flex; align-items: center; gap: var(--s-2); flex: 0 0 auto; min-height: var(--tap); width: 100%; text-align: left; background: var(--brand-50); color: var(--brand); padding: var(--s-3); }
-.conversation-workspace .history-current { height: auto; min-height: var(--tap); padding: var(--s-3); white-space: normal; text-align: left; }
 .conversation-workspace .history-date-group h3 { margin: 0; font-size: var(--fs-small); color: var(--ink-2); }
 .conversation-workspace .history-entry { width: 100%; min-width: 0; }
 .conversation-workspace .history-entry[aria-pressed="true"] { background: var(--brand-50); color: var(--brand); }

@@ -81,6 +81,15 @@ it('keeps an ineligible occurrence visible without presenting its dose as review
  render(<LateDoseFollowUps/>);await screen.findByText('DEMO medicine');
  expect(screen.getByText(/Saved plan needs review/)).toBeTruthy();expect(screen.queryByRole('button',{name:'Report dose status'})).toBeNull();expect(screen.queryByText(/Per dose/)).toBeNull();
 });
+it('shows all recent report rows at one disclosure level and only adds report actions when the API authorizes them',async()=>{
+ const rows:DoseFollowUp[]=Array.from({length:5},(_,index)=>{const allowed=index===1||index===3;const unavailableReason:'review_required'|null=allowed?null:'review_required';return {...item,occurrence_id:`demo-occ-${index}`,can_report:allowed,unavailable_reason:unavailableReason};});
+ vi.spyOn(api,'doseFollowUps').mockResolvedValue({items:rows,has_more:false,timezone:'Asia/Singapore',as_of:new Date(now).toISOString()});
+ render(<LateDoseFollowUps/>);await screen.findAllByText('DEMO medicine');
+ expect(screen.getAllByRole('button',{name:'Report dose status'})).toHaveLength(2);
+ expect(screen.getAllByText('Review the saved medication and plan before reporting this occurrence.')).toHaveLength(3);
+ expect(document.querySelector('.late-report-help details')).toBeNull();expect(screen.getByText(/Late reporting is available/)).toBeTruthy();
+ expect(screen.queryByRole('button',{name:/View all .* reports/})).toBeNull();expect(screen.queryByRole('button',{name:'Show fewer'})).toBeNull();
+});
 it('Today shows only eligible unresolved doses on the API patient-local date',async()=>{
  vi.spyOn(api,'doseFollowUps').mockResolvedValue({items:[
   {...item,occurrence_id:'yesterday',due_at:'2026-10-18T15:00:00Z'},
@@ -89,12 +98,13 @@ it('Today shows only eligible unresolved doses on the API patient-local date',as
   {...item,occurrence_id:'reported',due_at:'2026-10-18T18:00:00Z',report_id:'demo-report'},
  ],has_more:false,timezone:'Asia/Singapore',as_of:'2026-10-19T04:00:00Z'});
  const history=vi.fn();render(<LateDoseFollowUps todayOnly onHistory={history}/>);
- expect(await screen.findByRole('button',{name:'Report dose status'})).toBeTruthy();expect(screen.getByText(/12:00.*Not recorded/)).toBeTruthy();
+ expect(await screen.findByRole('button',{name:'Record status'})).toBeTruthy();expect(screen.getByText(/12:00.*Not recorded/)).toBeTruthy();
  expect(screen.queryByText(/yesterday|not-eligible|reported/)).toBeNull();expect(screen.getByText('Not recorded does not mean not taken.')).toBeTruthy();
- fireEvent.click(screen.getByRole('button',{name:'View records'}));expect(history).toHaveBeenCalledOnce();
+ expect(screen.getByRole('heading',{name:"Today's confirmation"})).toBeTruthy();expect(screen.getByText('1 item')).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'View all medication records'}));expect(history).toHaveBeenCalledOnce();
 });
 it('keeps existing report correction access available in the Records workflow',async()=>{
- const read=vi.spyOn(api,'doseFollowUps').mockImplementation(async includeReported=>({items:includeReported?[{...item,report_id:'demo-report',intake_status:'unsure'}]:[],has_more:false,timezone:'Asia/Singapore',as_of:new Date(now).toISOString()}));
+ const read=vi.spyOn(api,'doseFollowUps').mockImplementation(async includeReported=>({items:includeReported?[{...item,can_report:true,report_id:'demo-report',intake_status:'unsure'}]:[],has_more:false,timezone:'Asia/Singapore',as_of:new Date(now).toISOString()}));
  vi.spyOn(api,'lateReportHistory').mockResolvedValue({original:null,corrections:[]});render(<LateDoseFollowUps/>);
  fireEvent.click(await screen.findByRole('checkbox',{name:'Include reported occurrences to review or correct'}));
  fireEvent.click(await screen.findByRole('button',{name:'Review or correct report'}));await act(async()=>{await Promise.resolve();});expect(screen.getByRole('dialog')).toBeTruthy();expect(read).toHaveBeenLastCalledWith(true);
@@ -107,7 +117,7 @@ it('Care Task statuses and dates use the configured timezone and invalid dates s
  expect(sortCareTasks([task('done','2026-10-18T00:00:00Z','completed'),task('pending','2026-10-20T00:00:00Z'),task('late','2026-10-18T00:00:00Z')],now).map(row=>row.id)).toEqual(['late','pending','done']);
 });
 it.each(['reported_taken','reported_not_taken','unsure'] as const)('late %s stays a patient report and requires matching server confirmation',async status=>{
- vi.spyOn(api,'doseFollowUps').mockResolvedValue({items:[item],has_more:false,timezone:'Asia/Singapore',as_of:new Date(now).toISOString()});
+ vi.spyOn(api,'doseFollowUps').mockResolvedValue({items:[{...item,can_report:true}],has_more:false,timezone:'Asia/Singapore',as_of:new Date(now).toISOString()});
  vi.spyOn(api,'lateReportHistory').mockResolvedValue({original:null,corrections:[]});
  const prepare=vi.spyOn(api,'prepareLateReport').mockImplementation(async(_id,proposed)=>({challenge_id:'demo-challenge',session_id:'demo-session',expires_at:'2026-10-19T04:10:00Z',occurrence:item,proposed,timezone:'Asia/Singapore'}));
  const confirm=vi.spyOn(api,'confirmLateReport').mockImplementation(async(_id,challenge:LateReportChallenge)=>({...challenge.proposed,patient_id:'demo-owner',occurrence_id:item.occurrence_id,regimen_id:item.regimen_id,recorded_at:new Date(now).toISOString(),version:1,idempotency_key:'demo-key',ingestion_proven:false,visual_status:'not_checked'}));
@@ -126,10 +136,10 @@ it('does not request unavailable late reports or pretend they are empty',()=>{
  expect(screen.getByRole('status').textContent).toContain('not enabled');expect(read).not.toHaveBeenCalled();
  expect(screen.queryByRole('button',{name:'Retry'})).toBeNull();
 });
-it('bounds the initial occurrence list and expands without another query',async()=>{
+it('shows all bounded API occurrences without a second expansion or query',async()=>{
  const read=vi.spyOn(api,'doseFollowUps').mockResolvedValue({items:Array.from({length:5},(_,i)=>({...item,occurrence_id:`demo-${i}`,medication_name:`DEMO medicine ${i}`})),has_more:false,timezone:'Asia/Singapore',as_of:new Date(now).toISOString()});
- render(<LateDoseFollowUps/>);await screen.findByText('DEMO medicine 0');expect(screen.queryByText('DEMO medicine 4')).toBeNull();
- fireEvent.click(screen.getByRole('button',{name:'View all 5 reports'}));expect(screen.getByText('DEMO medicine 4')).toBeTruthy();expect(read).toHaveBeenCalledOnce();
+ render(<LateDoseFollowUps/>);await screen.findByText('DEMO medicine 0');expect(screen.getByText('DEMO medicine 4')).toBeTruthy();
+ expect(screen.queryByRole('button',{name:'View all 5 reports'})).toBeNull();expect(read).toHaveBeenCalledOnce();
 });
 it('requires checking an unusually old year before the historical review',()=>{
  render(<CareTaskForm regimens={[]} onCancel={vi.fn()} onSaved={vi.fn()}/>);

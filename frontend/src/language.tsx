@@ -9,6 +9,10 @@ const englishLabels:Record<string,string>={blood_pressure:'Blood pressure',blood
  medication_review:'Medication review',medication_follow_up:'Medication follow-up',symptom_follow_up:'Symptom follow-up',expiry_storage:'Expiry and storage review',
  forgetfulness:'Forgetfulness',running_out:'Medication running out',side_effect_concern:'Concern about symptoms or side effects',scheduling:'Scheduling difficulty',unclear_instructions:'Unclear instructions',complexity:'Medication complexity',unsure_taken:'Unsure whether taken',prefer_not_to_say:'Prefer not to say'};
 const translations:Record<string,string>={
+ 'Saved health notes':'已保存的健康感受',
+ 'Saved difficulty records':'已保存的困难记录',
+ 'Filter records':'筛选记录',
+ 'Dose reports':'服药记录',
  'Saved choices are read-only. Ask again to refresh medicine options.':'历史消息中的选择仅供回看；重新提问可读取最新药物选项。',
  'Choose a medicine':'选择药物','These choices expired. Ask your question again to refresh them.':'这些选项已过期，请重新提问以读取最新药物。','Knowledge sources':'知识来源','US drug label':'美国药品标签',
  'Hide conversation sidebar':'收起对话侧栏','Show conversation sidebar':'展开对话侧栏','Sending...':'发送中…','Retry sending':'重试发送',
@@ -1205,6 +1209,7 @@ Object.assign(translations, {
  'No eligible doses to report today.':'\u4eca\u5929\u6ca1\u6709\u53ef\u8865\u8bb0\u7684\u5242\u6b21\u3002',
  'Report dose status':'\u8bb0\u5f55\u670d\u836f\u60c5\u51b5',
  'Medication reports to confirm':'\u5f85\u786e\u8ba4\u7684\u670d\u836f\u8bb0\u5f55',
+ 'Open to review scheduled doses from the past 7 days; eligibility still applies.':'\u70b9\u51fb\u67e5\u770b\u8fd1 7 \u5929\u7684\u8ba1\u5212\u5242\u6b21\uff1b\u662f\u5426\u53ef\u8865\u8bb0\u4ecd\u53d6\u51b3\u4e8e\u8ba1\u5212\u72b6\u6001\u3002',
  'View records':'\u67e5\u770b\u8bb0\u5f55',
  'About late reports':'\u5173\u4e8e\u8865\u8bb0',
  'Late reporting is available for recent scheduled doses only. The time limit follows your schedule, next dose, and midnight in your time zone.':'\u4ec5\u53ef\u8865\u8bb0\u8fd1\u671f\u7684\u8ba1\u5212\u5242\u6b21\uff0c\u6709\u6548\u65f6\u95f4\u53d6\u51b3\u4e8e\u60a8\u7684\u7528\u836f\u8ba1\u5212\u548c\u65f6\u533a\u3002',
@@ -1246,4 +1251,9 @@ Object.assign(translations, {
  'Back to guest options':'\u8fd4\u56de\u8bbf\u5ba2\u8d26\u6237\u9009\u9879',
  'Switch to another account. Guest records are not merged into it.':'\u5207\u6362\u5230\u53e6\u4e00\u4e2a\u8d26\u6237\u3002\u8bbf\u5ba2\u8bb0\u5f55\u4e0d\u4f1a\u5408\u5e76\u5230\u65b0\u8d26\u6237\u3002',
  'Check your email to confirm the address and keep using this guest account.':'\u8bf7\u67e5\u6536\u90ae\u4ef6\u5e76\u786e\u8ba4\u5730\u5740\uff0c\u4ee5\u4fbf\u7ee7\u7eed\u4f7f\u7528\u6b64\u8bbf\u5ba2\u8d26\u6237\u3002','Check your email for a sign-in code or link.':'\u8bf7\u67e5\u6536\u90ae\u4ef6\u4e2d\u7684\u767b\u5f55\u9a8c\u8bc1\u7801\u6216\u94fe\u63a5\u3002'
+});
+Object.assign(translations, {
+ "Today's confirmation":'\u4eca\u65e5\u5f85\u786e\u8ba4',
+ 'Record status':'\u8bb0\u5f55\u60c5\u51b5',
+ 'View all medication records':'\u67e5\u770b\u5168\u90e8\u7528\u836f\u8bb0\u5f55'
 });

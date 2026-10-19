@@ -6,6 +6,7 @@ import {api} from '../api/client';
 import type {MedicationCareReview,ObservationTrend} from '../api/care';
 import {useLanguage} from '../language';
 import {Card,ErrorNotice} from './primitives';
+import {Screen} from '../ui/primitives';
 
 function Trend({data}:{data:ObservationTrend}){
  const {t,language,preferences}=useLanguage();const values=data.points.map(row=>row.value),min=Math.min(...values),max=Math.max(...values);
@@ -28,7 +29,7 @@ export function MedicationReviewScreen(){
  ...data.follow_ups.map(row=>`${row.title} · ${row.due_at} · ${t(row.status)}`),...data.questions.map(t),questions,
  data.summary.coverage_note,data.adherence_denominator,data.source_note].join('\n');
  const url=URL.createObjectURL(new Blob([content],{type:'text/plain;charset=utf-8'})),link=document.createElement('a');link.href=url;link.download='medithread-medication-review.txt';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
- return <Card title="Medication review preparation"><label className="field">{t('Observation window')}<select value={days} onChange={event=>setDays(Number(event.target.value) as 7|30)}><option value={7}>{t('Last 7 days')}</option><option value={30}>{t('Last 30 days')}</option></select></label>
+ return <Screen title="Medication review preparation" className="records-detail records-report"><Card><label className="field">{t('Observation window')}<select value={days} onChange={event=>setDays(Number(event.target.value) as 7|30)}><option value={7}>{t('Last 7 days')}</option><option value={30}>{t('Last 30 days')}</option></select></label>
  {error?<ErrorNotice error={error}/>:null}{!data&&!error?<p>{t('Loading records…')}</p>:data?<><p className="notice">{t('Patient-reported information; review with your healthcare professional.')}</p><SummaryOverview data={data.summary} questions={data.questions}/><ReportDetails><section className="report-reading" role="region" aria-label={t('Medication review preparation')} tabIndex={0}><h3>{t('Current medications and changes')}</h3>{data.summary.medications.map(row=><p key={row.regimen_id}>{row.name} · {t(row.state)} · {t('version')} {row.version} · {row.dose_amount??t('Unknown')} {t(row.dose_unit??'')} · {row.is_prn?t('As needed'):row.local_times.join(', ')||t('Not specified')}<br/>{row.course_start??t('Not specified')} → {row.course_end??t('Not specified')} · {t('No report')}: {row.without_report}</p>)}
  <details><summary>{t('Source and regimen history')}</summary>{data.source_records.map(row=><p key={row.regimen_id}>{row.name} · {t('version')} {row.version} · {t(row.state)} · {t(row.source_type??'Unknown')} · {t(row.review_status??'Unknown')}<br/>{t('Source document')}: {row.source_document_id??t('Unknown')}</p>)}</details>
  <h3>{t('Patient-reported adherence')}</h3><p>{t('Patient reported taken')}: {data.summary.reported_taken} · {t('Patient reported not taken')}: {data.summary.reported_not_taken} · {t('Patient is unsure')}: {data.summary.unsure}</p><p className="notice">{t('Only stored generated occurrences are counted. No report is not a missed dose. No adherence percentage is inferred.')}</p>
@@ -37,5 +38,5 @@ export function MedicationReviewScreen(){
  <h3>{t('Inventory and refill concerns')}</h3>{data.inventory.map(row=><p key={row.medication_id}>{data.summary.medications.find(med=>med.medication_id===row.medication_id)?.name??t('Registered medicine')} · {t('Estimated remaining')}: {row.estimated_remaining??t('Unknown')} {t(row.unit??'')}{row.low_stock?` · ${t('Low stock')}`:''}</p>)}
  <h3>{t('Unresolved follow-ups')}</h3>{data.follow_ups.map(row=><p key={row.id}>{row.title} · {new Date(row.due_at).toLocaleString(language==='zh'?'zh-CN':'en-SG',{timeZone:data.timezone})} · {t(row.status)}</p>)}
  <h3>{t('Questions for your pharmacist or doctor')}</h3>{data.questions.map(question=><p key={question}>{t(question)}</p>)}</section></ReportDetails><label className="field">{t('Your additional questions (included in export)')}<textarea maxLength={2000} value={questions} onChange={event=>setQuestions(event.target.value)}/></label><button className="primary" onClick={exportReview}>{t('Export medication review')}</button><p className="notice">{t('Downloaded to your device only. Review before choosing to share; nothing is sent automatically.')}</p></>:null}
- </Card>;
+ </Card></Screen>;
 }

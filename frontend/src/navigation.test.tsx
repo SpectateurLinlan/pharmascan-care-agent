@@ -5,7 +5,7 @@ import {useCareNavigation} from './navigation';
 import {greetingAt,greetingName} from './greeting';
 
 afterEach(()=>{cleanup();history.replaceState(null,'','/');});
-function Navigation({blocked=false}:{blocked?:boolean}){const nav=useCareNavigation(blocked);return <><output>{nav.tab}</output>{['today','medicines','records','me','assistant','check','check-result','label','manual','medicine-detail','medicine-history'].map(route=><button key={route} onClick={()=>nav.navigate(route)}>{route}</button>)}<button onClick={()=>nav.navigate('medicines',undefined,{preserveOrigin:true})}>Today medicines link</button><button onClick={()=>nav.navigate('records',undefined,{preserveOrigin:true})}>Today records link</button>{!nav.isRoot?<button onClick={nav.back}>Back</button>:null}</>;}
+function Navigation({blocked=false}:{blocked?:boolean}){const nav=useCareNavigation(blocked);return <><output>{nav.tab}</output>{['today','medicines','records','medication-records','me','assistant','check','check-result','label','manual','medicine-detail','medicine-history'].map(route=><button key={route} onClick={()=>nav.navigate(route)}>{route}</button>)}<button onClick={()=>nav.navigate('medicines',undefined,{preserveOrigin:true})}>Today medicines link</button><button onClick={()=>nav.navigate('records',undefined,{preserveOrigin:true})}>Today records link</button>{!nav.isRoot?<button onClick={nav.back}>Back</button>:null}</>;}
 it('twenty root selections replace their own entry and show no Back',()=>{
  render(<Navigation/>);const length=history.length;
  for(let i=0;i<20;i++)fireEvent.click(screen.getByText(['medicines','records','me','today'][i%4]!,{selector:'button'}));
@@ -47,6 +47,15 @@ it('makes contextual Records navigation return to Today without changing main-ta
  render(<Navigation/>);fireEvent.click(screen.getByText('Today records link'));await waitFor(()=>expect(screen.getByRole('status').textContent).toBe('records'));
  expect(screen.getByText('Back')).toBeTruthy();fireEvent.click(screen.getByText('Back'));await waitFor(()=>expect(screen.getByRole('status').textContent).toBe('today'));
  fireEvent.click(screen.getByText('records',{selector:'button'}));await waitFor(()=>expect(screen.getByRole('status').textContent).toBe('records'));expect(screen.queryByText('Back')).toBeNull();
+});
+it('returns the medication records child page to Records using the existing navigation stack',async()=>{
+ render(<Navigation/>);fireEvent.click(screen.getByText('records',{selector:'button'}));fireEvent.click(screen.getByText('medication-records',{selector:'button'}));
+ await waitFor(()=>expect(screen.getByRole('status').textContent).toBe('medication-records'));fireEvent.click(screen.getByText('Back'));
+ await waitFor(()=>expect(screen.getByRole('status').textContent).toBe('records'));
+});
+it('uses Records as the fallback for a direct medication-records URL',()=>{
+ history.replaceState(null,'','#medication-records');render(<Navigation/>);expect(screen.getByRole('status').textContent).toBe('medication-records');
+ fireEvent.click(screen.getByText('Back'));expect(screen.getByRole('status').textContent).toBe('records');
 });
 it('uses a sensible Medicines fallback for direct Detail links and retains a saved route stack on refresh',async()=>{
  history.replaceState(null,'','#medicine-detail');render(<Navigation/>);expect(screen.getByRole('status').textContent).toBe('medicine-detail');

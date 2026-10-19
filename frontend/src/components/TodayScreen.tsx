@@ -57,13 +57,14 @@ export function describeDueStatus(
 export function TodayScreen({
   medications,
   onChanged, onFeeling,
-  reminderPort, compact = false, onMedicines, onReviewPlan, hasMedicationRecords=false, setupCount=0, onVisualCheck, focusRegimenId, showTitle = true, onInteractionChange,
+  reminderPort, compact = false, onMedicines, onReviewPlan, hasMedicationRecords=false, setupCount=0, onVisualCheck, focusRegimenId, showTitle = true, onInteractionChange, hideDoseOccurrenceIds=[],
 }: {
   medications: MedicationSummary[];
   onChanged: () => void; onFeeling?:()=>void;
   focusRegimenId?: string|null;
   showTitle?:boolean;
   onInteractionChange?:(regimen:string,locked:boolean)=>void;
+  hideDoseOccurrenceIds?:readonly string[];
   onVisualCheck?: (regimenId:string|null) => void; reminderPort?: ReminderPort; compact?: boolean; onMedicines?: () => void; onReviewPlan?:()=>void; hasMedicationRecords?:boolean; setupCount?:number;
 }) {
   const {language,t}=useLanguage();
@@ -215,10 +216,10 @@ export function TodayScreen({
     );
   }
 
-  if(compact&&selected)return <><CompactDoseCard loadFailed={Boolean(error)} onRetry={()=>{setError(null);if(selected)void loadFor(selected);}} showTitle={showTitle} medication={selected} due={due} busy={busy||confirmation!==null||Boolean(error)} onReport={choice=>void report(choice)} onCheck={()=>onVisualCheck?.(selected.regimen_id)} onSnooze={minutes=>run(async()=>{if(!due?.occurrence_id)return;const row=await api.snoozeReminder(due.occurrence_id,minutes);setReminderAt(row.remind_at);setReminderDue(false);})} reminderAt={reminderAt} reminderDue={reminderDue}>
+  if(compact&&selected)return <>{due?.occurrence_id&&hideDoseOccurrenceIds.includes(due.occurrence_id)?null:<CompactDoseCard loadFailed={Boolean(error)} onRetry={()=>{setError(null);if(selected)void loadFor(selected);}} showTitle={showTitle} medication={selected} due={due} busy={busy||confirmation!==null||Boolean(error)} onReport={choice=>void report(choice)} onCheck={()=>onVisualCheck?.(selected.regimen_id)} onSnooze={minutes=>run(async()=>{if(!due?.occurrence_id)return;const row=await api.snoozeReminder(due.occurrence_id,minutes);setReminderAt(row.remind_at);setReminderDue(false);})} reminderAt={reminderAt} reminderDue={reminderDue}>
     {lastResult?<div className="status status--ok" role="status">{t(lastResult)}{onFeeling?<div className="actions"><button onClick={onFeeling}>{t('Record how I feel')}</button><button onClick={()=>setLastResult(null)}>{t('Skip for now')}</button></div>:null}</div>:null}
     {renderConfirmation()}{error?<ErrorNotice error={error}/>:null}
-  </CompactDoseCard><nav className="today-medication-shortcuts" aria-label={t('Medication management shortcuts')}><button className="text-button" type="button" onClick={onMedicines}>{t('My Medicines')}</button>{onVisualCheck?<button className="text-button" type="button" onClick={()=>onVisualCheck(selected.regimen_id)}>{t('Compare a pill photo')}</button>:null}</nav></>;
+  </CompactDoseCard>}<nav className="today-medication-shortcuts" aria-label={t('Medication management shortcuts')}><button className="text-button" type="button" onClick={onMedicines}>{t('My Medicines')}</button>{due?.occurrence_id&&hideDoseOccurrenceIds.includes(due.occurrence_id)&&onVisualCheck?<button className="text-button" type="button" onClick={()=>onVisualCheck(selected.regimen_id)}>{t('Compare a pill photo')}</button>:null}</nav></>;
   return (
     <Card
       title={compact ? "Today's medication" : "Today"}

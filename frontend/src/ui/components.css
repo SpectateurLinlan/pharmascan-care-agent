@@ -172,18 +172,6 @@
   min-width: 0;
 }
 
-.records-navigation-group.entry-group > .ui-rows {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.period-actions.records-summary-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-2);
-}
-.period-actions.records-summary-actions button { flex: 0 1 auto; width: auto; min-width: min(100%, 8rem); max-width: 100%; }
-
 @container (min-width: 38rem) {
   .ui-screen.ui-screen--me { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ui-screen--me > .identity-card,
@@ -192,10 +180,6 @@
   .ui-screen--me > .me-category--privacy { grid-column: 1 / -1; }
   .ui-screen--me > .me-category .ui-rows { flex: 1; }
   .ui-screen--me > .me-category--privacy .ui-rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .records-navigation-group.entry-group > .ui-rows {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: var(--s-3);
-  }
 
 }
 
@@ -396,14 +380,10 @@
 .ui-screen--me > .me-category { min-width: 0; }
 .ui-screen--me > .me-category .ui-row { min-width: 0; }
 .ui-screen--me > .me-app-info .ui-row { min-height: 56px; }
-.me-app-info .ui-row, .records-navigation-group .ui-row { border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--s-3); }
-.records-navigation-group.entry-group > .ui-rows { gap: var(--s-3); align-items: start; }
+.me-app-info .ui-row { border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--s-3); }
 .me-category .ui-row { gap: var(--s-3); }
 .record-form { width: 100%; max-width: 48rem; min-width: 0; }
 .record-form .field { min-width: 0; }
-.records-navigation-group.entry-group { border: 0; padding: 0; background: transparent; }
-.records-navigation-group .ui-row { background: var(--surface); padding: var(--s-4); }
-.records-navigation-group .ui-row:last-child,
 .me-app-info .ui-row:last-child { border-bottom: 1px solid var(--line); }
 .record-history { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
 .medication-choices { display:flex; flex-wrap:wrap; gap:var(--s-2); margin-block:var(--s-3); max-width:38rem; }
@@ -411,7 +391,7 @@
 .medication-choices p { flex-basis:100%; }
 .answer-sources a { overflow-wrap:anywhere; }
 .record-history__current-hint { margin: var(--s-2) 0 0; color: var(--ink-2); }
-.record-history__error { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); padding: var(--s-3) var(--s-4); border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface-warm); }
+.record-history__error { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); padding: var(--s-3) var(--s-4); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); }
 .record-history__error p { margin: 0; }
 .record-history__error button { width: auto; flex: 0 0 auto; }
 .record-history .field { max-width: 48rem; }

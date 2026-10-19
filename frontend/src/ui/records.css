@@ -1,0 +1,158 @@
+/* Records owns the overview and the reading/form hierarchy of its child pages.
+   Keep clinical states neutral: a missing report is never styled as a failure. */
+.records-screen,
+.records-detail { min-width: 0; width: 100%; max-width: 52rem; margin-inline: auto; }
+.records-screen .card__title,
+.records-detail .card__title { text-wrap: balance; }
+
+.card.records-summary--highlight {
+  padding: var(--s-6);
+  background: var(--brand-50);
+  border-color: var(--brand-100);
+  gap: var(--s-5);
+}
+.records-summary--highlight .card__title { color: var(--brand-strong); }
+.period-actions.records-summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: var(--s-3);
+  max-width: 30rem;
+}
+.period-actions.records-summary-actions button {
+  flex: 0 1 9rem;
+  width: min(9rem, 100%);
+  min-width: min(100%, 8rem);
+  max-width: 100%;
+  min-height: var(--tap-lg);
+  padding-inline: var(--s-5);
+  background: var(--surface);
+  border-color: var(--line-strong, var(--line));
+  color: var(--ink);
+  font-weight: var(--fw-strong);
+  font-size: var(--fs-body);
+}
+.period-actions.records-summary-actions button:hover { background: var(--surface-2); border-color: var(--ink-2); color: var(--ink); }
+
+.records-pending-disclosure {
+  min-width: 0;
+  border-block: 1px solid var(--line);
+  padding-block: var(--s-1);
+}
+.records-pending-disclosure > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  min-height: var(--tap-lg);
+  padding: var(--s-4) var(--s-3);
+  border-radius: var(--r-sm);
+  list-style: none;
+  cursor: pointer;
+}
+.records-pending-disclosure > summary::-webkit-details-marker { display: none; }
+.records-pending-disclosure > summary:hover { background: var(--surface-inset); }
+.records-pending-disclosure > summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.records-pending-disclosure__copy { display: grid; gap: var(--s-1); min-width: 0; }
+.records-pending-disclosure__copy strong { font-weight: var(--fw-strong); }
+.records-pending-disclosure__copy > span { color: var(--ink-2); font-size: var(--fs-small); }
+.records-pending-disclosure__chevron { display: flex; flex: 0 0 auto; color: var(--ink-2); }
+.records-pending-disclosure[open] .records-pending-disclosure__chevron { transform: rotate(90deg); }
+.records-pending-disclosure[open] > summary { margin-bottom: var(--s-4); }
+.records-pending-disclosure .today-unrecorded { padding: var(--s-3); border: 0; background: transparent; }
+.records-pending-disclosure .today-unrecorded__header { display: none; }
+
+.card.records-medication-history-card { padding: 0; }
+.records-medication-history-link {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  min-height: var(--tap-lg);
+  width: 100%;
+  padding: var(--s-5);
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--ink);
+  text-align: start;
+}
+.records-history-icon { display: flex; flex: 0 0 auto; color: var(--brand); }
+.records-medication-history-link__copy { display: grid; flex: 1; gap: var(--s-1); min-width: 0; }
+.records-medication-history-link__copy strong { font-size: var(--fs-body); font-weight: var(--fw-strong); }
+.records-medication-history-link__copy > span { color: var(--ink-2); font-size: var(--fs-small); }
+.records-medication-history-link > .app-icon { flex: 0 0 auto; color: var(--ink-2); }
+.records-medication-history-link:hover { background: var(--surface-2); }
+.records-medication-history-link:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+.records-navigation-group.entry-group { padding: 0; border: 0; background: transparent; gap: var(--s-2); }
+.records-navigation-group.entry-group > .ui-rows {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.records-navigation-group .ui-row { padding: var(--s-5); gap: var(--s-4); min-width: 0; }
+.records-navigation-group .ui-row:first-child { border-start-start-radius: var(--r-md); border-start-end-radius: var(--r-md); }
+.records-navigation-group .ui-row:last-child { border-end-start-radius: var(--r-md); border-end-end-radius: var(--r-md); }
+.records-navigation-group .ui-row__icon { background: transparent; width: 24px; height: 24px; flex-basis: 24px; }
+.records-navigation-group .ui-row__title { font-weight: var(--fw-strong); }
+
+/* Internal pages have one page title; forms and saved content are peers below it. */
+.records-detail > .card { min-width: 0; }
+.records-detail .field { min-width: 0; max-width: 44rem; }
+.records-detail .field > input,
+.records-detail .field > select,
+.records-detail .field > textarea { width: 100%; min-width: 0; }
+.records-detail .field > textarea { resize: vertical; }
+.records-detail .field > input,
+.records-detail .field > select { max-width: 28rem; }
+.records-detail .primary { align-self: start; width: auto; max-width: 100%; }
+.records-detail .actions button { flex: 0 1 auto; width: auto; max-width: 100%; }
+.records-detail .card > div:not([class]) > button { align-self: start; width: auto; max-width: 100%; }
+.records-detail .difficulties-panel button { width: fit-content; max-width: 100%; }
+.records-detail .health-note { padding: var(--s-4) 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; overflow-wrap: anywhere; }
+.records-detail .health-note time { display: block; color: var(--ink-2); font-size: var(--fs-small); font-variant-numeric: tabular-nums; }
+.records-detail .health-note .actions { justify-content: flex-start; }
+.records-detail .health-note .actions button { flex: 0 1 auto; width: auto; }
+.records-health .health-details { padding: var(--s-5) 0; border: 0; border-block: 1px solid var(--line); border-radius: 0; }
+.records-health .record-form { display: flex; flex-direction: column; gap: var(--s-4); }
+.records-health .record-form > .field { margin: 0; }
+.records-difficulties .difficulties-panel { padding: var(--s-5); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.records-difficulties > .card > button { align-self: start; width: auto; }
+
+.record-history__filter-group { min-inline-size: 0; padding: 0 0 var(--s-6); border: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
+.record-history__filter-group > legend { padding: 0; margin-bottom: var(--s-5); font-size: var(--fs-h2); font-weight: var(--fw-strong); }
+.record-history__filters { gap: var(--s-5); }
+.record-history__search { max-width: none; }
+.record-history__results-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: var(--s-2) var(--s-4); }
+.record-history__results-heading p { color: var(--ink-2); font-size: var(--fs-small); }
+.record-history .history time { font-variant-numeric: tabular-nums; }
+.record-history .history li { display: grid; grid-template-columns: minmax(0, 1fr); padding-block: var(--s-5); }
+.record-history .history li > .record-history__status { width: fit-content; max-width: 100%; padding: var(--s-2) var(--s-3); border-radius: var(--r-sm); background: var(--surface-inset); color: var(--ink-2); font-size: var(--fs-small); }
+.records-report .summary-overview { display: grid; gap: var(--s-3); padding-block: var(--s-5); border-block: 1px solid var(--line); }
+.records-report .summary-overview h3:not(:first-child) { margin-top: var(--s-4); }
+.records-report .report-reading > .summary-overview { margin-block: var(--s-5); }
+.records-report .report-actions { padding-top: var(--s-4); }
+
+@container (min-width: 40rem) {
+  .records-screen { gap: var(--s-6); }
+  .card.records-summary--highlight { padding: var(--s-8); }
+  .record-history__filters--grouped { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .record-history__filters--scoped { grid-template-columns: minmax(0, 22rem); }
+  .record-history .history li { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+  .records-navigation-group.entry-group > .ui-rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .records-navigation-group .ui-row { height: 100%; border-radius: 0; }
+  .records-navigation-group .ui-row:nth-child(odd) { border-inline-end: 1px solid var(--line); }
+  .records-navigation-group .ui-row:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  .records-navigation-group .ui-row:nth-child(n+3) { border-bottom: 0; }
+  .records-navigation-group .ui-row:nth-child(2) { border-start-end-radius: var(--r-md); }
+  .records-navigation-group .ui-row:nth-child(3) { border-end-start-radius: var(--r-md); }
+  .records-navigation-group .ui-row:first-child { border-start-end-radius: 0; }
+  .records-navigation-group .ui-row:last-child { border-end-start-radius: 0; }
+}
+@media (max-width: 480px) {
+  .records-medication-history-link,
+  .records-navigation-group .ui-row { padding: var(--s-4); gap: var(--s-3); }
+}
