@@ -187,8 +187,8 @@ function CompanionApp() {
       {tab==='me'?<PatientHub onOpen={setTab} onGuide={openGuide}/>:null}
       {tab==='help'?<OnboardingGuide owner={guideOwner} replay onClose={()=>setTab('me')}/>:null}
       {tab==='account'?<MeScreen standalone={standaloneSignIn} onGuest={()=>setTab('today')} onHelp={()=>setTab('help')} onSettings={()=>setTab('settings')} onFeedback={()=>setTab('feedback')} onIdentityChanged={()=>{window.localStorage.removeItem('pharmascan.agent-session');window.location.reload();}}/>:null}
-      {tab==='profile'?<Screen title="Personal Profile & Account" className="profile-screen"><ProfileScreen onDirtyChange={setProfileDirty}/><MeScreen onIdentityChanged={()=>window.location.reload()}/></Screen>:null}
-      {tab==='privacy'||tab==='conversations'||tab==='about'?<InformationScreen ownerId={guideOwner} kind={tab} onConversationCleared={()=>setConversationClearRevision(value=>value+1)} onPrivacy={()=>setTab('privacy')} onFeedback={()=>setTab('feedback')}/>:null}
+      {tab==='profile'&&accountKind==='guest'?<MeScreen onIdentityChanged={()=>window.location.reload()}/>:tab==='profile'?<Screen title="Personal Profile & Account" className="profile-screen"><ProfileScreen onDirtyChange={setProfileDirty} onIdentityChanged={()=>window.location.reload()}/></Screen>:null}
+      {tab==='privacy'||tab==='conversations'||tab==='about'?<InformationScreen ownerId={guideOwner} kind={tab} onConversationCleared={()=>setConversationClearRevision(value=>value+1)} onPrivacy={()=>setTab('privacy')} onFeedback={()=>setTab('feedback')} onGallery={()=>setTab('gallery')}/>:null}
       {tab==='caregivers'?<CaregiversScreen/>:null}
       {tab==='settings'?<SettingsScreen/>:null}
       {tab==='reminder-settings'||tab==='language-settings'||tab==='accessibility'?<SettingsScreen section={tab==='reminder-settings'?'reminders':tab==='language-settings'?'language':'accessibility'} onOpenCareTask={taskId=>setTab('care-tasks',{task:taskId})} multipleCareRemindersEnabled={health?.multiple_care_reminders_enabled===true}/>:null}

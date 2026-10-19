@@ -1,4 +1,5 @@
 import {ConversationHistory} from './ConversationHistory';
+import {MeScreen} from './MeScreen';
 import {accountDisplayName} from '../accountPresentation';
 import {useImageConsent} from '../imageConsent';
 import {api,type AgentUsage} from '../api/client';
@@ -25,14 +26,11 @@ export function PatientHub({onOpen,onGuide,auth=accountAuth}:{onOpen:(page:MeDes
  const member=account?.kind==='member';const guest=account?.kind==='guest';const local=account?.kind==='local';const fallback=guest?t('Guest Mode'):local?t('Local demo'):t('Your profile');const name=accountLoading?t('Loading account...'):accountFailed?t('Account unavailable'):accountDisplayName(account,preferences.display_name,fallback);
  return <Screen title="Me" lead="Your account, and how this app works for you." className="ui-screen--me">
   <section className="card identity-card">
-   <button aria-label={t('Personal profile')} className="identity-entry" onClick={()=>onOpen('profile')}>
+   <button aria-label={t(guest?'Manage guest account':'Personal profile')} className="identity-entry" onClick={()=>onOpen(guest?'account':'profile')}>
     <span className="avatar"><Icon name="user"/></span>
     <span><strong>{name}</strong><small>{member?`${account.email}${account.verified?` · ${t('Email verified')}`:''}`:guest?t('Guest Mode'):local?t('Email sign-in is unavailable in this local demo.'):accountFailed?t('Retry account status'):t('Personal profile')}</small></span>
     <Icon name="chevron-right"/>
    </button>
-   {guest
-    ? <div className="guest-link"><p>{t('Linking an email may keep access to records on other devices. Existing-account sign-in switches accounts; records are not merged.')}</p><button className="primary" onClick={()=>onOpen('account')}>{t('Manage guest account')}</button></div>
-    : null}
   </section>
   <RowGroup title="Care and reminders" className="me-category">
    <Row icon="user" title="Care contacts" onClick={()=>onOpen('caregivers')}/>
@@ -54,16 +52,22 @@ export function PatientHub({onOpen,onGuide,auth=accountAuth}:{onOpen:(page:MeDes
  </Screen>;
 }
 
-export function ProfileScreen({onDirtyChange=noDirtyChange}:{onDirtyChange?:(dirty:boolean)=>void}){
+export function ProfileScreen({onDirtyChange=noDirtyChange,onIdentityChanged=()=>undefined}:{onDirtyChange?:(dirty:boolean)=>void;onIdentityChanged?:()=>void}){
  const {t,preferences,savePreferences}=useLanguage();const savedName=preferences.display_name??'';
- const [name,setName]=useState(savedName),[busy,setBusy]=useState(false),[error,setError]=useState(false),[saved,setSaved]=useState(false);
+ const [name,setName]=useState(savedName),[busy,setBusy]=useState(false),[error,setError]=useState(false),[saved,setSaved]=useState(false),[section,setSection]=useState<'personal'|'security'>('personal');
  useEffect(()=>setName(savedName),[savedName]);
  const dirty=name.trim()!==savedName.trim();useEffect(()=>{onDirtyChange(dirty);return()=>onDirtyChange(false);},[dirty,onDirtyChange]);
  async function save(){if(!dirty||!name.trim()||busy)return;setBusy(true);setError(false);setSaved(false);try{const ok=await savePreferences({display_name:name.trim()});if(ok){setName(name.trim());setSaved(true);}else setError(true);}catch{setError(true);}finally{setBusy(false);}}
- return <Card title="Personal profile"><label className="field">{t('Display name')}<input maxLength={80} value={name} onChange={event=>{setName(event.target.value);setError(false);setSaved(false);}}/></label><p>{t('Choose the name you would like us to use.')}</p>{error?<p role="alert">{t('Could not save profile. Your changes are still here.')}</p>:null}<div className="actions"><button disabled={!dirty||busy} onClick={()=>{setName(savedName);setError(false);setSaved(false);}}>{t('Cancel')}</button><button className="primary" disabled={!dirty||!name.trim()||busy} onClick={()=>void save()}>{busy?t('Saving...'):t('Save profile')}</button></div>{saved?<AutoDismissNotice>{t('Profile saved.')}</AutoDismissNotice>:null}</Card>;
+ return <>
+  <div className="account-tabs" role="group" aria-label={t('Personal Profile & Account')}>
+   <button type="button" aria-pressed={section==='personal'} onClick={()=>setSection('personal')}>{t('Personal profile')}</button>
+   <button type="button" aria-pressed={section==='security'} onClick={()=>setSection('security')}>{t('Account & security')}</button>
+  </div>
+  {section==='personal'?<section><Card title="Personal profile"><label className="field">{t('Display name')}<input maxLength={80} value={name} onChange={event=>{setName(event.target.value);setError(false);setSaved(false);}}/></label><p>{t('Choose the name you would like us to use.')}</p>{error?<p role="alert">{t('Could not save profile. Your changes are still here.')}</p>:null}<div className="actions"><button disabled={!dirty||busy} onClick={()=>{setName(savedName);setError(false);setSaved(false);}}>{t('Cancel')}</button><button className="primary" disabled={!dirty||!name.trim()||busy} onClick={()=>void save()}>{busy?t('Saving...'):t('Save profile')}</button></div>{saved?<AutoDismissNotice>{t('Profile saved.')}</AutoDismissNotice>:null}</Card></section>:<section><MeScreen embedded onIdentityChanged={onIdentityChanged}/></section>}
+ </>;
 }
 
-export function InformationScreen({kind,onPrivacy,onFeedback,onConversationCleared,ownerId=''}:{onConversationCleared?:()=>void;ownerId?:string;kind:'privacy'|'conversations'|'about';onPrivacy?:()=>void;onFeedback?:()=>void;onHistory?:()=>void}){
+export function InformationScreen({kind,onPrivacy,onFeedback,onGallery,onConversationCleared,ownerId=''}:{onConversationCleared?:()=>void;ownerId?:string;kind:'privacy'|'conversations'|'about';onPrivacy?:()=>void;onFeedback?:()=>void;onGallery?:()=>void;onHistory?:()=>void}){
  const {t,language}=useLanguage();const [photoConsent,setPhotoConsent]=useImageConsent(ownerId);const [usage,setUsage]=useState<AgentUsage|null>(null),[usageFailed,setUsageFailed]=useState(false);
  useEffect(()=>{if(kind!=='about')return;let live=true;void api.agentUsage().then(value=>{if(live){setUsage(value);setUsageFailed(false);}}).catch(()=>{if(live){setUsage(null);setUsageFailed(true);}});return()=>{live=false;};},[kind]);
  if(kind==='about'){
@@ -92,5 +96,20 @@ export function InformationScreen({kind,onPrivacy,onFeedback,onConversationClear
    </dl><div className="about-links">{onPrivacy?<button type="button" onClick={onPrivacy}>{t('Privacy controls')} <Icon name="chevron-right"/></button>:null}{onFeedback?<button type="button" onClick={onFeedback}>{t('Send feedback')} <Icon name="chevron-right"/></button>:null}</div></section>
   </article>;
  }
- return <Screen title={kind==='privacy'?'Privacy Settings':'AI Assistant & Chat History'} className="me-child-screen"><Card>{kind==='privacy'?<><label className="consent image-consent"><input type="checkbox" checked={photoConsent} onChange={event=>setPhotoConsent(event.target.checked)}/>{t('Allow medication photo processing')}</label><p>{t('This preference is saved in this browser for this account. When you choose recognition, the image is sent to the recognition service. It does not control photos you separately choose to save.')}</p><p>{t('Saved evidence is private to this account. This page does not provide full data export or account deletion.')}</p></>:<><p>{t('Recent conversation context is separate from saved history. Turning saving off affects new conversations; it does not delete earlier saved messages.')}</p><ConversationHistory onCleared={()=>onConversationCleared?.()}/><p>{t('Raw audio is not saved. Browser speech may use an online service.')}</p></>}</Card></Screen>;
+ return <Screen title={kind==='privacy'?'Privacy Settings':'AI Assistant & Chat History'} lead={kind==='conversations'?'Manage chat history and context settings.':undefined} className={`me-child-screen${kind==='conversations'?' me-child-screen--conversations':''}`}>
+  {kind==='privacy'?<Card>
+   <div className="privacy-settings-list">
+    <section className="privacy-setting-row">
+     <span className="privacy-setting-row__icon"><Icon name="shield"/></span>
+     <span className="privacy-setting-row__copy"><strong>{t('Allow medication photo processing')}</strong><small id="photo-processing-description">{t('This setting is saved in this browser for this account. When you choose pill-photo comparison, the selected image is sent to the recognition service. It does not automatically save the image. Other reading flows ask for consent separately.')}</small></span>
+     <button type="button" className="history-switch" role="switch" aria-label={t('Allow medication photo processing')} aria-describedby="photo-processing-description" aria-checked={photoConsent} onClick={()=>setPhotoConsent(!photoConsent)}><span/></button>
+    </section>
+    <section className="privacy-setting-row privacy-setting-row--explanation">
+     <span className="privacy-setting-row__icon"><Icon name="image"/></span>
+     <span className="privacy-setting-row__copy"><strong>{t('Saving medication photos')}</strong><small>{t('Photos and extracted details are saved only when you choose Save in the relevant medication flow. Saving is separate from photo processing and never happens automatically.')}</small></span>
+    </section>
+    {onGallery?<Row icon="image" title="View and manage saved medication photos" hint="Review photos you chose to save to your account." onClick={onGallery}/>:null}
+   </div>
+  </Card>:<Card><ConversationHistory onCleared={()=>onConversationCleared?.()}/><p className="conversation-audio-note">{t('Raw audio is not saved. Browser speech may use an online service.')}</p></Card>}
+ </Screen>;
 }

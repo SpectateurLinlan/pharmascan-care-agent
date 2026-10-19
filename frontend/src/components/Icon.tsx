@@ -1,8 +1,11 @@
 import type {CSSProperties,ReactNode} from 'react';
-export type IconName='speaker'|'house'|'pill'|'clipboard'|'user'|'settings'|'bell'|'languages'|'chevron-left'|'chevron-right'|'chevron-down'|'plus'|'message'|'camera'|'image'|'shield'|'alert'|'info'|'check'|'clock'|'calendar'|'file'|'heart'|'close'|'panel'|'send';
+export type IconName='speaker'|'house'|'pill'|'clipboard'|'user'|'settings'|'bell'|'languages'|'chevron-left'|'chevron-right'|'chevron-down'|'plus'|'message'|'camera'|'image'|'shield'|'alert'|'info'|'check'|'clock'|'calendar'|'file'|'heart'|'close'|'panel'|'send'|'edit'|'trash'|'mail';
 const paths:Record<IconName,ReactNode>={
  panel:<><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></>,
  send:<><path d="m21 3-6 18-4-8-8-4Z"/><path d="m11 13 10-10"/></>,
+ edit:<><path d="m15 5 4 4"/><path d="M4 20l4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10Z"/></>,
+ trash:<><path d="M4 7h16"/><path d="M10 11v6m4-6v6"/><path d="m6 7 1 14h10l1-14M9 7V4h6v3"/></>,
+ mail:<><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m4 7 8 6 8-6"/></>,
  speaker:<><path d="m11 5-6 4H2v6h3l6 4Z"/><path d="M15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></>,
  house:<><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/></>,
  pill:<><path d="m10 4-6 6a5.65 5.65 0 0 0 8 8l6-6a5.65 5.65 0 0 0-8-8Z"/><path d="m7 7 8 8"/></>,
