@@ -58,11 +58,12 @@ test('responsive data volumes, languages, enlarged text and readable navigation'
    await page.goto('/e2e/patient-feedback.html?shell=1');
    for(const width of [390,430,768,1024,1280,1600,1920]){
     await page.setViewportSize({width,height:1000});await page.locator('[data-guide="medicines"]').click();
-    await expect(page.locator('.medicine-shortcuts button')).toHaveCount(3);
+    await expect(page.locator('.medicine-shortcuts button')).toHaveCount(2);
     await expect(page.locator('.medicine-shortcuts')).toBeVisible();
     // Medication rows retain every real fetched item, including long names.
-    await expect(page.locator('.ui-screen--medicines .ui-row')).toHaveCount(count);
+    await expect(page.locator('.current-medications-card .medication-list-row')).toHaveCount(count);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    if(count===2&&language==='zh'&&font===100&&width===1280)await page.screenshot({path:'../outputs/my-medicines-active-1280.png',fullPage:true});
     if([0,1,5,10].includes(count)&&[390,1280,1920].includes(width)){
      await page.locator('[data-guide="today"]').click();
      if(count>1)await expect(page.locator('.medicine-list-row')).toHaveCount(count);

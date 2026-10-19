@@ -19,6 +19,21 @@ const rows=[
  regimen({regimen_id:'DEMO-draft',display_name:'DEMO Draft medication',state:'draft'}),
 ];
 
+test('an active plan past its planned end stays discoverable across library and browser history',async({page})=>{
+ const mock=await mockPatientApp(page);
+ mock.setMedications([{...medication,course_start_date:'2020-01-01',course_end_date:'2020-02-01'}]);
+ mock.setPlans([regimen({regimen_id:medication.regimen_id,display_name:medication.display_name,state:'active',course_start_date:'2020-01-01',course_end_date:'2020-02-01'})]);
+ await page.goto('/#medicines');
+ await expect(page.locator('.current-medications-card .medication-list-row')).toHaveCount(1);
+ await expect(page.getByRole('button',{name:/Regimen Records/})).toContainText('1 courses');
+ await page.getByRole('button',{name:'Medication Library'}).click();
+ await expect(page.getByRole('heading',{name:'My Medication Library'})).toBeVisible();
+ await page.goBack();await expect(page.locator('.current-medications-card .medication-list-row')).toHaveCount(1);
+ await page.goForward();await expect(page.getByRole('heading',{name:'My Medication Library'})).toBeVisible();
+ await page.reload();await expect(page.getByRole('heading',{name:'My Medication Library'})).toBeVisible();
+ expect(mock.errors).toEqual([]);
+});
+
 test('history filters stay mounted across genuine Back/Forward and direct refresh restores records',async({page,browser})=>{
  const mock=await mockPatientApp(page);mock.setMedications([medication]);mock.setPlans([...rows,regimen({regimen_id:'DEMO-active',display_name:'DEMO Amlodipine',state:'active',supersedes_id:'DEMO-superseded-nifedipine',version_no:2})]);
  await page.route('**/api/me/inventory/DEMO-med-amlodipine*',route=>route.fulfill({json:{medication_id:'DEMO-med-amlodipine',unit:null,last_confirmed_stock:null,last_confirmed_at:null,estimated_remaining:null,daily_requirement:null,estimated_days:null,low_stock:false,estimate_note:'DEMO synthetic no stock records',transactions:[]}}));

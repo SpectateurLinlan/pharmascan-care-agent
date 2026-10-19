@@ -17,7 +17,7 @@ test('current enrollment contract, independent confirmation, saved chat and resp
  await page.reload();await expect(page.getByRole('button',{name:'Previous',exact:true})).toBeVisible();
  await page.getByRole('button',{name:'Skip for now',exact:true}).click();
  await page.locator('[data-guide="medicines"]').click();
- await page.getByRole('button',{name:/Add medication$/}).click();
+ await expect(page.getByRole('heading',{name:/Add medication$/})).toBeVisible();
  await page.getByRole('button',{name:/^Add manually/}).click();
  await page.getByLabel('Medication name',{exact:true}).fill('DEMO Metformin 500 mg tablet');
  await page.getByLabel('Dose amount',{exact:true}).fill('1');

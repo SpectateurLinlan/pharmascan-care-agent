@@ -35,7 +35,7 @@ test('mobile companion synthetic speech -> real Agent -> consent -> synthetic br
   await page.screenshot({path:'../outputs/home390.png'});
   const composer=await page.locator('.composer-row').boundingBox(); expect(composer?.y).toBeLessThan(720);
   await page.getByRole('button',{name:'My Medicines',exact:true}).click();
-  await page.getByRole('button',{name:/Add medication/}).click();await page.getByRole('button',{name:/Add manually/}).click();
+  await page.getByRole('heading',{name:/Add medication/}).waitFor();await page.getByRole('button',{name:/Add manually/}).click();
   await page.getByLabel('Medication name', {exact:true}).fill('DEMO Metformin synthetic');
   await page.getByLabel('Dose amount',{exact:true}).fill('1'); await page.getByLabel('Unit',{exact:true}).fill('tablet');
   const time=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Singapore',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(Date.now()+120000));

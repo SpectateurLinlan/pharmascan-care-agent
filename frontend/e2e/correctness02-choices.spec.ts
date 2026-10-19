@@ -57,3 +57,24 @@ test('medication buttons continue the original intent, keep the conversation and
   await writeFile('../outputs/correctness02-browser-conversations.json',JSON.stringify({sent,replies,errors},null,2),'utf8');
  }
 });
+
+test('exact product clarification resumes reviewed personal instructions without a knowledge substitution',async({page,baseURL})=>{
+ test.setTimeout(30000);page.setDefaultTimeout(10000);expect(new URL(baseURL!).port).toBe('5191');
+ const {errors}=await mockPatientApp(page,true,{token:'DEMO.correctness02-synthetic-token',owner:'de020000-0000-4000-8000-000000000001'});
+ await page.route(url=>new URL(url).pathname.startsWith('/api/'),route=>route.continue());await page.clock.install({time:new Date('2026-10-18T04:00:00Z')});
+ await page.request.put('/api/me/preferences',{headers:{Authorization:'Bearer DEMO.correctness02-synthetic-token'},data:{preferred_language:'en',text_scale_percent:100,conversation_history_enabled:true}});
+ const replies:Array<Record<string,unknown>>=[];const sent:Array<Record<string,unknown>>=[];
+ page.on('request',request=>{if(request.method()==='POST'&&new URL(request.url()).pathname==='/api/agent/messages')sent.push(request.postDataJSON() as Record<string,unknown>);});
+ page.on('response',async response=>{if(response.request().method()==='POST'&&new URL(response.url()).pathname==='/api/agent/messages')replies.push(await response.json() as Record<string,unknown>);});
+ try{
+  await page.goto('/');await page.getByRole('button',{name:'Open full chat',exact:true}).click();await page.getByRole('textbox').fill('How should I take Amlodipine?');await page.getByRole('button',{name:'Send',exact:true}).click();
+  const choices=page.getByRole('region',{name:'Choose a medicine'});await expect(choices.getByRole('button')).toHaveCount(2);await expect(choices).not.toContainText('Metformin');
+  await choices.getByRole('button',{name:/5 mg/}).click();await expect(page.locator('.transcript')).toContainText('0.5 tablet');await expect(page.locator('.transcript')).toContainText('20:00');
+  expect(sent[1]?.conversation_id).toBeTruthy();expect(sent[1]?.medication_selection).toBeTruthy();expect(errors).toEqual([]);
+  await page.screenshot({path:'../outputs/correctness02-personal-plan-mobile.png',fullPage:true});
+ }finally{
+  const lines=['# Browser increment — exact-product personal instructions','','Actual App -> latest local Backend/Application, DEMO_ONLY patient; no Gemini or external knowledge calls required. Ground truth: Amlodipine 5 mg current reviewed plan = 0.5 tablet at 20:00. The ambiguous name must show only its two products, not Metformin.',''];
+  for(const [i,reply] of replies.entries())lines.push(`## Turn ${i+1}`,'','User:',`> ${String(sent[i]?.text??'')}`,'','Actual Assistant:',...String(reply.message??'').split('\n').map(line=>'> '+line),'','Actual selection: '+JSON.stringify(sent[i]?.medication_selection??null),'','Tool evidence: '+JSON.stringify(reply.tool_traces),'');
+  await writeFile('../outputs/correctness02-browser-product-conversations.md',lines.join('\n'),'utf8');
+ }
+});

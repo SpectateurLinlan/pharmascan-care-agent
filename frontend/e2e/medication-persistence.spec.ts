@@ -4,7 +4,7 @@ import {test,expect} from '@playwright/test';
 test.skip(process.env.RUN_LIVE_BROWSER!=='1','Explicit real patient-path opt-in required');
 test('Metformin 500 mg at 20:00 persists after reload and is private to user A',async({page,browser})=>{
  await page.goto('/');await skipInitialGuide(page);await page.getByRole('button',{name:'My Medicines',exact:true}).click();
- await page.getByRole('button',{name:/Add medication/}).click();await page.getByRole('button',{name:/Add manually/}).click();
+ await page.getByRole('heading',{name:/Add medication/}).waitFor();await page.getByRole('button',{name:/Add manually/}).click();
  await page.getByLabel('Medication name',{exact:true}).fill('DEMO Metformin 500 mg');
  await page.getByLabel('Dose amount',{exact:true}).fill('500');await page.getByLabel('Unit',{exact:true}).fill('mg');
  await page.locator('#med-time-0').fill('20:00');
