@@ -3,6 +3,7 @@ import {useEffect,useState} from 'react';
 import {accountAuth,type Account,type AccountPort} from '../api/auth';
 import {useLanguage} from '../language';
 import {Card} from './primitives';
+import {BottomSheet} from './BottomSheet';
 
 /**
  * Account and sign-in.
@@ -16,24 +17,21 @@ import {Card} from './primitives';
  * address. Only an explicit choice links an email account.
  */
 export function MeScreen({auth=accountAuth,onIdentityChanged,standalone=false,onGuest,onHelp}:{auth?:AccountPort;onSettings?:()=>void;onFeedback?:()=>void;onIdentityChanged:()=>void;standalone?:boolean;onGuest?:()=>void;onHelp?:()=>void}){
- const {t,preferences}=useLanguage();const [account,setAccount]=useState<Account|null>(null),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[code,setCode]=useState('');
- const [mode,setMode]=useState<'link'|'login'>('link'),[sent,setSent]=useState(false),[switchAccepted,setSwitchAccepted]=useState(false),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
- useEffect(()=>{let live=true;void auth.account().then(row=>{if(live){setAccount(row);if(row.kind==='signed_out')setMode('login');}}).catch(()=>{if(live)setNotice('Could not load your account.');});return()=>{live=false;};},[auth]);
+ const {t,preferences}=useLanguage();const [account,setAccount]=useState<Account|null>(null),[accountLoading,setAccountLoading]=useState(true),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[code,setCode]=useState('');
+ const [mode,setMode]=useState<'link'|'login'>('link'),[sent,setSent]=useState(false),[switchAccepted,setSwitchAccepted]=useState(false),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[confirmSignOut,setConfirmSignOut]=useState(false);
+ useEffect(()=>{let live=true;void auth.account().then(row=>{if(live){setAccount(row);if(row.kind==='signed_out')setMode('login');}}).catch(()=>{if(live)setNotice('Could not load your account.');}).finally(()=>{if(live)setAccountLoading(false);});return()=>{live=false;};},[auth]);
  async function run(action:()=>Promise<void>){setBusy(true);setNotice('');try{await action();}catch(error){setNotice(error instanceof Error?error.message:'Could not complete sign in.');}finally{setBusy(false);setPassword('');setCode('');}}
  const maySwitch=account?.kind==='signed_out'||account?.kind==='member'||(mode==='link'&&account?.kind==='guest')||(mode==='login'&&switchAccepted);
  const body=<>
- <h3>{t(account?.kind==='member'?'Your account':account?.kind==='local'?'Guest':'Guest')}</h3>
- {account?.kind==='member'?<><p>{account.email}</p><p>{t(account.verified?'Email verified':'Email verification pending')}</p><p>{t('Time zone')}: {preferences.timezone}</p>
- <div className="field"><label htmlFor="backup-password">{t('Set a backup password')}</label><input id="backup-password" type="password" autoComplete="new-password" minLength={8} value={password} onChange={event=>setPassword(event.target.value)}/></div>
- <button disabled={busy||password.length<8||!account.verified} onClick={()=>void run(async()=>{await auth.setPassword(password);setNotice('Backup password saved.');})}>{t('Save password')}</button>
- <button disabled={busy} onClick={()=>void run(async()=>{await disableWebPush();await auth.signOut();onIdentityChanged();})}>{t('Sign out')}</button></>:<>
- <p>{t('Guest records stay with your guest account. Link an email to access them on other devices.')}</p>
- <div className="segmented"><button aria-pressed={mode==='link'} onClick={()=>{setMode('link');setSent(false);}}>{t('Keep my records with email')}</button><button aria-pressed={mode==='login'} onClick={()=>{setMode('login');setSent(false);}}>{t('Sign in to an account')}</button></div>
- {mode==='login'&&account?.kind!=='signed_out'?<label className="consent"><input type="checkbox" checked={switchAccepted} onChange={event=>setSwitchAccepted(event.target.checked)}/>{t('Signing in switches accounts. Guest medication records will not be merged.')}</label>:null}
+ {account?.kind==='member'?<><p>{t('Login email')}: {account.email}</p><p>{t(account.verified?'Email verified':'Email verification pending')}</p><p>{t('Login methods')}: {t('Email sign-in link; password sign-in if previously enabled.')}</p><p>{t('Time zone')}: {preferences.timezone}</p>
+ <button disabled={busy} onClick={()=>setConfirmSignOut(true)}>{t('Sign out')}</button></>:<>
+ {account?.kind==='guest'?<><p>{t('Guest records are associated with this anonymous account. Linking an email may let you access them on another device; this has not been verified across hosted accounts.')}</p>
+ <div className="segmented"><button aria-pressed={mode==='link'} onClick={()=>{setMode('link');setSent(false);}}>{t('Link email and keep my records')}</button><button aria-pressed={mode==='login'} onClick={()=>{setMode('login');setSent(false);}}>{t('Sign in to an existing account')}</button></div>
+ {mode==='login'?<label className="consent"><input type="checkbox" checked={switchAccepted} onChange={event=>setSwitchAccepted(event.target.checked)}/>{t('Signing in switches accounts. Guest medication records will not be merged.')}</label>:null}</>:account?.kind==='local'?<p>{t('Email sign-in and account linking are unavailable in this local demo. No authenticated account is connected here.')}</p>:<p>{t('Sign in to an existing account. No guest account is currently active to link.')}</p>}
  <div className="field"><label htmlFor="login-email">{t('Email')}</label><input id="login-email" type="email" autoComplete="email" value={email} onChange={event=>{setEmail(event.target.value);setSent(false);}}/></div>
  <button className="primary" disabled={busy||!email||!auth.available||!maySwitch} onClick={()=>void run(async()=>{await auth.requestEmail(email,mode);setSent(true);setNotice(mode==='link'?'Check your email to confirm your address and keep your records.':'Check your email for a code or sign-in link.');})}>{t('Email code / Magic Link')}</button>
  {sent?<><div className="field"><label htmlFor="login-code">{t('Email code')}</label><input id="login-code" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={event=>setCode(event.target.value)} /></div><button disabled={busy||!code} onClick={()=>void run(async()=>{await auth.verifyEmail(email,code,mode);onIdentityChanged();})}>{t('Verify and continue')}</button></>:null}
- {mode==='login'?<details><summary>{t('Use email and password instead')}</summary><div className="field"><label htmlFor="login-password">{t('Password')}</label><input id="login-password" type="password" autoComplete="current-password" value={password} onChange={event=>setPassword(event.target.value)}/></div><button disabled={busy||!password||!email||!maySwitch||!auth.available} onClick={()=>void run(async()=>{await auth.passwordLogin(email,password);onIdentityChanged();})}>{t('Sign in')}</button></details>:null}
+ {mode==='login'&&account?.kind!=='local'?<details><summary>{t('Use email and password instead')}</summary><div className="field"><label htmlFor="login-password">{t('Password')}</label><input id="login-password" type="password" autoComplete="current-password" value={password} onChange={event=>setPassword(event.target.value)}/></div><button disabled={busy||!password||!email||!maySwitch||!auth.available} onClick={()=>void run(async()=>{await auth.passwordLogin(email,password);onIdentityChanged();})}>{t('Sign in')}</button></details>:null}
  </>}
  {notice?<div className="patient-toast" role="status"><p>{t(notice)}</p><button aria-label={t('Dismiss')} onClick={()=>setNotice('')}>{t('Close')}</button></div>:null}
  </>;
@@ -53,5 +51,5 @@ export function MeScreen({auth=accountAuth,onIdentityChanged,standalone=false,on
   <p className="signin-privacy">{t('Your records stay private to this account or browser session. You choose what to export or share.')}</p>
  </section>;
 
- return <Card title="Your account">{body}</Card>;
+ return <>{accountLoading?<Card title="Account & security"><p role="status">{t('Loading account...')}</p></Card>:account===null?<Card title="Account & security"><p role="alert">{t('Could not load your account. Please retry.')}</p><button onClick={()=>{setAccountLoading(true);void auth.account().then(setAccount).catch(()=>setNotice('Could not load your account.')).finally(()=>setAccountLoading(false));}}>{t('Retry')}</button></Card>:account.kind==='member'?<Card title="Account & security">{body}</Card>:account.kind==='signed_out'?<Card title="Sign in to an existing account">{body}</Card>:account.kind==='local'?<Card title="Local demo">{body}</Card>:<Card title="Guest Mode">{body}</Card>}{confirmSignOut?<BottomSheet title={t('Sign out?')} busy={busy} onCancel={()=>setConfirmSignOut(false)}><p>{t('You will leave this account on this device. Its records are not merged into another account.')}</p><button disabled={busy} onClick={()=>setConfirmSignOut(false)}>{t('Cancel')}</button><button className="primary" disabled={busy} onClick={()=>void run(async()=>{await disableWebPush();await auth.signOut();onIdentityChanged();})}>{t('Sign out')}</button></BottomSheet>:null}</>;
 }

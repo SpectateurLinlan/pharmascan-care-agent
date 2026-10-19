@@ -1,15 +1,16 @@
 import {useEffect, useRef, useState} from 'react';
 import {useLanguage} from '../language';
+import {AutoDismissNotice} from './primitives';
 
 export function TextSizeSlider() {
-  const {t, textScale, previewTextScale, updatePreferences} = useLanguage();
-  const [saving, setSaving] = useState(false);
+  const {t, textScale, previewTextScale, savePreferences} = useLanguage();
+  const [saving, setSaving] = useState(false),[failed,setFailed]=useState(false),[saved,setSaved]=useState(false);
   const changed = useRef(false);
   useEffect(()=>()=>previewTextScale(null),[previewTextScale]);
   function commit(value: number) {
     if (!changed.current || saving) return;
-    changed.current = false; setSaving(true);
-    void updatePreferences({text_scale_percent:value}).then(()=>{previewTextScale(null);setSaving(false);});
+    changed.current = false; setSaving(true);setFailed(false);setSaved(false);
+    void savePreferences({text_scale_percent:value}).then(ok=>{previewTextScale(null);setFailed(!ok);setSaved(ok);}).finally(()=>setSaving(false));
   }
   return <div className="field text-size-control">
     <label htmlFor="text-size">{t('Text size')} <output htmlFor="text-size" aria-live="polite">{textScale}%</output></label>
@@ -22,5 +23,7 @@ export function TextSizeSlider() {
     <div className="text-size-range"><span>100%</span><span>150%</span></div>
     <p id="text-size-help">{t('Applies to all text, including buttons and navigation. Release the slider to save.')}</p>
     {saving?<p role="status">{t('Saving text size…')}</p>:null}
+    {failed?<p role="alert">{t('Could not save text size. Your previous size is retained.')}</p>:null}
+    {saved?<AutoDismissNotice>{t('Text size saved.')}</AutoDismissNotice>:null}
   </div>;
 }

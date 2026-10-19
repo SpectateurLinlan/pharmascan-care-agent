@@ -14,7 +14,7 @@ it('email linking preserves the guest identity flow and verifies email_change OT
 });
 it('normal OTP/magic link and password sign-in use the official identity APIs',async()=>{
  const {driver,gateway}=setup();await gateway.accountPort.requestEmail('synthetic@example.test','login');
- expect(driver.signInWithOtp).toHaveBeenCalledWith({email:'synthetic@example.test',options:{emailRedirectTo:window.location.origin,shouldCreateUser:true}});
+ expect(driver.signInWithOtp).toHaveBeenCalledWith({email:'synthetic@example.test',options:{emailRedirectTo:window.location.origin,shouldCreateUser:false}});
  await gateway.accountPort.verifyEmail('synthetic@example.test','123456','login');expect(driver.verifyOtp).toHaveBeenCalledWith(expect.objectContaining({type:'email'}));
  await gateway.accountPort.passwordLogin('synthetic@example.test','SIMULATED_password');expect(driver.signInWithPassword).toHaveBeenCalledOnce();
 });

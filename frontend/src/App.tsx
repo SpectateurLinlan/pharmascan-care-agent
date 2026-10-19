@@ -79,6 +79,7 @@ function CompanionApp() {
   const setupRequest=useRef(0);
   const loadSourceTasks=useCallback(async()=>{const version=++setupRequest.current;try{const rows=await api.evidenceTasks();if(version===setupRequest.current){setSourceTasks(rows);setSetupError(null);}}catch(caught){if(version===setupRequest.current){setSourceTasks(null);setSetupError(caught);}}},[]);
   const [manualDirty,setManualDirty]=useState(false);
+  const [profileDirty,setProfileDirty]=useState(false);
   const [resumeId, setResumeId] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -86,7 +87,7 @@ function CompanionApp() {
   const [loading, setLoading] = useState(true);
   const [fatal, setFatal] = useState<unknown>(null);
   const [guideOpen,setGuideOpen]=useState(false),[guideOwner,setGuideOwner]=useState(''),[guideReplay,setGuideReplay]=useState(false);
-  const {tab,navigate:setTab,back:goBack,isRoot,pending,confirmLeave,cancelLeave}=useCareNavigation(guideOpen&&!loading&&!fatal&&Boolean(medications),manualDirty);
+  const {tab,navigate:setTab,back:goBack,isRoot,pending,confirmLeave,cancelLeave}=useCareNavigation(guideOpen&&!loading&&!fatal&&Boolean(medications),manualDirty||profileDirty);
   const [member,setMember]=useState(false),[identity,setIdentity]=useState<Account|null>(null),[now,setNow]=useState(()=>new Date());
   /* The signed-out state gets its own surface, so the shell needs to know the
      kind of identity and not only whether an email account is linked. */
@@ -140,7 +141,7 @@ function CompanionApp() {
     <a className="skip-link" href="#main-content">{t('Skip to content')}</a>
     {!standaloneSignIn?<header ref={headerRef} className="companion-header app-header">{!isRoot&&tab!=='assistant'?<button className="back-button" aria-label={t('Back')} onClick={goBack}><Icon name="chevron-left"/></button>:null}<div className="brand"><img className="brand-mark" src="/branding/medithread-192.png" width="28" height="28" alt=""/><span>MediThread</span></div><LanguageMenu/>{tab!=='assistant'?<button type="button" className="assistant-header-shortcut" aria-label={t('AI assistant')} onClick={()=>openAssistant()}><img src="/branding/assistant-avatar-green.png" width="28" height="28" alt=""/><span>{t('AI assistant')}</span></button>:null}<button className="notification-shortcut" aria-label={t('Medication reminders')} onClick={()=>setTab('reminder-settings')}><Icon name="bell"/></button><button className="settings-shortcut" aria-label={t('Settings')} onClick={()=>setTab('settings')}><Icon name="settings"/></button></header>:null}
     {preferenceError ? <p role="alert">{preferenceError}</p> : null}
-    {pending?<BottomSheet title={t('Leave without saving?')} onCancel={cancelLeave}><p>{t('Leaving clears the unsaved details on this page. Saved registrations can be managed in Finish medication setup.')}</p><button className="danger" onClick={()=>{setManualDirty(false);setResumeId(null);confirmLeave();}}>{t('Leave and clear')}</button><button onClick={cancelLeave}>{t('Keep editing')}</button></BottomSheet>:null}
+    {pending?<BottomSheet title={t('Leave without saving?')} onCancel={cancelLeave}><p>{t(profileDirty&&!manualDirty?'Leaving will discard your unsaved profile name.':'Leaving clears the unsaved details on this page. Saved registrations can be managed in Finish medication setup.')}</p><button className="danger" onClick={()=>{setManualDirty(false);setProfileDirty(false);setResumeId(null);confirmLeave();}}>{t('Leave and clear')}</button><button onClick={cancelLeave}>{t('Keep editing')}</button></BottomSheet>:null}
     {fatal ? <ErrorNotice error={fatal} /> : null}
     <main ref={mainRef} id="main-content" className="app-main">
     {!guideOpen?<NotificationInvitation ownerId={guideOwner} onSettings={()=>setTab('reminder-settings')}/>:null}
@@ -186,8 +187,8 @@ function CompanionApp() {
       {tab==='me'?<PatientHub onOpen={setTab} onGuide={openGuide}/>:null}
       {tab==='help'?<OnboardingGuide owner={guideOwner} replay onClose={()=>setTab('me')}/>:null}
       {tab==='account'?<MeScreen standalone={standaloneSignIn} onGuest={()=>setTab('today')} onHelp={()=>setTab('help')} onSettings={()=>setTab('settings')} onFeedback={()=>setTab('feedback')} onIdentityChanged={()=>{window.localStorage.removeItem('pharmascan.agent-session');window.location.reload();}}/>:null}
-      {tab==='profile'?<><ProfileScreen/><MeScreen onIdentityChanged={()=>window.location.reload()}/></>:null}
-      {tab==='privacy'||tab==='conversations'||tab==='about'?<InformationScreen ownerId={guideOwner} kind={tab} onConversationCleared={()=>setConversationClearRevision(value=>value+1)} onHistory={()=>setTab('records')}/>:null}
+      {tab==='profile'?<Screen title="Personal Profile & Account" className="profile-screen"><ProfileScreen onDirtyChange={setProfileDirty}/><MeScreen onIdentityChanged={()=>window.location.reload()}/></Screen>:null}
+      {tab==='privacy'||tab==='conversations'||tab==='about'?<InformationScreen ownerId={guideOwner} kind={tab} onConversationCleared={()=>setConversationClearRevision(value=>value+1)} onPrivacy={()=>setTab('privacy')} onFeedback={()=>setTab('feedback')}/>:null}
       {tab==='caregivers'?<CaregiversScreen/>:null}
       {tab==='settings'?<SettingsScreen/>:null}
       {tab==='reminder-settings'||tab==='language-settings'||tab==='accessibility'?<SettingsScreen section={tab==='reminder-settings'?'reminders':tab==='language-settings'?'language':'accessibility'} onOpenCareTask={taskId=>setTab('care-tasks',{task:taskId})} multipleCareRemindersEnabled={health?.multiple_care_reminders_enabled===true}/>:null}

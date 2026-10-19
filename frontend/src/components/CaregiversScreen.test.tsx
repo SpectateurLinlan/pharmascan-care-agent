@@ -9,8 +9,8 @@ const row:CaregiverContact={id:'00000000-0000-0000-0000-000000000321',patient_id
 
 it('loads contacts, creates only after explicit storage consent and never claims verification or notification',async()=>{
   vi.mocked(api.caregivers).mockResolvedValue([]);vi.mocked(api.createCaregiver).mockResolvedValue(row);
-  render(<CaregiversScreen newId={()=>row.id}/>);await screen.findByText('No caregiver contacts saved yet.');
-  fireEvent.click(screen.getByRole('button',{name:'Add caregiver contact'}));
+  render(<CaregiversScreen newId={()=>row.id}/>);await screen.findByText('No care contacts saved yet.');
+  fireEvent.click(screen.getByRole('button',{name:'Add care contact'}));
   fireEvent.change(screen.getByLabelText('Contact name'),{target:{value:row.name}});
   fireEvent.change(screen.getByLabelText('Relationship (optional)'),{target:{value:row.relationship}});
   fireEvent.change(screen.getByLabelText('Email address'),{target:{value:row.contact_value}});
@@ -30,7 +30,7 @@ it('edits saved contact and requires an independent delete confirmation with saf
   expect(api.updateCaregiver).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole('button',{name:'Delete contact'}));expect(api.deleteCaregiver).not.toHaveBeenCalled();fireEvent.click(screen.getByRole('button',{name:'Cancel'}));
   expect(api.deleteCaregiver).not.toHaveBeenCalled();fireEvent.click(screen.getByRole('button',{name:'Delete contact'}));fireEvent.click(screen.getByRole('button',{name:'Confirm deletion'}));
-  await screen.findByText('No caregiver contacts saved yet.');expect(api.deleteCaregiver).toHaveBeenCalledExactlyOnceWith(row.id);
+  await screen.findByText('No care contacts saved yet.');expect(api.deleteCaregiver).toHaveBeenCalledExactlyOnceWith(row.id);
 });
 
 it('failed create keeps the same retry id and failed list does not pretend to be empty',async()=>{
@@ -38,8 +38,8 @@ it('failed create keeps the same retry id and failed list does not pretend to be
   vi.mocked(api.createCaregiver).mockRejectedValueOnce(new Error('SIMULATED unavailable')).mockResolvedValue(row);
   render(<CaregiversScreen newId={()=>row.id}/>);await screen.findByRole('button',{name:'Retry loading contacts'});
   expect(screen.queryByText('No caregiver contacts saved yet.')).toBeNull();
-  fireEvent.click(screen.getByRole('button',{name:'Retry loading contacts'}));await screen.findByText('No caregiver contacts saved yet.');
-  fireEvent.click(screen.getByRole('button',{name:'Add caregiver contact'}));fireEvent.change(screen.getByLabelText('Contact name'),{target:{value:row.name}});fireEvent.change(screen.getByLabelText('Email address'),{target:{value:row.contact_value}});fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button',{name:'Retry loading contacts'}));await screen.findByText('No care contacts saved yet.');
+  fireEvent.click(screen.getByRole('button',{name:'Add care contact'}));fireEvent.change(screen.getByLabelText('Contact name'),{target:{value:row.name}});fireEvent.change(screen.getByLabelText('Email address'),{target:{value:row.contact_value}});fireEvent.click(screen.getByRole('checkbox'));
   fireEvent.click(screen.getByRole('button',{name:'Save contact'}));await waitFor(()=>expect(screen.getByRole('button',{name:'Save contact'}).hasAttribute('disabled')).toBe(false));
   fireEvent.click(screen.getByRole('button',{name:'Save contact'}));await screen.findByRole('heading',{name:row.name});
   expect(api.createCaregiver).toHaveBeenCalledTimes(2);expect(vi.mocked(api.createCaregiver).mock.calls.map(call=>call[0].id)).toEqual([row.id,row.id]);
