@@ -656,3 +656,10 @@ Additional unchanged-runtime regression:24 Render deployment tests PASS, bringin
 IMPLEMENTED LOCAL: the three summary actions are compact, left-starting, equal-width white controls with readable dark text on the pale-green summary card. Pending occurrences now have one native disclosure; eligibility guidance is inline, the server-bounded result set is visible after that single expansion, and only `can_report === true` rows expose a report/correction button. Ineligible rows remain review-only. Backend/API eligibility and missing-dose semantics are unchanged.
 
 Evidence: 21 focused Vitest cases PASS; synthetic Auth/API Chromium EN/ZH journeys PASS at390×844,844×390 and 150% text, including child routes, bounds and no horizontal overflow; typecheck, lint, build, Impeccable detector and diff check PASS. The 5173 browser used DEMO_ONLY intercepted data. Hosted/real-account behavior remains NOT VERIFIED. No new deferred implementation was introduced; no Git, DB, deployment or patient-data operation.
+
+
+### 2026-10-20 Release metadata and E2E environment correction
+
+The About version is derived from the frontend package manifest; working-tree package and lock are corrected to0.1.1 and the About test passes. Existing annotated `v0.1.1` points at `e3b3501`, whose package metadata is0.1.0. Owner says the tag may be rolled back. No local/remote tag movement, commit, push or deployment was performed. Hosted release readiness remains distinct.
+
+Corrected the unreleased-capability browser check to use fully synthetic `mockPatientApp` API responses and the current direct Add Follow-up action; 1 targeted browser case passes and asserts no dose-follow-up read. Responsive Records/Today/Care browser cases pass6/6 at5173. API-backed history and Today/Care integration specs retain their port guards: required isolated ports5182/5193 were not listening; do not run those tests against the ordinary app/API or remove the guards. They remain BLOCKED pending the isolated QA environment.

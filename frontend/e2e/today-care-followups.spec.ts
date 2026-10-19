@@ -87,14 +87,11 @@ test('no active medicines still exposes and confirms existing ended-plan follow-
 
 
 test('unreleased capabilities remain unavailable without dose reads or silent advanced settings',async({page})=>{
- const {errors}=await mockPatientApp(page,true,{token:'DEMO.correctness02-synthetic-token',owner:'de020000-0000-4000-8000-000000000001'});
- await page.route(url=>new URL(url).pathname.startsWith('/api/'),route=>route.continue());
- let reads=0;page.on('request',request=>{if(new URL(request.url()).pathname==='/api/me/dose-follow-ups')reads++;});
- await page.route('**/api/health',async route=>{const response=await route.fetch();await route.fulfill({response,json:{...await response.json(),late_dose_reports_enabled:false,care_task_followups_enabled:false}});});
+ const {errors,reads,prefs,setCapabilities}=await mockPatientApp(page,true,{token:'DEMO.correctness02-synthetic-token',owner:'de020000-0000-4000-8000-000000000001'});
+ prefs.preferred_language='en';setCapabilities({late_dose_reports_enabled:false,care_task_followups_enabled:false});
  await page.clock.install({time:new Date('2026-10-19T04:00:00Z')});
- await page.request.put('/api/me/preferences',{headers:{Authorization:'Bearer DEMO.correctness02-synthetic-token'},data:{preferred_language:'en'}});
- await page.goto('/#today');await expect(page.getByText(/Late reporting is not enabled yet/)).toBeVisible();expect(reads).toBe(0);
- await page.getByRole('button',{name:'View all follow-ups'}).click();await page.getByRole('button',{name:'Add medication follow-up'}).click();
+ await page.goto('/#today');await expect(page.getByText(/Late reporting is not enabled yet/)).toBeVisible();expect(reads.some(url=>new URL(url).pathname==='/api/me/dose-follow-ups')).toBe(false);
+ await page.getByRole('button',{name:'Add Follow-up'}).click();
  await expect(page.getByLabel('Advance reminder')).toBeDisabled();await expect(page.getByLabel('Advance reminder')).toHaveValue('0');
  expect(errors).toEqual([]);
 });
