@@ -25,7 +25,7 @@ def medication_question(text: str) -> dict[str, str] | None:
         or "怎么服用" in value
         or "怎么吃" in value
         or re.search(
-            r"\b(?:dose|amount per dose)\b|how much.*(?:each time|per dose)|每次.*(?:用量|服用量)|每次服.*多少",
+            r"\b(?:dose|amount per dose)\b|how much.*(?:each time|per dose)|每次.*(?:用量|服用量|吃多少|服用多少)",
             value,
             re.I,
         )

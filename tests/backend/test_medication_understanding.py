@@ -85,7 +85,12 @@ def test_education_tool_remains_available_when_model_omits_tool_or_fails(reviewe
         session_id=session.id,
         turn=AgentTurn(text="What is Amlodipine besylate used for?", language="en"),
     )
-    assert "dailymed.nlm.nih.gov" in reply.message and len(requests) == 1
+    assert "https://" not in reply.message and len(requests) == 1
+    assert any(
+        "dailymed.nlm.nih.gov" in source["url"]
+        for trace in reply.tool_results
+        for source in (trace.payload.get("general_knowledge") or {}).get("sources", [])
+    )
     assert "Unsupported invented" not in reply.message
     assert reply.tool_results[0].payload["action"] == "get_medication_understanding"
     assert reply.mode != "gemini" and not wired.store.events
@@ -273,7 +278,8 @@ def test_personal_instructions_no_fda_no_strength_conversion_or_food_guess(revie
     service, patient, draft, requests = reviewed
     result = service.explain(patient_id=patient, medication_id=draft.medication.id, question="personal_instructions")
     assert "1 tablet per dose" in result.patient_safe_summary and "20:00" in result.patient_safe_summary
-    assert "Food instruction: not recorded" in result.patient_safe_summary
+    assert "Food instruction" not in result.patient_safe_summary
+    assert result.personal_instructions.food_instruction is None
     assert result.personal_instructions.source_document_id == draft.regimen.source_id
     assert result.personal_instructions.dose_amount == 1 and result.general_knowledge is None
     assert "5 mg per dose" not in result.patient_safe_summary and not requests and not wired.store.events
@@ -459,7 +465,12 @@ def test_agent_typed_tool_grounding_and_no_medical_write(reviewed, wired):
         patient_id=patient, session_id=session.id, turn=AgentTurn(text="What is Amlodipine for?", language="zh")
     )
     assert "999" not in reply.message and "降低血压" in reply.message
-    assert "dailymed.nlm.nih.gov" in reply.message and len(requests) == 1
+    assert "https://" not in reply.message and len(requests) == 1
+    assert any(
+        "dailymed.nlm.nih.gov" in source["url"]
+        for trace in reply.tool_results
+        for source in (trace.payload.get("general_knowledge") or {}).get("sources", [])
+    )
     assert reply.tool_results[0].payload["general_knowledge"]["sources"][0]["version"] == "2"
     assert not wired.store.events and len(wired.store.regimens) == 1
     schema = next(row for row in model_tool_schemas() if row["name"] == "get_medication_understanding")
@@ -625,7 +636,12 @@ def test_contextual_use_discovers_then_explains_without_model(reviewed, wired, t
         "get_long_term_care",
     ]
     assert reply.tool_results[-1].payload["action"] == "get_medication_understanding"
-    assert "dailymed.nlm.nih.gov" in reply.message and len(requests) == 1
+    assert "https://" not in reply.message and len(requests) == 1
+    assert any(
+        "dailymed.nlm.nih.gov" in source["url"]
+        for trace in reply.tool_results
+        for source in (trace.payload.get("general_knowledge") or {}).get("sources", [])
+    )
     assert not reply.requires_confirmation and not wired.store.events
     saved = wired.sessions.get(patient, session.id)
     assert saved.context.referenced_medication_id == draft.medication.id
@@ -711,7 +727,12 @@ def test_contextual_verified_reference_selects_one_of_several(reviewed, wired):
     reply = conversation.handle_turn(
         patient_id=patient, session_id=session.id, turn=AgentTurn(text="What is my medication used for?", language="en")
     )
-    assert "dailymed.nlm.nih.gov" in reply.message and len(requests) == 1
+    assert "https://" not in reply.message and len(requests) == 1
+    assert any(
+        "dailymed.nlm.nih.gov" in source["url"]
+        for trace in reply.tool_results
+        for source in (trace.payload.get("general_knowledge") or {}).get("sources", [])
+    )
     assert len(reply.tool_results) == 2
 
 
@@ -862,7 +883,7 @@ def test_named_nifedipine_question_preserves_name_and_reports_unmatched_evidence
         patient_id=patient, session_id=session.id, turn=AgentTurn(text="Nifedipine LA有什么作用", language="zh")
     )
     assert queries[0].name == "Nifedipine LA" and len(queries) == 1
-    assert "无法可靠匹配" in reply.message and "请选择药物名称" not in reply.message
+    assert "无法从来源可靠确认" in reply.message and "请选择药物名称" not in reply.message
     assert reply.mode == "records_only"
     assert reply.tool_results[0].payload["action"] == "get_medication_understanding"
     assert reply.tool_results[0].payload["general_knowledge"]["status"] == "no_reliable_match"

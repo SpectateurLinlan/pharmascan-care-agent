@@ -303,3 +303,10 @@
 | Source scope/localization | COMPLETED scoped: optional source-label name, known-form product-family preference, ingredient boundary, Chinese units/route/options | Naturalness PARTIALLY COMPLETED; sources do not confirm patient products or prescribing reason |
 | OCR safe review display | COMPLETED scoped: original candidate ER/20:00/course words are visible and unconfirmed; editable existing time fields | Stage2 extraction enhancement is not implemented by this client change |
 | Git publication | Owner approved selective local commits only; unrelated successor-plan/detail-page work remains independent | No Push/Deploy authorization |
+
+
+### 2026-10-19 Patient Answer Quality supplement
+
+- **APPROVED / PASS local scoped:** concise complete EN/ZH lists; shared sourced ingredient explanations without identity merging; readable reviewed plan dose/time; default-collapsed source brand/version/link/original text; exact relevant medication options; conservative unique stronger-product resolution; click/text continuation; new-intent interruption; stable trusted IDs across language changes; explicit faithful original-instruction requests.
+- Implementation: existing MedicationUnderstandingService, ReadDialogue/Registry and AnswerSources. New optional clarification flag defaults false; no database schema, retrieval-provider or sensitive-write contract change.
+- Acceptance/evidence: twelve-row matrix and actual before/after outputs in `outputs/REAL_GEMINI_RELEASE_QA.md` (`Patient Experience Refinement`); 227 backend /2 source unit /4 actual local browser checks. New Gemini, PostgreSQL, hosted deployment and physical-device runs are **NOT RUN** for this presentation refinement.

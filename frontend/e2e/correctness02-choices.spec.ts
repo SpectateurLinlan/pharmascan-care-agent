@@ -19,7 +19,7 @@ test('medication buttons continue the original intent, keep the conversation and
  const input=page.getByRole('textbox');await input.fill('What is this medicine for?');await page.getByRole('button',{name:'Send',exact:true}).click();
  const choices=page.getByRole('region',{name:'Choose a medicine'});await expect(choices.getByRole('button')).toHaveCount(3);
  const target=choices.getByRole('button',{name:/Metformin 500 mg/});await target.focus();await page.keyboard.press('Enter');
- await expect(page.locator('.transcript')).toContainText('glycemic control');expect(sent).toHaveLength(2);
+ await expect(page.locator('.transcript')).toContainText('blood sugar');expect(sent).toHaveLength(2);
  expect(sent[1]?.medication_selection).toBeTruthy();expect(sent[1]?.conversation_id).toBeTruthy();expect(sent[1]?.text).toContain('Metformin');
  await page.getByText('Knowledge sources',{exact:true}).click();await expect(page.getByRole('link',{name:/US drug label/})).toHaveAttribute('href',/dailymed\.nlm\.nih\.gov/);
  await input.fill('Show my health observations');await page.getByRole('button',{name:'Send',exact:true}).click();await expect(page.locator('.transcript')).toContainText('DEMO felt well');

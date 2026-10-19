@@ -170,6 +170,19 @@ class ToolRegistry:
                     "ingredients": [item.name[:100] for item in product.ingredients[:8]] if product else [],
                     "strength_text": basis.strength_text if basis and basis.patient_checked else None,
                     "dosage_form": basis.form if basis and basis.patient_checked else None,
+                    # Read-only comparison evidence, never a dose recommendation.
+                    "comparison_basis": {
+                        "product_name": product.name,
+                        "brand": product.brand,
+                        "form": basis.form,
+                        "release": basis.formulation,
+                        "route": regimen.route,
+                    }
+                    if product
+                    and basis
+                    and basis.patient_checked
+                    and medication.identity_status.value in {"user_reviewed_document", "professional_verified"}
+                    else None,
                     "dose_amount": regimen.dose_amount,
                     "dose_unit": regimen.dose_unit,
                     "frequency_rule": regimen.frequency_rule,

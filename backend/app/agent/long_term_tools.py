@@ -291,10 +291,10 @@ def execute_care_tool(
     )
     if language == "zh":
         summary = (
-            f"本期记录的药物：{names}。患者自述已服 {summary_data['reported_taken']}、"
-            f"未服 {summary_data['reported_not_taken']}、"
-            f"不确定 {summary_data['unsure']} 次；未报告不等于漏服。记录的用药困难 {len(data['barriers'])} 项，"
-            f"未完成跟进 {len(data['follow_ups'])} 项。"
+            f"这段时间记录了 {names} 的用药情况：您自述已服 {summary_data['reported_taken']} 次、"
+            f"未服 {summary_data['reported_not_taken']} 次、"
+            f"不确定 {summary_data['unsure']} 次。尚未记录不等于未服。"
+            f"另有 {len(data['barriers'])} 项已记录的用药困难、{len(data['follow_ups'])} 项待跟进事项。"
         )
     else:
         summary = (
@@ -305,7 +305,8 @@ def execute_care_tool(
         )
     if name == "get_health_observations":
         summary = ""  # Answer the health query directly; medication totals belong to a combined review.
-    for task in data["follow_ups"][:4]:
+    overview = summary
+    for task in [] if name == "get_health_observations" else data["follow_ups"][:4]:
         medication = next(
             (row["name"] for row in summary_data["medications"] if row["medication_id"] == task["medication_id"]), None
         )
@@ -320,7 +321,7 @@ def execute_care_tool(
             if moment.tzinfo is not None:
                 due = moment.astimezone(ZoneInfo(timezone)).strftime("%Y-%m-%d %H:%M") + f" ({timezone})"
         summary += f" {'自述跟进' if language == 'zh' else 'Reported follow-up'}: “{label}” ({due})."
-    for barrier in data["barriers"][-2:]:
+    for barrier in [] if name == "get_health_observations" else data["barriers"][-2:]:
         summary += f" {'自述困难' if language == 'zh' else 'Reported difficulty'}: “{barrier['description'][:160]}”."
     if name != "get_unresolved_follow_ups":
         notes = data["observations"]
@@ -356,11 +357,8 @@ def execute_care_tool(
         if trends_text:
             summary += "\n" + trends_text.strip()
     if name == "prepare_medication_review":
-        summary += (
-            " 请核对用药清单、库存及未完成事项，并准备与药剂师讨论上述记录。"
-            if language == "zh"
-            else " Review your medication list, supply and open tasks, and discuss these reports with your pharmacist."
-        )
+        details = summary[len(overview) :]
+        summary = overview
         questions = data.get("questions", [])
         if questions:
             translated = {
@@ -378,6 +376,12 @@ def execute_care_tool(
             }
             summary += "\n复诊可讨论的问题：" if language == "zh" else "\nQuestions to discuss at your visit:"
             summary += "\n" + "\n".join("- " + (translated.get(q, q) if language == "zh" else q) for q in questions)
+        summary += (
+            "\n请带上用药清单，向医生或药剂师核对仍不确定的记录及后续安排。\n记录依据："
+            if language == "zh"
+            else "\nBring your medication list and ask your doctor or pharmacist to clarify uncertain records "
+            "and next steps.\nSupporting records:"
+        ) + details
     # Return only the requested minimum. UI has the full patient-review endpoint.
     sections = {
         "get_adherence_history": {"barriers"},

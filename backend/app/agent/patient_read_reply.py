@@ -58,9 +58,6 @@ def medication_list_reply(result: ToolResult, language: str) -> str:
             else f"Showing the first 20 of {len(rows)} active registrations, not the complete list. "
             "View remaining entries in Medicines or ask about a named medicine."
         )
-    lines.append(
-        "这是登记的用药清单，不能证明实际服用。" if zh else "This is your registered list, not proof of taking a dose."
-    )
     return "\n".join(lines)
 
 
@@ -82,15 +79,14 @@ def knowledge_sources_reply(data: dict, language: str) -> str:
     ]
     lines.extend(
         f"- openFDA / SPL{(' — ' + row['label_name']) if row.get('label_name') else ''} "
-        f"· {row['effective_time']} · v{row['version']}: {row['url']}"
+        f"· {row['effective_time']} · v{row['version']}"
         for row in sources
     )
     lines.append(
-        "这些标签支持一般成分用途，不代表已确认您持有的具体产品或个人处方。"
+        "链接和原文见回答依据；来源商品不代表您持有的具体产品。"
         if language == "zh"
         else (
-            "These support general ingredient uses; they do not "
-            "confirm your particular product or personal prescription."
+            "Links and excerpts are in Sources; source brands do not identify your particular product."
         )
     )
     return "\n".join(lines)

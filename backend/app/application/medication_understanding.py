@@ -14,6 +14,7 @@ from ..contracts.medication_knowledge import (
 from ..contracts.ports import Clock
 from ..domain.errors import NotFoundError
 from .enrollment import MedicationEnrollmentService
+from .medication_presentation import general_use_text, knowledge_scope
 
 REVIEWED = {SourceReviewStatus.USER_REVIEWED, SourceReviewStatus.PROFESSIONAL_VERIFIED}
 
@@ -157,36 +158,18 @@ class MedicationUnderstandingService:
             else (basis.formulation if basis and basis.patient_checked else "unknown"),
         )
         knowledge = self._provider.lookup(query)
-        if language == "zh":
-            summary = f"{name}："
-            if knowledge.status == "matched":
-                summary += knowledge.use_statement_zh or (
-                    f"该标签暂无经核对的中文用途译文，以下为美国标签原文（部分用途）：{knowledge.use_statement}"
-                )
-            else:
-                summary += (
-                    "目前无法可靠匹配或读取标签来确认一般用途，可能是成分名称不匹配、标签用途冲突或服务不可用；"
-                    "请核对原始标签或向药剂师查询。"
-                )
-            summary += " 仅说明一般成分用途，不确认您的具体产品、处方原因或用量；来源为美国标签。"
+        if knowledge.status == "matched":
+            explanation = general_use_text(knowledge, language)
         else:
-            summary = f"{name}: "
-            if knowledge.status == "matched":
-                summary += f"{knowledge.use_statement} "
-            else:
-                summary += (
-                    "I could not reliably confirm a general use from the source: the i"
-                    "ngredient may not match, label uses may conflict, or the service "
-                    "may be unavailable. Check the original label with your pharmacist"
-                    ". "
-                )
-            summary += (
-                "General ingredient information from US labels; not confirmation of your product, "
-                "prescription reason, dose or Singapore approval."
+            explanation = (
+                "暂时无法从来源可靠确认一般用途，可能存在成分不匹配、来源冲突或服务不可用；请核对原标签或咨询药剂师。"
+                if language == "zh"
+                else "I could not reliably confirm a general use: the ingredient may not match, sources may conflict, "
+                "or the service may be unavailable. Check the original label with your pharmacist."
             )
-        for citation in knowledge.sources:
-            label = f" — {citation.label_name}" if citation.label_name else ""
-            summary += f"\nopenFDA / SPL{label} ({citation.effective_time}, v{citation.version}): {citation.url}"
+        summary = f"{name}{'：' if language == 'zh' else ': '}{explanation}"
+        if knowledge.status == "matched":
+            summary += "\n\n" + knowledge_scope(language)
         if question == "personal_reason":
             summary = (
                 "记录尚未确认医生为您开药的个人原因。 "
@@ -218,7 +201,13 @@ class MedicationUnderstandingService:
                 else f"every {frequency.get('every_hours')} hours"
             )
         elif kind == "weekly":
-            schedule = f"{times}; weekdays (1=Monday): {frequency.get('days_of_week', [])}"
+            weekdays = (
+                ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
+                if language == "zh"
+                else ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+            )
+            days = "、".join(weekdays[int(day) - 1] for day in frequency.get("days_of_week", []) if 1 <= int(day) <= 7)
+            schedule = f"{days} {times}"
         else:
             schedule = ("每天 " if language == "zh" else "daily at ") + times
         unit = (
@@ -229,32 +218,46 @@ class MedicationUnderstandingService:
             else instructions.dose_unit
         )
         summary = (
-            f"已核对的当前计划：{name}，每次 {instructions.dose_amount:g} {unit}；{schedule}。"
+            f"已核对的当前计划：{name}，每次服用 {instructions.dose_amount:g} {unit}；{schedule}。"
             if language == "zh"
             else f"Your current reviewed plan: {name}, {instructions.dose_amount:g} "
             f"{instructions.dose_unit} per dose; {schedule}."
         )
-        food = instructions.food_instruction or ("未记录" if language == "zh" else "not recorded")
-        summary += f" {'用餐说明' if language == 'zh' else 'Food instruction'}: {food}."
+        if instructions.food_instruction:
+            food = instructions.food_instruction
+            if language == "zh":
+                food = {
+                    "with_food": "随餐服用",
+                    "with food": "随餐服用",
+                    "after_food": "餐后服用",
+                    "before_food": "餐前服用",
+                    "empty_stomach": "空腹服用",
+                    "with_or_without_food": "随餐或空腹均可",
+                }.get(food, food)
+            summary += f" 用餐要求：{food}。" if language == "zh" else f" Food: {food}."
         if instructions.route:
             route = (
                 {"oral": "口服", "topical": "外用", "inhalation": "吸入"}.get(instructions.route, instructions.route)
                 if language == "zh"
                 else instructions.route
             )
-            summary += f" {'途径' if language == 'zh' else 'Route'}: {route}."
-        if instructions.course_start_date or instructions.course_end_date:
+            summary += f" {route}。" if language == "zh" else f" Route: {route}."
+        if instructions.course_start_date and instructions.course_end_date:
             summary += (
-                f" {'疗程' if language == 'zh' else 'Course'}: "
-                f"{instructions.course_start_date or '?'} — {instructions.course_end_date or '?'}."
+                f" 疗程：{instructions.course_start_date} 至 {instructions.course_end_date}。"
+                if language == "zh"
+                else f" Course: {instructions.course_start_date} to {instructions.course_end_date}."
             )
-        if instructions.original_instructions:
+        elif instructions.course_start_date:
             summary += (
-                f" {'已核对原文' if language == 'zh' else 'Reviewed original'}: “{instructions.original_instructions}”."
+                f" 开始日期：{instructions.course_start_date}。"
+                if language == "zh"
+                else f" Starts: {instructions.course_start_date}."
             )
-        summary += (
-            " 来源为患者核对记录，不代表专业人员已验证；请对照原标签。"
-            if language == "zh"
-            else " Source: patient-reviewed record, not inferred professional verification. Check the original label."
-        )
+        elif instructions.course_end_date:
+            summary += (
+                f" 结束日期：{instructions.course_end_date}。"
+                if language == "zh"
+                else f" Ends: {instructions.course_end_date}."
+            )
         return summary

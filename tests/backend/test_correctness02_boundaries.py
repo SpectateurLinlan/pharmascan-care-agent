@@ -34,8 +34,9 @@ def test_release_paraphrases_keep_plural_history_and_source_intents():
     use = h.rows[-1]["actual"]
     h.ask("Where does that information come from?")
     sources = h.rows[-1]["actual"]
-    assert "https://dailymed.nlm.nih.gov/" in sources
-    assert "general ingredient uses" in sources and sources != use
+    assert "https://" not in sources
+    assert "US drug labels" in sources and sources != use
+    assert "dailymed.nlm.nih.gov" in h.rows[-1]["tools"][-1]["data"]["general_knowledge"]["sources"][0]["url"]
     assert "One use stated" not in sources
 
 
@@ -359,9 +360,10 @@ def test_identical_general_label_explanation_is_shared_without_hiding_product_re
         assert len({r["parameters"]["medication_id"] for r in calls}) == 3
         assert all(n in reply["message"] for n in ["Amlodipine 5 mg", "Amlodipine 10 mg", "Metformin 500 mg"])
         amlodipine = calls[0]["data"]["general_knowledge"]
-        assert reply["message"].count(amlodipine["use_statement"]) == 1
+        assert reply["message"].count("hypertension") == 1
         for source in amlodipine["sources"]:
-            assert reply["message"].count(source["url"]) == 1
+            assert source["url"] not in reply["message"]
+            assert source["url"].startswith("https://dailymed.nlm.nih.gov/")
     finally:
         h.close()
 

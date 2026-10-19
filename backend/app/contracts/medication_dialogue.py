@@ -29,6 +29,7 @@ class MedicationChoice(BaseModel):
     question: Literal["general_use", "personal_instructions", "personal_reason"]
     prompt: str = Field(default="", max_length=500)
     target_name: str | None = Field(default=None, max_length=160)
+    include_original: bool = False
     expires_at: AwareDatetime
     options: list[MedicationOption] = Field(max_length=10)
 

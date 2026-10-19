@@ -233,7 +233,10 @@ def exercise_sql_patient_reads(db, *, model=None, first_question="Which medicine
         assert len(choice["options"]) == 2
         selected = choice["options"][1]
         explained = ask(selected["label"], {"choice_id": choice["id"], "medication_id": selected["medication_id"]})
-        assert "glycemic control" in explained["message"] and "dailymed.nlm.nih.gov" in explained["message"]
+        assert "blood sugar" in explained["message"] and "https://" not in explained["message"]
+        assert (
+            "dailymed.nlm.nih.gov" in explained["tool_traces"][-1]["payload"]["general_knowledge"]["sources"][0]["url"]
+        )
         assert explained["tool_traces"][-1]["payload"]["medication_id"] == selected["medication_id"]
         saved = repos.sessions.get(A, session.id)
         assert (
