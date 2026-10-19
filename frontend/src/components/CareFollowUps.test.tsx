@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
-import {cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
+import {act,cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
 import {api} from '../api/client';
 import type {CareTask} from '../api/care';
 import {patientInstant} from '../patientDateTime';
 import {CareTaskForm} from './CareTaskForm';
 import {CareTasksScreen,CareTaskSummary,taskView,todayTasks} from './CareTasksScreen';
 import {LateDoseFollowUps} from './LateDoseFollowUps';
+import {careTaskLocalDate,careTaskMonthDays,shiftCareTaskMonth,sortCareTasks} from '../careTaskCalendar';
 import type {DoseFollowUp,LateReportChallenge} from '../api/doseFollowUps';
 
 const now=Date.parse('2026-10-19T04:00:00Z');
@@ -44,12 +45,30 @@ it('requires explicit historical confirmation, never schedules a past reminder a
 it('filters lifecycle views and opens a readable detail instead of inline edit forms',async()=>{
  const rows=[task('future','2026-10-20T00:00:00Z'),task('overdue','2026-10-18T00:00:00Z'),task('done','2026-10-18T00:00:00Z','completed')];
  vi.spyOn(api,'careTasks').mockResolvedValue(rows);render(<CareTasksScreen regimens={[]}/>);
- await screen.findByText('DEMO future');expect(screen.queryByText('DEMO overdue')).toBeNull();
+ await screen.findByRole('grid',{name:/October 2026/});fireEvent.click(screen.getByRole('button',{name:'List'}));expect(screen.getByRole('button',{name:/DEMO future/})).toBeTruthy();
  fireEvent.click(screen.getByRole('button',{name:'Overdue'}));fireEvent.click(screen.getByRole('button',{name:/DEMO overdue/}));
  const dialog=screen.getByRole('dialog',{name:'Follow-up details'});
  expect(within(dialog).getByText('Task created')).toBeTruthy();expect(within(dialog).queryByText('Reminder disabled')).toBeNull();expect(within(dialog).queryByRole('textbox')).toBeNull();
  expect(window.location.hash).toContain('task=overdue');
  expect(taskView(rows[1]!,now)).toBe('overdue');expect(todayTasks(rows,now).map(row=>row.id)).toEqual(['future','overdue']);
+});
+it('uses independent calendar/list and status filters over the same task rows',async()=>{
+ const rows=[task('late','2026-10-19T02:00:00Z'),task('future','2026-10-19T05:00:00Z'),task('done','2026-10-19T03:00:00Z','completed')];
+ vi.spyOn(api,'careTasks').mockResolvedValue(rows);render(<CareTasksScreen regimens={[]}/>);
+ await screen.findByRole('grid',{name:/October 2026/});
+ const today=(count:number)=>screen.getByRole('gridcell',{name:new RegExp(`19 October 2026, ${count} Care Tasks`)});expect(today(3).querySelectorAll('.care-calendar__marker')).toHaveLength(3);
+ fireEvent.click(today(3));fireEvent.click(screen.getByRole('button',{name:/DEMO late/}));expect(screen.getByRole('dialog',{name:'Follow-up details'})).toBeTruthy();fireEvent.click(screen.getByRole('button',{name:'Close'}));
+ fireEvent.click(screen.getByRole('button',{name:'Next month'}));expect(screen.getByRole('heading',{name:'November 2026'})).toBeTruthy();fireEvent.click(screen.getByRole('button',{name:'Today'}));expect(screen.getByRole('heading',{name:'October 2026'})).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'Completed'}));expect(today(1).querySelectorAll('.care-calendar__marker')).toHaveLength(1);
+ fireEvent.click(screen.getByRole('button',{name:'List'}));expect(screen.getByRole('button',{name:/DEMO done/})).toBeTruthy();expect(screen.queryByRole('button',{name:/DEMO late/})).toBeNull();expect(screen.queryByRole('button',{name:/DEMO future/})).toBeNull();
+ fireEvent.click(screen.getByRole('button',{name:'All'}));
+ const groups=Array.from(document.querySelectorAll('.care-list-view h3')).map(node=>node.textContent?.trim().split(' ')[0]);expect(groups).toEqual(['Overdue','Pending','Completed']);
+});
+it('opens the existing Add Follow-up form directly and preselects today from the patient zone',async()=>{
+ const open=vi.fn();vi.spyOn(api,'refreshFollowUps').mockResolvedValue([]);render(<CareTaskSummary onOpen={open}/>);
+ await screen.findByText('No pending medication follow-ups.');
+ fireEvent.click(screen.getByRole('button',{name:/Add Follow-up/}));
+ const dialog=screen.getByRole('dialog',{name:'New medication follow-up'});expect(within(dialog).getByLabelText('Date (required)')).toHaveProperty('value','2026-10-19');expect(open).not.toHaveBeenCalled();
 });
 it('Today summary is bounded, pending-first, excludes completed and opens the selected task',async()=>{
  const rows=[task('late','2026-10-18T00:00:00Z'),task('done','2026-10-18T00:00:00Z','completed'),...['20','21','22','23'].map(day=>task(day,`2026-10-${day}T00:00:00Z`))];
@@ -60,7 +79,32 @@ it('Today summary is bounded, pending-first, excludes completed and opens the se
 it('keeps an ineligible occurrence visible without presenting its dose as reviewed instructions',async()=>{
  vi.spyOn(api,'doseFollowUps').mockResolvedValue({items:[{...item,can_report:false,unavailable_reason:'review_required'}],has_more:false,timezone:'Asia/Singapore',as_of:new Date(now).toISOString()});
  render(<LateDoseFollowUps/>);await screen.findByText('DEMO medicine');
- expect(screen.getByText(/Saved plan · review required/)).toBeTruthy();expect(screen.queryByRole('button',{name:'Report dose status'})).toBeNull();expect(screen.queryByText(/Per dose/)).toBeNull();
+ expect(screen.getByText(/Saved plan needs review/)).toBeTruthy();expect(screen.queryByRole('button',{name:'Report dose status'})).toBeNull();expect(screen.queryByText(/Per dose/)).toBeNull();
+});
+it('Today shows only eligible unresolved doses on the API patient-local date',async()=>{
+ vi.spyOn(api,'doseFollowUps').mockResolvedValue({items:[
+  {...item,occurrence_id:'yesterday',due_at:'2026-10-18T15:00:00Z'},
+  {...item,occurrence_id:'today',due_at:'2026-10-18T16:00:00Z'},
+  {...item,occurrence_id:'not-eligible',due_at:'2026-10-18T17:00:00Z',can_report:false},
+  {...item,occurrence_id:'reported',due_at:'2026-10-18T18:00:00Z',report_id:'demo-report'},
+ ],has_more:false,timezone:'Asia/Singapore',as_of:'2026-10-19T04:00:00Z'});
+ const history=vi.fn();render(<LateDoseFollowUps todayOnly onHistory={history}/>);
+ expect(await screen.findByRole('button',{name:'Report dose status'})).toBeTruthy();expect(screen.getByText(/12:00.*Not recorded/)).toBeTruthy();
+ expect(screen.queryByText(/yesterday|not-eligible|reported/)).toBeNull();expect(screen.getByText('Not recorded does not mean not taken.')).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'View records'}));expect(history).toHaveBeenCalledOnce();
+});
+it('keeps existing report correction access available in the Records workflow',async()=>{
+ const read=vi.spyOn(api,'doseFollowUps').mockImplementation(async includeReported=>({items:includeReported?[{...item,report_id:'demo-report',intake_status:'unsure'}]:[],has_more:false,timezone:'Asia/Singapore',as_of:new Date(now).toISOString()}));
+ vi.spyOn(api,'lateReportHistory').mockResolvedValue({original:null,corrections:[]});render(<LateDoseFollowUps/>);
+ fireEvent.click(await screen.findByRole('checkbox',{name:'Include reported occurrences to review or correct'}));
+ fireEvent.click(await screen.findByRole('button',{name:'Review or correct report'}));await act(async()=>{await Promise.resolve();});expect(screen.getByRole('dialog')).toBeTruthy();expect(read).toHaveBeenLastCalledWith(true);
+});
+it('Care Task statuses and dates use the configured timezone and invalid dates stay findable in List',()=>{
+ expect(careTaskLocalDate('2026-10-18T16:30:00Z','Asia/Singapore')).toBe('2026-10-19');
+ expect(taskView(task('edge','2026-10-18T15:59:59Z'),now)).toBe('overdue');
+ expect(taskView(task('invalid','not-a-date'),now)).toBe('pending');
+ const days=careTaskMonthDays('2026-10');expect(days).toHaveLength(34);expect(days[3]).toBe('2026-10-01');expect(shiftCareTaskMonth('2026-12',1)).toBe('2027-01');
+ expect(sortCareTasks([task('done','2026-10-18T00:00:00Z','completed'),task('pending','2026-10-20T00:00:00Z'),task('late','2026-10-18T00:00:00Z')],now).map(row=>row.id)).toEqual(['late','pending','done']);
 });
 it.each(['reported_taken','reported_not_taken','unsure'] as const)('late %s stays a patient report and requires matching server confirmation',async status=>{
  vi.spyOn(api,'doseFollowUps').mockResolvedValue({items:[item],has_more:false,timezone:'Asia/Singapore',as_of:new Date(now).toISOString()});

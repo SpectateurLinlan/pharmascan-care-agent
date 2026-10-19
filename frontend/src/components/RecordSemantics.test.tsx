@@ -35,7 +35,7 @@ it('selects the same stable plan IDs across versions and distinct course dates',
 it('makes follow-up creation visible, cancellable and still confirmation gated',async()=>{
  vi.spyOn(Date,'now').mockReturnValue(Date.parse('2026-10-19T04:00:00Z'));
  vi.mocked(api.careTasks).mockResolvedValue([]);render(<CareTasksScreen regimens={[plan]}/>);
- await screen.findByText('No follow-ups in this view.');fireEvent.click(screen.getByRole('button',{name:'Add medication follow-up'}));
+ fireEvent.click(screen.getByRole('button',{name:'List'}));expect((await screen.findAllByText('No follow-ups in this view.')).length).toBeGreaterThan(0);fireEvent.click(screen.getByRole('button',{name:'Add Follow-up'}));
  fireEvent.click(screen.getByRole('button',{name:'Review and save'}));
  expect(screen.getByLabelText('Title (required)')).toBe(document.activeElement);
  fireEvent.change(screen.getByLabelText('Title (required)'),{target:{value:'DEMO review'}});
@@ -46,7 +46,7 @@ it('makes follow-up creation visible, cancellable and still confirmation gated',
  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Cancel'}));
  expect(screen.queryByLabelText('Title (required)')).toBeNull();expect(api.createCareTask).not.toHaveBeenCalled();
  vi.mocked(api.createCareTask).mockImplementation(async input=>({...input,patient_id:'DEMO-owner',status:'open',source:'patient_reported',version:1,history:[],created_at:'2026-10-17T00:00:00Z',updated_at:'2026-10-17T00:00:00Z',demo_only:true}));
- fireEvent.click(screen.getByRole('button',{name:'Add medication follow-up'}));
+ fireEvent.click(screen.getByRole('button',{name:'Add Follow-up'}));
  fireEvent.change(screen.getByLabelText('Title (required)'),{target:{value:'DEMO review'}});
  fireEvent.change(screen.getByLabelText('Date (required)'),{target:{value:'2026-10-20'}});
  fireEvent.change(screen.getByLabelText('Time (required)'),{target:{value:'08:00'}});

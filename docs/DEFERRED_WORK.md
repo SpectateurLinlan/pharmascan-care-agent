@@ -534,6 +534,13 @@ Next useful authorized-scope proposal: Correctness02 (BUG-08/09), P1/medium clin
 - NOT VERIFIED: hosted Supabase PostgREST/worker/device delivery and native device picker/accessibility. No external Gemini/notification request, stage, commit, push, deploy or production migration. No031 functional acceptance is inferred from isolated migration-chain parsing.
 - Future calendar: only the source-preserving read-only DTO and bounded month-aggregation/deep-link plan were delivered; docs/CARE_CALENDAR_INTEGRATION.md. A separate approved task may implement that bounded read-only scope; no second calendar or reminder source of truth.
 
+### 2026-10-20 Today and Care Task calendar UI supplement
+
+- IMPLEMENTED LOCAL: Today late-report cards now filter unresolved, eligible occurrences by the patient timezone and the server-provided `as_of`; the existing Records route hosts the recent report/correction workflow. No backend eligibility or write rules changed.
+- IMPLEMENTED LOCAL: Care Task Calendar/List views share `GET /api/me/care-tasks` data and one status derivation, with independent status filtering, patient-zone date grouping, existing task details/form workflows, and a direct Today creation action. No calendar storage, API, lifecycle state, or schedule changes.
+- Evidence: focused Vitest 21/21, synthetic Playwright EN/ZH at 390/1280 widths 2/2, TypeScript, affected ESLint, `git diff --check`, and Impeccable detector passed. Browser API/Auth were mocked; no patient records or backend services were written.
+- Hosted deployment and real-user/browser timezone behavior remain NOT VERIFIED. This supplement completes only the local frontend calendar/UI scope; prior 032/033 release gates and Push/device gates remain unchanged.
+
 
 ### 2026-10-19 ? MED-LIBRARY-01 / MED-GALLERY-01 incident and031 readiness update
 

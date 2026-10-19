@@ -23,13 +23,11 @@ export function TodayAttentionOverview({medications,focusRegimenId,onHistory,chi
  const current=medications.filter(row=>(['pending','upcoming'].includes(rows.get(row.regimen_id)?.state??'')||!!rows.get(row.regimen_id)?.next_due_at));
  const prn=medications.filter(row=>rows.get(row.regimen_id)?.state==='as_needed');
  const unavailable=medications.filter(row=>rows.get(row.regimen_id)?.state==='unavailable');
- const unreported=medications.filter(row=>(rows.get(row.regimen_id)?.unrecorded_times.length??0)>0);
  const recorded=medications.filter(row=>rows.get(row.regimen_id)?.state==='recorded').length;
  return <div className="today-attention">
   {current.length?<TodayMedicationCarousel medications={current} focusRegimenId={focusRegimenId}>{medicine=>children(medicine,onInteractionChange)}</TodayMedicationCarousel>:!unavailable.length?<p role="status">{t('No scheduled doses need attention right now.')}</p>:null}
   {unavailable.map(row=><p key={row.regimen_id} role="status"><strong>{row.display_name}</strong>: {t('This schedule cannot be assessed automatically. Review the saved plan in Medicines.')}</p>)}
-  {unreported.map(row=><p key={row.regimen_id}><strong>{row.display_name}</strong>: {t('Scheduled dose has no report. This does not mean it was not taken.')} <button onClick={onHistory}>{t('View records')}</button></p>)}
-  <LateDoseFollowUps enabled={lateReportsEnabled} onInteractionChange={onInteractionChange}/>
+  <LateDoseFollowUps enabled={lateReportsEnabled} todayOnly onHistory={onHistory} onInteractionChange={onInteractionChange}/>
   {recorded?<p>{t('Recorded plans today')}: {recorded} <button className="text-button" onClick={onHistory}>{t('View records')}</button></p>:null}
   {prn.length?<details className="today-prn"><summary>{t('As-needed medicines')} · {prn.length}</summary><p>{t('As-needed medicines have no daily required dose.')}</p><TodayMedicationCarousel medications={prn} focusRegimenId={focusRegimenId}>{medicine=>children(medicine,onInteractionChange)}</TodayMedicationCarousel></details>:null}
  </div>;

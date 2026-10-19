@@ -9,9 +9,9 @@ import {FollowUpError} from './FollowUpError';
 import {careCopy,careLabel} from './followUpCopy';
 import '../ui/followups.css';
 
-export function CareTaskForm({task,regimens,onCancel,onSaved,extended=true,multiple=false}:{multiple?:boolean;extended?:boolean;task?:CareTask|undefined;regimens:RegimenHistoryItem[];onCancel:()=>void;onSaved:(task:CareTask)=>void}){
+export function CareTaskForm({task,regimens,onCancel,onSaved,extended=true,multiple=false,initialDate=''}:{multiple?:boolean;extended?:boolean;initialDate?:string|undefined;task?:CareTask|undefined;regimens:RegimenHistoryItem[];onCancel:()=>void;onSaved:(task:CareTask)=>void}){
  const {language,t,preferences}=useLanguage(),c=careCopy(language),zone=preferences.timezone;
- const initial=task?localFields(task.due_at,zone):{date:'',time:''};
+ const initial=task?localFields(task.due_at,zone):{date:initialDate,time:''};
  const [title,setTitle]=useState(task?.title??''),[category,setCategory]=useState<TaskCategory>(task?.category??'medication_review');
  const [status,setStatus]=useState<TaskStatus>(task&&!['completed','cancelled'].includes(task.status)?task.status:'open');
  const [date,setDate]=useState(initial.date),[time,setTime]=useState(initial.time),[regimen,setRegimen]=useState(task?.regimen_id??''),[notes,setNotes]=useState(task?.notes??'');

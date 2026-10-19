@@ -2,10 +2,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { api, type MedicationSummary, type ReportChallengeResponse } from '../api/client';
+import {LanguageProvider,useLanguage} from '../language';
 import { TodayScreen } from './TodayScreen';
 
 vi.mock('../api/client', () => ({ ApiError: class extends Error {}, api: {
-  reminders: vi.fn().mockResolvedValue([]), snoozeReminder: vi.fn(), dueDose: vi.fn(), doseHistory: vi.fn(), requestReportChallenge: vi.fn(), submitReport: vi.fn(),
+  reminders: vi.fn().mockResolvedValue([]), snoozeReminder: vi.fn(), dueDose: vi.fn(), doseHistory: vi.fn(), requestReportChallenge: vi.fn(), submitReport: vi.fn(), updatePreferences: vi.fn(),
   requestPrnReportChallenge: vi.fn(), submitPrnReport: vi.fn(),
 } }));
 
@@ -22,6 +23,7 @@ const challenge = {
     intake_status_label: 'You reported taking this dose', safety_notice: 'This does not prove ingestion.' },
   already_recorded: false,
 } as ReportChallengeResponse;
+function SelectChinese(){const {setLanguage}=useLanguage();return <button type="button" onClick={()=>setLanguage('zh')}>DEMO Chinese</button>;}
 
 describe('dose report consent', () => {
   it('supports as-needed reports without inventing a scheduled occurrence', async () => {
@@ -86,13 +88,45 @@ describe('compact primary medication card', () => {
     await act(async()=>{await vi.advanceTimersByTimeAsync(15000);});
     expect(screen.getByText(/Your reminder is due/)).toBeTruthy();expect(api.submitReport).not.toHaveBeenCalled();expect(api.requestReportChallenge).not.toHaveBeenCalled();
   });
-  it('keeps the empty state and actions inside one primary card', () => {
-    const medicines=vi.fn(), history=vi.fn();
-    render(<TodayScreen compact medications={[]} onChanged={vi.fn()} onMedicines={medicines} onHistory={history}/>);
+  it('shows Add Medication only when there are no medication records, with lightweight contextual links', () => {
+    const medicines=vi.fn();
+    render(<TodayScreen compact medications={[]} onChanged={vi.fn()} onMedicines={medicines} onVisualCheck={()=>undefined}/>);
     expect(screen.getAllByRole('heading', {level:2})).toHaveLength(1);
-    expect(screen.getByText(/No dose due right now/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button',{name:'My Medicines'})); expect(medicines).toHaveBeenCalledOnce();
-    fireEvent.click(screen.getByRole('button',{name:'My History'})); expect(history).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button',{name:'Add your medication'})).toBeTruthy();
+    expect(screen.getByRole('button',{name:'My Medicines'}).className).toContain('text-button');
+    expect(screen.queryByRole('button',{name:'My History'})).toBeNull();
+    fireEvent.click(screen.getByRole('button',{name:'Add your medication'})); expect(medicines).toHaveBeenCalledOnce();
+  });
+  it('offers plan review instead of Add Medication when saved setup needs confirmation',()=>{
+    const add=vi.fn(),review=vi.fn();render(<TodayScreen compact medications={[]} onChanged={vi.fn()} onMedicines={add} onReviewPlan={review} setupCount={1}/>);
+    fireEvent.click(screen.getByRole('button',{name:'Review medication plan'}));expect(review).toHaveBeenCalledOnce();expect(add).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button',{name:'Add your medication'})).toBeNull();
+  });
+  it('localises the new Today medication actions in Chinese',async()=>{
+    vi.mocked(api.updatePreferences).mockResolvedValue({patient_id:'DEMO-owner',display_name:null,preferred_language:'zh',speech_locale:'zh-CN',text_size:'standard',text_scale_percent:100,voice_enabled:true,tts_autoplay:false,conversation_history_enabled:true,reminder_lead_minutes:0,reminders_enabled:true,timezone:'Asia/Singapore',created_at:'2026-10-20T00:00:00Z',updated_at:'2026-10-20T00:00:00Z'});
+    render(<LanguageProvider><SelectChinese/><TodayScreen compact medications={[]} onChanged={vi.fn()} onMedicines={()=>undefined} setupCount={1} onReviewPlan={()=>undefined}/></LanguageProvider>);
+    fireEvent.click(screen.getByRole('button',{name:'DEMO Chinese'}));
+    expect(await screen.findByRole('button',{name:'核对用药计划'})).toBeTruthy();
+    expect(screen.getByRole('navigation',{name:'药物管理快捷入口'})).toBeTruthy();
+  });
+  it('shows a concise plans link rather than Add Medication when historical medication records exist',()=>{
+    render(<TodayScreen compact medications={[]} onChanged={vi.fn()} onMedicines={()=>undefined} hasMedicationRecords/>);
+    expect(screen.getByText('No current medication plans.')).toBeTruthy();
+    expect(screen.queryByRole('button',{name:'Add your medication'})).toBeNull();
+    expect(screen.getByRole('button',{name:'My Medicines'})).toBeTruthy();
+  });
+  it('keeps the scheduled dose action visible and provides contextual plan access when nothing is due',async()=>{
+    vi.mocked(api.dueDose).mockResolvedValue({occurrence_id:null,regimen_id:'demo-regimen',medication_display_name:medication.display_name,dose_description:null,due_at:null,next_due_at:'2026-10-20T08:00:00+08:00',is_prn:false,visual_status:'not_checked',ingestion_proven:false});
+    const open=vi.fn();render(<TodayScreen compact medications={[medication]} onChanged={vi.fn()} onMedicines={open}/>);
+    expect(await screen.findByText(/Next scheduled/)).toBeTruthy();fireEvent.click(screen.getByRole('button',{name:'My Medicines'}));expect(open).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button',{name:'My History'})).toBeNull();
+  });
+  it('shows the existing report choices when a scheduled dose is available',async()=>{
+    vi.mocked(api.dueDose).mockResolvedValue({occurrence_id:'demo-occurrence',regimen_id:'demo-regimen',medication_display_name:medication.display_name,dose_description:'1 tablet',due_at:'2026-10-20T08:00:00+08:00',is_prn:false,visual_status:'not_checked',ingestion_proven:false});
+    render(<TodayScreen compact medications={[medication]} onChanged={vi.fn()} onMedicines={()=>undefined}/>);
+    expect(await screen.findByRole('button',{name:'Taken'})).toBeTruthy();
+    expect(screen.getByRole('button',{name:'Not now'})).toBeTruthy();
+    expect(screen.queryByRole('button',{name:'Add your medication'})).toBeNull();
   });
   it('keeps the secondary photo check visible on the primary card, with no disclosure to open', async () => {
     vi.mocked(api.dueDose).mockResolvedValue({occurrence_id:'demo-occurrence',regimen_id:'demo-regimen',medication_display_name:medication.display_name,dose_description:'1 tablet',due_at:'2026-10-14T00:00:00Z',is_prn:false,visual_status:'not_checked',ingestion_proven:false});

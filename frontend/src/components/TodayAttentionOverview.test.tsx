@@ -13,7 +13,7 @@ it('removes expired and PRN plans from the attention list without claiming not t
  expect(screen.queryByRole('button',{name:'Old dose report'})).toBeNull();
  await screen.findByRole('button',{name:'Report dose status'});
  expect(document.querySelector('.today-unrecorded')?.textContent).toContain('Old dose');
- expect(document.querySelector('.today-unrecorded')?.textContent).toContain('Unreported means there is no confirmed patient report. It does not mean a dose was missed.');
+ expect(document.querySelector('.today-unrecorded')?.textContent).toContain('Not recorded does not mean not taken.');
  expect(document.querySelector('.today-prn')?.hasAttribute('open')).toBe(false);
  expect(document.querySelector('.today-prn')?.textContent).toContain('no daily required dose');
  expect(screen.queryByText(/reported not taking/)).toBeNull();
@@ -24,6 +24,12 @@ it('does not turn a lookup failure into an empty or completed medication day',as
  expect(await screen.findByRole('alert')).toBeTruthy();
  expect(screen.getByRole('button',{name:'Retry loading schedule'})).toBeTruthy();
  expect(screen.queryByText('No scheduled doses need attention right now.')).toBeNull();
+});
+it('keeps today medication visible when there are no eligible late reports',async()=>{
+ vi.spyOn(api,'todayAttention').mockResolvedValue({as_of:'2026-10-19T04:00:00Z',local_date:'2026-10-19',timezone:'Asia/Singapore',plans:[{regimen_id:'0',state:'upcoming',next_due_at:'2026-10-19T05:00:00Z',unrecorded_times:[]}]});
+ vi.spyOn(api,'doseFollowUps').mockResolvedValue({items:[{occurrence_id:'yesterday',regimen_id:'0',medication_id:'m0',medication_name:'Old dose',due_at:'2026-10-18T15:00:00Z',dose_amount:1,dose_unit:'tablet',report_id:null,intake_status:null,actual_administration_at:null,recorded_at:null,reason:null,notes:''}],has_more:false,timezone:'Asia/Singapore',as_of:'2026-10-19T04:00:00Z'});
+ render(<TodayAttentionOverview medications={medicines.slice(0,1)} focusRegimenId={null} onHistory={()=>undefined}>{medicine=><button>{medicine.display_name} schedule</button>}</TodayAttentionOverview>);
+ expect(await screen.findByRole('button',{name:'Old dose schedule'})).toBeTruthy();expect(await screen.findByText('No eligible doses to report today.')).toBeTruthy();expect(screen.queryByRole('button',{name:'Report dose status'})).toBeNull();
 });
 it('keeps an unsupported schedule visible for review instead of inventing a time or empty day',async()=>{
  vi.spyOn(api,'todayAttention').mockResolvedValue({as_of:'2026-10-18T04:00:00Z',local_date:'2026-10-18',timezone:'Asia/Singapore',plans:[{regimen_id:'0',state:'unavailable',unrecorded_times:[]}]});

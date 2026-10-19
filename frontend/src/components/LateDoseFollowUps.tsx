@@ -3,29 +3,41 @@ import {api} from '../api/client';
 import type {DoseFollowUp,DoseFollowUps,LateReason,LateReportChallenge,DoseReportAudit,LateStatus} from '../api/doseFollowUps';
 import {useLanguage} from '../language';
 import {patientInstant} from '../patientDateTime';
+import {careTaskLocalDate} from '../careTaskCalendar';
 import {BottomSheet} from './BottomSheet';
 import {FollowUpError} from './FollowUpError';
 import {careCopy,careLabel} from './followUpCopy';
 import '../ui/followups.css';
 
-export function LateDoseFollowUps({enabled=true,onInteractionChange}:{enabled?:boolean;onInteractionChange?:(regimen:string,locked:boolean)=>void}){
- const {language,t,preferences}=useLanguage(),c=careCopy(language);
+export function LateDoseFollowUps({enabled=true,todayOnly=false,onHistory,onInteractionChange}:{enabled?:boolean;todayOnly?:boolean;onHistory?:()=>void;onInteractionChange?:(regimen:string,locked:boolean)=>void}){
+ const {language,t,preferences}=useLanguage();
  const [expanded,setExpanded]=useState(false),[data,setData]=useState<DoseFollowUps|null>(null),[error,setError]=useState<unknown>(null),[reported,setReported]=useState(false),[retry,setRetry]=useState(0),[selected,setSelected]=useState<DoseFollowUp|null>(null),[saved,setSaved]=useState(false);
  useEffect(()=>{if(!enabled)return;let live=true;void api.doseFollowUps(reported).then(value=>{if(live){setData(value);setError(null);}}).catch(caught=>{if(live)setError(caught);});return()=>{live=false;};},[enabled,reported,retry]);
- const when=(value:string)=>new Date(value).toLocaleString(language==='zh'?'zh-CN':'en-SG',{timeZone:data?.timezone??preferences.timezone});
+ const zone=data?.timezone??preferences.timezone;
+ const day=data?careTaskLocalDate(data.as_of,zone):null;
+ const items=(data?.items??[]).filter(item=>!todayOnly||(!item.report_id&&item.can_report!==false&&day!==null&&careTaskLocalDate(item.due_at,zone)===day));
+ const when=(value:string)=>Number.isFinite(Date.parse(value))?new Date(value).toLocaleString(language==='zh'?'zh-CN':'en-SG',{timeZone:zone}):t('Date unavailable');
+ const clock=(value:string)=>Number.isFinite(Date.parse(value))?new Date(value).toLocaleTimeString(language==='zh'?'zh-CN':'en-SG',{timeZone:zone,hour:'numeric',minute:'2-digit'}):t('Date unavailable');
  function choose(value:DoseFollowUp|null){if(selected)onInteractionChange?.(selected.regimen_id,false);if(value)onInteractionChange?.(value.regimen_id,true);setSelected(value);setSaved(false);}
- if(!enabled)return <section className="today-unrecorded"><h3>{c('Medication reports to confirm','需要确认服药情况')}</h3><p role="status">{c('Late reporting is not enabled yet. Your existing medication records remain available in Records.','补记功能尚未启用，已有服药记录仍可在记录页查看。')}</p></section>;
- return <section className="today-unrecorded" aria-label={c('Recent dose reports','近期服药情况')}><h3>{c('Medication reports to confirm','需要确认服药情况')}</h3>
-  <p>{c('Unreported means there is no confirmed patient report. It does not mean a dose was missed.','尚未记录表示系统没有收到经您确认的服药自述，不等于未服用。')}</p>
-  <p className="notice">{c('Past seven days. A scheduled dose leaves Today’s action window at the earliest of two hours after its planned time, the next scheduled dose, or local midnight. This does not change your medication instructions.','最近七天：计划时间后2小时、下一剂计划时间或患者当地午夜，以最早者结束今日操作窗口。这不会更改您的用药指示。')}</p>
+ if(!enabled)return <section className="today-unrecorded"><h3>{t(todayOnly?'Needs medication confirmation':'Medication reports to confirm')}</h3><p role="status">{t('Late reporting is not enabled yet. Your existing medication records remain available in Records.')}</p></section>;
+ return <section className={`today-unrecorded${todayOnly?' today-unrecorded--compact':''}`} aria-label={t(todayOnly?'Needs medication confirmation':'Recent dose reports')}>
+  <header className="today-unrecorded__header"><h3>{t(todayOnly?'Needs medication confirmation':'Medication reports to confirm')}</h3>{todayOnly&&data?<span className="care-status">{items.length}</span>:null}</header>
+  {todayOnly?<p className="today-unrecorded__note">{t('Not recorded does not mean not taken.')}</p>:<details className="late-report-help"><summary>{t('About late reports')}</summary><p>{t('Late reporting is available for recent scheduled doses only. The time limit follows your schedule, next dose, and midnight in your time zone.')}</p><p>{t('Not recorded does not mean not taken.')}</p></details>}
   {error?<><FollowUpError error={error} kind="read"/><button onClick={()=>setRetry(value=>value+1)}>{t('Retry')}</button></>:null}
-  {saved?<p role="status">{c('Patient report saved.','已保存您的服药自述。')}</p>:null}
-  {!data&&!error?<p role="status">{c('Loading dose reports…','正在读取服药情况…')}</p>:data?<><ul className="late-dose-list">{(expanded?data.items:data.items.slice(0,3)).map(item=><li key={item.occurrence_id}><h4>{item.medication_name}{item.strength_text&&!item.medication_name.toLowerCase().includes(item.strength_text.toLowerCase())?` · ${item.strength_text}`:''}</h4><p>{item.can_report===false?c('Saved plan · review required','已保存计划 · 待核对'):c('Reviewed plan','已核对计划')} · {c('Version','版本')} {item.version_no??1}{item.can_report!==false&&item.dose_amount!==null&&item.dose_unit?` · ${c('Per dose','每次服用')} ${item.dose_amount} ${t(item.dose_unit)}`:''}</p><p>{c('Scheduled','计划时间')}: {when(item.due_at)} · {item.intake_status?careLabel(item.intake_status,language,t):c('Not recorded','尚未记录')}</p>{item.can_report===false?<p>{c('Review the saved medication and plan before reporting this occurrence.','请先核对已保存的药物及计划，再记录该剂次。')} <a href="#medicines">{c('View medicines','查看药物')}</a></p>:<button className="primary" onClick={()=>choose(item)}>{item.report_id?c('Review or correct report','查看或更正自述'):c('Report dose status','补记服药情况')}</button>}</li>)}</ul>{data.items.length>3?<button onClick={()=>setExpanded(value=>!value)}>{expanded?c('Show fewer','收起'):c(`View all ${data.items.length} reports`,`查看全部${data.items.length}个剂次`)}</button>:null}{!data.items.length?<p>{c('No eligible dose occurrences in this view.','该分类暂无可补记的计划剂次。')}</p>:null}{data.has_more?<p>{c('Showing the 50 most recent occurrences. Earlier records remain in Records.','显示最近50个剂次，更早的记录仍可在记录页查看。')}</p>:null}</>:null}
-  <label><input type="checkbox" checked={reported} onChange={e=>setReported(e.target.checked)}/>{c('Include reported occurrences to review or correct','包含已记录剂次，以便查看或更正')}</label>
-  {selected?<LateDoseSheet item={selected} zone={data?.timezone??preferences.timezone} onCancel={()=>choose(null)} onSaved={()=>{choose(null);setSaved(true);setRetry(value=>value+1);window.dispatchEvent(new Event('pharmascan:reminder-refresh'));}}/>:null}
+  {saved?<p role="status">{t('Patient report saved.')}</p>:null}
+  {!data&&!error?<p role="status">{t('Loading dose reports\u2026')}</p>:data?todayOnly?<>
+   {items.length?<ul className="today-dose-list">{items.map(item=><li key={item.occurrence_id}><div><strong>{item.medication_name}</strong><span>{clock(item.due_at)}{' \u00b7 '}{t('Not recorded')}</span></div><button type="button" className="text-button" onClick={()=>choose(item)}>{t('Report dose status')}</button></li>)}</ul>:<p className="care-calendar__empty">{t('No eligible doses to report today.')}</p>}
+   {onHistory?<button type="button" className="text-button" onClick={onHistory}>{t('View records')}</button>:null}
+  </>:<>
+   <ul className="late-dose-list">{(expanded?items:items.slice(0,3)).map(item=><li key={item.occurrence_id}><h4>{item.medication_name}{item.strength_text&&!item.medication_name.toLowerCase().includes(item.strength_text.toLowerCase())?` \u00b7 ${item.strength_text}`:''}</h4><p>{item.can_report===false?t('Saved plan needs review'):t('Reviewed plan')}{' \u00b7 '}{t('Version')} {item.version_no??1}{item.can_report!==false&&item.dose_amount!==null&&item.dose_unit?` \u00b7 ${t('Per dose')} ${item.dose_amount} ${t(item.dose_unit)}`:''}</p><p>{t('Scheduled')}: {when(item.due_at)}{' \u00b7 '}{item.intake_status?careLabel(item.intake_status,language,t):t('Not recorded')}</p>{item.can_report===false?<p>{t('Review the saved medication and plan before reporting this occurrence.')} <a href="#medicines">{t('View medicines')}</a></p>:<button className="primary" onClick={()=>choose(item)}>{item.report_id?t('Review or correct report'):t('Report dose status')}</button>}</li>)}</ul>
+   {items.length>3?<button onClick={()=>setExpanded(value=>!value)}>{expanded?t('Show fewer'):t('View all {count} reports').replace('{count}',String(items.length))}</button>:null}
+   {!items.length?<p>{t('No eligible dose occurrences in this view.')}</p>:null}
+   {data.has_more?<p>{t('Showing the 50 most recent occurrences. Earlier records remain in Records.')}</p>:null}
+   <label><input type="checkbox" checked={reported} onChange={event=>setReported(event.target.checked)}/>{t('Include reported occurrences to review or correct')}</label>
+  </>:null}
+  {selected?<LateDoseSheet item={selected} zone={zone} onCancel={()=>choose(null)} onSaved={()=>{choose(null);setSaved(true);setRetry(value=>value+1);window.dispatchEvent(new Event('pharmascan:reminder-refresh'));}}/>:null}
  </section>;
 }
-
 function LateDoseSheet({item,zone,onCancel,onSaved}:{item:DoseFollowUp;zone:string;onCancel:()=>void;onSaved:()=>void}){
  const {language,t}=useLanguage(),c=careCopy(language);const [status,setStatus]=useState<LateStatus|null>(item.intake_status),[date,setDate]=useState(''),[time,setTime]=useState(''),[reason,setReason]=useState<LateReason|''>(''),[notes,setNotes]=useState('');
  const [challenge,setChallenge]=useState<LateReportChallenge|null>(null),[history,setHistory]=useState<DoseReportAudit>({original:null,corrections:[]}),[historyError,setHistoryError]=useState<unknown>(null),[error,setError]=useState<unknown>(null),[issues,setIssues]=useState<Record<string,string>>({}),[busy,setBusy]=useState(false);

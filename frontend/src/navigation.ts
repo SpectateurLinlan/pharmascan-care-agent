@@ -42,14 +42,15 @@ export function useCareNavigation(blocked:boolean,leaveBlocked=false) {
     const unload=(event:BeforeUnloadEvent)=>{if(leaving.current){event.preventDefault();event.returnValue='';}};
     window.addEventListener('beforeunload',unload);window.addEventListener('popstate',pop);return()=>{window.removeEventListener('popstate',pop);window.removeEventListener('beforeunload',unload);};
   },[]);
-  const navigate=useCallback((value:string,query?:Record<string,string>) => {
+  const navigate=useCallback((value:string,query?:Record<string,string>,options?:{preserveOrigin?:boolean}) => {
     const next=normalize(value);if(locked.current||authCallback()||!valid(next)||next===current.current.at(-1))return;
     const isRoot=roots.some(root=>root===next);
-    const updated=isRoot?[next]:[...current.current,next].slice(-12);
+    const preserveOrigin=options?.preserveOrigin===true;
+    const updated=isRoot&&!preserveOrigin?[next]:[...current.current,next].slice(-12);
     const search=query?new URLSearchParams(query).toString():'';
     const href=`#${next}${search?'?'+search:''}`;
     if(leaving.current){pendingHref.current=href;setPending(updated);return;}
-    window.history[isRoot?'replaceState':'pushState']({careRoute:updated},'',href);
+    window.history[isRoot&&!preserveOrigin?'replaceState':'pushState']({careRoute:updated},'',href);
     setStack(updated);document.documentElement.scrollTop=0;
   },[]);
   function back(){
@@ -58,5 +59,5 @@ export function useCareNavigation(blocked:boolean,leaveBlocked=false) {
     else {const parent=parents[stack[0]??'']??'today';if(leaving.current){setPending([parent]);return;}window.history.replaceState({careRoute:[parent]},'',`#${parent}`);setStack([parent]);}
   }
   const confirmLeave=()=>{if(!pending)return;window.history.replaceState({careRoute:pending},'',pendingHref.current??`#${pending.at(-1)}`);pendingHref.current=null;setStack(pending);setPending(null);};
-  return {pending,confirmLeave,cancelLeave:()=>{pendingHref.current=null;setPending(null);},tab:stack.at(-1)??'today',navigate,back,isRoot:roots.some(root=>root===stack.at(-1))};
+  return {pending,confirmLeave,cancelLeave:()=>{pendingHref.current=null;setPending(null);},tab:stack.at(-1)??'today',navigate,back,isRoot:stack.length===1&&roots.some(root=>root===stack.at(-1))};
 }
