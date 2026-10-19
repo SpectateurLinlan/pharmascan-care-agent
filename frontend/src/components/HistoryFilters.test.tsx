@@ -77,11 +77,11 @@ it('retains results when the same filter is selected again',async()=>{
  expect(screen.getAllByRole('listitem')).toHaveLength(1);expect(api.medicationHistory).toHaveBeenCalledTimes(count);
 });
 
-it('keeps current medicines visible and reports history failures inline without a global confirmation-style popup',async()=>{
+it('reports history failures inline without the rejected current-medicine subsection or global popup',async()=>{
  vi.mocked(api.historyCatalogue).mockRejectedValue(new Error('temporary network failure'));
- render(<HistoryScreen currentMedications={[{medication_id:'private-medication-id',regimen_id:'private-regimen-id',display_name:'Amlodipine',dose_amount:5,dose_unit:'mg',is_prn:false,version_no:1,identity_status:'reviewed',source_backed:true}]}/>);
- expect((await screen.findByRole('alert')).textContent).toContain('Medication history could not be loaded. Your current medicines are still shown above.');
- expect(screen.getByRole('heading',{name:'Current medicines'})).toBeTruthy();expect(screen.getByText('Amlodipine')).toBeTruthy();
+ render(<HistoryScreen/>);
+ expect((await screen.findByRole('alert')).textContent).toContain('Could not load medication history. Please retry.');
+ expect(screen.queryByRole('heading',{name:'Current medicines'})).toBeNull();expect(screen.queryByText(/still shown above/)).toBeNull();
  expect(screen.queryByText('Please review this')).toBeNull();expect(screen.getByRole('button',{name:'Retry history query'})).toBeTruthy();
  expect((screen.getByLabelText('Medicine') as HTMLSelectElement).value).toBe('');
 });

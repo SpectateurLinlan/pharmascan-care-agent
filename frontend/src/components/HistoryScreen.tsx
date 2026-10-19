@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {useLanguage} from '../language';
-import {api,type HistoryCatalogue,type MedicationHistoryFilters,type MedicationHistoryPage,type MedicationHistoryEntry,type MedicationHistoryRange,type MedicationSummary} from '../api/client';
+import {api,type HistoryCatalogue,type MedicationHistoryFilters,type MedicationHistoryPage,type MedicationHistoryEntry,type MedicationHistoryRange} from '../api/client';
 import {Card} from './primitives';
 import {historyMedicationOptions,historyPlanLabel,historyName} from '../historyFilterLabels';
 
@@ -8,7 +8,7 @@ export function intakeLabel(value:string|null):string{
  return ({reported_taken:'You reported taking this dose',reported_not_taken:'You reported not taking this dose',unsure:'You were unsure'} as Record<string,string>)[value??'']??'This dose has no record of whether you took it yet.';
 }
 
-export function HistoryScreen({currentMedications=[]}:{currentMedications?:readonly MedicationSummary[]}){
+export function HistoryScreen(){
  const {t,language,preferences}=useLanguage();
  const [catalogue,setCatalogue]=useState<HistoryCatalogue|null>(null);
  const [search,setSearch]=useState('');
@@ -52,17 +52,11 @@ export function HistoryScreen({currentMedications=[]}:{currentMedications?:reado
  const matching=options.filter(row=>row.label.normalize('NFKC').toLocaleLowerCase().includes(search.trim().normalize('NFKC').toLocaleLowerCase()));
  const visibleOptions=options.filter(row=>matching.some(match=>match.id===row.id)||row.id===filters.medication_name);
  const planLabels=plans.map(row=>({id:row.id,label:(!filters.medication_name?`${catalogue?.medications.find(med=>med.id===row.medication_id)?.display_name??''} \u00b7 `:'')+historyPlanLabel(row,t,locale,preferences.timezone)}));
- const currentMedicineNames=[...new Map(currentMedications.map(row=>[row.display_name.normalize('NFKC').trim().replace(/\s+/g,' ').toLocaleLowerCase(),row.display_name.trim()])).values()].sort((a,b)=>a.localeCompare(b,locale));
 
  function chooseMedicine(value:string){change({range_kind:filters.range_kind==='plan'?'30':filters.range_kind,...(value?{medication_name:historyName(value)}:{}),...(filters.range_kind==='custom'?{start:filters.start??'',end:filters.end??''}:{})});}
  function choosePlan(value:string){const next={...filters};delete next.regimen_id;if(!value&&next.range_kind==='plan')next.range_kind='30';if(value)next.regimen_id=value;change(next);}
  function chooseRange(value:MedicationHistoryRange){const next={...filters,range_kind:value};delete next.start;delete next.end;change(next);}
  return <Card title="My medication records" hint="View saved dose reports and past scheduled doses by medicine and date."><div className="record-history">
-  <section className="record-history__current" aria-labelledby="current-medicines-heading">
-   <h3 id="current-medicines-heading">{t('Current medicines')}</h3>
-   {currentMedicineNames.length?<ul>{currentMedicineNames.map(name=><li key={name}>{name}</li>)}</ul>:<p>{t('No current medicines are listed.')}</p>}
-   <p className="record-history__current-hint">{t('Current medicines are shown separately from dose history.')}</p>
-  </section>
   <div className="record-history__filters record-history__filters--grouped">
    <div className="field record-history__search"><label htmlFor="history-search">{t('Search medicines')}</label><input id="history-search" type="search" value={search} onChange={event=>setSearch(event.target.value)} placeholder={t('Search medicine names')} aria-describedby="history-search-count"/>
     {search?<button type="button" onClick={()=>{setSearch('');document.getElementById('history-search')?.focus();}}>{t('Clear search')}</button>:null}
@@ -82,7 +76,7 @@ export function HistoryScreen({currentMedications=[]}:{currentMedications?:reado
   <p className="notice">{t('Only stored dose reports and already generated past scheduled doses are shown. Missing schedules are not generated here; future doses are excluded.')}</p>
   {!valid?<p role="status">{t('Choose a valid start and end date.')}</p>:null}
   {page?<><p className="notice">{t('Query period')}: {page.window_start?date(page.window_start):t('All available history')} - {date(page.window_end)}</p>{page.missing_plan_start?<p className="notice">{t('The plan start date is missing; showing its available stored records.')}</p>:null}</>:null}
-  {error?<div className="record-history__error" role="alert"><p>{t('Medication history could not be loaded. Your current medicines are still shown above.')}</p><button type="button" onClick={()=>setRetry(value=>value+1)}>{t('Retry history query')}</button></div>:null}
+  {error?<div className="record-history__error" role="alert"><p>{t('Could not load medication history. Please retry.')}</p><button type="button" onClick={()=>setRetry(value=>value+1)}>{t('Retry history query')}</button></div>:null}
   {loading?<p role="status">{t('Loading your history...')}</p>:null}
   {page&&!entries.length&&!loading?<p>{t('No records in this range.')}</p>:null}
   {page?<p role="status">{t('Displayed records')}: {entries.length}</p>:null}

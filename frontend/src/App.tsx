@@ -30,7 +30,7 @@ import {FeedbackScreen} from './components/FeedbackScreen';
 import {ReminderMonitor} from './components/ReminderMonitor';
 import {accountAuth,type Account} from './api/auth';
 import {OnboardingGuide} from './components/OnboardingGuide';
-import {TodayMedicationCarousel} from './components/TodayMedicationCarousel';
+import {TodayAttentionOverview} from './components/TodayAttentionOverview';
 import {readTour} from './onboarding';
 import {useCareNavigation} from './navigation';
 import {greetingAt,greetingName} from './greeting';
@@ -145,7 +145,7 @@ function CompanionApp() {
       {tab === 'check'||tab==='check-result' ? <VisualCheckScreen ownerId={guideOwner} initialFile={routedPhoto} showResult={tab==='check-result'} onResult={()=>setTab('check-result')} showBack={false} regimenId={visualRegimen} onBack={goBack} onAddSource={()=>setTab('label')}/> : null}
       {tab === 'today' ? <>
 
-        <div className="today-panels"><div id="today-medication" className="today-medication-anchor">{currentMedications.length?<TodayMedicationCarousel medications={currentMedications} focusRegimenId={focusRegimen}>{medication=><TodayScreen key={medication.regimen_id} showTitle={false} focusRegimenId={focusRegimen} onFeeling={()=>{setHealthDescription('');setTab('health-notes');}} onVisualCheck={id=>{setVisualRegimen(id);setTab('check');}} compact medications={[medication]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')}/>}</TodayMedicationCarousel>:<TodayScreen compact medications={[]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')} onVisualCheck={()=>{setVisualRegimen(null);setTab('check');}}/>}</div>
+        <div className="today-panels"><div id="today-medication" className="today-medication-anchor">{currentMedications.length?<TodayAttentionOverview medications={currentMedications} focusRegimenId={focusRegimen} onHistory={()=>setTab('records')}>{(medication,onInteractionChange)=><TodayScreen onInteractionChange={onInteractionChange} key={medication.regimen_id} showTitle={false} focusRegimenId={focusRegimen} onFeeling={()=>{setHealthDescription('');setTab('health-notes');}} onVisualCheck={id=>{setVisualRegimen(id);setTab('check');}} compact medications={[medication]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')}/>}</TodayAttentionOverview>:<TodayScreen compact medications={[]} onChanged={refreshMedications} onMedicines={()=>setTab('medicines')} onHistory={()=>setTab('records')} onVisualCheck={()=>{setVisualRegimen(null);setTab('check');}}/>}</div>
         <CareTaskSummary medications={medications?.medications??[]} onOpen={()=>setTab('care-tasks')}/></div>
       </> : null}
       {tab==='medicines'?<MedicinesHub medications={medications?.medications??[]} drafts={drafts} setupCount={setupEntries?.length??null} versions={versions} onOpen={openMedicine}/>:null}
@@ -173,7 +173,7 @@ function CompanionApp() {
           <Row icon="calendar" title="Medication follow-ups" hint="Your care follow-ups" onClick={()=>setTab('care-tasks')}/>
           <Row icon="clipboard" title="Medication review preparation" hint="Information for your next review" onClick={()=>setTab('medication-review')}/>
         </RowGroup>
-        <div className="screen-full"><HistoryScreen currentMedications={currentMedications} /></div>
+        <div className="screen-full"><HistoryScreen /></div>
       </Screen> : null}
       {tab==='me'?<PatientHub onOpen={setTab} onGuide={openGuide}/>:null}
       {tab==='help'?<OnboardingGuide owner={guideOwner} replay onClose={()=>setTab('me')}/>:null}

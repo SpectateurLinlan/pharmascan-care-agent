@@ -160,7 +160,7 @@ export interface MedicationSummary {
   dose_basis?:DoseBasis|null;
   dose_amount?: number | null;
   dose_unit?: string | null;
-  frequency_rule?: {kind:string;local_times:string[];days_of_week:number[]} | null;
+  frequency_rule?: {kind:string;local_times:string[];days_of_week:number[];every_hours?:number|null;interval_anchor?:{local_date:string;local_time:string;time_source:'patient_entered'|'default_0800'}|null} | null;
   food_instruction?: string | null;
   course_start_date?: string | null;
   course_end_date?: string | null;
@@ -203,7 +203,7 @@ export interface ConfirmChallengeResponse {
     medication_name: string;
     dose_amount: number | null;
     dose_unit: string | null;
-    frequency: { kind: string; local_times: string[]; days_of_week: number[] } | null;
+    frequency: { kind: string; local_times: string[]; days_of_week: number[];every_hours?:number|null;interval_anchor?:{local_date:string;local_time:string;time_source:'patient_entered'|'default_0800'}|null } | null;
     is_prn: boolean;
     version_no: number;
     local_timezone: string;
@@ -339,7 +339,7 @@ export interface DraftInput {
   dose_basis?:DoseBasis|null;
   dose_amount?: number | null;
   dose_unit?: string | null;
-  frequency_kind?: 'daily' | 'weekly' | 'interval_hours' | null;
+  frequency_kind?: 'daily' | 'weekly' | 'interval' | 'interval_hours' | null;
   frequency_local_times?: string[];
   frequency_days_of_week?: number[];
   frequency_every_hours?: number | null;
@@ -482,8 +482,9 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
-  dueDose: (regimenId: string) =>
-    request<DueDoseResponse>(withClient('/api/doses/due', { regimen_id: regimenId })),
+  todayAttention: () => request<{as_of:string;local_date:string;timezone:string;plans:Array<{regimen_id:string;state:'pending'|'upcoming'|'unrecorded'|'recorded'|'as_needed'|'not_scheduled'|'unavailable';unrecorded_times:string[]}>}>(withClient('/api/me/today-attention')),
+  dueDose: (regimenId: string, attentionOnly = false) =>
+    request<DueDoseResponse>(withClient('/api/doses/due', { regimen_id: regimenId, ...(attentionOnly?{attention_only:'true'}:{}) })),
 
   requestReportChallenge: (occurrenceId: string, payload: {
     regimen_id: string;

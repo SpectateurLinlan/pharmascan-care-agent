@@ -328,7 +328,7 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
         <span aria-hidden="true">{remaining} / {usage.limit}</span>
         <span className="sr-only">{t('AI conversations left today')}: {remaining} / {usage.limit} · {t('Resets at midnight Singapore time')}</span>
       </span>:null}
-      {preferences.voice_enabled ? <VoiceInput key={`${language}:${viewKey.current}`} onTranscript={setText} disabled={busy} /> : null}
+      {preferences.voice_enabled ? <VoiceInput key={`${language}:${viewKey.current}`} onTranscript={setText} disabled={busy||!active} /> : null}
       <button className="primary composer-send" aria-label={t(busy?'Sending...':'Send')} title={t(busy?'Sending...':'Send')} onClick={() => void send()} disabled={busy || (!text.trim()&&!photo) || Boolean(photo&&!photoConsent)} aria-busy={busy}>{workspace?<Icon name="send"/>:t('Send')}</button>
     </div>
     {usage&&!compact ? <p className="ai-allowance" role="status"><span className="allowance-detail">{t('AI conversations left today')}: {remaining} / {usage.limit} · {t('Resets at midnight Singapore time')}{usage.llm_user_turns>=usage.limit?`. ${t('Your medication records, reports and reminders still work.')}`:''}</span><span className="allowance-compact" aria-hidden="true">AI: {remaining} / {usage.limit}</span></p> : null}

@@ -292,3 +292,14 @@
 - **版本差异：**S19准备阶段“no deployment performed”不代表当前全未部署；S17真实one-shot processed0不代表推送送达或Cron启用。旧Stage2 0.8契约由0.10接收器替代，旧材料不重跑或删除。
 
 后续只能依据新代码/测试/明确决定更新现有ID；保留历史、风险、审批门槛及证据环境，不把资料缺失解释为未实现。
+
+
+### 2026-10-19 targeted release supplement
+
+| Requirement | Actual evidence / state | Boundary |
+|---|---|---|
+| Production027/028/029 | COMPLETED: scoped runner, matching live ledger, RPC/RLS/audit/ACL verification; prior private backup restored69tables | Not a frontend/backend deployment or successful production draft-delete test |
+| Gemini retry/patient routing | COMPLETED scoped: bounded SDK retry and 24-turn final continuous EN/ZH actual patient replies; initial failure retained |16new real API requests,61cumulative; no universal accuracy/availability claim |
+| Source scope/localization | COMPLETED scoped: optional source-label name, known-form product-family preference, ingredient boundary, Chinese units/route/options | Naturalness PARTIALLY COMPLETED; sources do not confirm patient products or prescribing reason |
+| OCR safe review display | COMPLETED scoped: original candidate ER/20:00/course words are visible and unconfirmed; editable existing time fields | Stage2 extraction enhancement is not implemented by this client change |
+| Git publication | Owner approved selective local commits only; unrelated successor-plan/detail-page work remains independent | No Push/Deploy authorization |

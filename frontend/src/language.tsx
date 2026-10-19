@@ -8,6 +8,18 @@ const englishLabels:Record<string,string>={blood_pressure:'Blood pressure',blood
  medication_review:'Medication review',medication_follow_up:'Medication follow-up',symptom_follow_up:'Symptom follow-up',expiry_storage:'Expiry and storage review',
  forgetfulness:'Forgetfulness',running_out:'Medication running out',side_effect_concern:'Concern about symptoms or side effects',scheduling:'Scheduling difficulty',unclear_instructions:'Unclear instructions',complexity:'Medication complexity',unsure_taken:'Unsure whether taken',prefer_not_to_say:'Prefer not to say'};
 const translations:Record<string,string>={
+ 'Could not load medication history. Please retry.':'无法读取服药记录，请重试。',
+ 'No scheduled doses need attention right now.':'当前没有待处理的定时剂次。',
+ 'As-needed medicines':'按需用药',
+ 'As-needed medicines have no daily required dose.':'按需用药没有每日必服剂次。',
+ 'Recorded plans today':'今日已记录的用药计划',
+ 'Unrecorded does not mean missed.':'尚未记录不代表没有服用。',
+ 'This schedule cannot be assessed automatically. Review the saved plan in Medicines.':'暂时无法自动判断此计划，请在药物页核对已保存的安排。',
+ "Interval in hours":"间隔小时数",
+ "First dose time":"首次服药时间",
+ "First dose time (optional)":"首次服药时间（可选）",
+ "Default 08:00":"默认 08:00",
+ "When is the first dose? If left blank, 08:00 is used by default. The course start date is the first-dose date. Check both before confirming; this is not a report that you took it.":"首次服药时间是什么？未填写时默认使用 08:00，疗程开始日期作为首次服药日期。请核对后再确认；这不表示您已经服药。",
  'Saved choices are read-only. Ask again to refresh medicine options.':'历史消息中的选择仅供回看；重新提问可读取最新药物选项。',
  'Choose a medicine':'选择药物','These choices expired. Ask your question again to refresh them.':'这些选项已过期，请重新提问以读取最新药物。','Knowledge sources':'知识来源','US drug label':'美国药品标签',
  'Hide conversation sidebar':'收起对话侧栏','Show conversation sidebar':'展开对话侧栏','Sending...':'发送中…','Retry sending':'重试发送',

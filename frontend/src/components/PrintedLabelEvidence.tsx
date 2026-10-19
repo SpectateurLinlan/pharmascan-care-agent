@@ -1,5 +1,6 @@
 import type {SourcePreview} from '../api/client';
 import {useLanguage} from '../language';
+import {SourceReviewHints} from './SourceReviewHints';
 
 /**
  * Medication understanding: what a source actually said, and where it said it.
@@ -26,6 +27,7 @@ export function PrintedLabelEvidence({candidate}: {candidate:SourcePreview['cand
  ];
  return <div className="printed-label-evidence"><h4>{t('Read from the label')}</h4>
  <p>{evidence.directions?.value??parts?.text??t('No personal directions were returned.')}</p>
+ <SourceReviewHints candidates={[candidate]}/>
  <dl className="source-instructions">{rows.map(([label,value])=><div key={label}><dt>{t(label)}</dt><dd>{value||unknown}</dd></div>)}</dl>
  <p className="notice">{t('Frequency does not specify clock times. Label dates and expiry are not course dates.')}</p>
  {evidence.cautions?.map((item,index)=><p key={index}>{item.value}</p>)}

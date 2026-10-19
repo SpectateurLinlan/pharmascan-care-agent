@@ -483,3 +483,14 @@
 @media(max-width:40rem){.add-medication-methods{grid-template-columns:1fr;}}
 .pending-registration { display:flex; gap:var(--s-3); align-items:center; margin-block:var(--s-3); }
 .pending-registration > button:first-child { flex:1; min-width:0; }
+
+.record-history__filters label, .record-history__filters small { display: block; }
+.record-history__filters input, .record-history__filters select { width: 100%; min-width: 0; }
+.record-history__search { display: grid; gap: var(--s-2); }
+.record-history__search { grid-column: 1 / -1; max-width: 36rem; }
+.today-attention { display: grid; gap: var(--s-4); min-width: 0; }
+.today-unrecorded, .today-prn { padding: var(--s-4); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.today-attention summary { cursor: pointer; color: var(--brand); }
+.today-attention li { overflow-wrap: anywhere; margin-block: var(--s-2); }
+.pending-registration { display:flex; gap:var(--s-3); align-items:center; margin-block:var(--s-3); }
+.pending-registration > button:first-child { flex:1; min-width:0; }
