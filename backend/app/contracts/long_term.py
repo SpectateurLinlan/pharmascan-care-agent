@@ -1,7 +1,7 @@
 """Public long-term care DTOs. Patient identity is never a request argument."""
 
 from datetime import datetime
-from typing import Literal, Protocol
+from typing import Annotated, Literal, Protocol
 from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
@@ -93,6 +93,9 @@ class StockStatus(CareDTO):
     label_quantities: list[LabelQuantity] = Field(default_factory=list)
 
 
+ReminderOffsets = list[Annotated[int, Field(strict=True, ge=0, le=10080)]]
+
+
 class CareTaskInput(CareDTO):
     id: UUID
     category: TaskCategory
@@ -102,6 +105,7 @@ class CareTaskInput(CareDTO):
     regimen_id: UUID | None = None
     notes: str = Field(default="", max_length=1000)
     reminder_minutes: int | None = Field(default=0, ge=0, le=10080)
+    reminder_offsets: ReminderOffsets | None = Field(default=None, max_length=8)
     historical_confirmed: bool = False
     confirmed: bool = False
 
@@ -117,6 +121,7 @@ class TaskUpdate(CareDTO):
     medication_id: UUID | None = None
     regimen_id: UUID | None = None
     reminder_minutes: int | None = Field(default=None, ge=0, le=10080)
+    reminder_offsets: ReminderOffsets | None = Field(default=None, max_length=8)
     historical_confirmed: bool = False
     confirmed: bool = False
 
@@ -138,6 +143,7 @@ class TaskHistory(CareDTO):
     medication_id: UUID | None = None
     regimen_id: UUID | None = None
     reminder_minutes: int | None = None
+    reminder_offsets: ReminderOffsets | None = Field(default=None, max_length=8)
     historical_confirmed: bool = False
 
 
@@ -152,6 +158,7 @@ class CareTask(CareDTO):
     status: TaskStatus = "open"
     notes: str = ""
     reminder_minutes: int | None = Field(default=0, ge=0, le=10080)
+    reminder_offsets: ReminderOffsets | None = Field(default=None, max_length=8)
     historical_entry: bool = False
     source: Literal["patient_reported", "stock_estimate"] = "patient_reported"
     version: int = 1

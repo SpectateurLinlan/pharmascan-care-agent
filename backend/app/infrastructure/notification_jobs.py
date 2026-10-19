@@ -23,9 +23,12 @@ class PostgresNotificationJobs:
         patient_scope: UUID | None = None,
         include_late_reports: bool = False,
         extended_tasks: bool = False,
+        multiple_reminders: bool = False,
     ):
         self._database = database
         self._scope = patient_scope
+        if multiple_reminders and not extended_tasks:
+            raise ValueError("Multiple reminders require extended task support")
         # Fixed allowlisted relations, selected only by injected release capabilities.
         self._event_table = "public.effective_dose_events" if include_late_reports else "public.dose_events"
         self._task_table = (
@@ -36,6 +39,13 @@ class PostgresNotificationJobs:
                 "0 AS reminder_minutes FROM public.medication_care_tasks)"
             )
         )
+
+        if multiple_reminders:
+            self._task_table = """(SELECT t.patient_id,t.id,t.medication_id,t.regimen_id,t.due_at,
+                t.status,t.source,t.version,
+                offsets.reminder_minutes FROM public.medication_care_tasks t CROSS JOIN LATERAL
+                (SELECT DISTINCT unnest(coalesce(t.reminder_offsets,CASE WHEN t.reminder_minutes IS NULL
+                    THEN '{}'::integer[] ELSE ARRAY[t.reminder_minutes] END)) AS reminder_minutes) offsets)"""
 
     def patients(self) -> list[dict]:
         with self._database.transaction() as conn:
@@ -138,9 +148,16 @@ class PostgresNotificationJobs:
                     JOIN public.push_subscriptions s ON s.patient_id=o.patient_id AND s.id=d.subscription_id
                     WHERE o.patient_id=d.patient_id AND o.id=d.occurrence_id AND o.status<>'closed'
                     AND r.state='active' AND rule.enabled AND p.reminders_enabled AND s.enabled
+                    AND o.due_at>=r.effective_from AND (r.effective_to IS NULL OR o.due_at<r.effective_to)
+                    AND %s < LEAST(o.due_at+interval '2 hours',
+                    coalesce((SELECT min(n.due_at) FROM public.dose_occurrences n WHERE n.patient_id=o.patient_id
+                     AND n.regimen_id=o.regimen_id AND n.status<>'closed' AND n.due_at>o.due_at),
+                     o.due_at+interval '2 hours'),
+                    ((o.due_at AT TIME ZONE p.timezone)::date+1)::timestamp AT TIME ZONE p.timezone)
+                    AND (r.course_end_date IS NULL OR (o.due_at AT TIME ZONE rule.timezone)::date<=r.course_end_date)
                     AND NOT EXISTS(SELECT 1 FROM {self._event_table} e
                         WHERE e.patient_id=o.patient_id AND e.occurrence_id=o.id)))""",
-                (self._scope, self._scope, now - timedelta(minutes=15)),
+                (self._scope, self._scope, now - timedelta(minutes=15), now),
             )
             row = conn.execute(
                 f"""SELECT d.id,d.subscription_id,d.attempts,s.endpoint,s.keys,p.language
@@ -155,14 +172,19 @@ class PostgresNotificationJobs:
                 AND (%s::uuid IS NULL OR d.patient_id=%s)
                 AND d.remind_at BETWEEN %s AND %s AND s.enabled AND p.reminders_enabled
                 AND r.state='active' AND NOT r.is_prn AND rule.enabled AND o.status<>'closed'
+                AND %s < LEAST(o.due_at+interval '2 hours',
+                    coalesce((SELECT min(n.due_at) FROM public.dose_occurrences n WHERE n.patient_id=o.patient_id
+                     AND n.regimen_id=o.regimen_id AND n.status<>'closed' AND n.due_at>o.due_at),
+                     o.due_at+interval '2 hours'),
+                    ((o.due_at AT TIME ZONE p.timezone)::date+1)::timestamp AT TIME ZONE p.timezone)
                 AND d.regimen_id=o.regimen_id AND d.rule_id=o.rule_id
-                AND (r.effective_to IS NULL OR o.due_at<=r.effective_to)
+                AND (r.effective_to IS NULL OR o.due_at<r.effective_to)
                 AND (r.course_end_date IS NULL OR (o.due_at AT TIME ZONE rule.timezone)::date<=r.course_end_date)
                 AND d.remind_at=COALESCE(snooze.remind_at,o.due_at-make_interval(mins=>p.reminder_lead_minutes))
                 AND NOT EXISTS(SELECT 1 FROM {self._event_table} e
                     WHERE e.patient_id=o.patient_id AND e.occurrence_id=o.id)
                 ORDER BY d.next_attempt_at,d.id FOR UPDATE OF d SKIP LOCKED LIMIT 1""",
-                (now, self._scope, self._scope, now - timedelta(minutes=15), now),
+                (now, self._scope, self._scope, now - timedelta(minutes=15), now, now),
             ).fetchone()
             if row is None:
                 conn.execute(

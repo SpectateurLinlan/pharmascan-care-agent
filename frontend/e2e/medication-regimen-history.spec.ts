@@ -24,11 +24,11 @@ test('an active plan past its planned end stays discoverable across library and 
  mock.setMedications([{...medication,course_start_date:'2020-01-01',course_end_date:'2020-02-01'}]);
  mock.setPlans([regimen({regimen_id:medication.regimen_id,display_name:medication.display_name,state:'active',course_start_date:'2020-01-01',course_end_date:'2020-02-01'})]);
  await page.goto('/#medicines');
- await expect(page.locator('.current-medications-card .medication-list-row')).toHaveCount(1);
+ await expect(page.locator('.current-medications-card .medication-list-row')).toHaveCount(0);
  await expect(page.getByRole('button',{name:/Regimen Records/})).toContainText('1 courses');
  await page.getByRole('button',{name:'Medication Library'}).click();
  await expect(page.getByRole('heading',{name:'My Medication Library'})).toBeVisible();
- await page.goBack();await expect(page.locator('.current-medications-card .medication-list-row')).toHaveCount(1);
+ await page.goBack();await expect(page.locator('.current-medications-card .medication-list-row')).toHaveCount(0);
  await page.goForward();await expect(page.getByRole('heading',{name:'My Medication Library'})).toBeVisible();
  await page.reload();await expect(page.getByRole('heading',{name:'My Medication Library'})).toBeVisible();
  expect(mock.errors).toEqual([]);

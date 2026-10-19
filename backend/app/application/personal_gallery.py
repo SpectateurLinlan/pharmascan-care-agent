@@ -57,7 +57,9 @@ class PersonalGalleryService:
             current = [
                 row
                 for row in regimens
-                if row.state == RegimenState.ACTIVE and (not row.course_start_date or row.course_start_date <= today)
+                if row.state == RegimenState.ACTIVE
+                and (not row.course_start_date or row.course_start_date <= today)
+                and (not row.course_end_date or row.course_end_date >= today)
             ]
             photos = [
                 row

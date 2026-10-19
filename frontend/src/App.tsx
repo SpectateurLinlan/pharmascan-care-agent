@@ -134,7 +134,7 @@ function CompanionApp() {
   const openAssistant=(contextual=true)=>{setAssistantSlots(contextual&&['medicine-detail','medicines','records'].includes(tab)?{source_page:tab,...(tab==='medicine-detail'&&detail?{regimen_id:detail.regimen_id,medication_id:detail.medication_id}:{}),navigation_nonce:crypto.randomUUID()}:{});setTab('assistant');};
   const viewTodayMedication=()=>{setTab('today');requestAnimationFrame(()=>requestAnimationFrame(()=>document.getElementById('today-medication')?.scrollIntoView({behavior:'smooth',block:'start'})));};
   const calendarDate=new Intl.DateTimeFormat('en-CA',{timeZone:preferences.timezone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-  const currentMedications=medications?.medications.filter(row=>!isPastCourse(row)&&(!row.course_start_date||row.course_start_date<=calendarDate))??[];
+  const currentMedications=medications?.medications.filter(row=>!isPastCourse(row,calendarDate))??[];
   const guideVisible=guideOpen&&!loading&&!fatal&&Boolean(medications)&&tab==='today';
   return <div className={standaloneSignIn?'app companion signin-shell':'app companion'} data-root-surface={assistantSurface?'true':undefined}><div data-app-content>
     <a className="skip-link" href="#main-content">{t('Skip to content')}</a>
@@ -165,7 +165,7 @@ function CompanionApp() {
       {tab==='medication-inventory'&&detail?<Screen title="Inventory management" lead={detail.display_name}><InventoryPanel key={detail.medication_id} medicationId={detail.medication_id} mode="manage"/></Screen>:null}
       {tab==='medicine-history'&&detail?<Screen title="Medication history" lead={detail.display_name}><HistoryScreen key={detail.regimen_id} scopedTitle={`${t(detail.display_name)} · ${t('Medication history')}`} initialFilters={{range_kind:'7',medication_id:detail.medication_id,medication_name:historyName(detail.display_name),regimen_id:detail.regimen_id}}/></Screen>:null}
       {tab==='gallery'?<PersonalGalleryScreen initialMedicationId={galleryMedicationId} onMedicationSelected={setGalleryMedicationId} onSources={id=>{setEvidenceTaskId(id);setTab('label');}} onMedicationDetail={id=>{const related=versions.filter(row=>row.medication_id===id);const chosen=related.find(row=>row.state==='active')??related[0];if(chosen)openMedicine('medicine-detail',chosen.regimen_id);}}/>:null}
-      {tab==='care-tasks'?<CareTasksScreen extended={health?.care_task_followups_enabled===true} regimens={versions}/>:null}
+      {tab==='care-tasks'?<CareTasksScreen multiple={health?.multiple_care_reminders_enabled===true} extended={health?.care_task_followups_enabled===true} regimens={versions}/>:null}
       {tab==='adherence-barriers'?<AdherenceBarriersScreen regimens={versions}/>:null}
       {tab==='medication-review'?<MedicationReviewScreen/>:null}
       {tab==='health-notes'?<HealthTrackingScreen initialDescription={healthDescription} medications={medications?.medications??[]}/>:null}

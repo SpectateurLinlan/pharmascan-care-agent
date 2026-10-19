@@ -39,6 +39,7 @@ def build_worker_dispatch(settings: Settings) -> NotificationDispatchService:
         database,
         include_late_reports=settings.enable_late_dose_reports,
         extended_tasks=settings.enable_care_task_followups,
+        multiple_reminders=settings.enable_multiple_care_reminders,
     )
     repos = build_postgres_repositories(database, include_late_reports=settings.enable_late_dose_reports)
 
@@ -70,6 +71,7 @@ def build_worker_dispatch(settings: Settings) -> NotificationDispatchService:
             )
             reminders = ReminderService(
                 repository=PostgresWorkerReminders(database),
+                schedule=schedule,
                 occurrences=repos.occurrences,
                 regimens=repos.regimens,
                 clock=clock,

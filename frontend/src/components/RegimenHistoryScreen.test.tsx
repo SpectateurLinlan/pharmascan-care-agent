@@ -15,8 +15,9 @@ it('searches medication names case-insensitively, filters actual historical stat
  const cards=screen.getAllByRole('button',{name:/View Regimen Details/});expect(cards).toHaveLength(4);
  expect(screen.getAllByText('DEMO Amlodipine',{exact:true})).toHaveLength(3);expect(screen.getByText('DEMO Future')).toBeTruthy();
  fireEvent.change(screen.getByRole('searchbox',{name:'Search medication name'}),{target:{value:'AMLO'} });expect(screen.getAllByRole('button',{name:/View Regimen Details/})).toHaveLength(3);
- fireEvent.change(screen.getByLabelText('Filter by status'),{target:{value:'active'}});expect(screen.getAllByRole('button',{name:/View Regimen Details/})).toHaveLength(1);
- fireEvent.click(screen.getByRole('button',{name:/View Regimen Details/}));expect(onOpen).toHaveBeenCalledWith('DEMO-active');
+ fireEvent.change(screen.getByLabelText('Filter by status'),{target:{value:'active'}});expect(screen.queryAllByRole('button',{name:/View Regimen Details/})).toHaveLength(0);
+ fireEvent.change(screen.getByLabelText('Filter by status'),{target:{value:'ended'}});
+ fireEvent.click(screen.getAllByRole('button',{name:/View Regimen Details/}).find(row=>row.textContent?.includes('Course Ended as Scheduled'))!);expect(onOpen).toHaveBeenCalledWith('DEMO-active');
 });
 
 it('collapses a supersession chain into its latest historical version and leaves version-effective timestamps out of course dates',()=>{
@@ -52,10 +53,10 @@ it('includes active past-date courses by default and filters lifecycle without m
  const past=regimen({regimen_id:'DEMO-active',display_name:'DEMO tracked',state:'active',course_end_date:'2004-01-01'});
  render(<RegimenHistoryScreen regimens={[past,regimen({regimen_id:'DEMO-ended',display_name:'DEMO ended',state:'ended'})]} onOpen={vi.fn()}/>);
  expect(screen.getByLabelText('Filter by status')).toHaveProperty('value','all');
- expect(screen.getByText('Planned end date passed; still tracked')).toBeTruthy();
+ expect(screen.getByText('Course Ended as Scheduled')).toBeTruthy();
  expect(screen.getAllByRole('button',{name:/View Regimen Details/})).toHaveLength(2);
  fireEvent.change(screen.getByLabelText('Filter by status'),{target:{value:'ended'}});
- expect(screen.queryByText('DEMO tracked')).toBeNull();expect(screen.getByText('DEMO ended')).toBeTruthy();expect(past.state).toBe('active');
+ expect(screen.getByText('DEMO tracked')).toBeTruthy();expect(screen.getByText('DEMO ended')).toBeTruthy();expect(past.state).toBe('active');
 });
 it('does not merge different registrations through invalid cross-medication links',()=>{
  const rows=[regimen({regimen_id:'DEMO-old',display_name:'DEMO same',state:'ended',medication_id:'DEMO-A'}),regimen({regimen_id:'DEMO-new',display_name:'DEMO same',state:'active',supersedes_id:'DEMO-old',version_no:2,medication_id:'DEMO-B'})];

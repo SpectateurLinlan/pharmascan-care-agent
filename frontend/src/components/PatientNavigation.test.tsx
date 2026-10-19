@@ -42,18 +42,18 @@ it('Medicines groups active plans and exposes the two direct medication entry ac
  fireEvent.click(screen.getByRole('button',{name:/Regimen Records/}));expect(open).toHaveBeenCalledWith('past-medicines');
  fireEvent.click(screen.getByRole('button',{name:/Medication Library/}));expect(open).toHaveBeenCalledWith('gallery');
  fireEvent.click(screen.getByRole('button',{name:/Finish medication setup/}));expect(open).toHaveBeenCalledWith('unfinished');
- expect(document.querySelector('.current-medications-card')!.compareDocumentPosition(document.querySelector('.medication-add-section')!)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+ expect(document.querySelector('.medication-add-section')!.compareDocumentPosition(document.querySelector('.current-medications-card')!)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
  expect(document.querySelector('.medication-add-section')!.compareDocumentPosition(document.querySelector('.pending-medication-review')!)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
  expect(document.querySelector('.pending-medication-review')!.compareDocumentPosition(document.querySelector('.medicine-shortcuts')!)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
  unmount();
- expect(isPastCourse({course_end_date:'2020-10-14'})).toBe(false);
- expect(isPastCourse({state:'active',course_end_date:'2020-10-14'})).toBe(false);
+ expect(isPastCourse({course_end_date:'2020-10-14'})).toBe(true);
+ expect(isPastCourse({state:'active',course_end_date:'2020-10-14'})).toBe(true);
  expect(isPastCourse({state:'ended'})).toBe(true);
  expect(isPastCourse({state:'superseded'})).toBe(true);
 });
-it('keeps backend-active plans visible after a planned end date without inventing a history record',()=>{
+it('excludes elapsed planned courses from Current without mutating lifecycle or inventing records',()=>{
  render(<MedicinesHub medications={[{...medication,course_end_date:'2020-10-14'}]} drafts={[]} versions={[]} onOpen={vi.fn()}/>);
- expect(document.querySelectorAll('.current-medications-card .medication-list-row')).toHaveLength(1);
+ expect(document.querySelectorAll('.current-medications-card .medication-list-row')).toHaveLength(0);
  expect(screen.getByRole('button',{name:/Regimen Records/}).textContent).toContain('0 courses');
 });
 it('shows the number of history cards rather than counting every old version or date-ended active plan',()=>{

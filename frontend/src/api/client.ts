@@ -153,7 +153,7 @@ export type ObservationInput=Pick<HealthObservation,'id'|'description'|'occurred
 export interface ReviewSummary {period:'week'|'month'|'course';window_start:string;window_end:string;generated_at:string;timezone:string;reported_taken:number;reported_not_taken:number;unsure:number;observations:HealthObservation[];questions:string[];coverage_note:string;
   medications:Array<{medication_id:string;regimen_id:string;name:string;version:number;state:string;is_prn:boolean;dose_amount:number|null;dose_unit:string|null;food_instruction:string|null;course_start:string|null;course_end:string|null;local_times:string[];recorded_occurrences:number;without_report:number}>}
 
-export interface HealthResponse {
+export interface HealthResponse {multiple_care_reminders_enabled?:boolean;
   medication_library_files_enabled?: boolean;
   late_dose_reports_enabled?: boolean;
   care_task_followups_enabled?: boolean;
@@ -370,7 +370,7 @@ export interface ReminderRecord { is_due?: boolean; occurrence_id: string; patie
 export interface PlannedReminder {occurrence_id:string;regimen_id:string;rule_id:string;medication_name:string;due_at:string;remind_at:string;slot:string}
 export interface PushSubscriptionInput {endpoint:string;keys:{p256dh:string;auth:string}}
 export interface PushSubscriptionRecord {id:string;enabled:boolean}
-export interface DoseReminderAlert {key:string;occurrence_id:string;regimen_id:string;medication_name:string;dose_amount:number|null;dose_unit:string|null;food_instruction:string|null;due_at:string;remind_at:string}
+export interface DoseReminderAlert {key:string;occurrence_id:string;regimen_id:string;medication_name:string;dose_amount:number|null;dose_unit:string|null;food_instruction:string|null;due_at:string;remind_at:string;expires_at?:string}
 
 export interface VisualCheckResult { decision:'unknown'|'ambiguous'|'unavailable'; selected_medication:string|null; comparison_available:false; reason:string; candidates:Array<{external_catalogue_id:string;display_name:string|null;visual_similarity:number|null;market:'US';strength:string|null}>; count_reliable:boolean; ingestion_proven:false; safe_to_take_confirmed:false; next_action:string }
 
@@ -518,7 +518,7 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
-  todayAttention: () => request<{as_of:string;local_date:string;timezone:string;plans:Array<{regimen_id:string;state:'pending'|'upcoming'|'unrecorded'|'recorded'|'as_needed'|'not_scheduled'|'unavailable';unrecorded_times:string[]}>}>(withClient('/api/me/today-attention')),
+  todayAttention: () => request<{as_of:string;local_date:string;timezone:string;plans:Array<{regimen_id:string;state:'pending'|'upcoming'|'unrecorded'|'recorded'|'as_needed'|'not_scheduled'|'unavailable';unrecorded_times:string[];next_due_at?:string|null}>}>(withClient('/api/me/today-attention')),
   dueDose: (regimenId: string, attentionOnly = false) =>
     request<DueDoseResponse>(withClient('/api/doses/due', { regimen_id: regimenId, ...(attentionOnly?{attention_only:'true'}:{}) })),
 

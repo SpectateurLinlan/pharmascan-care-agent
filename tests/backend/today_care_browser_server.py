@@ -8,8 +8,9 @@ from app.contracts.long_term import CareTaskInput, TaskUpdate
 from .correctness02_support import OWNER, build_harness
 
 
-def build_app(no_active=False):
+def build_app(no_active=False, multiple=False):
     h = build_harness()
+    h.app.state.multiple_care_reminders_enabled = multiple
     h.root.clock.advance(days=1)
     care = h.root.long_term
     now = h.root.clock.now()
@@ -55,7 +56,10 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(
-        build_app(no_active=os.environ.get("TODAY_CARE_NO_ACTIVE") == "1"),
+        build_app(
+            no_active=os.environ.get("TODAY_CARE_NO_ACTIVE") == "1",
+            multiple=os.environ.get("TODAY_CARE_MULTIPLE") == "1",
+        ),
         host="127.0.0.1",
         port=8791,
         log_level="warning",

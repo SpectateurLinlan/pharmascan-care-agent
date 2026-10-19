@@ -981,7 +981,7 @@ def test_gallery_current_plan_uses_injected_patient_calendar(evidence, wired):
     assert not run.safe_to_take and not wired.store.events
 
 
-def test_gallery_elapsed_planned_end_remains_current_without_lifecycle_write(evidence, wired):
+def test_gallery_elapsed_planned_end_is_historical_without_lifecycle_write(evidence, wired):
     from datetime import timedelta
 
     task, _ = reviewed_reference(
@@ -994,6 +994,6 @@ def test_gallery_elapsed_planned_end_remains_current_without_lifecycle_write(evi
     plan = wired.enrollment.get_regimen(PATIENT, task.draft_regimen_id)
     before = dict(wired.store.regimens)
     entry = next(row for row in evidence[1].list(PATIENT) if row["medication"].id == task.medication_id)
-    assert entry["status"] == "current"
+    assert entry["status"] == "historical"
     assert wired.enrollment.get_regimen(PATIENT, plan.id).state.value == "active"
     assert wired.store.regimens == before

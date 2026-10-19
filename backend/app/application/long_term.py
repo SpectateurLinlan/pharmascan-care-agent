@@ -224,6 +224,11 @@ class LongTermCareService:
         return rows
 
     def create_task(self, patient_id: UUID, values: CareTaskInput) -> CareTask:
+        if values.reminder_offsets is not None:
+            offsets = sorted(set(values.reminder_offsets), reverse=True)
+            values = values.model_copy(
+                update={"reminder_offsets": offsets, "reminder_minutes": max(offsets, default=None)}
+            )
         if not values.confirmed:
             raise ValidationError("Review and confirm the medication follow-up")
         if values.medication_id:
@@ -246,6 +251,13 @@ class LongTermCareService:
         )
 
     def update_task(self, patient_id: UUID, task_id: UUID, values: TaskUpdate) -> CareTask:
+        if "reminder_offsets" in values.model_fields_set:
+            offsets = sorted(set(values.reminder_offsets or []), reverse=True)
+            values = values.model_copy(
+                update={"reminder_offsets": offsets, "reminder_minutes": max(offsets, default=None)}
+            )
+        elif "reminder_minutes" in values.model_fields_set:
+            values = values.model_copy(update={"reminder_offsets": None})
         if not values.confirmed:
             raise ValidationError("Confirm the follow-up change")
         if values.status == "deferred" and (values.due_at is None or values.due_at <= self._clock.now()):
@@ -271,6 +283,7 @@ class LongTermCareService:
         if values.status not in {"completed", "cancelled"} and (
             (values.due_at is not None and values.due_at != previous.due_at)
             or ("reminder_minutes" in fields and values.reminder_minutes != previous.reminder_minutes)
+            or ("reminder_offsets" in fields and values.reminder_offsets != previous.reminder_offsets)
             or previous.status in {"completed", "cancelled"}
         ):
             self._validate_task_time(

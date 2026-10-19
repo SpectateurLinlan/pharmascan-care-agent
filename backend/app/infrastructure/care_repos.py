@@ -72,6 +72,7 @@ class MemoryCareRepository:
                     original.due_at != task.due_at
                     or original.notes != task.notes
                     or original.reminder_minutes != task.reminder_minutes
+                    or original.reminder_offsets != task.reminder_offsets
                 ):
                     raise ValidationError("Task key was already used for different date or notes")
                 return previous
@@ -86,7 +87,14 @@ class MemoryCareRepository:
                             recorded_at=task.created_at,
                             historical_confirmed=task.historical_entry,
                             **task.model_dump(
-                                include={"title", "category", "medication_id", "regimen_id", "reminder_minutes"}
+                                include={
+                                    "title",
+                                    "category",
+                                    "medication_id",
+                                    "regimen_id",
+                                    "reminder_minutes",
+                                    "reminder_offsets",
+                                }
                             ),
                         )
                     ]
@@ -119,7 +127,15 @@ class MemoryCareRepository:
             due = change.due_at or previous.due_at
             details = {
                 key: getattr(change, key) if key in change.model_fields_set else getattr(previous, key)
-                for key in ("title", "category", "medication_id", "regimen_id", "reminder_minutes", "notes")
+                for key in (
+                    "title",
+                    "category",
+                    "medication_id",
+                    "regimen_id",
+                    "reminder_minutes",
+                    "reminder_offsets",
+                    "notes",
+                )
             }
             row = previous.model_copy(
                 update={
@@ -163,9 +179,10 @@ class MemoryCareRepository:
 
 
 class SupabaseCareRepository:
-    def __init__(self, client: SupabaseDataClient, *, extended_tasks: bool = False):
+    def __init__(self, client: SupabaseDataClient, *, extended_tasks: bool = False, multiple_reminders: bool = False):
         self._client = client
         self._extended_tasks = extended_tasks
+        self._multiple_reminders = multiple_reminders
 
     def stock(self, patient_id: UUID, medication_id: UUID) -> list[StockTransaction]:
         self._client.check_patient(patient_id)
@@ -198,6 +215,8 @@ class SupabaseCareRepository:
         ]
 
     def create_task(self, task: CareTask) -> CareTask:
+        if task.reminder_offsets is not None and not self._multiple_reminders:
+            raise ValidationError("Multiple reminders require migration034 and its enabled capability")
         if not self._extended_tasks and (task.reminder_minutes != 0 or task.historical_entry):
             raise ValidationError("Advanced follow-up settings are not enabled")
         self._client.check_patient(task.patient_id)
@@ -207,13 +226,16 @@ class SupabaseCareRepository:
             body={
                 "p_task": task.model_dump(
                     mode="json",
-                    exclude={"patient_id", "history", "version", "status", "demo_only", "created_at", "updated_at"},
+                    exclude={"patient_id", "history", "version", "status", "demo_only", "created_at", "updated_at"}
+                    | ({"reminder_offsets"} if not self._multiple_reminders else set()),
                 )
             },
         )
         return CareTask.model_validate(row)
 
     def update_task(self, patient_id: UUID, task_id: UUID, change: TaskUpdate, now: datetime) -> CareTask:
+        if change.reminder_offsets is not None and not self._multiple_reminders:
+            raise ValidationError("Multiple reminders require migration034 and its enabled capability")
         if not self._extended_tasks:
             advanced = change.model_fields_set & {"title", "category", "medication_id", "regimen_id"}
             if (
@@ -229,7 +251,11 @@ class SupabaseCareRepository:
             "/rest/v1/rpc/update_medication_care_task",
             body={
                 "p_task_id": str(task_id),
-                "p_change": change.model_dump(mode="json", exclude={"confirmed"}, exclude_unset=True),
+                "p_change": change.model_dump(
+                    mode="json",
+                    exclude={"confirmed"} | ({"reminder_offsets"} if not self._multiple_reminders else set()),
+                    exclude_unset=True,
+                ),
             },
         )
         return CareTask.model_validate(row)

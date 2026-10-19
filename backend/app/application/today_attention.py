@@ -1,5 +1,6 @@
 """Current local-day attention read; creates no occurrences, reports or reminders."""
 
+from datetime import timedelta
 from uuid import UUID
 
 from ..contracts.ports import Clock
@@ -31,7 +32,7 @@ def read_today_attention(
             continue
         if (
             (plan.effective_to and plan.effective_to <= now)
-            or (plan.course_start_date and plan.course_start_date > day)
+            or (plan.course_start_date and plan.course_start_date > day + timedelta(days=1))
             or (plan.course_end_date and plan.course_end_date < day)
         ):
             continue
@@ -49,6 +50,16 @@ def read_today_attention(
             continue
         moments = schedule.planned_instants(patient_id=owner, regimen_id=plan.id, start=start, end=end)
         history = reports.history(patient_id=owner, regimen_id=plan.id, window_start=start, window_end=min(end, now))
+        future = next(
+            (
+                moment
+                for moment in schedule.planned_instants(
+                    patient_id=owner, regimen_id=plan.id, start=now, end=now + timedelta(days=2)
+                )
+                if moment > now
+            ),
+            None,
+        )
         recorded = {row.occurrence.due_at for row in history if row.event is not None and row.occurrence is not None}
         pending, unrecorded = [], []
         for index, moment in enumerate(moments):
@@ -65,7 +76,9 @@ def read_today_attention(
             if unrecorded
             else "recorded"
             if recorded
+            else "upcoming"
+            if future is not None
             else "not_scheduled"
         )
-        plans.append(TodayPlan(regimen_id=plan.id, state=state, unrecorded_times=unrecorded))
+        plans.append(TodayPlan(regimen_id=plan.id, state=state, unrecorded_times=unrecorded, next_due_at=future))
     return TodayAttention(as_of=now, local_date=day.isoformat(), timezone=timezone, plans=plans)

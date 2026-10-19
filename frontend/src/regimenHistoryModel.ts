@@ -25,3 +25,8 @@ export function plannedEndElapsed(row:{state:string;course_end_date:string|null}
  const today=new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
  return row.state==='active'&&!!row.course_end_date&&row.course_end_date<today;
 }
+
+export function plannedStartPending(row:{state:string;course_start_date:string|null},timeZone:string,now=new Date()){
+ const today=new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
+ return row.state==='active'&&!!row.course_start_date&&row.course_start_date>today;
+}

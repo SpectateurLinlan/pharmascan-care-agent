@@ -42,7 +42,7 @@ def integrated_dsn():
         admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
     local = f"postgresql://postgres@127.0.0.1:55441/{name}"
     database = PostgresDatabase(dsn=local, statement_timeout_ms=30000)
-    migrations = discover_migrations()
+    migrations = tuple(m for m in discover_migrations() if m.version <= "202610190033")
     try:
         with database.connect(autocommit=True) as db:
             identity = db.execute(

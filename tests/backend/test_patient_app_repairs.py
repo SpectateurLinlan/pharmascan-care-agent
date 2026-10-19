@@ -48,6 +48,7 @@ def activate(wired, minutes, name="DEMO Metformin"):
 def services(wired):
     reminder = ReminderService(
         repository=MemoryReminderRepository(wired.store),
+        schedule=wired.schedule,
         occurrences=wired.occurrences,
         regimens=wired.regimens,
         clock=wired.clock,

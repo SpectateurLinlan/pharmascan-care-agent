@@ -16,7 +16,9 @@ from .test_conversation_threads_sql import db as db
 pytestmark = pytest.mark.skipif(not os.environ.get("THREADS_TEST_DSN"), reason="isolated local PostgreSQL required")
 
 
-def _source(c, patient: UUID, medication_name: str, dose: int, schedule: dict) -> tuple[UUID, dict[str, UUID]]:
+def _source(
+    c, patient: UUID, medication_name: str, dose: int, schedule: dict, course_end=None
+) -> tuple[UUID, dict[str, UUID]]:
     source_id = uuid4()
     c.execute(
         "insert into source_documents(id,patient_id,source_kind,review_status,checksum) "
@@ -29,6 +31,9 @@ def _source(c, patient: UUID, medication_name: str, dose: int, schedule: dict) -
         "dose_unit": "mg",
         "frequency_rule": schedule,
     }
+    if course_end is not None:
+        values["course_end_date"] = course_end.isoformat()
+        values["course_start_date"] = course_end.isoformat()
     fields: dict[str, UUID] = {}
     for name, value in values.items():
         field_id = uuid4()
@@ -111,7 +116,15 @@ def _regimen(
 
 
 def _make_plan(
-    c, patient: UUID, medication_id: UUID | None = None, *, version: int = 1, predecessor=None, dose=5, time="08:00"
+    c,
+    patient: UUID,
+    medication_id: UUID | None = None,
+    *,
+    version: int = 1,
+    predecessor=None,
+    dose=5,
+    time="08:00",
+    course_end=None,
 ):
     schedule = {"kind": "daily", "local_times": [time], "days_of_week": [1, 2, 3, 4, 5, 6, 7]}
     medication_name = "DEMO successor " + uuid4().hex[:10]
@@ -120,7 +133,7 @@ def _make_plan(
             "select display_name from patient_medications where patient_id=%s and id=%s",
             (patient, medication_id),
         ).fetchone()[0]
-    source_id, fields = _source(c, patient, medication_name, dose, schedule)
+    source_id, fields = _source(c, patient, medication_name, dose, schedule, course_end)
     if medication_id is None:
         medication_id = uuid4()
         c.execute(

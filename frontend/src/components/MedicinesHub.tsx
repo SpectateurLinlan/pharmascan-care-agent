@@ -13,7 +13,7 @@ export type MedicineDestination='past-medicines'|'unfinished'|'gallery'|'medicin
 
 // The medications endpoint returns active plans. A planned end date does not
 // transition the backend lifecycle or make an active plan a historical course.
-export function isPastCourse(row:{state?:string;course_end_date?:string|null}){return row.state!==undefined&&['ended','superseded'].includes(row.state);}
+export function isPastCourse(row:{state?:string;course_end_date?:string|null},today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Singapore',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())){return (row.state!==undefined&&['ended','superseded'].includes(row.state))||((!row.state||row.state==='active')&&!!row.course_end_date&&row.course_end_date<today);}
 
 /** Review state plus the schedule, so a patient can see what is safe to act on. */
 function summaryHint(row:MedicationSummary,t:(value:string)=>string){
@@ -23,8 +23,8 @@ function summaryHint(row:MedicationSummary,t:(value:string)=>string){
 export function MedicinesHub({medications,versions,onOpen,setupCount=null}:{medications:MedicationSummary[];drafts:RegimenHistoryItem[];setupCount?:number|null;versions:RegimenHistoryItem[];onOpen:(page:MedicineDestination,regimenId?:string)=>void}){
  const {t,preferences}=useLanguage();
  const today=new Intl.DateTimeFormat('en-CA',{timeZone:preferences.timezone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
- const current=medications.filter(row=>!isPastCourse(row)&&(!row.course_start_date||row.course_start_date<=today));
- const upcoming=medications.filter(row=>!isPastCourse(row)&&row.course_start_date&&row.course_start_date>today);
+ const current=medications.filter(row=>!isPastCourse(row,today)&&(!row.course_start_date||row.course_start_date<=today));
+ const upcoming=medications.filter(row=>!isPastCourse(row,today)&&row.course_start_date&&row.course_start_date>today);
  const pastCount=regimenCourseGroups(versions).length;
  const medicationRow=(row:MedicationSummary,planned=false)=><button type="button" className="medication-list-row" key={row.regimen_id} onClick={()=>onOpen('medicine-detail',row.regimen_id)}>
   <span className="medication-list-row__icon"><Icon name="pill"/></span>
@@ -37,11 +37,6 @@ export function MedicinesHub({medications,versions,onOpen,setupCount=null}:{medi
   lead="View, add and manage your medications."
   headerTrailing={<span className="medicines-header-icon"><Icon name="pill"/></span>}
  >
-  <section className="card current-medications-card" aria-labelledby="current-medications-title">
-   <header className="current-medications-card__header"><h2 id="current-medications-title">{t('Currently taking')}</h2><span className="medication-count-badge">{current.length===1?t('1 medicine'):t('{count} medicines').replace('{count}',String(current.length))}</span></header>
-   {current.length?<div className="medication-list">{current.map(row=>medicationRow(row))}</div>:<EmptyState icon="pill" title="No current medication plans." text="Add a medication, review the instructions from your label or pharmacist, and activate the plan. Only a reviewed plan appears in Today."/>}
-   {upcoming.length?<div className="upcoming-medications"><h3>{t('Upcoming courses')}</h3><div className="medication-list">{upcoming.map(row=>medicationRow(row,true))}</div></div>:null}
-  </section>
   <section className="card medication-add-section" aria-labelledby="medication-add-title">
    <header className="medication-add-section__header"><h2 id="medication-add-title">{t('Add medication')}</h2></header>
    <div className="medication-add-actions">
@@ -52,6 +47,11 @@ export function MedicinesHub({medications,versions,onOpen,setupCount=null}:{medi
      <Icon name="clipboard"/><strong>{t('Add manually')}</strong><small>{t('Enter your medication and reviewed instructions')}</small>
     </button>
    </div>
+  </section>
+  <section className="card current-medications-card" aria-labelledby="current-medications-title">
+   <header className="current-medications-card__header"><h2 id="current-medications-title">{t('Currently taking')}</h2><span className="medication-count-badge">{current.length===1?t('1 medicine'):t('{count} medicines').replace('{count}',String(current.length))}</span></header>
+   {current.length?<div className="medication-list">{current.map(row=>medicationRow(row))}</div>:<EmptyState icon="pill" title="No current medication plans." text="Add a medication, review the instructions from your label or pharmacist, and activate the plan. Only a reviewed plan appears in Today."/>}
+   {upcoming.length?<div className="upcoming-medications"><h3>{t('Upcoming courses')}</h3><div className="medication-list">{upcoming.map(row=>medicationRow(row,true))}</div></div>:null}
   </section>
   {setupCount===null||setupCount>0?<button type="button" aria-label={`${t('Finish medication setup')}${setupCount===null?'':`, ${setupCount} ${t('awaiting review')}`}`} className={`pending-medication-review${setupCount===null?' pending-medication-review--unknown':''}`} onClick={()=>onOpen('unfinished')}>
    <Icon name={setupCount===null?'clipboard':'alert'}/><span><strong>{setupCount===null?t('Finish medication setup'):setupCount===1?t('1 medication setup needs review'):t('{count} medication setups need review').replace('{count}',String(setupCount))}</strong><small>{setupCount===null?t('View saved source registrations'):t('Review medication setup details to keep your records accurate.')}</small></span><Icon name="chevron-right"/>

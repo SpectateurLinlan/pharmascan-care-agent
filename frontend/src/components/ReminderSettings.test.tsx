@@ -3,7 +3,7 @@ import {afterEach,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,within} from '@testing-library/react';
 import {ReminderSettings} from './ReminderSettings';
 import {api} from '../api/client';
-vi.mock('../api/client',()=>({ApiError:class extends Error{},api:{reminderPlan:vi.fn(),pushSubscriptions:vi.fn().mockResolvedValue([]),pushConfig:vi.fn().mockResolvedValue({available:false,public_key:null})}}));
+vi.mock('../api/client',()=>({ApiError:class extends Error{},api:{careTasks:vi.fn().mockResolvedValue([]),reminderPlan:vi.fn(),pushSubscriptions:vi.fn().mockResolvedValue([]),pushConfig:vi.fn().mockResolvedValue({available:false,public_key:null})}}));
 afterEach(()=>{cleanup();vi.clearAllMocks();});
 it('failed reminder reads remain unavailable instead of an empty schedule',async()=>{
  vi.mocked(api.reminderPlan).mockRejectedValue(new Error('DEMO reminder service unavailable'));

@@ -2,3 +2,10 @@
 @media(max-width:600px){.bottom-sheet:has(.care-flow){width:100%;max-width:100%;max-height:100dvh;min-height:100dvh;border-radius:0;box-sizing:border-box;padding:1.25rem;padding-bottom:calc(1.5rem + env(safe-area-inset-bottom))}.sheet-backdrop:has(.care-flow){padding:0}.followup-actions button{flex:1}.care-flow input[type=date],.care-flow input[type=time]{min-width:0}}
 
 .followup-grid{align-items:start}.care-flow .field{align-content:start}.care-flow>.care-status{justify-self:start}
+
+/* Override the shared adjacent-field margin inside this explicit form grid. */
+.care-flow .followup-grid {grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+.care-flow .field + .field {margin-block-start:0}
+.care-flow .followup-grid .field {display:grid;grid-template-rows:auto auto;gap:.35rem}
+.care-flow input[type=date],.care-flow input[type=time] {min-height:3rem;margin:0;cursor:pointer}
+@media(max-width:420px){.care-flow .followup-grid {grid-template-columns:1fr}}

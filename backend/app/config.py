@@ -103,6 +103,7 @@ class Settings:
     enable_push_subscriptions: bool = False
     enable_medication_library_files: bool = False
     enable_late_dose_reports: bool = False
+    enable_multiple_care_reminders: bool = False
     enable_care_task_followups: bool = False
     vapid_public_key: str | None = field(default=None, repr=False)
     vapid_private_key: str | None = field(default=None, repr=False)
@@ -174,6 +175,8 @@ class Settings:
             enable_web_push=(read("ENABLE_WEB_PUSH") or "").lower() in {"1", "true", "yes"},
             enable_push_subscriptions=(read("ENABLE_PUSH_SUBSCRIPTIONS") or "").lower() in {"1", "true", "yes"},
             enable_medication_library_files=(read("ENABLE_MEDICATION_LIBRARY_FILES") or "").lower()
+            in {"1", "true", "yes"},
+            enable_multiple_care_reminders=(read("ENABLE_MULTIPLE_CARE_REMINDERS") or "").lower()
             in {"1", "true", "yes"},
             enable_care_task_followups=(read("ENABLE_CARE_TASK_FOLLOWUPS") or "").lower() in {"1", "true", "yes"},
             enable_late_dose_reports=(read("ENABLE_LATE_DOSE_REPORTS") or "").lower() in {"1", "true", "yes"},

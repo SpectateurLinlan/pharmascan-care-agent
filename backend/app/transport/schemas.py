@@ -34,6 +34,7 @@ class Request(BaseModel):
 
 
 class HealthResponse(BaseModel):
+    multiple_care_reminders_enabled: bool = False
     runtime_contract: Literal["patient-ux-reminders-v1"] = "patient-ux-reminders-v1"
     model_config = ConfigDict(extra="forbid")
 

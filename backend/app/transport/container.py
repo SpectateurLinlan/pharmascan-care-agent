@@ -208,7 +208,12 @@ def _services(
     )
     reminders = (
         ReminderService(
-            repository=reminder_repo, occurrences=occurrences, regimens=regimens, clock=clock, tz_provider=tz_provider
+            repository=reminder_repo,
+            occurrences=occurrences,
+            regimens=regimens,
+            clock=clock,
+            tz_provider=tz_provider,
+            schedule=schedule,
         )
         if reminder_repo is not None
         else None
@@ -689,7 +694,11 @@ def build_supabase_container(
                 services[0], repos.occurrences, repos.events, observations_service, root.clock
             )
             long_term = LongTermCareService(
-                SupabaseCareRepository(client, extended_tasks=settings.enable_care_task_followups),
+                SupabaseCareRepository(
+                    client,
+                    extended_tasks=settings.enable_care_task_followups,
+                    multiple_reminders=settings.enable_multiple_care_reminders,
+                ),
                 services[0],
                 repos.events,
                 observations_service,

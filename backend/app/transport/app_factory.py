@@ -69,6 +69,9 @@ def create_app(container: ApplicationContainer | None = None, settings: Settings
         if effective_settings is not None and wired.persistence == "supabase"
         else wired.library_files is not None
     )
+    app.state.multiple_care_reminders_enabled = bool(
+        effective_settings and effective_settings.enable_multiple_care_reminders
+    )
     app.state.care_task_followups_enabled = (
         effective_settings.enable_care_task_followups
         if effective_settings is not None and wired.persistence == "supabase"
