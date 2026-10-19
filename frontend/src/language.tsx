@@ -1,6 +1,7 @@
 import {patientCopy} from './patientCopy';
 import {experienceCopy} from './experienceCopy';
 import {pushCopy} from './pushCopy';
+import {aboutCopy} from './aboutCopy';
 import {api,type PatientPreferences,type PreferenceUpdate} from './api/client';
 import {createContext,useContext,useState,useCallback,useEffect,type ReactNode} from 'react';
 export type Language='en'|'zh';
@@ -494,7 +495,16 @@ const translations:Record<string,string>={
  "Spoken playback is unavailable. Please read the visible response.":"暂时无法播放语音，请阅读显示的回答。",
 };
 Object.assign(translations, {
- 'Course Ended as Scheduled':'疗程已到期',
+ 'Reminders & Notifications':'\u63d0\u9192\u4e0e\u901a\u77e5','Manage medication reminders, care tasks and device notifications.':'\u7ba1\u7406\u7528\u836f\u63d0\u9192\u3001\u8ddf\u8fdb\u4e8b\u9879\u4e0e\u8bbe\u5907\u901a\u77e5\u3002',
+ 'Reminder Schedule':'\u63d0\u9192\u8ba1\u5212','Medication Reminder Timing':'\u7528\u836f\u63d0\u9192\u63d0\u524d\u65f6\u95f4','At scheduled time':'\u6309\u8ba1\u5212\u65f6\u95f4','15 minutes before':'\u63d0\u524d 15 \u5206\u949f','30 minutes before':'\u63d0\u524d 30 \u5206\u949f','1 hour before':'\u63d0\u524d 1 \u5c0f\u65f6','Current setting: {minutes} minutes':'\u5f53\u524d\u8bbe\u7f6e\uff1a\u63d0\u524d {minutes} \u5206\u949f',
+ 'Medication reminders follow your reviewed plan. As-needed medicines have no fixed reminders.':'\u7528\u836f\u63d0\u9192\u4f9d\u636e\u5df2\u6838\u5bf9\u7684\u8ba1\u5212\u3002\u6309\u9700\u7528\u836f\u4e0d\u4f1a\u8bbe\u56fa\u5b9a\u63d0\u9192\u3002','Upcoming Reminders':'\u8fd1\u671f\u63d0\u9192','Care Task Reminders':'\u8ddf\u8fdb\u4e8b\u9879\u63d0\u9192','View task':'\u67e5\u770b\u4e8b\u9879','View task: {title}':'\u67e5\u770b\u4e8b\u9879\uff1a{title}','Try again':'\u91cd\u8bd5',
+ 'Device Notifications':'\u6b64\u8bbe\u5907\u901a\u77e5','Background Push':'\u540e\u53f0\u63a8\u9001','This device':'\u6b64\u8bbe\u5907','Setup available':'\u53ef\u8bbe\u7f6e','Unavailable':'\u6682\u65f6\u4e0d\u53ef\u7528','Not checked':'\u5c1a\u672a\u68c0\u67e5','Not set up':'\u5c1a\u672a\u8bbe\u7f6e','Enabled':'\u5df2\u5f00\u542f','Off':'\u5df2\u5173\u95ed','Allowed':'\u5df2\u5141\u8bb8','Blocked':'\u5df2\u963b\u6b62','Not asked yet':'\u5c1a\u672a\u8be2\u95ee','Configured':'\u5df2\u914d\u7f6e','Not configured':'\u5c1a\u672a\u914d\u7f6e','Set Up Device Notifications':'\u8bbe\u7f6e\u8bbe\u5907\u901a\u77e5','Complete the available steps. Browser permission is requested only when you choose Enable on this device.':'\u6309\u53ef\u7528\u6b65\u9aa4\u5b8c\u6210\u8bbe\u7f6e\u3002\u53ea\u6709\u5728\u60a8\u70b9\u51fb\u201c\u5728\u6b64\u8bbe\u5907\u542f\u7528\u201d\u65f6\uff0c\u6d4f\u89c8\u5668\u624d\u4f1a\u8be2\u95ee\u901a\u77e5\u6743\u9650\u3002',
+ 'Configured for device setup':'\u5df2\u53ef\u8fdb\u884c\u8bbe\u5907\u8bbe\u7f6e','Requires application setup':'\u9700\u8981\u5148\u914d\u7f6e\u5e94\u7528','Browser notification permission':'\u6d4f\u89c8\u5668\u901a\u77e5\u6743\u9650','This device subscription':'\u6b64\u8bbe\u5907\u8ba2\u9605','Test notification':'\u6d4b\u8bd5\u901a\u77e5','Not tested':'\u5c1a\u672a\u6d4b\u8bd5','You confirmed it arrived':'\u60a8\u5df2\u786e\u8ba4\u6536\u5230','Service accepted; receipt not confirmed':'\u670d\u52a1\u5df2\u63a5\u53d7\uff0c\u5c1a\u672a\u786e\u8ba4\u8bbe\u5907\u6536\u5230','Test unavailable in this application':'\u6b64\u5e94\u7528\u6682\u4e0d\u652f\u6301\u53d1\u9001\u6d4b\u8bd5','You did not receive it':'\u6211\u6ca1\u6709\u6536\u5230','I received it':'\u6211\u6536\u5230\u4e86','I did not receive it':'\u6211\u6ca1\u6709\u6536\u5230','A test notification is not available here. The device subscription can still be set up; delivery has not been verified.':'\u6b64\u5904\u65e0\u6cd5\u53d1\u9001\u6d4b\u8bd5\u901a\u77e5\u3002\u4ecd\u53ef\u8bbe\u7f6e\u8bbe\u5907\u8ba2\u9605\uff0c\u4f46\u5c1a\u672a\u9a8c\u8bc1\u901a\u77e5\u9001\u8fbe\u3002',
+ 'Background notification availability has not been checked. Refresh to retry before setting up this device.':'\u5c1a\u672a\u68c0\u67e5\u540e\u53f0\u901a\u77e5\u662f\u5426\u53ef\u7528\u3002\u8bbe\u7f6e\u8bbe\u5907\u524d\uff0c\u8bf7\u5237\u65b0\u5e76\u91cd\u8bd5\u3002',
+ 'Device setup is available. Delivery also depends on the background service and your device.':'\u53ef\u8fdb\u884c\u8bbe\u5907\u8bbe\u7f6e\uff1b\u901a\u77e5\u9001\u8fbe\u4e5f\u53d6\u51b3\u4e8e\u540e\u53f0\u670d\u52a1\u548c\u8bbe\u5907\u72b6\u6001\u3002','Background notifications need Web Push configured for this application. Medication reminders in the app remain available.':'\u6b64\u5e94\u7528\u9700\u5148\u914d\u7f6e Web Push \u624d\u80fd\u53d1\u9001\u540e\u53f0\u901a\u77e5\u3002\u5e94\u7528\u5185\u63d0\u9192\u4ecd\u53ef\u4f7f\u7528\u3002','Ask the application administrator to configure it. In-app reminders and calendar export remain available.':'\u8bf7\u8054\u7cfb\u5e94\u7528\u7ba1\u7406\u5458\u5b8c\u6210\u914d\u7f6e\u3002\u5e94\u7528\u5185\u63d0\u9192\u548c\u65e5\u5386\u5bfc\u51fa\u4ecd\u53ef\u4f7f\u7528\u3002','This browser or device does not support background notifications.':'\u6b64\u6d4f\u89c8\u5668\u6216\u8bbe\u5907\u4e0d\u652f\u6301\u540e\u53f0\u901a\u77e5\u3002','Notifications are blocked in your browser. Change site or device notification settings, then refresh this page.':'\u6d4f\u89c8\u5668\u5df2\u963b\u6b62\u901a\u77e5\u3002\u8bf7\u5728\u7f51\u7ad9\u6216\u8bbe\u5907\u8bbe\u7f6e\u4e2d\u5141\u8bb8\u901a\u77e5\uff0c\u7136\u540e\u5237\u65b0\u6b64\u9875\u3002',
+ 'A test sends a generic notification and does not record medication intake.':'\u6d4b\u8bd5\u53ea\u4f1a\u53d1\u9001\u901a\u7528\u901a\u77e5\uff0c\u4e0d\u4f1a\u8bb0\u5f55\u670d\u836f\u60c5\u51b5\u3002','The push service accepted the test. Check your device; receipt is not confirmed yet.':'\u63a8\u9001\u670d\u52a1\u5df2\u63a5\u53d7\u6d4b\u8bd5\u3002\u8bf7\u68c0\u67e5\u8bbe\u5907\uff1b\u5e94\u7528\u5c1a\u672a\u786e\u8ba4\u8bbe\u5907\u6536\u5230\u3002','Check this device. The service response does not confirm receipt.':'\u8bf7\u68c0\u67e5\u6b64\u8bbe\u5907\u3002\u670d\u52a1\u5668\u54cd\u5e94\u4e0d\u4ee3\u8868\u8bbe\u5907\u5df2\u6536\u5230\u3002','This device subscription is enabled. Delivery still depends on the background service and device settings.':'\u6b64\u8bbe\u5907\u8ba2\u9605\u5df2\u542f\u7528\u3002\u901a\u77e5\u9001\u8fbe\u4ecd\u53d6\u51b3\u4e8e\u540e\u53f0\u670d\u52a1\u548c\u8bbe\u5907\u8bbe\u7f6e\u3002','Background delivery confirmation':'\u540e\u53f0\u9001\u8fbe\u786e\u8ba4','Not verified':'\u5c1a\u672a\u9a8c\u8bc1','Application push setup':'\u5e94\u7528\u63a8\u9001\u914d\u7f6e','Calendar Export':'\u65e5\u5386\u5bfc\u51fa','Export to Calendar':'\u5bfc\u51fa\u5230\u65e5\u5386','Export reminders for the next 30 days as a one-time calendar import. Changes here will not update imported events.':'\u5c06\u672a\u6765 30 \u5929\u7684\u63d0\u9192\u4e00\u6b21\u6027\u5bfc\u5165\u65e5\u5386\u3002\u672c\u9875\u66f4\u6539\u4e0d\u4f1a\u540c\u6b65\u5230\u5df2\u5bfc\u5165\u7684\u4e8b\u9879\u3002',
+ 'Course Expired':'已到期',
+ 'Terminated':'已终止',
  'Reminder times':'提醒时间（可多选）',
  'Use at most eight valid reminder times.':'最多选择八个有效的提醒时间。',
  'Care Task reminders':'用药跟进提醒',
@@ -554,6 +564,7 @@ Object.assign(translations, {
 Object.assign(translations,patientCopy);
 Object.assign(translations,pushCopy);
 Object.assign(translations,experienceCopy);
+Object.assign(translations,aboutCopy);
 // Redesigned navigation, medication-record anatomy and status wording.
 Object.assign(translations,{
  'Me':'我',
@@ -568,7 +579,7 @@ Object.assign(translations,{
  'Not verified':'尚未核实',
  'Photos and evidence':'照片与证据',
  'Source photos, provenance and what they can and cannot show':'来源照片、出处，以及它们能说明和不能说明的内容',
- 'No current medication plans.':'目前没有用药计划。',
+ 'No current medication plans.':'目前没有当前用药计划。',
  'Add a medication, review the instructions from your label or pharmacist, and activate the plan. Only a reviewed plan appears in Today.':'添加药物，核对标签或药剂师提供的说明，然后启用计划。只有已核对的计划才会显示在“今日”。',
  'Choose how you want to record this medicine. You will review everything before it is activated.':'请选择记录此药物的方式。启用前您会核对全部内容。',
  'A photo is evidence for review. It never confirms what is inside a medicine.':'照片是供核对使用的证据，无法确认药物内部的成分。',
@@ -581,6 +592,9 @@ Object.assign(translations,{
  'A report records what you told the app. It is not proof that a medicine was swallowed.':'自述记录只记录您告诉应用的内容，不能证明药物已被吞服。',
  'Skip to content':'跳到主要内容',
  'Add your medication':'添加您的药物',
+ 'Review medication plan':'核对用药计划',
+ 'A medication plan needs review.':'有一项用药计划需要核对。',
+ 'No medication plans have been added.':'尚未添加用药计划。',
  'A photo check becomes available once you have a reviewed medicine.':'有已核对的药物后，即可使用照片核对。',
  // Product identity is a separate fact from plan review state, and is worded as such.
  'Form':'剂型',
@@ -722,7 +736,7 @@ Object.assign(translations,{
 const defaults={preferred_language:'en',speech_locale:'en-SG',text_size:'standard',voice_enabled:true,tts_autoplay:false,reminders_enabled:true,reminder_lead_minutes:0,timezone:'Asia/Singapore'} as const;
 type PlaybackPreferences={ttsProvider:'browser'|'tencent';speechRate:number;setTtsProvider:(provider:'browser'|'tencent')=>void;setSpeechRate:(rate:number)=>void};
 type Profile=Pick<PatientPreferences,'display_name'|'preferred_language'|'speech_locale'|'text_size'|'text_scale_percent'|'voice_enabled'|'tts_autoplay'|'conversation_history_enabled'|'reminder_lead_minutes'|'reminders_enabled'|'timezone'>;
-const Context=createContext<PlaybackPreferences & {textScale:number;previewTextScale:(value:number|null)=>void;language:Language;preferences:Profile;setLanguage:(value:Language)=>void;updatePreferences:(value:PreferenceUpdate)=>Promise<void>;loadPreferences:()=>Promise<void>;preferenceError:string}>({textScale:100,previewTextScale:()=>undefined,ttsProvider:'browser',speechRate:.9,setTtsProvider:()=>undefined,setSpeechRate:()=>undefined,language:'en',preferences:defaults,setLanguage:()=>undefined,updatePreferences:async()=>undefined,loadPreferences:async()=>undefined,preferenceError:''});
+const Context=createContext<PlaybackPreferences & {textScale:number;previewTextScale:(value:number|null)=>void;language:Language;preferences:Profile;setLanguage:(value:Language)=>void;updatePreferences:(value:PreferenceUpdate)=>Promise<void>;savePreferences:(value:PreferenceUpdate)=>Promise<boolean>;loadPreferences:()=>Promise<void>;preferenceError:string}>({textScale:100,previewTextScale:()=>undefined,ttsProvider:'browser',speechRate:.9,setTtsProvider:()=>undefined,setSpeechRate:()=>undefined,language:'en',preferences:defaults,setLanguage:()=>undefined,updatePreferences:async()=>undefined,savePreferences:async()=>false,loadPreferences:async()=>undefined,preferenceError:''});
 export function LanguageProvider({children}:{children:ReactNode}) {
  const [ttsProvider,setTtsProvider]=useState<'browser'|'tencent'>('browser'),[speechRate,setSpeechRate]=useState(.9);
  const [preferences,setValue]=useState<Profile>(defaults),[preferenceError,setError]=useState('');
@@ -730,9 +744,10 @@ export function LanguageProvider({children}:{children:ReactNode}) {
  const textScale=previewScale??preferences.text_scale_percent??(preferences.text_size==='large'?125:100);
  useEffect(()=>{const root=document.documentElement,previous=root.style.getPropertyValue('--font-scale');root.style.setProperty('--font-scale',String(textScale/100));return()=>{if(previous)root.style.setProperty('--font-scale',previous);else root.style.removeProperty('--font-scale');};},[textScale]);
  const loadPreferences=useCallback(async()=>{const value=await api.preferences();setValue(value);setError('');},[]);
- async function updatePreferences(value:PreferenceUpdate){setError('');try{const saved=await api.updatePreferences(value);setValue(saved);}catch{setError('Could not save preferences. Your previous preference is retained.');}}
+ async function savePreferences(value:PreferenceUpdate):Promise<boolean>{setError('');try{const saved=await api.updatePreferences(value);setValue(saved);return true;}catch{setError('Could not save preferences. Your previous preference is retained.');return false;}}
+ async function updatePreferences(value:PreferenceUpdate){await savePreferences(value);}
  function setLanguage(value:Language){void updatePreferences({preferred_language:value});}
- return <Context.Provider value={{textScale,previewTextScale,ttsProvider,setTtsProvider,speechRate,setSpeechRate,language:preferences.preferred_language,preferences,setLanguage,updatePreferences,loadPreferences,preferenceError}}>{children}</Context.Provider>;
+ return <Context.Provider value={{textScale,previewTextScale,ttsProvider,setTtsProvider,speechRate,setSpeechRate,language:preferences.preferred_language,preferences,setLanguage,updatePreferences,savePreferences,loadPreferences,preferenceError}}>{children}</Context.Provider>;
 }
 const galleryTranslations:Record<string,string>={
  'My Medication Gallery':'我的药物图库','All galleries':'全部图库','Search gallery':'搜索图库','Name, ingredient, brand or strength':'名称、成分、品牌或规格','Filter gallery':'筛选药物','Sort gallery':'排序','All medications':'全部药物','With photos':'有照片','Without photos':'无照片','Name A–Z':'名称 A–Z','Name Z–A':'名称 Z–A','Recently updated':'最近更新','Photo count':'照片数量','Product identity incomplete':'产品信息不完整','Product details reviewed by you':'您已核对产品资料','Product details from source information':'产品资料来自来源文件','Related courses':'个疗程','View product photos':'查看产品照片','No medications match these filters.':'没有符合这些筛选条件的药物。','Load more medications':'加载更多药物','Reference photos':'参考照片','Associated medication':'关联药物','Medication':'药物','Brand / manufacturer':'品牌 / 生产商','Product strength':'产品规格','Dosage form':'剂型','Product identity':'产品身份','Other records have a similar name. This gallery remains linked only to this medication record.':'其他记录中存在相似名称。本图库仍只关联当前药物记录。','Related medication courses':'相关用药疗程','All':'全部','Filter by photo content':'按照片内容筛选','Order':'排序','Newest first':'最新优先','Oldest first':'最早优先','No reference photos in this category yet.':'此类别暂无参考照片。','Photo count and comparison eligibility are separate. Evidence remains stored when comparison is stopped.':'照片数量与核对资格分别管理。停止用于视觉核对后，证据照片仍会保留。','Add reference photo':'添加参考照片','Add a reference photo':'添加参考照片','Choose a photo':'选择照片','Take photo':'拍摄照片','Choose existing photo':'从设备选择照片','Take photo with device camera':'使用设备相机拍照','Choose a photo from device':'从设备选择照片','Camera unavailable or permission denied. Choose an image file instead.':'相机不可用或权限被拒绝，请改为选择图片文件。','Camera preview':'相机预览','Capture photo':'拍照','Cancel camera':'关闭相机','PNG or JPEG, up to 8 MB':'PNG 或 JPEG，最大 8 MB','Replace photo':'更换照片','Photo content':'照片内容','What is visible in the image?':'照片中显示什么？','Other or unknown':'其他或未知','This image will be saved as evidence and will not enter pill visual comparison.':'此照片将作为证据保存，不会用于药片视觉核对。','Only reviewed loose-pill photos can be considered for personal visual comparison. Eligibility is checked by the service.':'只有已核对的裸药片照片才会纳入个人视觉核对评估；资格由服务端判定。','Photo source':'照片来源','Where did this image come from?':'这张照片来自哪里？','Personally photographed':'自行拍摄','Pharmacy or healthcare material':'药房或医疗资料','Other source':'其他来源','Unknown':'未知','Optional source note':'来源备注（可选）','Confirm medication association':'确认药物关联','I confirm this photo is associated with the medication shown. This does not verify exact product identity.':'我确认此照片关联到所示药物；这不代表产品身份已得到核实。','Personal visual comparison':'个人视觉核对','Use for personal visual comparison (optional, off by default)':'用于个人视觉核对（可选，默认关闭）','Private storage and processing':'私密存储与处理','Photos are private. Image processing is used only when comparison is selected and the photo qualifies.':'照片将私密保存。仅在您选择核对且照片符合资格时才会进行图像处理。','Photo details':'照片详情','Close photo details':'关闭照片详情','Added':'添加时间','Visual comparison status':'视觉核对状态','Stop using for comparison':'停止用于视觉核对','Stop using this photo for comparison? The private evidence photo will remain saved.':'停止将此照片用于视觉核对？私密证据照片仍会保留。','Stop comparison':'停止核对','Metadata correction and photo deletion are unavailable here. Your stored evidence is preserved':'目前无法在此修改资料或删除照片；已保存的证据会保留。'
@@ -796,6 +811,18 @@ Object.assign(galleryTranslations,{
  'Camera preview is not ready yet. Try again or choose an existing photo.':'相机预览尚未就绪。请重试或选择已有照片。',
  'Could not capture this photo. Try again or choose an existing photo.':'无法拍摄此照片。请重试或选择已有照片。',
 });
+Object.assign(translations, {
+ 'Personalisation':'\u4e2a\u6027\u5316','Usage preferences':'\u4e2a\u6027\u5316','Care contacts':'\u7167\u62a4\u8054\u7cfb\u4eba','Care and reminders':'\u7167\u62a4\u4e0e\u63d0\u9192','Reminders & Notifications':'\u63d0\u9192\u4e0e\u901a\u77e5','Language & Voice':'\u8bed\u8a00\u4e0e\u8bed\u97f3','Privacy & Data':'\u9690\u79c1\u4e0e\u6570\u636e','AI Assistant & Chat History':'AI \u52a9\u624b\u4e0e\u804a\u5929\u8bb0\u5f55','Privacy Settings':'\u9690\u79c1\u8bbe\u7f6e','Help & application information':'\u5e2e\u52a9\u4e0e\u5e94\u7528\u4fe1\u606f','Feedback & Suggestions':'\u53cd\u9988\u4e0e\u5efa\u8bae',
+ 'Guest Mode':'\u8bbf\u5ba2\u6a21\u5f0f','Manage guest account':'\u7ba1\u7406\u8bbf\u5ba2\u8d26\u6237','Loading account...':'\u6b63\u5728\u8bfb\u53d6\u8d26\u6237\u2026','Account unavailable':'\u8d26\u6237\u4fe1\u606f\u6682\u4e0d\u53ef\u7528','Retry account status':'\u91cd\u8bd5\u8bfb\u53d6\u8d26\u6237\u72b6\u6001','Your profile':'\u4e2a\u4eba\u8d44\u6599','Personal profile':'\u4e2a\u4eba\u8d44\u6599','Personal Profile & Account':'\u4e2a\u4eba\u8d44\u6599\u4e0e\u8d26\u6237','Account & security':'\u8d26\u6237\u4e0e\u5b89\u5168','Login email':'\u767b\u5f55\u90ae\u7bb1','Login methods':'\u767b\u5f55\u65b9\u5f0f','Email sign-in link; password sign-in if previously enabled.':'\u90ae\u7bb1\u767b\u5f55\u94fe\u63a5\uff1b\u5982\u4ee5\u524d\u5df2\u8bbe\u7f6e\uff0c\u4e5f\u53ef\u4f7f\u7528\u5bc6\u7801\u767b\u5f55\u3002','Link email and keep my records':'\u7ed1\u5b9a\u90ae\u7bb1\uff0c\u4fdd\u7559\u5f53\u524d\u8bb0\u5f55','Sign in to an existing account':'\u767b\u5f55\u73b0\u6709\u8d26\u6237','Guest records are associated with this anonymous account. Linking an email may let you access them on another device; this has not been verified across hosted accounts.':'\u8bbf\u5ba2\u8bb0\u5f55\u4e0e\u6b64\u533f\u540d\u8d26\u6237\u5173\u8054\u3002\u7ed1\u5b9a\u90ae\u7bb1\u540e\u53ef\u5c1d\u8bd5\u5728\u5176\u4ed6\u8bbe\u5907\u8bbf\u95ee\uff0c\u4f46\u5c1a\u672a\u5b8c\u6210\u6258\u7ba1\u73af\u5883\u9a8c\u8bc1\u3002','Linking an email may keep access to records on other devices. Existing-account sign-in switches accounts; records are not merged.':'\u7ed1\u5b9a\u90ae\u7bb1\u53ef\u80fd\u6709\u52a9\u4e8e\u5728\u5176\u4ed6\u8bbe\u5907\u7ee7\u7eed\u8bbf\u95ee\u8bb0\u5f55\u3002\u767b\u5f55\u73b0\u6709\u8d26\u6237\u4f1a\u5207\u6362\u8d26\u6237\uff0c\u4e0d\u4f1a\u5408\u5e76\u8bb0\u5f55\u3002','Signing in switches accounts. Guest medication records will not be merged.':'\u767b\u5f55\u540e\u5c06\u5207\u6362\u8d26\u6237\uff0c\u8bbf\u5ba2\u7528\u836f\u8bb0\u5f55\u4e0d\u4f1a\u5408\u5e76\u3002','Sign out?':'\u9000\u51fa\u767b\u5f55\uff1f','You will leave this account on this device. Its records are not merged into another account.':'\u60a8\u5c06\u5728\u6b64\u8bbe\u5907\u9000\u51fa\u8d26\u6237\uff0c\u5176\u8bb0\u5f55\u4e0d\u4f1a\u5408\u5e76\u5230\u5176\u4ed6\u8d26\u6237\u3002','Could not load your account. Please retry.':'\u6682\u65f6\u65e0\u6cd5\u8bfb\u53d6\u8d26\u6237\uff0c\u8bf7\u91cd\u8bd5\u3002','Retry':'\u91cd\u8bd5','Profile saved.':'\u4e2a\u4eba\u8d44\u6599\u5df2\u4fdd\u5b58\u3002','Could not save profile. Your changes are still here.':'\u8d44\u6599\u672a\u80fd\u4fdd\u5b58\uff0c\u60a8\u7684\u4fee\u6539\u4ecd\u4fdd\u7559\u5728\u6b64\u3002','Leaving will discard your unsaved profile name.':'\u79bb\u5f00\u540e\u5c06\u4e22\u5f03\u5c1a\u672a\u4fdd\u5b58\u7684\u663e\u793a\u540d\u79f0\u3002','Saving...':'\u4fdd\u5b58\u4e2d\u2026',
+ 'This preference is saved in this browser for this account. When you choose recognition, the image is sent to the recognition service. It does not control photos you separately choose to save.':'\u6b64\u9009\u9879\u4fdd\u5b58\u5728\u6b64\u6d4f\u89c8\u5668\u4e2d\uff0c\u4ec5\u5bf9\u5f53\u524d\u8d26\u6237\u751f\u6548\u3002\u60a8\u4e3b\u52a8\u9009\u62e9\u8bc6\u522b\u65f6\uff0c\u56fe\u7247\u4f1a\u53d1\u9001\u81f3\u8bc6\u522b\u670d\u52a1\u3002\u6b64\u9009\u9879\u4e0d\u4f1a\u7ba1\u7406\u60a8\u5355\u72ec\u4fdd\u5b58\u7684\u56fe\u7247\u3002','Saved evidence is private to this account. This page does not provide full data export or account deletion.':'\u5df2\u4fdd\u5b58\u7684\u56fe\u50cf\u8bc1\u636e\u53d7\u5f53\u524d\u8d26\u6237\u4fdd\u62a4\u3002\u6b64\u9875\u4e0d\u63d0\u4f9b\u5168\u90e8\u6570\u636e\u5bfc\u51fa\u6216\u8d26\u6237\u5220\u9664\u3002','Turning saving off affects new conversations; it does not delete earlier saved messages.':'\u5173\u95ed\u4fdd\u5b58\u540e\u4e0d\u4f1a\u4fdd\u5b58\u65b0\u5bf9\u8bdd\uff0c\u4e5f\u4e0d\u4f1a\u5220\u9664\u65e9\u524d\u5df2\u4fdd\u5b58\u7684\u6d88\u606f\u3002','Language, voice and text size are saved to your account. Voice provider and speaking speed are temporary browser settings and reset when you reload.':'\u8bed\u8a00\u3001\u8bed\u97f3\u504f\u597d\u548c\u5b57\u53f7\u4f1a\u4fdd\u5b58\u5230\u8d26\u6237\u3002\u8bed\u97f3\u670d\u52a1\u548c\u64ad\u653e\u901f\u5ea6\u4ec5\u5728\u5f53\u524d\u6d4f\u89c8\u5668\u751f\u6548\uff0c\u5237\u65b0\u540e\u4f1a\u91cd\u7f6e\u3002','Saved conversations cleared.':'\u5df2\u6e05\u9664\u5df2\u4fdd\u5b58\u7684\u5bf9\u8bdd\u3002','This removes the saved conversation history available through MediThread. It does not delete medication plans, reports or follow-ups, and does not request deletion from external AI providers.':'\u6b64\u64cd\u4f5c\u4f1a\u6e05\u9664 MediThread \u5185\u53ef\u8bbf\u95ee\u7684\u5bf9\u8bdd\u8bb0\u5f55\uff0c\u4e0d\u4f1a\u5220\u9664\u7528\u836f\u8ba1\u5212\u3001\u62a5\u544a\u6216\u8ddf\u8fdb\u4e8b\u9879\uff0c\u4e5f\u4e0d\u4f1a\u5411\u5916\u90e8 AI \u670d\u52a1\u5546\u63d0\u51fa\u5220\u9664\u8bf7\u6c42\u3002','Clearing...':'\u6b63\u5728\u6e05\u9664\u2026',
+ 'Saving a contact does not invite them, send notifications or grant access to your records.':'\u4fdd\u5b58\u8054\u7cfb\u65b9\u5f0f\u4e0d\u4f1a\u9080\u8bf7\u5bf9\u65b9\u3001\u53d1\u9001\u901a\u77e5\u6216\u6388\u4e88\u5176\u8bbf\u95ee\u60a8\u7684\u8bb0\u5f55\u3002','Add care contact':'\u6dfb\u52a0\u8054\u7cfb\u4eba','No care contacts saved yet.':'\u5c1a\u672a\u4fdd\u5b58\u7167\u62a4\u8054\u7cfb\u4eba\u3002','Delete care contact?':'\u5220\u9664\u8fd9\u4f4d\u8054\u7cfb\u4eba\uff1f','Contact saved.':'\u8054\u7cfb\u4eba\u5df2\u4fdd\u5b58\u3002','Contact updated.':'\u8054\u7cfb\u4eba\u5df2\u66f4\u65b0\u3002','Contact removed.':'\u8054\u7cfb\u4eba\u5df2\u5220\u9664\u3002','Verified':'\u5df2\u9a8c\u8bc1','Notifications on':'\u901a\u77e5\u5df2\u5f00\u542f','Record access enabled':'\u5df2\u5f00\u901a\u8bb0\u5f55\u8bbf\u95ee','Description':'\u5177\u4f53\u63cf\u8ff0','Submitting...':'\u6b63\u5728\u63d0\u4ea4\u2026','Tell us about an app issue or an improvement. Do not include passwords, verification codes or unnecessary sensitive medical information.':'\u8bf7\u544a\u8bc9\u6211\u4eec\u60a8\u9047\u5230\u7684\u95ee\u9898\u6216\u5efa\u8bae\u3002\u8bf7\u52ff\u586b\u5199\u5bc6\u7801\u3001\u9a8c\u8bc1\u7801\u6216\u4e0d\u5fc5\u8981\u7684\u654f\u611f\u533b\u7597\u4fe1\u606f\u3002','Your feedback was saved to your account feedback record. This does not mean it was emailed or reviewed.':'\u53cd\u9988\u5df2\u4fdd\u5b58\u5230\u60a8\u8d26\u6237\u7684\u53cd\u9988\u8bb0\u5f55\u4e2d\uff0c\u4f46\u8fd9\u4e0d\u8868\u793a\u5df2\u7ecf\u53d1\u90ae\u4ef6\u6216\u88ab\u4eba\u67e5\u770b\u3002','Feedback saved.':'\u53cd\u9988\u5df2\u4fdd\u5b58\u3002'
+});
+Object.assign(translations, {
+ 'Contacts are for your reference. Saving one does not invite the person, send notifications or grant access to your records.':'\u8054\u7cfb\u4eba\u8d44\u6599\u4ec5\u4f9b\u60a8\u67e5\u9605\u3002\u4fdd\u5b58\u8054\u7cfb\u65b9\u5f0f\u4e0d\u4f1a\u9080\u8bf7\u5bf9\u65b9\u3001\u53d1\u9001\u901a\u77e5\u6216\u5141\u8bb8\u5176\u8bbf\u95ee\u60a8\u7684\u8bb0\u5f55\u3002',
+ 'Local demo':'\u672c\u5730\u6f14\u793a','Email sign-in is unavailable in this local demo.':'\u672c\u5730\u6f14\u793a\u6682\u4e0d\u652f\u6301\u90ae\u7bb1\u767b\u5f55','Email sign-in and account linking are unavailable in this local demo. No authenticated account is connected here.':'\u672c\u5730\u6f14\u793a\u6682\u4e0d\u652f\u6301\u90ae\u7bb1\u767b\u5f55\u6216\u7ed1\u5b9a\u8d26\u6237\uff0c\u5f53\u524d\u672a\u8fde\u63a5\u5df2\u9a8c\u8bc1\u7684\u8d26\u6237\u3002',
+ 'Your confirmation is not independent verification.':'\u60a8\u7684\u786e\u8ba4\u4e0d\u4ee3\u8868\u5df2\u901a\u8fc7\u72ec\u7acb\u6838\u5b9e\u3002'
+});
+
 export function useLanguage(){const context=useContext(Context);return {...context,t:(text:string)=>context.language==='zh'?(galleryTranslations[text]??translations[text]??text):(englishLabels[text]??text)};}
 
 Object.assign(translations, {
@@ -848,10 +875,12 @@ Object.assign(galleryTranslations, {
  'Sort regimens':'\u7597\u7a0b\u6392\u5e8f',
  'All History':'\u5168\u90e8\u5386\u53f2',
  'Ended':'\u5df2\u7ed3\u675f',
+ 'Terminated':'\u5df2\u7ec8\u6b62',
  'Superseded':'\u5df2\u88ab\u66ff\u4ee3',
  'Most Recently Ended':'\u6700\u8fd1\u7ed3\u675f',
  'Oldest Ended':'\u6700\u65e9\u7ed3\u675f',
  'Most Recently Started':'\u6700\u8fd1\u5f00\u59cb',
+ 'Earliest Started':'\u6700\u65e9\u5f00\u59cb',
  'Name A-Z':'\u540d\u79f0 A-Z',
  'Name Z-A':'\u540d\u79f0 Z-A',
  'to':'\u81f3',
@@ -1058,4 +1087,153 @@ Object.assign(translations, {
  'No regimen records yet.':'暂无疗程记录。',
  'Reviewed courses appear here; unfinished setup remains in medication review.':'已核对疗程显示在这里；未完成设置请前往药物核对。',
  'Plan versions':'个计划版本',
+});
+
+Object.assign(translations, {
+ 'Medication Reminders':'定时用药提醒',
+ 'Reminder Lead Time':'用药提醒提前时间',
+ 'Upcoming Medication Reminders':'近期用药提醒',
+ 'Upcoming reminder count: {count}':'{count} 条',
+ 'No upcoming medication reminders.':'暂无近期用药提醒。',
+ 'Care Task Reminders':'用药跟进提醒',
+ 'One upcoming Care Task':'1 项近期跟进',
+ '{count} upcoming Care Tasks':'{count} 项近期跟进',
+ 'View':'查看',
+ 'Show fewer reminders':'收起提醒',
+ 'On':'已开启',
+ 'Off':'已关闭',
+ 'Saving medication reminder preference…':'正在保存用药提醒设置…',
+ 'Saving device notification setting…':'正在保存设备通知设置…',
+ 'Medication reminder preference saved.':'用药提醒设置已保存。',
+ 'Reminder lead time saved.':'提醒时间已保存。',
+ 'Device subscription saved.':'设备通知已开启。',
+ 'Device notifications turned off.':'设备通知已关闭。',
+ 'Could not save this setting. Your previous choice is unchanged.':'无法保存设置，已保留原来的选择。',
+ 'Receive Device Notifications':'接收设备通知',
+ 'This device is subscribed to notifications.':'此设备已订阅通知。',
+ 'Device notifications are off.':'此设备通知已关闭。',
+ 'Device notification status is being checked.':'正在确认此设备的通知状态。',
+ 'Checking notification availability.':'正在检查通知是否可用。',
+ 'Checking this device subscription.':'正在检查此设备的通知设置。',
+ 'Turn on device notifications before sending a test.':'请先开启此设备通知，再发送测试。',
+ 'This device subscription could not be confirmed.':'无法确认此设备的通知订阅。',
+ 'A test notification cannot be sent from this page. Device subscription is managed separately.':'\u6b64\u9875\u9762\u65e0\u6cd5\u53d1\u9001\u6d4b\u8bd5\u901a\u77e5\uff1b\u8bbe\u5907\u8ba2\u9605\u8bbe\u7f6e\u4e0d\u53d7\u5f71\u54cd\u3002',
+ 'Scheduled notifications are currently unavailable.':'定时通知暂不可用。',
+ 'This application is not configured for new device subscriptions.':'\u6b64\u5e94\u7528\u5c1a\u672a\u914d\u7f6e\u65b0\u8bbe\u5907\u8ba2\u9605\u3002',
+ 'This device is already subscribed. New device setup is currently unavailable.':'此设备已订阅通知，目前无法设置新设备。',
+ 'A device subscription does not guarantee delivery. Background delivery depends on the service and device settings.':'订阅设备通知不代表一定送达；后台通知也受服务和设备设置影响。',
+ 'Complete the available steps. Browser permission is requested only when you turn on device notifications.':'按步骤完成设置。只有开启设备通知时，浏览器才会请求通知权限。',
+ 'Close settings and use the device notification switch to continue setup.':'关闭此页面后，使用此设备通知开关继续设置。',
+ 'Notifications are blocked in your browser.':'浏览器已阻止通知。',
+ 'Allow browser notifications before sending a test.':'请先允许浏览器通知，再发送测试。',
+ 'The test was accepted by the service. Check this device; receipt is not confirmed.':'服务已接受测试请求。请检查此设备；尚未确认是否收到。',
+ 'Send Test Notification':'发送测试通知',
+ 'Test Notification':'测试通知',
+ 'Could not update device notification settings. Your previous confirmed state is unchanged.':'无法更新设备通知设置，已保留上次确认的状态。',
+ 'The test notification request failed. No device receipt was confirmed.':'测试通知请求失败，尚未确认设备收到通知。',
+ 'Could not check notification availability. Retry in Notification Settings.':'无法检查通知是否可用，请在通知设置中重试。',
+ 'Could not check this device subscription. Retry in Notification Settings.':'无法检查此设备的通知订阅，请在通知设置中重试。',
+ 'Checking':'正在检查',
+ 'Could not check':'无法检查',
+ 'Could not load account devices. Refresh to try again.':'无法加载账户设备，请刷新后重试。',
+ 'Notification Settings':'通知设置',
+ 'Current device':'当前设备','Browser subscription present; notifications off':'浏览器中存在订阅，但设备通知已关闭','Not subscribed':'未订阅','Account devices':'账户设备','Device names are not provided; entries are numbered from the saved subscriptions.':'接口未提供设备名称，以下按已保存的订阅顺序编号。','Checking account devices.':'正在检查账户设备。','Refresh device list':'刷新设备列表','Turn off device':'关闭设备通知','Use the device switch on the main page to manage this device.':'请使用通知页面上的设备开关管理此设备。','Troubleshooting':'故障排查','Browser permission':'浏览器权限','Disable push on all devices':'关闭所有设备的推送通知','Disable all device notifications':'关闭所有设备通知','This turns off saved push subscriptions on every device in this account, including this device. It does not change medication plans, adherence history, or reminder preferences.':'这会关闭此账户所有设备（包括当前设备）已保存的推送订阅，不会更改用药计划、服药记录或提醒偏好。','Confirm account-wide disable':'确认关闭账户所有设备通知','If the request fails partway, some devices may already be off. Refresh the list to check each status.':'如果操作中途失败，部分设备可能已关闭通知。请刷新列表逐一确认状态。','Confirm disable all devices':'确认关闭所有设备通知','Cancel':'取消','Disabling…':'正在关闭…','Push notifications are off on all account devices.':'账户所有设备的推送通知均已关闭。','The all-device request did not complete. Some devices may already be off; refresh the list to confirm. Medication plans, adherence history, and reminder preferences are unchanged.':'关闭所有设备通知的操作未完成。部分设备可能已关闭，请刷新列表确认。用药计划、服药记录和提醒偏好未更改。','Device subscription turned off.':'已关闭此设备的通知订阅。','Could not confirm this device was turned off. Refresh the device list to check.':'无法确认此设备是否已关闭，请刷新设备列表查看。','No saved devices.':'没有已保存的设备。','Refresh notification status':'刷新通知状态','Device notification guide':'设备通知帮助','Your device':'您的设备','In Chrome or Edge, open the site controls beside the address bar and allow Notifications. In Windows Settings → System → Notifications, allow your browser. Keep the browser able to run in the background.':'在 Chrome 或 Edge 中打开地址栏旁的网站设置并允许通知；在 Windows“设置 → 系统 → 通知”中允许浏览器发送通知，并允许浏览器在后台运行。','In Chrome, open this site → Site settings → Notifications → Allow. You can install the app from the browser menu. Also check Android Settings → Apps → Chrome → Notifications and battery restrictions.':'在 Chrome 中打开此网站的“网站设置 → 通知”并选择允许；也请检查 Android“设置 → 应用 → Chrome → 通知”及电池限制。您也可以从浏览器菜单安装此应用。','Use iOS/iPadOS 16.4 or later. In Safari, Share → Add to Home Screen. Open the installed app, then choose Enable on this device. Check Settings → Notifications for the installed app. An ordinary Safari tab is not enough.':'请使用 iOS/iPadOS 16.4 或更高版本。在 Safari 中选择“分享 → 添加到主屏幕”，打开已安装的应用并启用此设备通知；再检查系统设置中的应用通知。仅在 Safari 普通标签页中打开网页并不足够。','In Safari, use Safari Settings → Websites → Notifications; in Chrome or Edge, use the site controls. Also allow the browser or installed app in System Settings → Notifications. Focus modes may silence alerts.':'在 Safari 中打开“设置 → 网站 → 通知”，或在 Chrome/Edge 中使用网站设置；并在系统“设置 → 通知”中允许浏览器或已安装的应用。专注模式可能会静音提醒。','If setup fails, use the main page switch to turn notifications off and on again after checking system permission. A changed notification key may require a new subscription.':'如果设置失败，请先检查系统通知权限，再通过通知页面上的设备开关关闭并重新开启。推送密钥更换后可能需要重新订阅。','Permission, subscription and server setup are separate. A successful test request does not prove device receipt. Offline devices, Focus and power-saving settings can delay notifications.':'浏览器权限、设备订阅和服务器配置是不同环节。测试请求成功不代表设备已收到；设备离线、专注模式或省电设置都可能延迟通知。',
+ 'Export Calendar':'导出日历',
+ 'Preparing calendar…':'正在准备日历…',
+ 'Exported events will not sync automatically.':'导出后不会自动同步更新。',
+ 'Choose the time range and reminder types for this calendar file.':'选择时间范围和要导出的提醒。',
+ 'Time range':'时间范围',
+ 'Next 30 days':'未来 30 天',
+ 'Next 90 days':'未来 90 天',
+ 'Full remaining course':'完整剩余疗程',
+ 'Open-ended courses include the next 90 days.':'未设计划结束日期的疗程按未来 90 天导出。',
+ 'Custom date range':'自定义日期范围',
+ 'Start date':'开始日期',
+ 'End date':'结束日期',
+ 'Export content':'导出内容',
+ 'Medication reminders':'定时用药提醒',
+ 'Export .ics':'导出 .ics',
+ 'Exporting calendar…':'正在导出日历…',
+ 'Calendar file generated. Import it into your calendar app.':'日历文件已生成，请在系统日历中导入。',
+ 'Select at least one type of reminder to export.':'请至少选择一种要导出的提醒。',
+ 'Choose a start and end date.':'请选择开始和结束日期。',
+ 'The end date must be on or after the start date.':'结束日期不能早于开始日期。',
+ 'Custom date ranges can include up to 366 days.':'自定义日期范围最多为 366 天。',
+ 'Choose a date range that starts today or later.':'请选择从今天或之后开始的日期范围。',
+ 'The calendar file is empty or invalid. No download was started.':'日历文件为空或格式无效，未开始下载。',
+ 'Calendar export could not be completed. Check the selected range and try again.':'无法完成日历导出，请检查所选范围后重试。',
+ 'Calendar export exceeds 500 events. Choose a shorter date range or remove an export category.':'导出内容超过 500 个事件，请缩短日期范围或减少导出类别。',
+ 'No upcoming calendar events match the selected options.':'所选条件下没有近期日历事件。',
+ 'One-time calendar import. Changes in MediThread will not update this file.':'这是一次性日历导入；MediThread 中的更改不会自动更新此文件。',
+ 'View task: {title}':'查看跟进事项：{title}',
+});
+
+
+Object.assign(translations, {
+ 'Add Follow-up':'\u65b0\u589e\u8ddf\u8fdb',
+ 'View calendar and all follow-ups':'\u67e5\u770b\u65e5\u5386\u548c\u5168\u90e8\u8ddf\u8fdb',
+ 'Care Task view':'\u8ddf\u8fdb\u89c6\u56fe',
+ 'Calendar':'\u65e5\u5386',
+ 'List':'\u5217\u8868',
+ 'Filter by status':'\u6309\u72b6\u6001\u7b5b\u9009',
+ 'Care Tasks':'\u9879\u8ddf\u8fdb',
+ 'Previous month':'\u4e0a\u4e2a\u6708',
+ 'Next month':'\u4e0b\u4e2a\u6708',
+ 'Today':'\u4eca\u5929',
+ 'Monday':'\u4e00',
+ 'Tuesday':'\u4e8c',
+ 'Wednesday':'\u4e09',
+ 'Thursday':'\u56db',
+ 'Friday':'\u4e94',
+ 'Saturday':'\u516d',
+ 'Sunday':'\u65e5',
+ 'Task status legend':'\u8ddf\u8fdb\u72b6\u6001\u56fe\u4f8b',
+ 'Tasks without a valid date are available in List view.':'\u6ca1\u6709\u6709\u6548\u65e5\u671f\u7684\u4e8b\u9879\u8bf7\u5728\u5217\u8868\u4e2d\u67e5\u770b\u3002',
+ 'Select a date':'\u9009\u62e9\u65e5\u671f',
+ 'No follow-ups on this date.':'\u8fd9\u5929\u6ca1\u6709\u8ddf\u8fdb\u4e8b\u9879\u3002',
+ 'No follow-ups in this view.':'\u6b64\u7b5b\u9009\u4e0b\u6ca1\u6709\u8ddf\u8fdb\u4e8b\u9879\u3002',
+ 'Date unavailable':'\u65e5\u671f\u4e0d\u53ef\u7528',
+ 'Loading follow-ups...':'\u6b63\u5728\u52a0\u8f7d\u8ddf\u8fdb\u4e8b\u9879\u2026',
+ 'Reload follow-ups':'\u91cd\u65b0\u52a0\u8f7d\u8ddf\u8fdb\u4e8b\u9879',
+ 'Pending':'\u5f85\u5904\u7406',
+ 'Overdue':'\u5df2\u903e\u671f',
+ 'Completed':'\u5df2\u5b8c\u6210',
+ 'All':'\u5168\u90e8',
+ 'Needs medication confirmation':'\u9700\u786e\u8ba4\u7684\u7528\u836f',
+ 'Recent dose reports':'\u8fd1\u671f\u670d\u836f\u8bb0\u5f55',
+ 'Not recorded does not mean not taken.':'\u672a\u8bb0\u5f55\u4e0d\u4ee3\u8868\u672a\u670d\u7528\u3002',
+ 'No eligible doses to report today.':'\u4eca\u5929\u6ca1\u6709\u53ef\u8865\u8bb0\u7684\u5242\u6b21\u3002',
+ 'Report dose status':'\u8bb0\u5f55\u670d\u836f\u60c5\u51b5',
+ 'Medication reports to confirm':'\u5f85\u786e\u8ba4\u7684\u670d\u836f\u8bb0\u5f55',
+ 'View records':'\u67e5\u770b\u8bb0\u5f55',
+ 'About late reports':'\u5173\u4e8e\u8865\u8bb0',
+ 'Late reporting is available for recent scheduled doses only. The time limit follows your schedule, next dose, and midnight in your time zone.':'\u4ec5\u53ef\u8865\u8bb0\u8fd1\u671f\u7684\u8ba1\u5212\u5242\u6b21\uff0c\u6709\u6548\u65f6\u95f4\u53d6\u51b3\u4e8e\u60a8\u7684\u7528\u836f\u8ba1\u5212\u548c\u65f6\u533a\u3002',
+ 'No eligible dose occurrences in this view.':'\u6b64\u89c6\u56fe\u4e2d\u6ca1\u6709\u53ef\u8865\u8bb0\u7684\u5242\u6b21\u3002',
+ 'View all {count} reports':'\u67e5\u770b\u5168\u90e8 {count} \u6761\u8bb0\u5f55',
+ 'Show fewer':'\u6536\u8d77'
+});
+Object.assign(translations, {
+ 'Cancelled':'\u5df2\u53d6\u6d88',
+ 'Late reporting is not enabled yet. Your existing medication records remain available in Records.':'\u8865\u8bb0\u529f\u80fd\u5c1a\u672a\u542f\u7528\uff0c\u5df2\u6709\u670d\u836f\u8bb0\u5f55\u4ecd\u53ef\u5728\u8bb0\u5f55\u9875\u67e5\u770b\u3002',
+ 'Patient report saved.':'\u5df2\u4fdd\u5b58\u60a8\u7684\u670d\u836f\u81ea\u8ff0\u3002',
+ 'Loading dose reports\u2026':'\u6b63\u5728\u8bfb\u53d6\u670d\u836f\u60c5\u51b5\u2026',
+ 'Not recorded':'\u5c1a\u672a\u8bb0\u5f55',
+ 'Saved plan needs review':'\u5df2\u4fdd\u5b58\u7684\u8ba1\u5212\u9700\u5148\u6838\u5bf9',
+ 'Reviewed plan':'\u5df2\u6838\u5bf9\u7684\u8ba1\u5212',
+ 'Version':'\u7248\u672c',
+ 'Per dose':'\u6bcf\u6b21\u670d\u7528',
+ 'Scheduled':'\u8ba1\u5212\u65f6\u95f4',
+ 'Review the saved medication and plan before reporting this occurrence.':'\u8bf7\u5148\u6838\u5bf9\u5df2\u4fdd\u5b58\u7684\u836f\u7269\u548c\u8ba1\u5212\uff0c\u518d\u8bb0\u5f55\u8be5\u5242\u6b21\u3002',
+ 'View medicines':'\u67e5\u770b\u836f\u7269',
+ 'Review or correct report':'\u67e5\u770b\u6216\u66f4\u6b63\u81ea\u8ff0',
+ 'No eligible dose occurrences in this view.':'\u6b64\u89c6\u56fe\u4e2d\u6ca1\u6709\u53ef\u8865\u8bb0\u7684\u5242\u6b21\u3002',
+ 'Showing the 50 most recent occurrences. Earlier records remain in Records.':'\u663e\u793a\u6700\u8fd1 50 \u4e2a\u5242\u6b21\uff0c\u66f4\u65e9\u7684\u8bb0\u5f55\u4ecd\u53ef\u5728\u8bb0\u5f55\u9875\u67e5\u770b\u3002',
+ 'Include reported occurrences to review or correct':'\u5305\u542b\u5df2\u8bb0\u5f55\u7684\u5242\u6b21\uff0c\u4ee5\u4fbf\u67e5\u770b\u6216\u66f4\u6b63'
+});
+Object.assign(translations, {
+ 'Care contacts':'\u7167\u62a4\u8054\u7cfb\u4eba','Care and reminders':'\u7167\u62a4\u4e0e\u63d0\u9192','Reminders & Notifications':'\u63d0\u9192\u4e0e\u901a\u77e5','Personalisation':'\u4e2a\u6027\u5316','Language & Voice':'\u8bed\u8a00\u4e0e\u8bed\u97f3','Privacy & Data':'\u9690\u79c1\u4e0e\u6570\u636e','AI Assistant & Chat History':'AI \u52a9\u624b\u4e0e\u804a\u5929\u8bb0\u5f55','Privacy Settings':'\u9690\u79c1\u8bbe\u7f6e','Help & application information':'\u5e2e\u52a9\u4e0e\u5e94\u7528\u4fe1\u606f','Feedback & Suggestions':'\u53cd\u9988\u4e0e\u5efa\u8bae',
+ 'Guest Mode':'\u8bbf\u5ba2\u6a21\u5f0f','Manage guest account':'\u7ba1\u7406\u8bbf\u5ba2\u8d26\u6237','Loading account...':'\u6b63\u5728\u8bfb\u53d6\u8d26\u6237\u2026','Account unavailable':'\u8d26\u6237\u4fe1\u606f\u6682\u4e0d\u53ef\u7528','Retry account status':'\u91cd\u8bd5\u8bfb\u53d6\u8d26\u6237\u72b6\u6001','Your profile':'\u4e2a\u4eba\u8d44\u6599','Personal profile':'\u4e2a\u4eba\u8d44\u6599','Personal Profile & Account':'\u4e2a\u4eba\u8d44\u6599\u4e0e\u8d26\u6237','Account & security':'\u8d26\u6237\u4e0e\u5b89\u5168','Login email':'\u767b\u5f55\u90ae\u7bb1','Login methods':'\u767b\u5f55\u65b9\u5f0f','Email sign-in link; password sign-in if previously enabled.':'\u90ae\u7bb1\u767b\u5f55\u94fe\u63a5\uff1b\u5982\u4ee5\u524d\u5df2\u8bbe\u7f6e\uff0c\u4e5f\u53ef\u4f7f\u7528\u5bc6\u7801\u767b\u5f55\u3002','Link email and keep my records':'\u7ed1\u5b9a\u90ae\u7bb1\uff0c\u4fdd\u7559\u5f53\u524d\u8bb0\u5f55','Sign in to an existing account':'\u767b\u5f55\u73b0\u6709\u8d26\u6237','Guest records are associated with this anonymous account. Linking an email may let you access them on another device; this has not been verified across hosted accounts.':'\u8bbf\u5ba2\u8bb0\u5f55\u4e0e\u6b64\u533f\u540d\u8d26\u6237\u5173\u8054\u3002\u7ed1\u5b9a\u90ae\u7bb1\u540e\u53ef\u5c1d\u8bd5\u5728\u5176\u4ed6\u8bbe\u5907\u8bbf\u95ee\uff0c\u4f46\u5c1a\u672a\u5b8c\u6210\u6258\u7ba1\u73af\u5883\u9a8c\u8bc1\u3002','Linking an email may keep access to records on other devices. Existing-account sign-in switches accounts; records are not merged.':'\u7ed1\u5b9a\u90ae\u7bb1\u53ef\u80fd\u6709\u52a9\u4e8e\u5728\u5176\u4ed6\u8bbe\u5907\u7ee7\u7eed\u8bbf\u95ee\u8bb0\u5f55\u3002\u767b\u5f55\u73b0\u6709\u8d26\u6237\u4f1a\u5207\u6362\u8d26\u6237\uff0c\u4e0d\u4f1a\u5408\u5e76\u8bb0\u5f55\u3002','Signing in switches accounts. Guest medication records will not be merged.':'\u767b\u5f55\u540e\u5c06\u5207\u6362\u8d26\u6237\uff0c\u8bbf\u5ba2\u7528\u836f\u8bb0\u5f55\u4e0d\u4f1a\u5408\u5e76\u3002','Sign out?':'\u9000\u51fa\u767b\u5f55\uff1f','You will leave this account on this device. Its records are not merged into another account.':'\u60a8\u5c06\u5728\u6b64\u8bbe\u5907\u9000\u51fa\u8d26\u6237\uff0c\u5176\u8bb0\u5f55\u4e0d\u4f1a\u5408\u5e76\u5230\u5176\u4ed6\u8d26\u6237\u3002','Could not load your account. Please retry.':'\u6682\u65f6\u65e0\u6cd5\u8bfb\u53d6\u8d26\u6237\uff0c\u8bf7\u91cd\u8bd5\u3002','Retry':'\u91cd\u8bd5','Profile saved.':'\u4e2a\u4eba\u8d44\u6599\u5df2\u4fdd\u5b58\u3002','Could not save profile. Your changes are still here.':'\u8d44\u6599\u672a\u80fd\u4fdd\u5b58\uff0c\u60a8\u7684\u4fee\u6539\u4ecd\u4fdd\u7559\u5728\u6b64\u3002','Leaving will discard your unsaved profile name.':'\u79bb\u5f00\u540e\u5c06\u4e22\u5f03\u5c1a\u672a\u4fdd\u5b58\u7684\u663e\u793a\u540d\u79f0\u3002','Saving...':'\u4fdd\u5b58\u4e2d\u2026',
+ 'This preference is saved in this browser for this account. When you choose recognition, the image is sent to the recognition service. It does not control photos you separately choose to save.':'\u6b64\u9009\u9879\u4fdd\u5b58\u5728\u6b64\u6d4f\u89c8\u5668\u4e2d\uff0c\u4ec5\u5bf9\u5f53\u524d\u8d26\u6237\u751f\u6548\u3002\u60a8\u4e3b\u52a8\u9009\u62e9\u8bc6\u522b\u65f6\uff0c\u56fe\u7247\u4f1a\u53d1\u9001\u81f3\u8bc6\u522b\u670d\u52a1\u3002\u6b64\u9009\u9879\u4e0d\u4f1a\u7ba1\u7406\u60a8\u5355\u72ec\u4fdd\u5b58\u7684\u56fe\u7247\u3002','Saved evidence is private to this account. This page does not provide full data export or account deletion.':'\u5df2\u4fdd\u5b58\u7684\u56fe\u50cf\u8bc1\u636e\u53d7\u5f53\u524d\u8d26\u6237\u4fdd\u62a4\u3002\u6b64\u9875\u4e0d\u63d0\u4f9b\u5168\u90e8\u6570\u636e\u5bfc\u51fa\u6216\u8d26\u6237\u5220\u9664\u3002','Turning saving off affects new conversations; it does not delete earlier saved messages.':'\u5173\u95ed\u4fdd\u5b58\u540e\u4e0d\u4f1a\u4fdd\u5b58\u65b0\u5bf9\u8bdd\uff0c\u4e5f\u4e0d\u4f1a\u5220\u9664\u65e9\u524d\u5df2\u4fdd\u5b58\u7684\u6d88\u606f\u3002',
+ 'Saving a contact does not invite them, send notifications or grant access to your records.':'\u4fdd\u5b58\u8054\u7cfb\u65b9\u5f0f\u4e0d\u4f1a\u9080\u8bf7\u5bf9\u65b9\u3001\u53d1\u9001\u901a\u77e5\u6216\u6388\u4e88\u5176\u8bbf\u95ee\u60a8\u7684\u8bb0\u5f55\u3002','Add care contact':'\u6dfb\u52a0\u8054\u7cfb\u4eba','No care contacts saved yet.':'\u5c1a\u672a\u4fdd\u5b58\u7167\u62a4\u8054\u7cfb\u4eba\u3002','Delete care contact?':'\u5220\u9664\u8fd9\u4f4d\u8054\u7cfb\u4eba\uff1f','Contact saved.':'\u8054\u7cfb\u4eba\u5df2\u4fdd\u5b58\u3002','Contact updated.':'\u8054\u7cfb\u4eba\u5df2\u66f4\u65b0\u3002','Contact removed.':'\u8054\u7cfb\u4eba\u5df2\u5220\u9664\u3002','Verified':'\u5df2\u9a8c\u8bc1','Notifications on':'\u901a\u77e5\u5df2\u5f00\u542f','Record access enabled':'\u5df2\u5f00\u901a\u8bb0\u5f55\u8bbf\u95ee',
+ 'Description':'\u5177\u4f53\u63cf\u8ff0','Submitting...':'\u6b63\u5728\u63d0\u4ea4\u2026','Tell us about an app issue or an improvement. Do not include passwords, verification codes or unnecessary sensitive medical information.':'\u8bf7\u544a\u8bc9\u6211\u4eec\u60a8\u9047\u5230\u7684\u95ee\u9898\u6216\u5efa\u8bae\u3002\u8bf7\u52ff\u586b\u5199\u5bc6\u7801\u3001\u9a8c\u8bc1\u7801\u6216\u4e0d\u5fc5\u8981\u7684\u654f\u611f\u533b\u7597\u4fe1\u606f\u3002','Your feedback was saved to your account feedback record. This does not mean it was emailed or reviewed.':'\u53cd\u9988\u5df2\u4fdd\u5b58\u5230\u60a8\u8d26\u6237\u7684\u53cd\u9988\u8bb0\u5f55\u4e2d\uff0c\u4f46\u8fd9\u4e0d\u8868\u793a\u5df2\u7ecf\u53d1\u90ae\u4ef6\u6216\u88ab\u4eba\u67e5\u770b\u3002','Feedback saved.':'\u53cd\u9988\u5df2\u4fdd\u5b58\u3002'
 });
