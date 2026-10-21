@@ -5,7 +5,7 @@ import { useLanguage } from '../language';
  * The primary visual CTA opens the read-only photo evidence flow separately.
  */
 
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   api,
   type DoseHistoryResponse,
@@ -74,6 +74,7 @@ export function TodayScreen({
   const [showSnooze, setShowSnooze] = useState(false);
   const [selected, setSelected] = useState<MedicationSummary | null>(null);
   const [due, setDue] = useState<DueDoseResponse | null>(null);
+  const dueRevision=useRef(0);
   const [history, setHistory] = useState<DoseHistoryResponse | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -106,13 +107,16 @@ export function TodayScreen({
   useEffect(() => {
     if (!compact || !selected) return;
     let live = true;
+    let pending = false;
 
-    const refresh = () => { if (document.visibilityState === 'hidden') return;
-      void api.dueDose(selected.regimen_id,true).then(value => { if (live) {setDue(value);setError(null);} }).catch(caught => { if (live) setError(caught); });
+    const refresh = () => { if (pending || document.visibilityState === 'hidden') return;
+      pending=true;
+      const revision=dueRevision.current;
+      void api.dueDose(selected.regimen_id,true).then(value => { if (live&&revision===dueRevision.current) {setDue(value);setError(null);} }).catch(caught => { if (live&&revision===dueRevision.current) setError(caught); }).finally(()=>{pending=false;});
     };
     refresh(); const poll=setInterval(refresh,15000); document.addEventListener('visibilitychange',refresh);
-    return () => { live = false; clearInterval(poll); document.removeEventListener('visibilitychange',refresh); };
-  }, [compact, selected, medications]);
+    return () => { live = false; dueRevision.current++;clearInterval(poll); document.removeEventListener('visibilitychange',refresh); };
+  }, [compact, selected]);
 
   useEffect(() => {
     if (!compact || !due?.occurrence_id) { setReminderAt(null); return; }
@@ -163,12 +167,14 @@ export function TodayScreen({
       const challenge = due.occurrence_id ? await api.requestReportChallenge(due.occurrence_id, payload)
         : await api.requestPrnReportChallenge(payload);
       if (challenge.already_recorded) {
+        const revision=++dueRevision.current;
         setLastResult(
           'Your report was already saved. Nothing changed.',
         );
         onChanged();
         if (selected) {
-          setHistory(await api.doseHistory(selected.regimen_id));
+          const [history,nextDue]=await Promise.all([api.doseHistory(selected.regimen_id),api.dueDose(selected.regimen_id,true)]);
+          if(revision===dueRevision.current){setHistory(history);setDue(nextDue);}
         }
         return;
       }
@@ -189,6 +195,7 @@ export function TodayScreen({
         challenge_id: challenge.challenge_id!,
       };
       const result = occurrenceId ? await api.submitReport(occurrenceId, payload) : await api.submitPrnReport(payload);
+      const revision=++dueRevision.current;
       setConfirmation(null);
       setLastResult(
         result.already_recorded
@@ -197,7 +204,8 @@ export function TodayScreen({
       );
       onChanged();
       if (selected) {
-        setHistory(await api.doseHistory(selected.regimen_id));
+        const [history,nextDue]=await Promise.all([api.doseHistory(selected.regimen_id),api.dueDose(selected.regimen_id,true)]);
+        if(revision===dueRevision.current){setHistory(history);setDue(nextDue);}
       }
     });
 
@@ -206,7 +214,7 @@ export function TodayScreen({
   if (medications.length === 0) {
     return (
       <Card title={compact ? "Today's medication" : "Today"}>
-        <p className="notice">{t(setupCount>0?'A medication plan needs review.':hasMedicationRecords?'No current medication plans.':'No medication plans have been added.')}</p>
+        <p className="notice" data-today-empty-state="ready">{t(setupCount>0?'A medication plan needs review.':hasMedicationRecords?'No current medication plans.':'No medication plans have been added.')}</p>
         {compact ? <nav className="today-medication-shortcuts" aria-label={t('Medication management shortcuts')}>
           {setupCount>0?<button className="primary dominant" type="button" onClick={onReviewPlan}>{t('Review medication plan')}</button>:!hasMedicationRecords?<button className="primary dominant" type="button" onClick={onMedicines}>{t('Add your medication')}</button>:null}
           {onMedicines?<button className="text-button" type="button" onClick={onMedicines}>{t('My Medicines')}</button>:null}

@@ -1,7 +1,11 @@
 /* Records owns the overview and the reading/form hierarchy of its child pages.
    Keep clinical states neutral: a missing report is never styled as a failure. */
 .records-screen,
-.records-detail { min-width: 0; width: 100%; max-width: 52rem; margin-inline: auto; }
+.records-detail { min-width: 0; width: 100%; }
+.records-screen .records-summary--highlight,
+.records-screen .records-pending-disclosure,
+.records-screen .records-medication-history-card,
+.records-screen .records-navigation-group { grid-column: 1 / -1; min-width: 0; width: 100%; }
 .records-screen .card__title,
 .records-detail .card__title { text-wrap: balance; }
 
@@ -20,19 +24,21 @@
   max-width: 30rem;
 }
 .period-actions.records-summary-actions button {
-  flex: 0 1 9rem;
-  width: min(9rem, 100%);
-  min-width: min(100%, 8rem);
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
   max-width: 100%;
-  min-height: var(--tap-lg);
-  padding-inline: var(--s-5);
+  min-height: var(--button-height);
+  padding-block: var(--button-padding-block);
+  padding-inline: var(--s-2);
   background: var(--surface);
   border-color: var(--line-strong, var(--line));
   color: var(--ink);
   font-weight: var(--fw-strong);
-  font-size: var(--fs-body);
+  font-size: var(--button-font-size);
 }
 .period-actions.records-summary-actions button:hover { background: var(--surface-2); border-color: var(--ink-2); color: var(--ink); }
+.records-screen .late-dose-list button.primary { width: auto; min-height: var(--button-height); padding: 4px 12px; }
 
 .records-pending-disclosure {
   min-width: 0;
@@ -45,7 +51,7 @@
   justify-content: space-between;
   gap: var(--s-4);
   min-height: var(--tap-lg);
-  padding: var(--s-4) var(--s-3);
+  padding: var(--s-2) var(--s-3);
   border-radius: var(--r-sm);
   list-style: none;
   cursor: pointer;
@@ -136,12 +142,20 @@
 .records-report .report-reading > .summary-overview { margin-block: var(--s-5); }
 .records-report .report-actions { padding-top: var(--s-4); }
 
+@media(max-width:600px) {
+ .card.records-summary--highlight { gap:var(--s-3); padding:var(--s-4); }
+ .period-actions.records-summary-actions { gap:var(--s-1); }
+ .period-actions.records-summary-actions button { flex:1 1 0; width:auto; min-width:0; max-width:100%; min-height:var(--button-height); padding:var(--button-padding-block) 0; }
+}
+
 @container (min-width: 40rem) {
-  .records-screen { gap: var(--s-6); }
-  .card.records-summary--highlight { padding: var(--s-8); }
+  .records-screen { gap: var(--s-3); }
+  .card.records-summary--highlight { padding: var(--section-padding); }
   .record-history__filters--grouped { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .record-history__filters--scoped { grid-template-columns: minmax(0, 22rem); }
   .record-history .history li { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+}
+@container (min-width: 20rem) {
   .records-navigation-group.entry-group > .ui-rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .records-navigation-group .ui-row { height: 100%; border-radius: 0; }
   .records-navigation-group .ui-row:nth-child(odd) { border-inline-end: 1px solid var(--line); }
@@ -154,5 +168,5 @@
 }
 @media (max-width: 480px) {
   .records-medication-history-link,
-  .records-navigation-group .ui-row { padding: var(--s-4); gap: var(--s-3); }
+  .records-navigation-group .ui-row { padding: var(--s-3); gap: var(--s-2); }
 }

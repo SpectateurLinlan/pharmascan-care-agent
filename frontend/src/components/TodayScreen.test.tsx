@@ -24,6 +24,16 @@ const challenge = {
   already_recorded: false,
 } as ReportChallengeResponse;
 function SelectChinese(){const {setLanguage}=useLanguage();return <button type="button" onClick={()=>setLanguage('zh')}>DEMO Chinese</button>;}
+it('keeps a slow due-dose read single and does not restart it for an equivalent medication array',async()=>{
+ vi.useFakeTimers();let finish!:(value:Awaited<ReturnType<typeof api.dueDose>>)=>void;
+ vi.mocked(api.dueDose).mockReturnValue(new Promise(resolve=>{finish=resolve;}));
+ const changed=vi.fn();const view=render(<TodayScreen compact medications={[medication]} onChanged={changed}/>);
+ view.rerender(<TodayScreen compact medications={[medication]} onChanged={changed}/>);
+ await act(async()=>{await vi.advanceTimersByTimeAsync(45000);});
+ expect(api.dueDose).toHaveBeenCalledOnce();
+ await act(async()=>{finish({occurrence_id:null,regimen_id:'demo-regimen',medication_display_name:medication.display_name,dose_description:null,due_at:null,is_prn:false,visual_status:'not_checked',ingestion_proven:false});});
+ expect(api.submitReport).not.toHaveBeenCalled();
+});
 
 describe('dose report consent', () => {
   it('supports as-needed reports without inventing a scheduled occurrence', async () => {

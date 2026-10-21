@@ -73,7 +73,7 @@ See [testing](../docs/DEVELOPMENT.md#running-and-testing) and [current limitatio
 
 Four tabs: Today / Medicines / Records / Me. Assistant is a persistent Today-origin task view with light Medicines/Records entries. Guide progress is user-scoped browser storage, with explicit Skip/Finish and Me Help replay. Hash child routes preserve parent/origin behavior; missing medication context falls back to selection.
 
-`RUN_LOCAL_UX=1 QA_BASE_URL=<isolated local URL> npx playwright test e2e/ux-navigation.spec.ts` exercises the actual UI + local in-memory FastAPI (not mocked HTTP and not live Supabase). Cloud-provider tests stay separately opt-in. `public/sw.js` handles private Web Push only and caches no patient data. The API exposes public VAPID configuration; private keys never enter Vite variables. [Worker, calendar and device acceptance](../docs/REMINDERS.md).
+`RUN_LOCAL_UX=1 QA_BASE_URL=<isolated local URL> npx playwright test e2e/ux-navigation.spec.ts` exercises the actual UI + local in-memory FastAPI (not mocked HTTP and not live Supabase). Cloud-provider tests stay separately opt-in. `public/sw.js` handles private Web Push only and caches no patient data. The API exposes public VAPID configuration; private keys never enter Vite variables. See the [architecture and trust boundaries](../docs/ARCHITECTURE.md#worker-dispatch-transport-boundary).
 
 The local five-day review browser fixture is reproducible from public test files;
 it requires no private screenshots, patient records or QA scripts. From the
@@ -105,6 +105,26 @@ synthetic inputs with `python scripts/generate_gallery_demo.py` (add
 calls. Generated `outputs/` are not source files to publish.
 
 Photo result navigation has its own child route and retains the selected file on Back/Forward; late responses from a closed task do not reopen it. The local browser suite contains two real local-FastAPI journeys and one explicit visual-HTTP-MOCK navigation case. TypeScript tests use Node type declarations only for loading the committed service worker source; no Node filesystem code enters the application bundle.
+
+## Shared page layout
+
+All routed patient pages use the App shell's centered content column, including
+the Assistant workspace and child settings pages. New pages should reuse
+`Screen` from `src/ui/primitives.tsx` and let their full-width cards stretch
+inside it. Content width is not selected by route.
+
+Change these values in `src/ui/tokens.css` to update the layout everywhere:
+
+| Token | Purpose |
+|---|---|
+| `--page-content-max` | Maximum page width, currently `52rem` |
+| `--page-gutter-narrow` | Outer gutter on narrow screens |
+| `--page-gutter-wide` | Outer gutter beside the desktop navigation rail |
+
+`--content-max` is an alias consumed by the existing shell, header and composer.
+Avoid adding page-specific outer width limits. Inner field/readable-text widths,
+peer card columns and dialog sizing belong to their own components.
+
 ## Medication care additions
 
 Four tabs remain Today / Medicines / Records / Me. InventoryPanel belongs to medication detail; CareTasksScreen, AdherenceBarriersScreen and MedicationReviewScreen consume typed FastAPI endpoints. CareReviewSheet is shared by forms and Agent proposals and requires an explicit human Confirm before writes. HealthTrackingScreen reuses the observation API for validated numeric values. No stock/clinical calculation or database/Stage2 request was added to React.

@@ -13,9 +13,9 @@ test('persistent controlled guide, four tabs, task back, drafts and calendar set
  await page.locator('.language-shortcut').evaluate(button=>(button as HTMLButtonElement).focus());expect(await guide.evaluate(dialog=>dialog.contains(document.activeElement))).toBe(true);
  await page.keyboard.press('Escape');await expect(guide).toBeVisible();
  await expect(page.locator('.patient-nav button')).toHaveCount(4);
- await page.getByRole('button',{name:'Next',exact:true}).click();await expect(page.getByText('2 / 7')).toBeVisible();
- await page.reload();await expect(page.getByText('2 / 7')).toBeVisible();
- const second=await page.context().newPage();await second.goto('about:blank');await page.bringToFront();await expect(page.getByText('2 / 7')).toBeVisible();await second.close();
+ await page.getByRole('button',{name:'Next',exact:true}).click();await expect(page.getByText('2 / 8')).toBeVisible();
+ await page.reload();await expect(page.getByText('2 / 8')).toBeVisible();
+ const second=await page.context().newPage();await second.goto('about:blank');await page.bringToFront();await expect(page.getByText('2 / 8')).toBeVisible();await second.close();
  for(const width of [390,430,1280]){
    await page.setViewportSize({width,height:900});const next=page.getByRole('button',{name:'Next',exact:true});await next.hover();
    const colors=await next.evaluate(button=>({background:getComputedStyle(button).backgroundColor,color:getComputedStyle(button).color}));
@@ -36,7 +36,7 @@ await expect(input).toHaveValue('DEMO unfinished chat');
  await page.getByRole('heading',{name:/Add medication/}).waitFor();await page.getByRole('button',{name:/Add manually/}).click();await page.getByLabel('Medication name',{exact:true}).fill('DEMO UX draft');
  await page.getByRole('button',{name:'Back',exact:true}).click();await page.getByRole('button',{name:/Add manually/}).click();await expect(page.getByLabel('Medication name',{exact:true})).toHaveValue('DEMO UX draft');
  await page.locator('[data-guide="me"]').click();await page.getByRole('button',{name:/Help \/ User Guide/}).click();await page.getByRole('button',{name:'Quick start guide',exact:true}).click();await expect(guide).toBeVisible();
- for(let i=0;i<6;i++)await page.getByRole('button',{name:'Next',exact:true}).click();await page.getByRole('button',{name:'Finish',exact:true}).click();
+ for(let i=0;i<7;i++)await page.getByRole('button',{name:'Next',exact:true}).click();await page.getByRole('button',{name:'Finish',exact:true}).click();
  await page.locator('[data-guide="me"]').click();await page.locator('.entry-group').getByRole('button',{name:/Medication reminders/}).click();await expect(page.getByText(/No upcoming timed reminders/)).toBeVisible();
  await expect(page.getByRole('button',{name:'Enable on this device',exact:true})).toBeDisabled();await expect(page.getByText(/Web Push is not configured/)).toBeVisible();
  for(const width of [390,430,1280]){await page.setViewportSize({width,height:900});await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);await page.screenshot({path:`${artifactRoot}/reminder-settings-${width}.png`});}

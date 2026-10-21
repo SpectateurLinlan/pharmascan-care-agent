@@ -160,6 +160,6 @@ it('localizes the export action and dialog controls in Chinese',async()=>{
  render(<LanguageProvider><ChooseChinese/><CalendarExportAction/></LanguageProvider>);
  fireEvent.click(await screen.findByRole('button',{name:'导出日历'}));const dialog=await screen.findByRole('dialog',{name:'导出到日历'});
  expect(within(dialog).getByRole('radio',{name:'未来 30 天'})).toBeTruthy();expect(within(dialog).getByRole('radio',{name:'完整剩余疗程'})).toBeTruthy();
- expect(within(dialog).getByRole('checkbox',{name:'定时用药提醒'})).toBeTruthy();expect(within(dialog).getByRole('button',{name:'导出 .ics'})).toBeTruthy();
+ expect(within(dialog).getByRole('checkbox',{name:'用药提醒'})).toBeTruthy();expect(within(dialog).getByRole('button',{name:'导出 .ics'})).toBeTruthy();
  fireEvent.click(within(dialog).getByRole('button',{name:'取消'}));await waitFor(()=>expect(screen.queryByRole('dialog')).toBeNull());
 });

@@ -19,6 +19,7 @@ function initial():string[] {
   return valid(route)?[route]:['today'];
 }
 function currentRouteHref(route:string){
+ if(window.location.hash.startsWith(`#${route}?`))return window.location.hash;
  if((route==='gallery'||route==='care-tasks')&&window.location.hash.startsWith(`#${route}`))return window.location.hash;
  return `#${route}`;
 }
@@ -42,7 +43,7 @@ export function useCareNavigation(blocked:boolean,leaveBlocked=false) {
     const unload=(event:BeforeUnloadEvent)=>{if(leaving.current){event.preventDefault();event.returnValue='';}};
     window.addEventListener('beforeunload',unload);window.addEventListener('popstate',pop);return()=>{window.removeEventListener('popstate',pop);window.removeEventListener('beforeunload',unload);};
   },[]);
-  const navigate=useCallback((value:string,query?:Record<string,string>,options?:{preserveOrigin?:boolean}) => {
+  const navigate=useCallback((value:string,query?:Record<string,string>,options?:{preserveOrigin?:boolean;replace?:boolean}) => {
     const next=normalize(value);if(locked.current||authCallback()||!valid(next)||next===current.current.at(-1))return;
     const isRoot=roots.some(root=>root===next);
     const preserveOrigin=options?.preserveOrigin===true;
@@ -50,8 +51,17 @@ export function useCareNavigation(blocked:boolean,leaveBlocked=false) {
     const search=query?new URLSearchParams(query).toString():'';
     const href=`#${next}${search?'?'+search:''}`;
     if(leaving.current){pendingHref.current=href;setPending(updated);return;}
-    window.history[isRoot&&!preserveOrigin?'replaceState':'pushState']({careRoute:updated},'',href);
+    window.history[options?.replace===true||(isRoot&&!preserveOrigin)?'replaceState':'pushState']({careRoute:updated},'',href);
     setStack(updated);document.documentElement.scrollTop=0;
+  },[]);
+  const restore=useCallback((value:string,query?:Record<string,string>,routeStack?:readonly string[])=>{
+    const route=normalize(value);if(authCallback()||!valid(route))return;
+    const restored=routeStack&&routeStack.length>0&&routeStack.length<=12&&routeStack.every(item=>valid(item))&&routeStack.at(-1)===route
+      ? [...routeStack]
+      : [route];
+    const search=query?new URLSearchParams(query).toString():'';
+    window.history.replaceState({...window.history.state,careRoute:restored},'',`#${route}${search?'?'+search:''}`);
+    current.current=restored;setStack(restored);setPending(null);pendingHref.current=null;document.documentElement.scrollTop=0;
   },[]);
   function back(){
     if(locked.current)return;
@@ -59,5 +69,5 @@ export function useCareNavigation(blocked:boolean,leaveBlocked=false) {
     else {const parent=parents[stack[0]??'']??'today';if(leaving.current){setPending([parent]);return;}window.history.replaceState({careRoute:[parent]},'',`#${parent}`);setStack([parent]);}
   }
   const confirmLeave=()=>{if(!pending)return;window.history.replaceState({careRoute:pending},'',pendingHref.current??`#${pending.at(-1)}`);pendingHref.current=null;setStack(pending);setPending(null);};
-  return {pending,confirmLeave,cancelLeave:()=>{pendingHref.current=null;setPending(null);},tab:stack.at(-1)??'today',navigate,back,isRoot:stack.length===1&&roots.some(root=>root===stack.at(-1))};
+  return {pending,confirmLeave,cancelLeave:()=>{pendingHref.current=null;setPending(null);},tab:stack.at(-1)??'today',navigate,restore,back,isRoot:stack.length===1&&roots.some(root=>root===stack.at(-1))};
 }

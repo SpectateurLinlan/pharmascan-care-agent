@@ -1,64 +1,34 @@
-import {useEffect,useRef,useState} from 'react';
+import {useState} from 'react';
 import {useLanguage,type Language} from '../language';
-import {Icon} from './Icon';
 
 /**
- * The header language control.
- *
- * It used to navigate to the full Language & speech settings page, which meant
- * two taps and a page load to do the one thing this control is for. It now
- * opens the two available languages and switches on choice. The full set of
- * language and speech preferences still lives in Settings.
+ * One tap switches the interface language. Detailed speech preferences remain
+ * available on the Language & speech settings page.
  */
-const OPTIONS: Array<{code: Language; label: string}> = [
-  {code: 'en', label: 'English'},
-  {code: 'zh', label: '中文'},
-];
-
 export function LanguageMenu() {
-  const {language, setLanguage, t} = useLanguage();
-  const [open, setOpen] = useState(false);
-  const wrap = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: MouseEvent) => {
-      if (!wrap.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
-
-  return <div className="language-menu" ref={wrap}>
+  const {language, savePreferences, t} = useLanguage();
+  const [savingLanguage,setSavingLanguage]=useState<Language|null>(null);
+  const switching=savingLanguage!==null;
+  const nextLanguage: Language = language === 'zh' ? 'en' : 'zh';
+  const targetLabel=nextLanguage==='zh'?'中文':'EN';
+  const progressLabel=t((savingLanguage??nextLanguage)==='zh'?'Switching to Chinese…':'Switching to English…');
+  async function switchLanguage(){
+    if(switching)return;
+    setSavingLanguage(nextLanguage);
+    try{await savePreferences({preferred_language:nextLanguage});}
+    finally{setSavingLanguage(null);}
+  }
+  return <div className="language-menu">
     <button
       type="button"
       className="language-shortcut"
-      aria-haspopup="menu"
-      aria-expanded={open}
-      aria-label={t('Language and speech')}
-      onClick={() => setOpen(value => !value)}
-    >{language === 'zh' ? '中文' : 'EN'}</button>
-    {open ? <ul className="language-menu__list" role="menu" aria-label={t('Choose a language')}>
-      {OPTIONS.map(option => <li key={option.code} role="none">
-        <button
-          type="button"
-          role="menuitemradio"
-          aria-checked={language === option.code}
-          className={language === option.code ? 'is-current' : undefined}
-          lang={option.code}
-          onClick={() => { setLanguage(option.code); setOpen(false); }}
-        >
-          <span>{option.label}</span>
-          {language === option.code ? <Icon name="check"/> : null}
-        </button>
-      </li>)}
-    </ul> : null}
+      data-ui-language={language}
+      aria-label={switching?progressLabel:t('Switch language')}
+      aria-busy={switching}
+      disabled={switching}
+      title={switching?progressLabel:t('Switch language')}
+      onClick={() => void switchLanguage()}
+    >{targetLabel}</button>
+    <span className="sr-only" role="status" aria-live="polite">{switching?progressLabel:''}</span>
   </div>;
 }

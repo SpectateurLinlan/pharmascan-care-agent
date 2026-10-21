@@ -54,37 +54,45 @@ h2 {
   font-weight: var(--fw-strong);
 }
 
-/* h3 shares the body size on purpose: it is separated by weight and colour,
-   which is what keeps the scale above it meaningful. */
+/* Card-level headings stay one step above body copy. */
 h3 {
   font-size: var(--fs-h3);
   line-height: var(--lh-h3);
   font-weight: var(--fw-strong);
 }
 
-/* Chinese does not take negative tracking, and needs a taller line box. */
+/* Chinese does not take negative tracking. Keep line boxes tuned by role. */
 :lang(zh),
 :lang(zh-Hans) {
   letter-spacing: 0;
 }
 
-:lang(zh) h1,
-:lang(zh) h2,
-:lang(zh) h3,
 :lang(zh) p,
 :lang(zh) li,
-:lang(zh) button,
-:lang(zh) input,
-:lang(zh) label,
-:lang(zh-Hans) h1,
-:lang(zh-Hans) h2,
-:lang(zh-Hans) h3,
 :lang(zh-Hans) p,
-:lang(zh-Hans) li,
+:lang(zh-Hans) li {
+  line-height: 1.55;
+}
+
+:lang(zh) h1,
+:lang(zh-Hans) h1 {
+  line-height: 1.3;
+}
+
+:lang(zh) h2,
+:lang(zh-Hans) h2,
+:lang(zh) h3,
+:lang(zh-Hans) h3 {
+  line-height: 1.4;
+}
+
+:lang(zh) button,
 :lang(zh-Hans) button,
+:lang(zh) input,
 :lang(zh-Hans) input,
+:lang(zh) label,
 :lang(zh-Hans) label {
-  line-height: 1.7;
+  line-height: 1.4;
 }
 
 a {
@@ -92,17 +100,17 @@ a {
 }
 
 /* --- controls -------------------------------------------------------------
-   Minimum 48px targets everywhere, because the audience includes tremor and
-   low vision. Component rules below may only make these larger, never smaller. */
+   Shared compact actions; wrapped and enlarged labels can grow naturally. */
 
 button {
   font: inherit;
-  font-size: var(--fs-body);
+  font-size: var(--button-font-size);
+  line-height: var(--button-line-height);
   font-weight: var(--fw-medium);
   color: var(--ink);
   cursor: pointer;
-  min-height: var(--tap);
-  padding: var(--s-3) var(--s-4);
+  min-height: var(--button-height);
+  padding: var(--button-padding-block) var(--control-padding-inline);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-md);
   background: var(--surface);
@@ -131,7 +139,7 @@ textarea {
   min-width: 0;
   max-width: 100%;
   min-height: var(--tap);
-  padding: var(--s-3) var(--s-4);
+  padding: var(--control-padding-block) var(--control-padding-inline);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
   background: var(--surface);
@@ -143,10 +151,10 @@ textarea {
 
 input[type='checkbox'],
 input[type='radio'] {
-  width: 24px;
-  height: 24px;
-  min-height: 24px;
-  flex: 0 0 24px;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  flex: 0 0 18px;
   padding: 0;
   accent-color: var(--brand);
 }

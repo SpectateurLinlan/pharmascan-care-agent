@@ -11,8 +11,7 @@
  */
 
 :root {
-  /* The patient's text-size preference multiplies the root, and every spacing
-     token below is expressed in rem, so spacing scales with the type. */
+  /* Patient text scaling is applied once here; browser zoom stays independent. */
   font-size: calc(16px * var(--font-scale, 1));
 
   /* --- type ------------------------------------------------------------- */
@@ -21,65 +20,65 @@
     'Microsoft YaHei', 'Noto Sans SC', sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Menlo, Consolas, monospace;
 
-  /* Type scale.
-     Body is 18px and `--fs-small` (16px) is the floor for anything a patient
-     must read, so the four steps above body have to fit in 18→36px. The
-     measured build this replaces had body 16 / h2 18 / h1 24 — a 1.22:1 step,
-     which reads as one flat size. Every adjacent step here is >= 1.22:1 and
-     the two that carry the page structure (display→h1, h1→h2) are >= 1.27:1.
-     h3 is deliberately the body size and is separated by weight, not scale. */
-  --fs-display: 2.25rem; /* 36 */
-  --lh-display: 1.15;
-  --fs-h1: 1.75rem; /* 28 */
-  --lh-h1: 1.2;
-  --fs-h2: 1.375rem; /* 22 */
-  --lh-h2: 1.25;
-  --fs-h3: 1.125rem; /* 18, same as body: weight carries it */
+  /* Semantic type roles: routine copy stays compact while clinical names remain clear. */
+  --fs-display: 2rem;
+  --lh-display: 1.2;
+  --fs-h1: 1.375rem;
+  --lh-h1: 1.23;
+  --fs-h2: 0.9375rem;
+  --lh-h2: 1.4;
+  --fs-h3: 0.875rem;
   --lh-h3: 1.4;
-  --fs-body: 1.125rem; /* 18 */
+  --fs-body: 0.75rem;
   --lh-body: 1.55;
-  --fs-small: 1rem; /* 16 */
+  --fs-small: 0.75rem;
   --lh-small: 1.5;
-  --fs-caption: 0.9375rem; /* 15 */
+  --fs-caption: 0.6875rem;
   --lh-caption: 1.5;
+  --fs-navigation: 0.6875rem;
+  --fs-navigation-compact: 0.6875rem;
+  --fs-clinical: 0.875rem;
 
   --fw-regular: 400;
   --fw-medium: 500;
   --fw-strong: 600;
   --tracking-display: -0.01em;
 
-  /* --- space (rem: scales with the patient's text size) ------------------ */
+  /* Spacing remains proportional when the patient enlarges text. */
   --s-1: 0.25rem;
   --s-2: 0.5rem;
-  --s-3: 0.75rem;
-  --s-4: 1rem;
-  --s-5: 1.25rem;
-  --s-6: 1.5rem;
-  --s-8: 2rem;
+  --s-3: 0.625rem;
+  --s-4: 0.75rem;
+  --s-5: 0.75rem;
+  --s-6: 1rem;
+  --s-8: 1.25rem;
   --s-12: 3rem;
 
-  /* --- shape and elevation ---------------------------------------------- */
-  --r-sm: 10px;
-  --r-md: 14px;
-  --r-lg: 20px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
   --r-pill: 999px;
   --e-1: 0 1px 2px rgb(22 41 42 / 6%), 0 8px 24px rgb(22 41 42 / 6%);
 
-  /* --- targets ----------------------------------------------------------- */
-  --tap: 48px;
-  --tap-lg: 56px;
+  --tap: 40px;
+  --tap-lg: 44px;
+  --icon-control: 18px;
+  --control-padding-block: 0.25rem;
+  --control-padding-inline: 0.625rem;
+  --button-height: 36px;
+  --button-font-size: 0.75rem;
+  --button-line-height: 1.4;
+  --button-padding-block: 0.25rem;
 
-  /* --- layout ------------------------------------------------------------
-   * One source of truth for the shell. The bottom bar and the desktop rail are
-   * the same navigation, so a screen never has to know which one is showing.
-   * `--rail-width` is 0 until the rail exists, which keeps every calculation
-   * below valid on a phone.
-   */
+  /* Shared shell and readable-content measures. */
   --rail-width: 0px;
-  --content-max: 960px;
-  --dashboard-max: 1200px;
-  --section-padding: var(--s-5);
-  --section-gap: var(--s-6);
+  --page-content-max: 52rem;
+  --page-gutter-narrow: var(--s-4);
+  --page-gutter-wide: var(--s-8);
+  /* Compatibility name for shared shell/header/composer consumers. */
+  --content-max: var(--page-content-max);
+  --section-padding: clamp(10px, 0.75rem, 14px);
+  --section-gap: clamp(10px, 0.75rem, 14px);
   --report-measure: 72ch;
   --dock-height: 4.5rem;
 
@@ -145,6 +144,14 @@
   --space-4: var(--s-4);
   --space-6: var(--s-6);
   --space-8: var(--s-8);
+}
+
+@media (max-width: 40rem) {
+  :root {
+    --fs-h1: 1.25rem; /* 20 */
+    --lh-h1: 1.33;
+    --fs-navigation: var(--fs-navigation-compact);
+  }
 }
 
 @media (prefers-color-scheme: dark) {

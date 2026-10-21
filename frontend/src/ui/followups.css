@@ -1,4 +1,4 @@
-.care-flow{display:grid;gap:1rem}.care-flow h2{margin:0}.care-flow form{display:grid;gap:.9rem}.care-flow .field{margin:0;min-width:0}.care-flow input,.care-flow select,.care-flow textarea{width:100%;box-sizing:border-box}.care-flow textarea{min-height:6rem}.followup-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem}.followup-actions{display:flex;gap:.75rem;justify-content:flex-end;flex-wrap:wrap}.followup-error{color:#9b2c24;font-size:.9rem}.care-tabs{display:flex;gap:.5rem;margin:1rem 0}.care-tabs button{flex:1}.care-tabs [aria-pressed=true]{background:#e7f1ea;color:#0d6255}.care-list{display:grid;gap:.75rem;list-style:none;padding:0}.care-list__button{display:grid;gap:.55rem;width:100%;text-align:start;padding:1rem;background:white}.care-list__heading{display:flex;gap:.8rem;justify-content:space-between;align-items:start}.care-list__heading strong{overflow-wrap:anywhere}.care-status{border-radius:2rem;padding:.15rem .6rem;font-size:.85rem;white-space:nowrap;background:#e7f1ea;color:#185b4e}.care-status--overdue{background:#fff2d8;color:#835a17}.care-status--completed{background:#edf0f2;color:#465967}.care-timeline{padding-inline-start:1.25rem;display:grid;gap:1rem}.care-timeline li{padding-inline-start:.4rem}.care-timeline p{margin:.25rem 0}.late-dose-list{list-style:none;padding:0;display:grid;gap:.8rem}.late-dose-list li{padding:1rem;border:1px solid #dddcd5;border-radius:1rem}.late-dose-list h4{margin:0 0 .4rem}.late-dose-list .followup-actions{justify-content:start}.care-flow fieldset{border:0;padding:0;display:grid;gap:.6rem}.care-flow fieldset label{display:flex;gap:.6rem;align-items:center}.care-flow fieldset input{width:auto}.care-flow [aria-invalid=true]{border-color:#9b2c24}.care-flow .notice{margin:.2rem 0}.care-list__meta{color:#526763;font-size:.95rem}
+.care-flow{display:grid;gap:1rem}.care-flow h2{margin:0}.care-flow form{display:grid;gap:.9rem}.care-flow .field{margin:0;min-width:0}.care-flow input,.care-flow select,.care-flow textarea{width:100%;box-sizing:border-box}.care-flow textarea{min-height:6rem}.followup-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem}.followup-actions{display:flex;gap:.75rem;justify-content:flex-end;flex-wrap:wrap}.followup-error{color:#9b2c24;font-size:var(--fs-caption)}.care-tabs{display:flex;gap:.5rem;margin:1rem 0}.care-tabs button{flex:1}.care-tabs [aria-pressed=true]{background:#e7f1ea;color:#0d6255}.care-list{display:grid;gap:.75rem;list-style:none;padding:0}.care-list__button{display:grid;gap:.55rem;width:100%;text-align:start;padding:1rem;background:white}.care-list__heading{display:flex;gap:.8rem;justify-content:space-between;align-items:start}.care-list__heading strong{overflow-wrap:anywhere}.care-status{border-radius:2rem;padding:.15rem .6rem;font-size:.85rem;white-space:nowrap;background:#e7f1ea;color:#185b4e}.care-status--overdue{background:#fff2d8;color:#835a17}.care-status--completed{background:#edf0f2;color:#465967}.care-timeline{padding-inline-start:1.25rem;display:grid;gap:1rem}.care-timeline li{padding-inline-start:.4rem}.care-timeline p{margin:.25rem 0}.late-dose-list{list-style:none;padding:0;display:grid;gap:.8rem}.late-dose-list li{padding:1rem;border:1px solid #dddcd5;border-radius:1rem}.late-dose-list h4{margin:0 0 .4rem}.late-dose-list .followup-actions{justify-content:start}.care-flow fieldset{border:0;padding:0;display:grid;gap:.6rem}.care-flow fieldset label{display:flex;gap:.6rem;align-items:center}.care-flow fieldset input{width:auto}.care-flow [aria-invalid=true]{border-color:#9b2c24}.care-flow .notice{margin:.2rem 0}.care-list__meta{color:#526763;font-size:.95rem}
 @media(max-width:600px){.bottom-sheet:has(.care-flow){width:100%;max-width:100%;max-height:100dvh;min-height:100dvh;border-radius:0;box-sizing:border-box;padding:1.25rem;padding-bottom:calc(1.5rem + env(safe-area-inset-bottom))}.sheet-backdrop:has(.care-flow){padding:0}.followup-actions button{flex:1}.care-flow input[type=date],.care-flow input[type=time]{min-width:0}}
 
 .followup-grid{align-items:start}.care-flow .field{align-content:start}.care-flow>.care-status{justify-self:start}
@@ -11,47 +11,79 @@
 
 .care-summary__header,.care-task-page__header,.care-calendar__month,.care-calendar__agenda>header,.today-unrecorded__header{display:flex;align-items:center;justify-content:space-between;gap:.75rem}
 .care-summary__header h2,.care-task-page__header h2,.today-unrecorded__header h3{margin:0}
-.care-summary__add,.care-summary__calendar{min-height:2.75rem}
+.care-summary__add,.care-summary__calendar{min-height:var(--button-height)}
 .care-summary__counts,.care-view-switch,.care-status-filter{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:.75rem 0}
 .care-summary__empty,.care-calendar__empty,.care-calendar__hint{margin:.6rem 0;color:#526763}
 .care-task-page__header{margin-bottom:.75rem}.care-task-page__header p{margin:.25rem 0 0}.care-view-switch button[aria-pressed=true],.care-status-filter button[aria-pressed=true]{background:#087565;color:#fff;border-color:#087565}
 .care-status-filter__mobile{display:none}
-.care-calendar{margin-top:1rem}.care-calendar__month{justify-content:center;margin-bottom:.75rem}.care-calendar__month h3{margin:0 auto;min-width:8rem;text-align:center}.care-calendar__month button{min-height:2.5rem}
-.care-calendar__grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:.2rem;text-align:center}.care-calendar__grid [role=columnheader]{padding:.35rem .1rem;color:#526763;font-size:.9rem}
-.care-calendar__day{position:relative;display:flex;min-width:0;min-height:3.3rem;flex-direction:column;align-items:center;justify-content:center;gap:.25rem;padding:.3rem;border:1px solid transparent;border-radius:.55rem;background:transparent;color:inherit;cursor:pointer}
+.care-calendar{margin-top:1rem}.care-calendar__month{justify-content:center;margin-bottom:.75rem}.care-calendar__month h3{margin:0 auto;min-width:8rem;text-align:center}.care-calendar__month button{min-height:var(--button-height)}
+.care-calendar__grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:.2rem;text-align:center}.care-calendar__grid [role=columnheader]{display:grid;place-items:center;min-width:0;padding:.35rem .1rem;color:#526763;font-size:var(--fs-caption);line-height:1.25;white-space:nowrap}
+.care-calendar__day{position:relative;display:flex;min-width:0;min-height:var(--button-height);flex-direction:column;align-items:center;justify-content:center;gap:.25rem;padding:.2rem;border:1px solid transparent;border-radius:.55rem;background:transparent;color:inherit;font-size:var(--button-font-size);cursor:pointer}
 .care-calendar__day:hover{background:#edf4f1}.care-calendar__day.is-today{font-weight:700}.care-calendar__day[aria-selected=true]{border-color:#087565;background:#edf4f1}.care-calendar__markers{display:flex;gap:.2rem;min-height:.35rem}.care-calendar__marker{display:inline-block;width:.35rem;height:.35rem;border-radius:50%;background:#087565}.care-calendar__marker--overdue{background:#bd8121}.care-calendar__marker--completed{background:#87958f}
-.care-calendar__legend{display:flex;justify-content:center;gap:1rem;list-style:none;margin:.8rem 0;padding:0;font-size:.85rem}.care-calendar__legend li{display:flex;align-items:center;gap:.35rem}.care-calendar__agenda{border-top:1px solid #e2e4df;margin-top:1rem;padding-top:.75rem}.care-calendar__agenda h3{margin:0}.care-calendar__agenda>header{margin-bottom:.5rem}.care-list--compact{gap:.4rem}.care-list--compact .care-list__button{padding:.75rem}.care-list-view>section+section{border-top:1px solid #e2e4df;margin-top:1rem;padding-top:.75rem}.care-list-view h3{display:flex;align-items:center;gap:.5rem}.care-list-view .care-list{margin-top:.5rem}
-.today-unrecorded--compact{margin-top:.75rem}.today-unrecorded--compact .today-unrecorded__note{margin:.25rem 0;color:#526763;font-size:.92rem}.today-dose-list{list-style:none;margin:.5rem 0;padding:0;display:grid;gap:.35rem}.today-dose-list li{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.65rem 0;border-top:1px solid #e2e4df}.today-dose-list li>div{display:grid;gap:.15rem;min-width:0}.today-dose-list li>div span{color:#526763;font-size:.9rem}.today-dose-list .text-button{flex:none}
-@media(max-width:600px){.care-task-page__header{align-items:flex-start}.care-task-page__header .primary{min-height:2.75rem;flex:none}.care-view-switch{display:grid;grid-template-columns:1fr 1fr}.care-view-switch button{min-height:2.75rem}.care-status-filter--desktop{display:none}.care-status-filter__mobile{display:grid;gap:.35rem}.care-status-filter__mobile select{width:100%;min-height:2.75rem}.care-calendar__grid{gap:.1rem}.care-calendar__day{min-height:2.8rem;padding:.15rem}.care-calendar__legend{justify-content:flex-start;gap:.6rem;flex-wrap:wrap}.today-dose-list li{align-items:flex-start}.today-dose-list .text-button{min-height:2.75rem}}
+.care-calendar__legend{display:flex;justify-content:center;gap:1rem;list-style:none;margin:.8rem 0;padding:0;font-size:var(--fs-caption)}.care-calendar__legend li{display:flex;align-items:center;gap:.35rem}.care-calendar__agenda{border-top:1px solid #e2e4df;margin-top:1rem;padding-top:.75rem}.care-calendar__agenda h3{margin:0}.care-calendar__agenda>header{margin-bottom:.5rem}.care-list--compact{gap:.4rem}.care-list--compact .care-list__button{padding:.75rem}.care-list-view>section+section{border-top:1px solid #e2e4df;margin-top:1rem;padding-top:.75rem}.care-list-view h3{display:flex;align-items:center;gap:.5rem}.care-list-view .care-list{margin-top:.5rem}
+.today-unrecorded--compact{margin-top:.75rem}.today-unrecorded--compact .today-unrecorded__note{margin:.25rem 0;color:#526763;font-size:var(--fs-caption)}.today-dose-list{list-style:none;margin:.5rem 0;padding:0;display:grid;gap:.35rem}.today-dose-list li{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.65rem 0;border-top:1px solid #e2e4df}.today-dose-list li>div{display:grid;gap:.15rem;min-width:0}.today-dose-list li>div strong{font-size:var(--fs-clinical);line-height:1.35}.today-dose-list li>div span{color:#526763;font-size:var(--fs-caption)}.today-dose-list .text-button{flex:none}
+@media(max-width:600px){.care-task-page__header{align-items:flex-start}.care-task-page__header .primary{min-height:var(--button-height);flex:none;font-size:var(--button-font-size);padding-inline:var(--s-3)}.care-task-page__header h2{font-size:var(--fs-h3);line-height:var(--lh-h3)}.care-view-switch{display:grid;grid-template-columns:1fr 1fr}.care-view-switch button{min-height:var(--button-height)}.care-status-filter--desktop{display:flex}.care-status-filter__mobile{display:none;gap:.35rem}.care-status-filter__mobile select{width:100%;min-height:2.75rem}.care-calendar__grid{grid-template-columns:repeat(7,minmax(0,1fr));gap:.1rem}.care-calendar__grid [role=columnheader]{font-size:var(--fs-navigation-compact)}.care-calendar__day{min-height:var(--button-height);padding:.15rem}.care-calendar__legend{justify-content:flex-start;gap:.6rem;flex-wrap:wrap;font-size:var(--fs-caption)}.today-dose-list li{align-items:flex-start}.today-dose-list .text-button{min-height:var(--button-height)}}
 @media(max-width:420px){.care-flow .followup-grid {grid-template-columns:1fr}}
+
+/* Compact task controls retain the shared touch area. */
+.care-task-page{gap:var(--s-2)}
+.care-task-page__header{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;align-items:center;gap:.25rem .75rem}
+.card.care-task-page .care-task-page__header>div{display:contents}
+.care-task-page__header h2{grid-column:1;grid-row:1}
+.care-task-page__header p{grid-column:1 / -1;grid-row:2}
+.care-task-page__header .primary{grid-column:2;grid-row:1;display:inline-flex;align-items:center;justify-content:center;gap:.35rem;min-width:8rem;min-height:var(--button-height);padding:.15rem .9rem;white-space:nowrap}
+.care-view-switch{display:flex;width:100%;flex-wrap:nowrap;gap:0;padding:0;margin:.75rem 0;border:0;border-radius:var(--r-pill);background:var(--surface-2)}
+.care-view-switch button{position:relative;isolation:isolate;flex:1 1 0;min-width:0;min-height:var(--button-height);padding:.15rem .5rem;border:0;border-radius:var(--r-pill);background:transparent;color:var(--ink-2)}
+.care-view-switch button::before{position:absolute;z-index:-1;inset:3px;border-radius:var(--r-pill);background:transparent;content:""}
+.care-view-switch button[aria-pressed=true]{background:transparent;color:var(--brand-strong);border-color:transparent;font-weight:var(--fw-strong)}
+.care-view-switch button[aria-pressed=true]::before{background:var(--surface);box-shadow:0 1px 2px rgb(22 41 42 / 10%)}
+.care-view-switch button:focus-visible{z-index:1}
+.care-calendar__month{display:grid;grid-template-columns:var(--tap) minmax(0,1fr) var(--tap) auto;gap:var(--s-1)}
+.care-calendar__month h3{min-width:0;margin:0;font-size:var(--fs-h3);line-height:var(--lh-h3);text-wrap:balance}
+.care-calendar__month button{min-width:var(--tap);min-height:var(--button-height);padding:.1rem .5rem}
+.care-status-filter{gap:.35rem;margin:.4rem 0 .6rem}
+.care-status-filter button{min-width:4rem;min-height:var(--button-height);padding:.15rem .75rem;border-radius:var(--r-md);background:var(--surface);font-size:var(--button-font-size)}
+.care-status-filter button[aria-pressed=true]{background:var(--brand);color:var(--on-brand);border-color:var(--brand)}
+@media(max-width:600px){
+ .care-task-page__header{align-items:center}
+ .care-task-page__header .primary{font-size:var(--button-font-size);padding-inline:.6rem}
+ .care-task-page__header h2{font-size:var(--fs-h3);line-height:var(--lh-h3)}
+ .care-view-switch{display:grid;grid-template-columns:1fr 1fr}
+ .care-status-filter--desktop{display:flex}
+ .care-status-filter__mobile{display:none;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:.5rem;margin:.25rem 0 .5rem;font-size:var(--fs-caption)}
+ .care-status-filter__mobile select{width:100%;min-height:var(--tap);padding:.35rem .65rem}
+ :root[data-text-scale]:not([data-text-scale="100"]) .care-task-page__header{grid-template-columns:minmax(0,1fr)}
+ :root[data-text-scale]:not([data-text-scale="100"]) .care-task-page__header .primary{grid-column:1;grid-row:3;justify-self:start}
+}
+@media(max-width:360px){.care-task-page__header{grid-template-columns:minmax(0,1fr) auto;gap:.4rem}.care-task-page__header .primary{padding-inline:.45rem}}
 
 /* Today uses one medication surface with compact confirmation and schedule rows. */
 .today-attention{display:grid;gap:.55rem;min-width:0}
 .today-attention__heading{display:flex;align-items:center;justify-content:space-between;gap:.75rem}
-.today-attention__heading h2{margin:0;font-size:1.25rem}
-.today-attention__heading time{color:#526763;font-size:.9rem;font-variant-numeric:tabular-nums}
-.today-attention .today-unrecorded--compact{margin:0;padding:.7rem 0 0;border:0;border-top:1px solid #e2e4df;border-radius:0;background:transparent}
-.today-unrecorded--compact .today-unrecorded__header h3{font-size:1rem}
-.today-unrecorded__count{flex:none;color:#526763;font-size:.9rem}
-.today-unrecorded--compact .today-unrecorded__note{margin:.15rem 0;color:#526763;font-size:.82rem}
+.today-attention__heading h2{margin:0;font-size:var(--fs-h2);line-height:var(--lh-h2)}
+.today-attention__heading time{color:#526763;font-size:var(--fs-caption);font-variant-numeric:tabular-nums}
+.today-attention .today-unrecorded--compact{margin:0;padding:0;border:0;border-radius:0;background:transparent}
+.today-unrecorded--compact .today-unrecorded__header h3{font-size:var(--fs-body)}
+.today-unrecorded__count{flex:none;color:#526763;font-size:var(--fs-caption)}
+.today-unrecorded--compact .today-unrecorded__note{margin:.15rem 0;color:#526763;font-size:var(--fs-caption)}
 .today-unrecorded--compact .today-dose-list{margin:.25rem 0 0}
 .today-unrecorded--compact .today-dose-list li{min-height:2.8rem;padding:.4rem 0}
-.today-dose-list__action{display:inline-flex;align-items:center;gap:.45rem;flex:none;min-height:2.75rem;padding:.25rem .4rem;border:0;background:transparent;color:#087565;font:inherit;cursor:pointer}
-.today-dose-list__action span,.today-records-link span{font-size:1.15rem}
+.today-dose-list__action{display:inline-flex;align-items:center;gap:.45rem;flex:none;min-height:var(--button-height);padding:.25rem .4rem;border:0;background:transparent;color:#087565;font:inherit;cursor:pointer}
+.today-dose-list__action span,.today-records-link span{font-size:1.15rem;line-height:1}
 .today-dose-list__action:focus-visible,.today-records-link:focus-visible,.care-summary__add:focus-visible,.care-summary__calendar:focus-visible{outline:3px solid #087565;outline-offset:2px}
-.today-records-link{display:flex;align-items:center;justify-content:flex-end;gap:.5rem;width:100%;min-height:2.75rem;padding:.35rem 0;border:0;background:transparent;color:#087565;font:inherit;text-align:start;cursor:pointer}
+.today-records-link{display:flex;align-items:center;justify-content:flex-end;gap:.5rem;width:100%;min-height:var(--button-height);padding:.35rem 0;border:0;background:transparent;color:#087565;font:inherit;text-align:start;cursor:pointer}
 .today-schedule-empty{margin:.15rem 0;color:#526763}
 .today-overview--embedded{min-width:0}
 .today-overview--embedded .medicine-current .card{padding:.65rem 0 0}
 .today-overview--embedded .dose-head{gap:.2rem}
-.today-overview--embedded .dose-name{font-size:1.05rem;line-height:1.35}
-.today-overview--embedded .dose-plan,.today-overview--embedded .dose-strength{font-size:.85rem}
+.today-overview--embedded .dose-name{font-size:var(--fs-clinical);line-height:1.35}
+.today-overview--embedded .dose-plan,.today-overview--embedded .dose-strength{font-size:var(--fs-body)}
 .today-overview--embedded .dose-details{display:none}
 .today-overview--embedded .dose-report{gap:.35rem;padding-top:.55rem}
-.today-overview--embedded .dose-report__choices .choice{min-height:2.6rem}
-.today-overview--embedded .dose-secondary-action{min-height:2.5rem}
+.today-overview--embedded .dose-report__choices .choice{min-height:var(--button-height)}
+.today-overview--embedded .dose-secondary-action{min-height:var(--button-height)}
 .today-attention .today-medication-shortcuts{gap:.2rem 1rem;margin-top:.2rem;padding-top:.45rem;border-top:1px solid #e2e4df}
-.today-attention .today-medication-shortcuts .text-button{display:inline-flex;align-items:center;min-height:2.5rem;padding:0 .2rem;border:0;border-radius:0;background:transparent;color:#087565;font:inherit;text-decoration:underline;text-underline-offset:.16em}
+.today-attention .today-medication-shortcuts .text-button{display:inline-flex;align-items:center;min-height:var(--button-height);padding:0 .2rem;border:0;border-radius:0;background:transparent;color:#087565;font:inherit;text-decoration:underline;text-underline-offset:.16em}
 .care-summary{gap:.35rem}
 .care-summary__header{min-height:2.6rem}
 .care-summary__add{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;padding:.25rem .35rem;border:0;background:transparent;color:#087565;font:inherit}
@@ -64,6 +96,15 @@
 .care-summary .care-list__heading strong{font-weight:600}
 .care-summary .care-list__meta{font-size:.86rem}
 .care-summary__empty{margin:.15rem 0}
-.care-summary__calendar{display:flex;align-items:center;gap:.55rem;width:100%;min-height:2.75rem;margin-top:.2rem;padding:.45rem 0;border:0;border-top:1px solid #e2e4df;border-radius:0;background:transparent;color:#087565;font:inherit;text-align:start;cursor:pointer}
+.care-summary__calendar{display:flex;align-items:center;gap:.55rem;width:100%;min-height:var(--button-height);margin-top:.2rem;padding:.45rem 0;border:0;border-top:1px solid #e2e4df;border-radius:0;background:transparent;color:#087565;font:inherit;text-align:start;cursor:pointer}
 .care-summary__calendar .app-icon:last-child{margin-inline-start:auto;color:#526763}
-@media(max-width:600px){.today-attention__heading h2{font-size:1.15rem}.today-dose-list__action{gap:.2rem;padding-inline:.15rem;font-size:.9rem}.care-summary__header{align-items:center}.care-summary__add{min-height:2.75rem}}
+@media(max-width:600px){.today-dose-list__action{gap:.2rem;padding-inline:.15rem;font-size:var(--button-font-size)}.care-summary__header{align-items:center}.care-summary__add{min-height:var(--button-height)}}
+
+/* The reference keeps status choices visible; large text may wrap them. */
+.care-status-filter button { flex:0 1 auto; }
+
+/* Confirmation follows the actual schedule and remains a subordinate region. */
+.today-confirmation-region,.card.today-confirmation-card { padding:var(--s-3); background:var(--brand-50); border:1px solid var(--brand-100); border-radius:var(--r-md); }
+.today-confirmation-card .today-unrecorded--compact { margin:0; padding:0; border:0; background:transparent; }
+.today-confirmation-region .today-dose-list li { padding-block:var(--s-1); }
+.today-confirmation-region .today-records-link,.today-confirmation-card .today-records-link { min-height:var(--button-height); padding-block:0; }

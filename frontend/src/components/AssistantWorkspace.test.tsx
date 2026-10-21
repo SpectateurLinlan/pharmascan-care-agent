@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
-import {useState} from 'react';
+import {StrictMode,useState} from 'react';
 import {AssistantScreen} from './AssistantScreen';
 import {api,type AgentMessageResponse} from '../api/client';
 vi.mock('../api/client',()=>({ApiError:class extends Error{},api:{recentTurns:vi.fn(),sendMessage:vi.fn(),newConversation:vi.fn(),conversationHistory:vi.fn(),agentUsage:vi.fn()}}));
@@ -9,6 +9,13 @@ beforeEach(()=>{localStorage.removeItem('pharmascan.agent-session');vi.mocked(ap
 afterEach(()=>{cleanup();vi.resetAllMocks();});
 function Host({onViewTodayMedication}:{onViewTodayMedication?:()=>void}={}){const [workspace,setWorkspace]=useState(false),[session,setSession]=useState<string|null>('DEMO-session');return <AssistantScreen sessionId={session} onSession={setSession} todayEntry compact={!workspace} workspace={workspace} onExpand={()=>setWorkspace(true)} onClose={()=>setWorkspace(false)} {...(onViewTodayMedication?{onViewTodayMedication}:{})}/>;}
 const reply:AgentMessageResponse={message:'DEMO answer',intent:'clarification',mode:'rules',tool_traces:[],session_id:'DEMO-session',session_state:'idle',requires_confirmation:false};
+it('starts one recent-turn and usage read under StrictMode and none for an immediately disposed mount',async()=>{
+ render(<StrictMode><Host/></StrictMode>);
+ await waitFor(()=>expect(api.recentTurns).toHaveBeenCalledTimes(1));expect(api.agentUsage).toHaveBeenCalledTimes(1);
+ cleanup();vi.mocked(api.recentTurns).mockClear();vi.mocked(api.agentUsage).mockClear();
+ const view=render(<Host/>);view.unmount();await act(async()=>{await Promise.resolve();});
+ expect(api.recentTurns).not.toHaveBeenCalled();expect(api.agentUsage).not.toHaveBeenCalled();
+});
 it('edits inline without opening, sends once, and displays the pending patient message immediately',async()=>{
  let finish!:(value:AgentMessageResponse)=>void;vi.mocked(api.sendMessage).mockReturnValue(new Promise(resolve=>{finish=resolve;}));render(<Host/>);
  const input=screen.getByRole('textbox');fireEvent.focus(input);fireEvent.change(input,{target:{value:'DEMO question'}});expect(screen.queryByRole('dialog')).toBeNull();

@@ -273,9 +273,12 @@ export function EnrollScreen({
         <label htmlFor={fieldId('med-unit')}>{t('Dose unit')}</label>
         <input
           id={fieldId('med-unit')} aria-label={t('Unit')}
-          value={doseUnit}
-          onChange={(event) => setDoseUnit(event.target.value)}
-          placeholder="tablet"
+          value={doseUnit === 'tablet' || doseUnit === 'capsule' ? t(doseUnit) : doseUnit}
+          onChange={(event) => {
+            const value = event.target.value;
+            setDoseUnit(value === t('tablet') ? 'tablet' : value === t('capsule') ? 'capsule' : value);
+          }}
+          placeholder={t('tablet')}
         />
       </div>
     </div>

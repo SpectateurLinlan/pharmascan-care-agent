@@ -5,7 +5,7 @@ import {useCareNavigation} from './navigation';
 import {greetingAt,greetingName} from './greeting';
 
 afterEach(()=>{cleanup();history.replaceState(null,'','/');});
-function Navigation({blocked=false}:{blocked?:boolean}){const nav=useCareNavigation(blocked);return <><output>{nav.tab}</output>{['today','medicines','records','medication-records','me','assistant','check','check-result','label','manual','medicine-detail','medicine-history'].map(route=><button key={route} onClick={()=>nav.navigate(route)}>{route}</button>)}<button onClick={()=>nav.navigate('medicines',undefined,{preserveOrigin:true})}>Today medicines link</button><button onClick={()=>nav.navigate('records',undefined,{preserveOrigin:true})}>Today records link</button>{!nav.isRoot?<button onClick={nav.back}>Back</button>:null}</>;}
+function Navigation({blocked=false}:{blocked?:boolean}){const nav=useCareNavigation(blocked);return <><output>{nav.tab}</output>{['today','medicines','records','medication-records','me','assistant','check','check-result','label','manual','medicine-detail','medicine-history'].map(route=><button key={route} onClick={()=>nav.navigate(route)}>{route}</button>)}<button onClick={()=>nav.navigate('medicines',undefined,{preserveOrigin:true})}>Today medicines link</button><button onClick={()=>nav.navigate('records',undefined,{preserveOrigin:true})}>Today records link</button><button onClick={()=>nav.navigate('medicines',undefined,{replace:true})}>Guide route</button><button onClick={()=>nav.restore('today',{search:'kept'},['today'])}>Restore guide origin</button>{!nav.isRoot?<button onClick={nav.back}>Back</button>:null}</>;}
 it('twenty root selections replace their own entry and show no Back',()=>{
  render(<Navigation/>);const length=history.length;
  for(let i=0;i<20;i++)fireEvent.click(screen.getByText(['medicines','records','me','today'][i%4]!,{selector:'button'}));
@@ -18,6 +18,12 @@ it('returns assistant to its actual origin and deep links have explicit parent f
 });
 it('locked guide blocks application route actions',()=>{render(<Navigation blocked/>);fireEvent.click(screen.getByText('records',{selector:'button'}));expect(screen.getByRole('status').textContent).toBe('today');});
 it('does not overwrite an unconsumed identity callback URL',()=>{history.replaceState(null,'','/?code=DEMO-synthetic-callback');render(<Navigation/>);expect(location.search).toBe('?code=DEMO-synthetic-callback');fireEvent.click(screen.getByText('me',{selector:'button'}));expect(location.hash).toBe('');});
+it('preserves a direct route query through navigation initialization and guide restoration',async()=>{
+ history.replaceState({careRoute:['today']},'','#today?search=amlodipine&range=30');render(<Navigation/>);
+ await waitFor(()=>expect(location.hash).toBe('#today?search=amlodipine&range=30'));
+ fireEvent.click(screen.getByText('Guide route'));await waitFor(()=>expect(screen.getByRole('status').textContent).toBe('medicines'));
+ fireEvent.click(screen.getByText('Restore guide origin'));expect(location.hash).toBe('#today?search=kept');
+});
 it('preserves medication, photo, and gallery state when navigation initializes a direct gallery URL',async()=>{
  const href='#gallery?medication_id=DEMO-med&photo_id=DEMO-photo&search=metformin&sort=updated';history.replaceState(null,'',href);render(<Navigation/>);
  await waitFor(()=>expect(location.hash).toBe(href));expect(screen.getByRole('status').textContent).toBe('gallery');
@@ -47,6 +53,13 @@ it('makes contextual Records navigation return to Today without changing main-ta
  render(<Navigation/>);fireEvent.click(screen.getByText('Today records link'));await waitFor(()=>expect(screen.getByRole('status').textContent).toBe('records'));
  expect(screen.getByText('Back')).toBeTruthy();fireEvent.click(screen.getByText('Back'));await waitFor(()=>expect(screen.getByRole('status').textContent).toBe('today'));
  fireEvent.click(screen.getByText('records',{selector:'button'}));await waitFor(()=>expect(screen.getByRole('status').textContent).toBe('records'));expect(screen.queryByText('Back')).toBeNull();
+});
+it('replaces history during guided routes and restores the origin query in place',async()=>{
+ history.replaceState({careRoute:['today']},'','#today?search=original');render(<Navigation/>);const length=history.length;
+ fireEvent.click(screen.getByText('Guide route'));await waitFor(()=>expect(screen.getByRole('status').textContent).toBe('medicines'));
+ fireEvent.click(screen.getByText('records',{selector:'button'}));await waitFor(()=>expect(screen.getByRole('status').textContent).toBe('records'));
+ expect(history.length).toBe(length);fireEvent.click(screen.getByText('Restore guide origin'));
+ expect(location.hash).toBe('#today?search=kept');expect(history.length).toBe(length);
 });
 it('returns the medication records child page to Records using the existing navigation stack',async()=>{
  render(<Navigation/>);fireEvent.click(screen.getByText('records',{selector:'button'}));fireEvent.click(screen.getByText('medication-records',{selector:'button'}));

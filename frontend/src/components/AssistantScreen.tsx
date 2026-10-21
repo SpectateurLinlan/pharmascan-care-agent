@@ -118,9 +118,9 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
   },[turns,confirmationIndex]);
   const handledClear=useRef(0);
   useEffect(()=>{if(clearRevision===handledClear.current)return;handledClear.current=clearRevision;recentLoad.current+=1;loadedSession.current=sessionId;setRecent([]);setTurns([]);setSentTexts([]);setSentPhotoNames([]);setReportStates({});setConfirmationIndex(null);setHistoryOpen(false);views.current.clear();outgoing.current.clear();setConversationId(null);if(selectionKey)localStorage.removeItem(selectionKey);setViewSlots({});setSource(null);setCareProposal(null);},[clearRevision,sessionId]);
-  useEffect(()=>{if(conversationId||!sessionId||loadedSession.current===sessionId||!api.recentTurns)return;let live=true;const version=++recentLoad.current;void api.recentTurns(sessionId).then(rows=>{if(live&&version===recentLoad.current&&loadedSession.current!==sessionId){loadedSession.current=sessionId;setRecent(rows);}}).catch(()=>{if(live&&version===recentLoad.current)setError(new Error('Could not restore recent conversation. Your medication records have not changed.'));});return()=>{live=false;};},[sessionId,clearRevision,conversationId]);
+  useEffect(()=>{if(conversationId||!sessionId||loadedSession.current===sessionId||!api.recentTurns)return;let live=true;const version=++recentLoad.current;void Promise.resolve().then(()=>{if(!live)return;return api.recentTurns(sessionId).then(rows=>{if(live&&version===recentLoad.current&&loadedSession.current!==sessionId){loadedSession.current=sessionId;setRecent(rows);}}).catch(()=>{if(live&&version===recentLoad.current)setError(new Error('Could not restore recent conversation. Your medication records have not changed.'));});});return()=>{live=false;};},[sessionId,clearRevision,conversationId]);
 
-  useEffect(()=>{let live=true; if(api.agentUsage) void api.agentUsage().then(value=>{if(live)setUsage(value);}).catch(()=>{if(live)setUsage(null);});return()=>{live=false;};},[]);
+  useEffect(()=>{let live=true; void Promise.resolve().then(()=>{if(!live||!api.agentUsage)return;return api.agentUsage().then(value=>{if(live)setUsage(value);}).catch(()=>{if(live)setUsage(null);});});return()=>{live=false;};},[]);
 
   async function send(selection?:MedicationSelection,selectionLabel?:string) {
     const failed=outgoing.current.get(viewKey.current);
@@ -247,30 +247,30 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
     {compact&&todayEntry?<>
       <div className="today-assistant__heading"><Icon name="message"/><h2>MediThread Assistant</h2><button type="button" className="today-assistant__expand" onClick={onExpand}>{t('Open full chat')}<Icon name="chevron-right"/></button></div>
       <p className="card__hint">{t('View your medicines, review your records or prepare for a visit.')}</p>
-      <div className="assistant-tasks" aria-label={t('Assistant tasks')}>
+      <div className="today-assistant__suggestions"><div className="assistant-tasks" role="group" tabIndex={0} aria-label={t('Assistant tasks')}>
         <button type="button" disabled={busy||Boolean(text.trim())||Boolean(photo)} onClick={onViewTodayMedication}>{t('View today’s medication')}</button>
         {([
           ['Understand medicines','What are my current medications used for? Explain general uses separately from my reviewed instructions.'],
           ['Review my records','Summarise my recorded doses and health observations from the past 7 days. Distinguish unrecorded doses from reported not taken.'],
           ['Prepare for a visit','Help me prepare questions for a pharmacist or doctor using my saved medication and health records.'],
         ] as const).map(([label,prompt])=><button type="button" key={label} disabled={busy||Boolean(text.trim())||Boolean(photo)} onClick={()=>{setText(t(prompt));requestAnimationFrame(()=>focusMessage());}}>{t(label)}</button>)}
-      </div>
+      </div></div>
     </>:null}
     {source&&!selectedHistory?<details className="assistant-source" aria-label={t('Source context')}><summary>{t('From')}: {t(source.page==='medicine-detail'?'Medication details':source.page==='medicines'?'Medicines':'Records')}{source.display_name?` ? ${t('Viewing')}: ${source.display_name}`:''}</summary><p className="notice">{t('Page context is a record reference. Current medication facts are checked again when needed.')}</p>{onSourceReturn?<button type="button" className="text-button" onClick={()=>onSourceReturn(source)}>{t('Return to source')}</button>:null}</details>:null}
     <div ref={timeline} className="conversation-scroll">
     {workspace&&[...views.current.entries()].some(([key,row])=>key!==viewKey.current&&!row.conversation&&(row.text||row.photo||row.turns.length||row.recent.length))?<button disabled={workspaceLocked} onClick={returnTemporary}>{t('Return to unsent conversation')}</button>:null}
     {olderCursor&&!selectedHistory?<button disabled={busy} onClick={()=>void earlierMessages()}>{t('Load earlier messages')}</button>:null}
     {!preferences.conversation_history_enabled?<p className="notice">{t('Saving is off. New messages stay temporary and cannot be restored across devices.')}</p>:null}
-    {workspace&&selectedHistory?<article className="selected-history"><button type="button" className="text-button" onClick={showCurrentConversation}>{t('Back to current conversation')}</button><p className="user-message">{selectedHistory.user_text}</p><p className="history-message">{patientMessage(selectedHistory.assistant_text)}</p></article>:null}
-    {workspace&&!selectedHistory&&!recent.length&&!turns.length&&!pendingText?<p className="notice">{t('Ask a question about your medicines or records.')}</p>:null}
+    {workspace&&selectedHistory?<article className="selected-history" data-guide="assistant-conversation"><button type="button" className="text-button" onClick={showCurrentConversation}>{t('Back to current conversation')}</button><p className="user-message">{selectedHistory.user_text}</p><p className="history-message">{patientMessage(selectedHistory.assistant_text)}</p></article>:null}
+    {workspace&&!selectedHistory&&!recent.length&&!turns.length&&!pendingText?<p className="notice" data-guide="assistant-conversation">{t('Ask a question about your medicines or records.')}</p>:null}
     {recent.length&&!turns.length?<p className="notice">{t('Saved choices are read-only. Ask again to refresh medicine options.')}</p>:null}
-    {!selectedHistory&&(recent.length||turns.length||pendingText)?<details className="recent-chat" open={!todayEntry||!compact||conversationExpanded||busy||confirmationIndex!==null||careProposal!==null||Boolean(pendingText)} onToggle={event=>{if(todayEntry&&compact)setConversationExpanded(event.currentTarget.open);}}><summary>{t('Recent conversation')} · {recent.length+turns.length}</summary>{recent.map((row,index)=><article key={`recent-${index}`}><p className="user-message">{row.user}{row.photo?<small>{t('Photo attached')}</small>:null}</p><p>{patientMessage(row.assistant)}</p></article>)}
+    {!selectedHistory&&(recent.length||turns.length||pendingText)?<details className="recent-chat" open={!todayEntry||!compact||conversationExpanded||busy||confirmationIndex!==null||careProposal!==null||Boolean(pendingText)} onToggle={event=>{if(todayEntry&&compact)setConversationExpanded(event.currentTarget.open);}}><summary data-guide="assistant-conversation">{t('Recent conversation')} · {recent.length+turns.length}</summary>{recent.map((row,index)=><article key={`recent-${index}`}><p className="user-message">{row.user}{row.photo?<small>{t('Photo attached')}</small>:null}</p><p>{patientMessage(row.assistant)}</p></article>)}
     {/* Conversation reads top to bottom with the composer at the bottom, as
         every chat surface does. The input used to sit above the transcript, so
         the newest reply appeared *below* the field you type into. */}
     {!selectedHistory&&turns.length>visibleLiveTurns?<button onClick={()=>{retainScroll();setVisibleLiveTurns(value=>value+6);}}>{t('Load earlier messages')}</button>:null}
     {!selectedHistory&&turns.length ? <ul className="transcript" aria-live="polite" aria-hidden={confirmationIndex!==null}>
-      {turns.map((turn, index) => index<turns.length-visibleLiveTurns?null:<li className="turn" key={index}>
+      {turns.map((turn, index) => index<turns.length-visibleLiveTurns?null:<li className="turn" key={index} data-guide={index===turns.length-1?'assistant-conversation':undefined}>
         <p className="user-message">{sentPhotoNames[index]?<span className="chat-photo-note">{t('Photo attached')}: {sentPhotoNames[index]}<br/></span>:null}{sentTexts[index]}</p>
         <p>{turn.medication_choice?.prompt||patientMessage(turn.message)}</p>
         {turn.medication_choice?<MedicationChoices choice={turn.medication_choice} disabled={busy||index!==turns.length-1} onChoose={(choice,label)=>void send(choice,label)}/>:null}
@@ -299,7 +299,7 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
     {careProposal?<CareReviewSheet proposal={careProposal} onCancel={()=>setCareProposal(null)} onSaved={()=>{setCareProposal(null);setReportNotice('Your medication-care record was saved.');onChanged?.();window.dispatchEvent(new Event('pharmascan:reminder-refresh'));}}/>:null}
 
     </div>
-    <div className={workspace?"conversation-interaction":undefined} hidden={Boolean(selectedHistory)}>
+    <div className={workspace?"conversation-interaction":todayEntry?'today-assistant__interaction':undefined} hidden={Boolean(selectedHistory)}>
     {workspace&&!selectedHistory?<nav className="workspace-tasks" aria-label={t('Assistant tasks')}><div className="assistant-tasks" aria-label={t('Assistant tasks')}>
       <button type="button" aria-label={t('View today’s medication')} disabled={busy||Boolean(text.trim())||Boolean(photo)} onClick={onViewTodayMedication}>{t("Today's medication")}</button>{([
       ['Understand medicines','What are my current medications used for? Explain general uses separately from my reviewed instructions.'],
@@ -316,7 +316,7 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
       </div>
       <button type="button" className="icon-button" aria-label={t('Remove photo')} onClick={()=>setPhoto(null)}><Icon name="close"/></button>
     </div>:null}
-    <div className="composer-row" hidden={Boolean(selectedHistory)}>
+    <div className="composer-row" data-guide="assistant-composer" hidden={Boolean(selectedHistory)}>
       <input ref={photoInput} className="sr-only" type="file" accept="image/png,image/jpeg" aria-label={t('Choose a photo')} onChange={event=>{const selected=event.currentTarget.files?.[0]??null;setPhoto(selected);event.currentTarget.value='';}}/>
       <button className="photo-button" type="button" aria-label={t('Add a photo to chat')} onClick={()=>photoInput.current?.click()}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1"/><path d="m4 18 5-5 4 3 4-5 4 6"/></svg></button>
       {workspace?<textarea ref={workspaceInput} rows={1} maxLength={2000} aria-label={t("Review your message before sending")} value={text} disabled={busy}
@@ -331,6 +331,7 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
       {preferences.voice_enabled ? <VoiceInput key={`${language}:${viewKey.current}`} onTranscript={setText} disabled={busy||!active} /> : null}
       <button className="primary composer-send" aria-label={t(busy?'Sending...':'Send')} title={t(busy?'Sending...':'Send')} onClick={() => void send()} disabled={busy || (!text.trim()&&!photo) || Boolean(photo&&!photoConsent)} aria-busy={busy}>{workspace?<Icon name="send"/>:t('Send')}</button>
     </div>
+    {usage&&compact&&todayEntry?<p className="today-assistant__allowance" role="status" title={`${t('AI conversations left today')} · ${t('Resets at midnight Singapore time')}`}>{t('AI conversations left today')}: {remaining} / {usage.limit}</p>:null}
     {usage&&!compact ? <p className="ai-allowance" role="status"><span className="allowance-detail">{t('AI conversations left today')}: {remaining} / {usage.limit} · {t('Resets at midnight Singapore time')}{usage.llm_user_turns>=usage.limit?`. ${t('Your medication records, reports and reminders still work.')}`:''}</span><span className="allowance-compact" aria-hidden="true">AI: {remaining} / {usage.limit}</span></p> : null}
     {workspace&&error&&(text.trim()||photo||outgoing.current.get(viewKey.current)?.selection)?<button className="text-button composer-retry" disabled={busy} onClick={()=>{const failed=outgoing.current.get(viewKey.current);void send(failed?.selection,failed?.selection?failed.text:undefined);}}>{t('Retry sending')}</button>:null}
     </div>

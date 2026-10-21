@@ -28,6 +28,7 @@ it('keeps guest email linking and existing-account sign-in as separate explicit 
  fireEvent.click(screen.getByRole('button',{name:'Link email and keep my records'}));
  fireEvent.change(screen.getByLabelText('Email'),{target:{value:'guest@example.test'}});fireEvent.click(screen.getByRole('button',{name:'Email code / Magic Link'}));
  await waitFor(()=>expect(auth.requestEmail).toHaveBeenCalledWith('guest@example.test','link'));
+ fireEvent.click(screen.getByRole('button',{name:'Back to guest options'}));
  fireEvent.click(screen.getByRole('button',{name:'Sign in to an existing account'}));expect(screen.getByLabelText(/Signing in switches accounts/)).toBeTruthy();
  expect(auth.requestEmail).toHaveBeenCalledTimes(1);
 });

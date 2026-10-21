@@ -8,6 +8,17 @@ export type Language='en'|'zh';
 const englishLabels:Record<string,string>={blood_pressure:'Blood pressure',blood_glucose:'Blood glucose',weight:'Weight',sleep:'Sleep',mood:'Mood',note:'Descriptive note',
  medication_review:'Medication review',medication_follow_up:'Medication follow-up',symptom_follow_up:'Symptom follow-up',expiry_storage:'Expiry and storage review',
  forgetfulness:'Forgetfulness',running_out:'Medication running out',side_effect_concern:'Concern about symptoms or side effects',scheduling:'Scheduling difficulty',unclear_instructions:'Unclear instructions',complexity:'Medication complexity',unsure_taken:'Unsure whether taken',prefer_not_to_say:'Prefer not to say'};
+const guideTranslations:Record<string,string>={
+ 'Getting Started':'新手指引','Read Aloud':'朗读','Stop Reading':'停止','Read-aloud is not supported by this browser.':'当前浏览器不支持语音朗读。','Skip Guide':'跳过指引','Guide Back':'上一步','Guide Next':'下一步','Guide Finish':'完成','Close Guide':'关闭指引','Guide progress':'指引进度',
+ "Check Today's Schedule":'查看今日安排',"Today's Medications":'今日用药',"Review today's scheduled doses and record what actually happened.":'在这里查看今天的计划剂次，并根据实际情况记录是否服药。','Care Tasks':'用药跟进','See follow-up tasks that are pending or overdue.':'查看尚待处理或已经逾期的跟进事项。','Not recorded does not mean not taken.':'未记录不代表未服药。',
+ 'Add and Manage Medications':'添加与管理药物','Add a Medication':'添加药物','Open Medications to add a medication using the available entry methods.':'在「药物」页面添加药物，并按页面提供的方式录入资料。','Review the Schedule':'核对用药计划','Check the medication name, dose, and schedule before relying on the information for daily management.':'请核对药名、剂量及用药时间，确认信息准确后再用于日常管理。',"A photo alone cannot confirm a medication's identity.":'不能仅凭照片确认药物身份。',
+ 'Review Medication and Health Records':'回顾用药与健康记录','Review History':'查看历史记录','Use Records to review saved dose reports, health observations, and follow-up information.':'在「记录」中回顾已保存的服药情况、健康观察及跟进信息。','Medication & Health Summary':'用药与健康总结','Open or export a summary when reviewing your information or preparing for a healthcare visit.':'需要整理信息或准备就诊时，可以查看并导出总结报告。',
+ 'Ask the AI Assistant':'向 AI 助手提问','Questions and Preparation':'提问与准备','Ask about medications, review existing records, or prepare questions for a healthcare visit.':'可以询问药物信息、回顾已有记录，或准备就诊时需要讨论的问题。','Conversation History':'查看对话','If chat saving is enabled, you can revisit previous conversations in the full chat view.':'如果已启用对话保存，可以在完整聊天页回顾过去的对话。','The AI assistant does not independently change your medication schedule or replace a doctor or pharmacist.':'AI 助手不会自行更改您的用药计划，也不能代替医生或药师。',
+ 'Use Text, Photos, or Voice':'使用文字、照片或语音','Text Input':'文字输入','Type your question and review it before sending.':'直接输入问题，并在发送前检查内容。','Photos and Voice':'照片与语音','You can attach photos or use voice input when available. Recognition and transcription may be inaccurate, so check the results.':'您可以按需添加照片或使用语音输入。识别和转写可能出错，请先核对结果。','Adding photos or using the microphone may require browser permissions.':'添加照片或启用麦克风时，可能需要相应的浏览器权限。',
+ 'Manage Your Account and Settings':'管理账户与个人设置','Account and Care':'账户与照护','Use Me to manage your profile, sign-in options, and care contacts.':'在「我」中管理个人资料、登录方式及照护联系人。','Use Me to manage account access and care contacts.':'在「我」中管理账户访问方式和照护联系人。','Reminders and Preferences':'提醒与偏好','Adjust reminders, language, voice, text size, and privacy settings.':'您可以调整提醒、语言、语音、文字大小和隐私设置。','In Guest Mode, you can link an email to keep access to current records or sign in to an existing account. Accounts are not merged.':'访客模式下，您可以绑定邮箱以保留当前记录的访问权限，也可以登录已有账户。两种账户不会合并。',
+ "You're All Set!":'准备就绪！',"You've explored MediThread's main features.":'您已了解 MediThread 的主要功能。','We hope this guide helps you get started.':'希望这份指引能帮助您顺利开始。','You can reopen this guide anytime from Help & User Guide.':'您可以随时在「帮助与使用指南」中再次打开新手指引。','Start Using MediThread':'开始使用',
+};
+const guideEnglishLabels:Record<string,string>={'Guide Back':'Back','Guide Next':'Next','Guide Finish':'Finish'};
 const translations:Record<string,string>={
  'Saved health notes':'已保存的健康感受',
  'Saved difficulty records':'已保存的困难记录',
@@ -124,23 +135,26 @@ const translations:Record<string,string>={
  'Previous medicine':'上一种药物', 'Next medicine':'下一种药物',
  'Swipe or tap a medicine to view':'左右滑动或点击上方药物查看',
  'Quick start guide':'新手指南',
+ 'Ask your AI assistant':'使用 AI 助手',
+ 'Explore your records':'查看各类记录',
+ 'Your account and personal settings':'账户与个人设置',
+ 'Settings and reminders':'设置与提醒',
+ 'On Today, start with your medication plan and today’s doses. The confirmation area shows doses that still need a report; the Care Tasks card below shows pending and overdue follow-ups. Open Records for past reports. No report does not mean a dose was missed.':'“今日”页面从上至下先显示用药计划和今日剂次；确认区提示仍需记录的剂次，下方的跟进卡显示待处理及逾期事项。历史记录请前往“记录”。没有记录不代表漏服。',
+ 'In Medicines, start with Scan or Add manually. Review any medication setup that still needs attention, then browse current plans. Open a medicine for its plan details, saved evidence and available history.':'在“药物”中先选择扫描或手动添加。处理仍需完善的药物资料后，可浏览当前计划；打开药物可查看计划详情、已保存证据和可用历史记录。',
+ 'Ask about your saved medication information, reports or visit preparation. Use answers as help reviewing your records and follow the instructions from your healthcare professional; the assistant does not prescribe or change your plan.':'您可以询问已保存的用药信息、记录或复诊准备事项。请将回答作为查看资料的辅助，并遵循医护人员的指示；助手不会开药或更改您的计划。',
+ 'Add a label, prescription or package photo to a chat only when you choose to allow processing. Review any extracted details. Pill-photo checking is a separate flow; a photo alone does not confirm medicine identity or that it is safe to take.':'只有在您同意处理时，才将药品标签、处方或包装照片添加到对话，并请核对提取出的内容。药片照片核对是另一个独立流程；照片本身不能确认药物身份或用药安全。',
+ 'When voice input is enabled, tap the microphone and allow browser speech recognition. Review or edit the transcript before sending; you can type instead. Browser speech may use an online service.':'启用语音输入后，点击麦克风并允许浏览器进行语音识别。发送前请核对或修改识别文字；您也可以直接输入。浏览器语音服务可能会联网。',
+ 'Records is arranged from top to bottom: medication and health summaries first, then the expandable recent dose-report section, followed by My medication records and its filters. Health notes, medication difficulties, follow-ups and visit preparation are below.':'“记录”页按从上到下排列：先是用药与健康总结，然后是可展开的近期服药记录，接着是我的用药记录及筛选项。健康记录、用药困难、用药跟进和复诊准备位于下方。',
+ 'Me starts with your account or guest options. Below are Care & Notifications, Personalisation, and Privacy & Data; Help, About and Feedback are grouped at the bottom. Guest records remain with the current account.':'“我”页面先显示账户或访客选项。下方依次为照护与通知、个性化、隐私与数据；帮助、关于、反馈位于页面底部。访客记录保留在当前账户中。',
+ 'In the full Assistant, conversation history is in the side panel and the selected conversation is in the main area. Start a chat, use a suggested prompt, or type a question. Answers help you review saved information; the assistant does not prescribe or change your plan.':'完整助手页面的侧栏显示对话历史，主区域显示当前对话。您可新建会话、使用建议问题或输入问题。回答用于辅助查看已保存信息，助手不会开方或更改计划。',
+ 'Use the bell in the header for medication reminders and device notifications. The settings button opens language, voice, text size and reminder preferences. Automatic reading follows your saved preference; voice input, playback and device notifications may also depend on browser and system settings.':'点击顶部铃铛可管理用药提醒和设备通知；设置按钮可调整语言、语音、文字大小和提醒偏好。自动朗读遵循您保存的偏好；语音输入、播放及设备通知也可能受浏览器和系统设置影响。',
  'Learn the buttons and voice settings':'了解按钮和语音设置',
  'Your daily companion':'您的日常用药助手',
- 'Today shows your reviewed schedule. Start by adding your medicine if your list is empty.':'“今日”显示您已核对的用药计划。如果列表为空，请先添加药物。',
  'Add and manage medicines':'添加与管理药物',
- 'Open Medicines to read a label or enter instructions. Review and activate the plan before it appears in Today.':'在“药物”中读取标签或手动填写指示，核对并启用计划后，就能在“今日”中看到。',
  'Use a photo':'使用照片',
- 'The photo button adds label or packaging information for review. Compare a pill photo on Today opens a separate visual check; a photo cannot tell you that a medicine is safe to take.':'图片按钮用于添加标签或包装资料，供您核对。“今日”的“核对我的药物”打开独立的视觉核对。照片无法证明药物可以安全服用。',
  'Speak, review, then send':'说话、核对，再发送',
- 'Tap the microphone, allow speech recognition, then review or edit the words. Send is on the right. You can always type instead. Your browser may use an online speech service.':'点击麦克风并允许语音识别，然后核对或修改文字。发送按钮在右侧，您也可以随时打字。浏览器可能使用在线语音服务。',
- 'Record and review your reports':'记录与查看服药自述',
- 'After choosing I took it, confirm the separate summary to save your report. Cancel saves nothing. History contains your reports and summaries; a report does not prove ingestion. Reminders are prompts, not changes to your plan.':'选择“已服用”后，还需在独立弹窗中确认，才能保存自述；取消不会保存。“记录”中可查看自述和总结，自述不代表已证实吞服。提醒仅作提示，不会修改用药计划。',
- 'Choose your voice settings':'选择语音设置',
- 'Automatic reading is off by default. Turn on Read replies automatically in Language and speech if you want it. You can also use Play response and Stop audio. Browser voice is the default; cloud voice requires an explicit choice.':'自动朗读默认关闭。需要时，可在“语言与语音”中开启“自动朗读回答”，也可以使用“播放回答”和“停止语音”。默认使用浏览器语音，云端语音需要您主动选择。',
  'Current settings':'当前设置', 'Voice':'语音', 'On':'开启', 'Off':'关闭',
  'Open language and speech settings':'打开语言与语音设置',
- 'Your account and settings':'账户与设置',
- 'The person icon shows your account status and opens Me. Link a guest account using email to access it on another device. Settings contains language, speech, text size and reminder options. You can reopen this guide from Me or Settings.':'人物图标显示账户状态，点击进入“我”。访客可用邮箱绑定账户，以便在其他设备使用。设置中可调整语言、语音、字体和提醒。您可以从“我”或设置页再次查看本指南。',
  'Previous':'上一步', 'Next':'下一步', 'Got it':'知道了', 'Guest':'访客', 'Account':'账户',
  'Source registration saved. Continue your medication plan in My Medicines.':'资料登记已保存，请在“我的药物”中查看或继续确认用药计划。',
  'Source information and review':'查看来源与核对信息',
@@ -744,14 +758,15 @@ const Context=createContext<PlaybackPreferences & {textScale:number;previewTextS
 export function LanguageProvider({children}:{children:ReactNode}) {
  const [ttsProvider,setTtsProvider]=useState<'browser'|'tencent'>('browser'),[speechRate,setSpeechRate]=useState(.9);
  const [preferences,setValue]=useState<Profile>(defaults),[preferenceError,setError]=useState('');
+ const [languagePreview,setLanguagePreview]=useState<Language|null>(null);
  const [previewScale,previewTextScale]=useState<number|null>(null);
  const textScale=previewScale??preferences.text_scale_percent??(preferences.text_size==='large'?125:100);
- useEffect(()=>{const root=document.documentElement,previous=root.style.getPropertyValue('--font-scale');root.style.setProperty('--font-scale',String(textScale/100));return()=>{if(previous)root.style.setProperty('--font-scale',previous);else root.style.removeProperty('--font-scale');};},[textScale]);
+ useEffect(()=>{const root=document.documentElement,previous=root.style.getPropertyValue('--font-scale'),previousScale=root.getAttribute('data-text-scale');root.style.setProperty('--font-scale',String(textScale/100));root.setAttribute('data-text-scale',String(textScale));return()=>{if(previous)root.style.setProperty('--font-scale',previous);else root.style.removeProperty('--font-scale');if(previousScale===null)root.removeAttribute('data-text-scale');else root.setAttribute('data-text-scale',previousScale);};},[textScale]);
  const loadPreferences=useCallback(async()=>{const value=await api.preferences();setValue(value);setError('');},[]);
- async function savePreferences(value:PreferenceUpdate):Promise<boolean>{setError('');try{const saved=await api.updatePreferences(value);setValue(saved);return true;}catch{setError('Could not save preferences. Your previous preference is retained.');return false;}}
+ async function savePreferences(value:PreferenceUpdate):Promise<boolean>{setError('');if(value.preferred_language)setLanguagePreview(value.preferred_language);try{const saved=await api.updatePreferences(value);setValue(saved);return true;}catch{setError('Could not save preferences. Your previous preference is retained.');return false;}finally{if(value.preferred_language)setLanguagePreview(null);}}
  async function updatePreferences(value:PreferenceUpdate){await savePreferences(value);}
  function setLanguage(value:Language){void updatePreferences({preferred_language:value});}
- return <Context.Provider value={{textScale,previewTextScale,ttsProvider,setTtsProvider,speechRate,setSpeechRate,language:preferences.preferred_language,preferences,setLanguage,updatePreferences,savePreferences,loadPreferences,preferenceError}}>{children}</Context.Provider>;
+ return <Context.Provider value={{textScale,previewTextScale,ttsProvider,setTtsProvider,speechRate,setSpeechRate,language:languagePreview??preferences.preferred_language,preferences,setLanguage,updatePreferences,savePreferences,loadPreferences,preferenceError}}>{children}</Context.Provider>;
 }
 const galleryTranslations:Record<string,string>={
  'My Medication Gallery':'我的药物图库','All galleries':'全部图库','Search gallery':'搜索图库','Name, ingredient, brand or strength':'名称、成分、品牌或规格','Filter gallery':'筛选药物','Sort gallery':'排序','All medications':'全部药物','With photos':'有照片','Without photos':'无照片','Name A–Z':'名称 A–Z','Name Z–A':'名称 Z–A','Recently updated':'最近更新','Photo count':'照片数量','Product identity incomplete':'产品信息不完整','Product details reviewed by you':'您已核对产品资料','Product details from source information':'产品资料来自来源文件','Related courses':'个疗程','View product photos':'查看产品照片','No medications match these filters.':'没有符合这些筛选条件的药物。','Load more medications':'加载更多药物','Reference photos':'参考照片','Associated medication':'关联药物','Medication':'药物','Brand / manufacturer':'品牌 / 生产商','Product strength':'产品规格','Dosage form':'剂型','Product identity':'产品身份','Other records have a similar name. This gallery remains linked only to this medication record.':'其他记录中存在相似名称。本图库仍只关联当前药物记录。','Related medication courses':'相关用药疗程','All':'全部','Filter by photo content':'按照片内容筛选','Order':'排序','Newest first':'最新优先','Oldest first':'最早优先','No reference photos in this category yet.':'此类别暂无参考照片。','Photo count and comparison eligibility are separate. Evidence remains stored when comparison is stopped.':'照片数量与核对资格分别管理。停止用于视觉核对后，证据照片仍会保留。','Add reference photo':'添加参考照片','Add a reference photo':'添加参考照片','Choose a photo':'选择照片','Take photo':'拍摄照片','Choose existing photo':'从设备选择照片','Take photo with device camera':'使用设备相机拍照','Choose a photo from device':'从设备选择照片','Camera unavailable or permission denied. Choose an image file instead.':'相机不可用或权限被拒绝，请改为选择图片文件。','Camera preview':'相机预览','Capture photo':'拍照','Cancel camera':'关闭相机','PNG or JPEG, up to 8 MB':'PNG 或 JPEG，最大 8 MB','Replace photo':'更换照片','Photo content':'照片内容','What is visible in the image?':'照片中显示什么？','Other or unknown':'其他或未知','This image will be saved as evidence and will not enter pill visual comparison.':'此照片将作为证据保存，不会用于药片视觉核对。','Only reviewed loose-pill photos can be considered for personal visual comparison. Eligibility is checked by the service.':'只有已核对的裸药片照片才会纳入个人视觉核对评估；资格由服务端判定。','Photo source':'照片来源','Where did this image come from?':'这张照片来自哪里？','Personally photographed':'自行拍摄','Pharmacy or healthcare material':'药房或医疗资料','Other source':'其他来源','Unknown':'未知','Optional source note':'来源备注（可选）','Confirm medication association':'确认药物关联','I confirm this photo is associated with the medication shown. This does not verify exact product identity.':'我确认此照片关联到所示药物；这不代表产品身份已得到核实。','Personal visual comparison':'个人视觉核对','Use for personal visual comparison (optional, off by default)':'用于个人视觉核对（可选，默认关闭）','Private storage and processing':'私密存储与处理','Photos are private. Image processing is used only when comparison is selected and the photo qualifies.':'照片将私密保存。仅在您选择核对且照片符合资格时才会进行图像处理。','Photo details':'照片详情','Close photo details':'关闭照片详情','Added':'添加时间','Visual comparison status':'视觉核对状态','Stop using for comparison':'停止用于视觉核对','Stop using this photo for comparison? The private evidence photo will remain saved.':'停止将此照片用于视觉核对？私密证据照片仍会保留。','Stop comparison':'停止核对','Metadata correction and photo deletion are unavailable here. Your stored evidence is preserved':'目前无法在此修改资料或删除照片；已保存的证据会保留。'
@@ -827,7 +842,7 @@ Object.assign(translations, {
  'Your confirmation is not independent verification.':'\u60a8\u7684\u786e\u8ba4\u4e0d\u4ee3\u8868\u5df2\u901a\u8fc7\u72ec\u7acb\u6838\u5b9e\u3002'
 });
 
-export function useLanguage(){const context=useContext(Context);return {...context,t:(text:string)=>context.language==='zh'?(galleryTranslations[text]??translations[text]??text):(englishLabels[text]??text)};}
+export function useLanguage(){const context=useContext(Context);return {...context,t:(text:string)=>context.language==='zh'?(guideTranslations[text]??galleryTranslations[text]??translations[text]??text):(guideEnglishLabels[text]??englishLabels[text]??text)};}
 
 Object.assign(translations, {
  'This dose has no record of whether you took it yet.':'这次用药还没有记录服用情况。',
@@ -1256,4 +1271,56 @@ Object.assign(translations, {
  "Today's confirmation":'\u4eca\u65e5\u5f85\u786e\u8ba4',
  'Record status':'\u8bb0\u5f55\u60c5\u51b5',
  'View all medication records':'\u67e5\u770b\u5168\u90e8\u7528\u836f\u8bb0\u5f55'
+});
+
+Object.assign(translations, {
+ 'Medication plan':'\u7528\u836f\u8ba1\u5212',
+ 'Review current plans and scheduled doses in the first card.':'\u5728\u7b2c\u4e00\u5f20\u5361\u7247\u4e2d\u67e5\u770b\u5f53\u524d\u8ba1\u5212\u548c\u5df2\u6392\u7a0b\u7684\u5242\u6b21\u3002',
+ "Today's confirmation":'\u4eca\u65e5\u5f85\u786e\u8ba4',
+ "The confirmation area shows today's scheduled doses that still need a report. No report does not mean a dose was missed.":'\u786e\u8ba4\u533a\u663e\u793a\u4eca\u5929\u4ecd\u9700\u8bb0\u5f55\u7684\u8ba1\u5212\u5242\u6b21\u3002\u6ca1\u6709\u8bb0\u5f55\u4e0d\u4ee3\u8868\u6f0f\u670d\u3002',
+ 'Care tasks':'\u8ddf\u8fdb\u4e8b\u9879',
+ 'The follow-up card shows pending and overdue tasks. Add a follow-up here or open the calendar for the full list.':'\u8ddf\u8fdb\u5361\u663e\u793a\u5f85\u5904\u7406\u548c\u5df2\u903e\u671f\u4e8b\u9879\u3002\u60a8\u53ef\u5728\u6b64\u65b0\u589e\u4e8b\u9879\uff0c\u6216\u6253\u5f00\u65e5\u5386\u67e5\u770b\u5168\u90e8\u3002',
+ 'Add medication':'\u6dfb\u52a0\u836f\u7269',
+ 'Start with Scan or Add manually. You choose when to send a medication document for processing.':'\u5148\u9009\u62e9\u626b\u63cf\u6216\u624b\u52a8\u6dfb\u52a0\u3002\u662f\u5426\u53d1\u9001\u7528\u836f\u8d44\u6599\u8fdb\u884c\u5904\u7406\u7531\u60a8\u51b3\u5b9a\u3002',
+ 'Review plans':'\u6838\u5bf9\u7528\u836f\u8ba1\u5212',
+ 'Complete any medication setup that needs attention, then browse current plans. Open a medicine for details, saved evidence and available history.':'\u5148\u5b8c\u6210\u9700\u5904\u7406\u7684\u7528\u836f\u8d44\u6599\u6838\u5bf9\uff0c\u518d\u67e5\u770b\u5f53\u524d\u8ba1\u5212\u3002\u6253\u5f00\u836f\u7269\u53ef\u67e5\u770b\u8be6\u60c5\u3001\u5df2\u4fdd\u5b58\u7684\u8bc1\u636e\u548c\u76f8\u5173\u5386\u53f2\u3002',
+ 'Medication and health summary':'\u7528\u836f\u4e0e\u5065\u5eb7\u603b\u7ed3',
+ 'Use the first section to open this week, this month or a medication-plan summary.':'\u5728\u7b2c\u4e00\u4e2a\u6a21\u5757\u9009\u62e9\u67e5\u770b\u672c\u5468\u3001\u672c\u6708\u6216\u6309\u7528\u836f\u8ba1\u5212\u751f\u6210\u7684\u603b\u7ed3\u3002',
+ 'Dose reports':'\u670d\u836f\u8bb0\u5f55',
+ 'Expand the pending-dose section to review recent scheduled doses. Only eligible items can be reported or corrected; an unreported dose is not automatically marked missed.':'\u5c55\u5f00\u5f85\u786e\u8ba4\u6a21\u5757\u53ef\u6838\u5bf9\u8fd1\u671f\u8ba1\u5212\u5242\u6b21\u3002\u53ea\u6709\u7b26\u5408\u6761\u4ef6\u7684\u9879\u76ee\u624d\u80fd\u8865\u8bb0\u6216\u66f4\u6b63\uff1b\u672a\u8bb0\u5f55\u4e0d\u4f1a\u81ea\u52a8\u6807\u8bb0\u4e3a\u6f0f\u670d\u3002',
+ 'Medication history and more':'\u7528\u836f\u8bb0\u5f55\u53ca\u5176\u4ed6',
+ 'The My medication records card opens saved reports and filters. Health notes, medication difficulties, follow-ups and visit preparation are below.':'\u70b9\u51fb\u201c\u6211\u7684\u7528\u836f\u8bb0\u5f55\u201d\u5361\u7247\u53ef\u67e5\u770b\u5df2\u4fdd\u5b58\u7684\u81ea\u8ff0\u5e76\u4f7f\u7528\u7b5b\u9009\u5668\u3002\u5065\u5eb7\u8bb0\u5f55\u3001\u7528\u836f\u56f0\u96be\u3001\u8ddf\u8fdb\u4e8b\u9879\u548c\u590d\u8bca\u51c6\u5907\u4f4d\u4e8e\u4e0b\u65b9\u3002',
+ 'Your account or Guest Mode appears first. Guest records remain associated with the current account.':'\u9875\u9762\u9996\u5148\u663e\u793a\u60a8\u7684\u8d26\u6237\u6216\u8bbf\u5ba2\u6a21\u5f0f\u3002\u8bbf\u5ba2\u8bb0\u5f55\u4fdd\u7559\u5728\u5f53\u524d\u8d26\u6237\u4e2d\u3002',
+ 'Care and notifications':'\u7167\u62a4\u4e0e\u901a\u77e5',
+ 'Open Care Contacts to manage saved contact details. Reminders & Notifications contains reminder and device-notification settings.':'\u6253\u5f00\u201c\u7167\u62a4\u8054\u7cfb\u4eba\u201d\u7ba1\u7406\u5df2\u4fdd\u5b58\u7684\u8054\u7cfb\u65b9\u5f0f\u3002\u201c\u63d0\u9192\u4e0e\u901a\u77e5\u201d\u4e2d\u53ef\u7ba1\u7406\u7528\u836f\u63d0\u9192\u548c\u8bbe\u5907\u901a\u77e5\u8bbe\u7f6e\u3002',
+ 'Personalisation and privacy':'\u4e2a\u6027\u5316\u4e0e\u9690\u79c1',
+ 'Language & Voice, Text Size, AI Assistant & Chat History, and Privacy Settings are grouped below. Help, About and Feedback are at the bottom.':'\u4e0b\u65b9\u4f9d\u6b21\u5305\u542b\u201c\u8bed\u8a00\u4e0e\u8bed\u97f3\u201d\u3001\u201c\u6587\u5b57\u5927\u5c0f\u201d\u3001\u201cAI \u52a9\u624b\u4e0e\u804a\u5929\u8bb0\u5f55\u201d\u548c\u201c\u9690\u79c1\u8bbe\u7f6e\u201d\u3002\u5e2e\u52a9\u3001\u5173\u4e8e\u548c\u53cd\u9988\u4f4d\u4e8e\u9875\u9762\u5e95\u90e8\u3002',
+ 'Conversation history':'\u5bf9\u8bdd\u5386\u53f2',
+ 'In the full Assistant, the side panel contains saved conversations and the New conversation action.':'\u6253\u5f00\u5b8c\u6574\u52a9\u624b\u9875\u9762\u540e\uff0c\u4fa7\u680f\u663e\u793a\u5df2\u4fdd\u5b58\u7684\u5bf9\u8bdd\u548c\u201c\u65b0\u5efa\u4f1a\u8bdd\u201d\u6309\u94ae\u3002',
+ 'Chat and actions':'\u804a\u5929\u4e0e\u64cd\u4f5c',
+ 'The main area shows the selected conversation. Use suggested prompts or type in the composer; answers help you review saved information and do not change your medication plan.':'\u4e3b\u533a\u663e\u793a\u5f53\u524d\u5bf9\u8bdd\u3002\u60a8\u53ef\u9009\u62e9\u5efa\u8bae\u95ee\u9898\u6216\u5728\u8f93\u5165\u6846\u4e2d\u63d0\u95ee\uff1b\u56de\u7b54\u53ef\u8f85\u52a9\u67e5\u770b\u5df2\u4fdd\u5b58\u7684\u4fe1\u606f\uff0c\u4e0d\u4f1a\u66f4\u6539\u7528\u836f\u8ba1\u5212\u3002',
+ 'Choose an image':'\u9009\u62e9\u56fe\u7247',
+ 'Add a label, prescription or package photo to a chat only when you choose to allow processing.':'\u53ea\u6709\u60a8\u9009\u62e9\u5141\u8bb8\u5904\u7406\u65f6\uff0c\u624d\u5c06\u836f\u54c1\u6807\u7b7e\u3001\u5904\u65b9\u6216\u5305\u88c5\u7167\u7247\u6dfb\u52a0\u5230\u5bf9\u8bdd\u4e2d\u3002',
+ 'Review the result':'\u6838\u5bf9\u5904\u7406\u7ed3\u679c',
+ 'Check any extracted details. Pill-photo checking is a separate flow; a photo alone does not confirm medicine identity or safety.':'\u8bf7\u6838\u5bf9\u63d0\u53d6\u7684\u4fe1\u606f\u3002\u836f\u7247\u7167\u7247\u6838\u5bf9\u662f\u53e6\u4e00\u9879\u72ec\u7acb\u6d41\u7a0b\uff1b\u4ec5\u51ed\u7167\u7247\u65e0\u6cd5\u786e\u8ba4\u836f\u7269\u8eab\u4efd\u6216\u7528\u836f\u5b89\u5168\u6027\u3002',
+ 'Voice input':'\u8bed\u97f3\u8f93\u5165',
+ 'When voice is enabled, tap the microphone and allow browser speech recognition.':'\u542f\u7528\u8bed\u97f3\u540e\uff0c\u70b9\u51fb\u9ea6\u514b\u98ce\u5e76\u5141\u8bb8\u6d4f\u89c8\u5668\u8fdb\u884c\u8bed\u97f3\u8bc6\u522b\u3002',
+ 'Review before sending':'\u53d1\u9001\u524d\u6838\u5bf9',
+ 'Check or edit the transcript before sending, or type instead. Browser speech recognition may use an online service.':'\u53d1\u9001\u524d\u8bf7\u6838\u5bf9\u6216\u4fee\u6539\u8bc6\u522b\u6587\u5b57\uff0c\u4e5f\u53ef\u4ee5\u76f4\u63a5\u8f93\u5165\u3002\u6d4f\u89c8\u5668\u8bed\u97f3\u8bc6\u522b\u53ef\u80fd\u4f1a\u4f7f\u7528\u5728\u7ebf\u670d\u52a1\u3002',
+ 'Switch language':'\u5207\u6362\u8bed\u8a00',
+ 'More suggested actions':'\u66f4\u591a\u5efa\u8bae\u64cd\u4f5c',
+ 'Plan and manage your medication-related tasks.':'\u6309\u65e5\u671f\u5b89\u6392\u4e0e\u7ba1\u7406\u7528\u836f\u8ddf\u8fdb\u4e8b\u9879\u3002',
+ 'Switching to Chinese…':'\u6b63\u5728\u5207\u6362\u4e3a\u4e2d\u6587\u2026',
+ 'Switching to English…':'\u6b63\u5728\u5207\u6362\u4e3a\u82f1\u6587\u2026',
+ 'Use the language control in the header to switch the interface between English and Chinese.':'\u4f7f\u7528\u9876\u90e8\u8bed\u8a00\u63a7\u4ef6\uff0c\u53ef\u5728\u4e2d\u6587\u548c\u82f1\u6587\u754c\u9762\u4e4b\u95f4\u5207\u6362\u3002',
+ 'Medication reminders':'\u7528\u836f\u63d0\u9192',
+ 'The bell opens medication reminder and device-notification settings. Device notification availability depends on your browser and system.':'\u70b9\u51fb\u94c3\u94db\u53ef\u6253\u5f00\u7528\u836f\u63d0\u9192\u548c\u8bbe\u5907\u901a\u77e5\u8bbe\u7f6e\u3002\u8bbe\u5907\u901a\u77e5\u662f\u5426\u53ef\u7528\u53d6\u51b3\u4e8e\u6d4f\u89c8\u5668\u548c\u7cfb\u7edf\u3002',
+ 'More preferences':'\u66f4\u591a\u504f\u597d\u8bbe\u7f6e',
+ 'The gear opens Settings for language and speech preferences, text size, and reminders. Automatic reading follows your saved preference.':'\u70b9\u51fb\u9f7f\u8f6e\u53ef\u6253\u5f00\u8bbe\u7f6e\uff0c\u7ba1\u7406\u8bed\u8a00\u4e0e\u8bed\u97f3\u3001\u6587\u5b57\u5927\u5c0f\u548c\u63d0\u9192\u504f\u597d\u3002\u81ea\u52a8\u6717\u8bfb\u9075\u5faa\u60a8\u4fdd\u5b58\u7684\u504f\u597d\u3002',
+ 'Read this step aloud':'\u6717\u8bfb\u672c\u6b65',
+ 'Stop audio':'\u505c\u6b62\u6717\u8bfb',
+ "Guide audio uses your browser's speech voice.":'\u6307\u5f15\u6717\u8bfb\u4f7f\u7528\u6d4f\u89c8\u5668\u8bed\u97f3\u3002',
+ 'Turn on voice in Settings to listen to the guide.':'\u8bf7\u5728\u8bbe\u7f6e\u4e2d\u542f\u7528\u8bed\u97f3\u540e\u6536\u542c\u6307\u5f15\u3002',
+ 'Speech playback is not available in this browser.':'\u6b64\u6d4f\u89c8\u5668\u4e0d\u652f\u6301\u8bed\u97f3\u64ad\u653e\u3002',
+ 'Could not play audio. Please read the guide text.':'\u65e0\u6cd5\u64ad\u653e\u8bed\u97f3\uff0c\u8bf7\u9605\u8bfb\u5c4f\u5e55\u4e0a\u7684\u6307\u5f15\u6587\u5b57\u3002'
 });

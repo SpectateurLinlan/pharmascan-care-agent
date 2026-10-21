@@ -12,7 +12,7 @@ export function RecordsOverview({lateReportsEnabled,onOpenSummary,onOpenMedicati
   <details className="records-pending-disclosure">
    <summary>
     <span className="records-pending-disclosure__copy">
-     <strong>{t('Medication reports to confirm')}</strong>
+     <strong data-guide="medication-records">{t('Medication reports to confirm')}</strong>
      <span>{t('Open to review scheduled doses from the past 7 days; eligibility still applies.')}</span>
     </span>
     <span className="records-pending-disclosure__chevron"><Icon name="chevron-right"/></span>

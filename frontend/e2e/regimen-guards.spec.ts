@@ -23,7 +23,7 @@ test('history opt-in, overlap conflict, explicit stop and understandable legacy 
  await page.addInitScript(({clientId,start})=>{
   localStorage.setItem('pharmascan.client_id',clientId);
   localStorage.setItem('pharmascan.agent-session',start.session_id);
-  localStorage.setItem(`pharmascan.quick-start.v2:${start.patient_id}`,JSON.stringify({version:2,status:'skipped',step:0}));
+  localStorage.setItem(`pharmascan.quick-start.v4:${start.patient_id}`,JSON.stringify({version:4,status:'skipped',step:0}));
  },{clientId,start});
  await page.goto('/');
  const skip=page.getByRole('button',{name:'Skip for now'});if(await skip.isVisible())await skip.click();

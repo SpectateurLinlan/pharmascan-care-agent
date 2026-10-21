@@ -8,7 +8,7 @@ test('controlled tour, in-place conversation, four roots and responsive patient 
  page.setDefaultTimeout(12000);const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
  await page.goto('/');const guide=page.getByRole('dialog',{name:'Quick start guide'});await expect(guide).toBeVisible();
  await page.mouse.click(4,4);await page.keyboard.press('Escape');await expect(guide).toBeVisible();
- await page.getByRole('button',{name:'Next',exact:true}).click();await page.reload();await expect(page.getByText('2 / 7')).toBeVisible();
+ await page.getByRole('button',{name:'Next',exact:true}).click();await page.reload();await expect(page.getByText('2 / 8')).toBeVisible();
  const next=guide.getByRole('button',{name:'Next',exact:true});await next.hover();
  const colors=await next.evaluate(el=>({bg:getComputedStyle(el).backgroundColor,fg:getComputedStyle(el).color}));expect(colors.bg).not.toBe(colors.fg);
  await page.screenshot({path:`${artifacts}/guide-hover-390.png`});await guide.getByRole('button',{name:'Skip for now'}).click();

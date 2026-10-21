@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /** AUTOMATED/SIMULATED preference and quota display, no provider calls. */
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
-import {cleanup,render,screen,fireEvent} from '@testing-library/react';
+import {cleanup,render,screen,fireEvent,waitFor} from '@testing-library/react';
 import {LanguageProvider,useLanguage} from './language';
 import {AssistantScreen} from './components/AssistantScreen';
 import {api} from './api/client';
@@ -20,9 +20,10 @@ it('loads the persisted Chinese preference and readable daily quota/reset disclo
  expect(screen.getByTestId('language').textContent).toBe('zh');
  expect((screen.getByLabelText('发送前检查或编辑内容') as HTMLInputElement).disabled).toBe(false);
 });
-it('retains the previous language if saving preferences fails',async()=>{
+it('previews the selected language and restores the previous language if saving fails',async()=>{
  vi.mocked(api.updatePreferences).mockRejectedValue(new Error('SIMULATED network failure'));
  render(<LanguageProvider><Harness/></LanguageProvider>);fireEvent.click(screen.getByText('Save Chinese'));
- expect(screen.getByTestId('language').textContent).toBe('en');
+ expect(screen.getByTestId('language').textContent).toBe('zh');
+ await waitFor(()=>expect(screen.getByTestId('language').textContent).toBe('en'));
  expect(await screen.findByText(/Resets at midnight Singapore time/)).not.toBeNull();
 });

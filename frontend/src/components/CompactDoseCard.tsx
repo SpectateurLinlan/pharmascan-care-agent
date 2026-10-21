@@ -42,7 +42,7 @@ export function CompactDoseCard({medication,due,busy,onReport,onCheck,onSnooze,r
  const scheduleText=medication.is_prn?t('As needed'):medication.frequency_rule?.local_times.join(', ')??t('Not specified');
  const foodText=medication.food_instruction?medication.food_instruction.split('; ').map(t).join(' · '):null;
  return <Card {...(showTitle?{title:"Today's medication"}:{})}>
-  <div className="dose-head">
+  <div className="dose-head" data-today-dose-state={loadFailed?'error':due?'ready':'loading'}>
    <p className="dose-name compact-name">{medication.display_name}</p>
    {/* What you were told to take, on one line: the units per dose, when, and
        whether it goes with food. The product strength stays separate and quiet

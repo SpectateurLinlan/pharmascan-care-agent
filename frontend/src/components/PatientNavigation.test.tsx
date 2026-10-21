@@ -5,6 +5,7 @@ import {HealthTrackingScreen} from './HealthTrackingScreen';
 import {InformationScreen,PatientHub} from './PatientHub';
 import {MedicinesHub,isPastCourse} from './MedicinesHub';
 import {ReviewSummaryScreen} from './ReviewSummaryScreen';
+import {accountAuth} from '../api/auth';
 import {api,type HealthObservation,type MedicationSummary,type RegimenHistoryItem} from '../api/client';
 
 vi.mock('../api/client',()=>({ApiError:class extends Error{},api:{observations:vi.fn(),saveObservation:vi.fn(),deleteObservation:vi.fn(),reviewSummary:vi.fn(),agentUsage:vi.fn().mockResolvedValue({limit:20})}}));
@@ -12,22 +13,26 @@ vi.mock('../api/auth',()=>({accountAuth:{account:async()=>({kind:'guest',email:n
 afterEach(()=>{cleanup();vi.resetAllMocks();});
 const medication:MedicationSummary={medication_id:'DEMO-med',regimen_id:'DEMO-regimen',display_name:'DEMO Metformin',is_prn:false,version_no:1,identity_status:'unverified',source_backed:true,dose_amount:500,dose_unit:'mg',frequency_rule:{kind:'daily',local_times:['20:00'],days_of_week:[]},food_instruction:'after food',course_start_date:'2026-10-14',course_end_date:'2099-10-20'};
 it('Me is an entry hierarchy with a separate account destination, not an expanded email form',async()=>{
- const open=vi.fn(),guide=vi.fn();render(<PatientHub onOpen={open} onGuide={guide}/>);await screen.findAllByText('Guest');
+ const open=vi.fn(),guide=vi.fn();render(<PatientHub onOpen={open} onGuide={guide}/>);await screen.findAllByText('Guest Mode');
  expect(document.querySelectorAll('.me-category')).toHaveLength(3);
  for(const category of document.querySelectorAll('.me-category'))expect(category.querySelectorAll('.ui-row')).toHaveLength(2);
  expect(document.querySelectorAll('.me-app-info .ui-row')).toHaveLength(3);
  expect(screen.queryByLabelText('Email')).toBeNull();expect(screen.queryByRole('button',{name:/Singpass/})).toBeNull();
- fireEvent.click(screen.getByRole('button',{name:'Login or register'}));expect(open).toHaveBeenLastCalledWith('account');
- fireEvent.click(screen.getByRole('button',{name:/Personal profile/}));expect(open).toHaveBeenLastCalledWith('profile');
- fireEvent.click(screen.getByRole('button',{name:/Language and speech/}));expect(open).toHaveBeenLastCalledWith('language-settings');
+ fireEvent.click(screen.getByRole('button',{name:'Manage guest account'}));expect(open).toHaveBeenLastCalledWith('account');
+ fireEvent.click(screen.getByRole('button',{name:/Language & Voice/}));expect(open).toHaveBeenLastCalledWith('language-settings');
  fireEvent.click(screen.getByRole('button',{name:/Text size/}));expect(open).toHaveBeenLastCalledWith('accessibility');
- fireEvent.click(screen.getByRole('button',{name:/Assistant and conversation saving/}));expect(open).toHaveBeenLastCalledWith('conversations');
- fireEvent.click(screen.getByRole('button',{name:/Privacy controls/}));expect(open).toHaveBeenLastCalledWith('privacy');
- fireEvent.click(screen.getByRole('button',{name:/Caregiver contacts/}));expect(open).toHaveBeenLastCalledWith('caregivers');
- fireEvent.click(screen.getByRole('button',{name:/Medication reminders/}));expect(open).toHaveBeenLastCalledWith('reminder-settings');
+ fireEvent.click(screen.getByRole('button',{name:/AI Assistant & Chat History/}));expect(open).toHaveBeenLastCalledWith('conversations');
+ fireEvent.click(screen.getByRole('button',{name:/Privacy Settings/}));expect(open).toHaveBeenLastCalledWith('privacy');
+ fireEvent.click(screen.getByRole('button',{name:/Care contacts/}));expect(open).toHaveBeenLastCalledWith('caregivers');
+ fireEvent.click(screen.getByRole('button',{name:/Reminders & Notifications/}));expect(open).toHaveBeenLastCalledWith('reminder-settings');
  fireEvent.click(screen.getByRole('button',{name:/Help \/ User Guide/}));expect(guide).toHaveBeenCalledOnce();
  fireEvent.click(screen.getByRole('button',{name:/About MediThread/}));expect(open).toHaveBeenLastCalledWith('about');
  fireEvent.click(screen.getByRole('button',{name:/Feedback/}));expect(open).toHaveBeenLastCalledWith('feedback');
+});
+it('opens a signed-in member profile from the identity entry',async()=>{
+ const open=vi.fn();render(<PatientHub onOpen={open} auth={{...accountAuth,account:async()=>({kind:'member',email:'member@example.test',verified:true})}}/>);
+ await screen.findByText(/member@example\.test/);
+ fireEvent.click(screen.getByRole('button',{name:'Personal profile'}));expect(open).toHaveBeenCalledWith('profile');
 });
 it('Medicines groups active plans and exposes the two direct medication entry actions',()=>{
  const open=vi.fn();const {unmount}=render(<MedicinesHub medications={[medication]} drafts={[]} versions={[]} setupCount={1} onOpen={open}/>);

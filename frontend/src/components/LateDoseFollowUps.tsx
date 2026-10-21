@@ -12,7 +12,7 @@ import '../ui/followups.css';
 export function LateDoseFollowUps({enabled=true,todayOnly=false,showHeading=true,onHistory,onInteractionChange,onTodayItemsChange}:{enabled?:boolean;todayOnly?:boolean;showHeading?:boolean;onHistory?:()=>void;onInteractionChange?:(regimen:string,locked:boolean)=>void;onTodayItemsChange?:(items:DoseFollowUp[])=>void}){
  const {language,t,preferences}=useLanguage();
  const [data,setData]=useState<DoseFollowUps|null>(null),[error,setError]=useState<unknown>(null),[reported,setReported]=useState(false),[retry,setRetry]=useState(0),[selected,setSelected]=useState<DoseFollowUp|null>(null),[saved,setSaved]=useState(false);
- useEffect(()=>{if(!enabled)return;let live=true;void api.doseFollowUps(reported).then(value=>{if(live){setData(value);setError(null);}}).catch(caught=>{if(live)setError(caught);});return()=>{live=false;};},[enabled,reported,retry]);
+ useEffect(()=>{if(!enabled)return;let live=true;void Promise.resolve().then(()=>{if(!live)return;return api.doseFollowUps(reported).then(value=>{if(live){setData(value);setError(null);}}).catch(caught=>{if(live)setError(caught);});});return()=>{live=false;};},[enabled,reported,retry]);
  const zone=data?.timezone??preferences.timezone;
  const day=data?careTaskLocalDate(data.as_of,zone):null;
  const items=(data?.items??[]).filter(item=>!todayOnly||(!item.report_id&&item.can_report!==false&&day!==null&&careTaskLocalDate(item.due_at,zone)===day));

@@ -32,6 +32,7 @@ export function PatientHub({onOpen,onGuide,auth=accountAuth}:{onOpen:(page:MeDes
     <Icon name="chevron-right"/>
    </button>
   </section>
+  <div className="me-settings-tour-target" data-guide="me-settings">
   <RowGroup title="Care and reminders" className="me-category">
    <Row icon="user" title="Care contacts" onClick={()=>onOpen('caregivers')}/>
    <Row icon="bell" title="Reminders & Notifications" onClick={()=>onOpen('reminder-settings')}/>
@@ -44,6 +45,7 @@ export function PatientHub({onOpen,onGuide,auth=accountAuth}:{onOpen:(page:MeDes
    <Row icon="message" title="AI Assistant & Chat History" onClick={()=>onOpen('conversations')}/>
    <Row icon="shield" title="Privacy Settings" onClick={()=>onOpen('privacy')}/>
   </RowGroup>
+  </div>
   <RowGroup title="Help & application information" className="me-app-info" spread>
    {onGuide?<Row icon="info" title="Help / User Guide" onClick={onGuide}/>:null}
    <Row icon="file" title="About MediThread" onClick={()=>onOpen('about')}/>

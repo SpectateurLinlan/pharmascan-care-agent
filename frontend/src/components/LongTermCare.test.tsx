@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
-import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {api} from '../api/client';
 import {CareReviewSheet} from './CareReviewSheet';
 import {InventoryPanel} from './InventoryPanel';
@@ -11,6 +11,18 @@ vi.mock('../api/client',()=>({ApiError:class extends Error{},api:{inventory:vi.f
 const stock:StockStatus={medication_id:'demo-med',unit:'tablet',last_confirmed_stock:3,last_confirmed_at:'2026-10-15T00:00:00Z',estimated_remaining:2,daily_requirement:1,estimated_days:2,low_stock:true,estimate_note:'DEMO estimate',transactions:[]};
 const proposal:CareReview={action:'stock',medication_id:'demo-med',stock:{id:'demo-idempotency',kind:'count',quantity:3,unit:'tablet',low_threshold:7,note:'DEMO',confirmed:false}};
 beforeEach(()=>vi.resetAllMocks());afterEach(()=>{cleanup();vi.restoreAllMocks();});
+it('coalesces refresh events during a slow read and performs a fresh read after it settles',async()=>{
+ let finish!:(value:[])=>void;
+ vi.mocked(api.refreshFollowUps).mockReturnValueOnce(new Promise(resolve=>{finish=resolve;})).mockResolvedValue([]);
+ render(<CareTaskSummary onOpen={vi.fn()}/>);
+ await act(async()=>{for(let index=0;index<3;index++)window.dispatchEvent(new Event('pharmascan:reminder-refresh'));});
+ expect(api.refreshFollowUps).toHaveBeenCalledTimes(1);
+ await act(async()=>{finish([]);});
+ expect(api.refreshFollowUps).toHaveBeenCalledTimes(2);
+ expect(screen.getByText('No pending medication follow-ups.')).toBeTruthy();
+ await act(async()=>{window.dispatchEvent(new Event('pharmascan:reminder-refresh'));});
+ expect(api.refreshFollowUps).toHaveBeenCalledTimes(3);
+});
 it('keeps absent schedule unknown and names stock and provenance in the actual export',async()=>{
  const at='2026-10-16T00:00:00Z';const report:MedicationCareReview={generated_at:at,timezone:'Asia/Singapore',observation_window_days:30,
   summary:{period:'month',window_start:'2026-10-01T00:00:00Z',window_end:at,generated_at:at,timezone:'Asia/Singapore',reported_taken:0,reported_not_taken:0,unsure:0,observations:[],questions:[],coverage_note:'DEMO stored occurrences only',medications:[{medication_id:'demo-med',regimen_id:'demo-regimen',name:'DEMO Metformin 500 mg',version:1,state:'pending_review',is_prn:false,dose_amount:null,dose_unit:null,food_instruction:null,course_start:null,course_end:null,local_times:[],recorded_occurrences:0,without_report:0}]},

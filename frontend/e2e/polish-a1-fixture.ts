@@ -7,7 +7,7 @@ export async function mockPatientApp(page:Page,historyEnabled=true,identity?:{to
  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
  const token=identity?.token??'DEMO.synthetic-session-token',owner=identity?.owner??'d00d0000-0000-4000-8000-000000000001';
  const user={id:owner,aud:'authenticated',role:'authenticated',email:null,phone:'',app_metadata:{provider:'anonymous',providers:['anonymous']},user_metadata:{demo_only:true},is_anonymous:true,created_at:'2026-10-16T00:00:00Z'};
- await page.addInitScript(({owner})=>{localStorage.setItem(`pharmascan.quick-start.v2:${owner}`,JSON.stringify({version:2,status:'skipped',step:0}));},{owner});
+ await page.addInitScript(({owner})=>{localStorage.setItem(`pharmascan.quick-start.v4:${owner}`,JSON.stringify({version:4,status:'skipped',step:0}));},{owner});
  await page.route(url=>new URL(url).pathname.includes('/auth/v1/'),async route=>{
   const path=new URL(route.request().url()).pathname;
   if(path.endsWith('/signup')){await route.fulfill({json:{access_token:token,token_type:'bearer',expires_in:3600,refresh_token:'DEMO.refresh',user}});return;}

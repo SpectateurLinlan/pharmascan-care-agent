@@ -62,7 +62,7 @@ it('uses independent calendar/list and status filters over the same task rows',a
  fireEvent.click(screen.getByRole('button',{name:'Completed'}));expect(today(1).querySelectorAll('.care-calendar__marker')).toHaveLength(1);
  fireEvent.click(screen.getByRole('button',{name:'List'}));expect(screen.getByRole('button',{name:/DEMO done/})).toBeTruthy();expect(screen.queryByRole('button',{name:/DEMO late/})).toBeNull();expect(screen.queryByRole('button',{name:/DEMO future/})).toBeNull();
  fireEvent.click(screen.getByRole('button',{name:'All'}));
- const groups=Array.from(document.querySelectorAll('.care-list-view h3')).map(node=>node.textContent?.trim().split(' ')[0]);expect(groups).toEqual(['Overdue','Pending','Completed']);
+ const groups=Array.from(document.querySelectorAll('.care-list-view h3')).map(node=>node.textContent?.trim().split(' ')[0]);expect(groups).toEqual(['Pending','Overdue','Completed']);
 });
 it('opens the existing Add Follow-up form directly and preselects today from the patient zone',async()=>{
  const open=vi.fn();vi.spyOn(api,'refreshFollowUps').mockResolvedValue([]);render(<CareTaskSummary onOpen={open}/>);

@@ -29,8 +29,8 @@ export function MedicinesHub({medications,versions,onOpen,setupCount=null}:{medi
  const pastCount=regimenCourseGroups(versions).length;
  const medicationRow=(row:MedicationSummary,planned=false)=><button type="button" className="medication-list-row" key={row.regimen_id} onClick={()=>onOpen('medicine-detail',row.regimen_id)}>
   <span className="medication-list-row__icon"><Icon name="pill"/></span>
-  <span className="medication-list-row__body"><strong>{row.display_name}</strong><small>{planned?`${t('Course start date')}: ${row.course_start_date}`:summaryHint(row,t)}</small></span>
-  <span className="medication-list-row__badges">{versions.find(version=>version.regimen_id===row.regimen_id)?.patient_edited?<span className="medication-edited-badge">{t('Edited')}</span>:null}{row.source_backed?<span className="medication-source-badge">{t('Source record')}</span>:null}<Icon name="chevron-right"/></span>
+  <span className="medication-list-row__body"><strong>{row.display_name}</strong><span className="medication-list-row__meta"><small>{planned?`${t('Course start date')}: ${row.course_start_date}`:summaryHint(row,t)}</small><span className="medication-list-row__badges">{versions.find(version=>version.regimen_id===row.regimen_id)?.patient_edited?<span className="medication-edited-badge">{t('Edited')}</span>:null}{row.source_backed?<span className="medication-source-badge">{t('Source record')}</span>:null}</span></span></span>
+  <Icon name="chevron-right"/>
  </button>;
  return <Screen
   className="ui-screen--medicines"
@@ -40,7 +40,7 @@ export function MedicinesHub({medications,versions,onOpen,setupCount=null}:{medi
  >
   <section className="card medication-add-section" aria-labelledby="medication-add-title">
    <header className="medication-add-section__header"><h2 id="medication-add-title">{t('Add medication')}</h2></header>
-   <div className="medication-add-actions">
+   <div className="medication-add-actions" data-guide="medication-add">
     <button type="button" className="medication-add-action medication-add-action--scan" onClick={()=>onOpen('label')}>
      <Icon name="camera"/><strong>{t('Scan medication document')}</strong><small>{t('Photograph or upload a medication document')}</small>
     </button>
@@ -77,7 +77,7 @@ export function MedicationDetail({row,summary,onHistory,onGallery,onCheck,onEdit
  const [knowledge,setKnowledge]=useState<MedicationKnowledge|null>(null),[knowledgeLoading,setKnowledgeLoading]=useState(false),[knowledgeError,setKnowledgeError]=useState<unknown>(null);
  const [history,setHistory]=useState<MedicationHistoryPage|null>(null),[products,setProducts]=useState<GalleryEntry[]>([]),[productsLoaded,setProductsLoaded]=useState(false),[productLoadError,setProductLoadError]=useState(false),[error,setError]=useState<unknown>(null);
  useEffect(()=>{let live=true;setHistory(null);void api.medicationHistory({range_kind:'7',medication_id:row.medication_id,regimen_id:row.regimen_id}).then(value=>{if(live)setHistory(value);}).catch(caught=>{if(live)setError(caught);});return()=>{live=false;};},[row.medication_id,row.regimen_id]);
- useEffect(()=>{let live=true;setProductsLoaded(false);setProductLoadError(false);void api.personalGallery().then(value=>{if(live){setProducts(value);setProductsLoaded(true);}}).catch(caught=>{if(live){setError(caught);setProductLoadError(true);setProductsLoaded(true);}});return()=>{live=false;};},[row.medication_id]);
+ useEffect(()=>{let live=true;setProductsLoaded(false);setProductLoadError(false);void Promise.resolve().then(()=>{if(!live)return;return api.personalGallery().then(value=>{if(live){setProducts(value);setProductsLoaded(true);}}).catch(caught=>{if(live){setError(caught);setProductLoadError(true);setProductsLoaded(true);}});});return()=>{live=false;};},[row.medication_id]);
  useEffect(()=>{setKnowledge(null);setKnowledgeError(null);},[row.medication_id]);
  async function loadKnowledge(){setKnowledgeLoading(true);setKnowledgeError(null);try{setKnowledge(await api.medicationKnowledge(row.medication_id,language));}catch(caught){setKnowledgeError(caught);}finally{setKnowledgeLoading(false);}}
  const basis=summary?.dose_basis??null;

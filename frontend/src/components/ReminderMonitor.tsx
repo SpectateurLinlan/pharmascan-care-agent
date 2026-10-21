@@ -6,6 +6,7 @@ import {useLanguage} from '../language';
 export function ReminderMonitor({enabled,onReview,port}:{enabled:boolean;onReview:(regimenId:string)=>void;port?:ReminderPort}){
  const {language,t,preferences}=useLanguage();const [alert,setAlert]=useState<DoseReminderAlert|null>(null),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
  const tabOwner=useRef(crypto.randomUUID());
+ const notificationLanguage=useRef(language);notificationLanguage.current=language;
  const leaseKey=(row:DoseReminderAlert)=>'pharmascan.reminder-owner:'+row.occurrence_id;
  const ownsLease=(row:DoseReminderAlert)=>{try{const value:unknown=JSON.parse(localStorage.getItem(leaseKey(row))??'null');return typeof value==='object'&&value!==null&&'owner' in value&&value.owner===tabOwner.current;}catch{return false;}};
  const takeLease=(row:DoseReminderAlert)=>{try{const value:unknown=JSON.parse(localStorage.getItem(leaseKey(row))??'null');if(typeof value==='object'&&value!==null&&'until' in value&&typeof value.until==='number'&&value.until>Date.now()&&!ownsLease(row))return false;}catch{/* Ignore a malformed expired local presentation lease. */}localStorage.setItem(leaseKey(row),JSON.stringify({owner:tabOwner.current,until:Date.now()+30000}));return true;};
@@ -25,11 +26,11 @@ export function ReminderMonitor({enabled,onReview,port}:{enabled:boolean;onRevie
    if(active.current){const current=rows.find(row=>row.key===active.current?.key);if(!current){active.current=null;setAlert(null);}else return;}
    const next=rows.find(row=>!shown.current.has(row.key)&&!sessionStorage.getItem('pharmascan.alert:'+row.key));
    if(next&&takeLease(next)){shown.current.add(next.key);sessionStorage.setItem('pharmascan.alert:'+next.key,'shown');active.current=next;setAlert(next);setNotice('');
-    if(notifications.support()==='granted')void notifications.notify('MediThread',language==='zh'?'您有已安排的用药需要查看。':'You have a scheduled medication to review.').catch(()=>undefined);}
+    if(notifications.support()==='granted')void notifications.notify('MediThread',notificationLanguage.current==='zh'?'您有已安排的用药需要查看。':'You have a scheduled medication to review.').catch(()=>undefined);}
   }catch{if(live){failures=Math.min(failures+1,4);nextAttemptAt=Date.now()+Math.min(120000,15000*2**(failures-1));setNotice('Could not refresh reminders. Your medication records have not changed.');}}finally{pending.current=false;}}
   void refresh();const timer=setInterval(()=>void refresh(),15000);const wake=()=>void refresh();document.addEventListener('visibilitychange',wake);
   return()=>{live=false;clearInterval(timer);document.removeEventListener('visibilitychange',wake);};
- },[enabled,notifications,language]);
+ },[enabled,notifications]);
  useEffect(()=>{const expire=()=>{const row=active.current;if(row&&(Date.now()>=expires(row)||isQuiet(row)||!ownsLease(row))){if(ownsLease(row))localStorage.removeItem(leaseKey(row));active.current=null;setAlert(null);}else if(row){localStorage.setItem(leaseKey(row),JSON.stringify({owner:tabOwner.current,until:Date.now()+30000}));}};const timer=setInterval(expire,1000);window.addEventListener('storage',expire);return()=>{clearInterval(timer);window.removeEventListener('storage',expire);if(active.current&&ownsLease(active.current))localStorage.removeItem(leaseKey(active.current));};},[]);
  if(!alert)return notice?<p role="status" className="notice">{t(notice)}</p>:null;
  async function snooze(minutes:number){if(!alert)return;setBusy(true);changing.current=true;revision.current++;try{const saved=await api.snoozeReminder(alert.occurrence_id,minutes);close(Date.parse(saved.remind_at));}catch(error){setNotice(error instanceof ApiError?error.message:'Could not change your reminder. Please try again.');}finally{changing.current=false;setBusy(false);}}
