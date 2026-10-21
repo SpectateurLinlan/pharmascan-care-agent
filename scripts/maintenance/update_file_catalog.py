@@ -1,8 +1,10 @@
 """Generate objective first-party navigation without overwriting manual explanations.
 
-Run from root: python scripts/maintenance/update_file_catalog.py [--check]
+Run from root: python scripts/maintenance/update_file_catalog.py [--full] [--check]
+Default: maintained source/docs. --full: include retained outputs/evidence/backups
+as path-only records in separate FULL outputs; never read private record contents.
 Local file reads only; no credentials, network, database or Git mutation.
-Manual descriptions belong in docs/file_catalog_metadata.json, never generated Markdown.
+Manual descriptions belong in internal/docs/file_catalog_metadata.json, never generated Markdown.
 """
 
 from __future__ import annotations
@@ -55,9 +57,16 @@ TOPS = {
     ".github",
 }
 SECRET_NAMES = {".env", "credentials.json", "auth-state.json"}
+GENERATED_CATALOGS = {
+    "internal/FILE_CATALOG.md",
+    "internal/FILE_CATALOG_FULL.md",
+    "internal/docs/file_index.json",
+    "internal/docs/file_index_FULL.json",
+}
+DEFAULT_EXCLUDED = {"outputs", "evidence", "status"}
 
 
-def files():
+def files(*, full: bool = False):
     for folder, dirs, names in os.walk(ROOT):
         parent = Path(folder)
         relative = parent.relative_to(ROOT)
@@ -67,6 +76,8 @@ def files():
             if d not in SKIP
             and not d.startswith(("launcher-reload-", "reload-check-", "vercel-"))
             and (parent != ROOT or d in TOPS)
+            and (full or not (parent == ROOT and d in DEFAULT_EXCLUDED))
+            and (full or not (relative.as_posix() == "internal" and d == "backups"))
         )
         for name in sorted(names):
             if (
@@ -74,11 +85,11 @@ def files():
                 or name.startswith(".env.")
                 and name != ".env.example"
                 or name.endswith(".env")
-                or name.endswith((".log", ".pyc", ".tmp", ".bak", ".tsbuildinfo", ".key", ".pem"))
+                or name.endswith((".log", ".pyc", ".tmp", ".bak", ".tsbuildinfo", ".key", ".pem", ".p12", ".pfx"))
             ):
                 continue
             path = parent / name
-            if path.is_symlink() or not path.is_file():
+            if (relative / name).as_posix() in GENERATED_CATALOGS or path.is_symlink() or not path.is_file():
                 continue
             yield path, (relative / name).as_posix()
 
@@ -154,11 +165,11 @@ def describe(path: Path, rel: str):
     }
 
 
-def generate():
-    metadata_path = ROOT / "docs/file_catalog_metadata.json"
+def generate(*, full: bool = False):
+    metadata_path = ROOT / "internal/docs/file_catalog_metadata.json"
     manual = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.exists() else {}
     rows = []
-    for path, rel in files():
+    for path, rel in files(full=full):
         row = describe(path, rel)
         row.update(manual.get(rel, {}))
         rows.append(row)
@@ -170,8 +181,16 @@ def generate():
         "# File Catalog — 自动文件目录",
         "",
         (
+            "模式：FULL，包含保留的输出/证据/备份路径；不读取其正文。"
+            if full
+            else "模式：默认，仅维护中的源码/文档；输出、证据、status 和内部备份按需用 --full 盘点。"
+        ),
+        "生成目录自身、凭据、依赖和缓存不参与盘点。FULL 使用独立输出，不覆盖默认目录。",
+        "",
+        (
             "由 `python scripts/maintenance/update_file_catalog.py` "
-            "更新。人工职责/风险说明保存在 [file_catalog_metadata.json](file_catalog_metadata.json)，不会被生成器覆盖。"
+            "更新。人工职责/风险说明保存在 "
+            "[file_catalog_metadata.json](docs/file_catalog_metadata.json)，不会被生成器覆盖。"
         ),
         (
             f"当前扫描 {len(rows)} 个第一方文件。包括源代码、测试、保留文档/证据；"
@@ -218,17 +237,26 @@ def generate():
     return "\n".join(lines), rows
 
 
-if __name__ == "__main__":
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
-    args = parser.parse_args()
-    content, rows = generate()
-    output = ROOT / "docs/FILE_CATALOG.md"
-    index = ROOT / "docs/file_index.json"
+    parser.add_argument("--full", action="store_true", help="Include retained evidence/output/backup paths separately")
+    args = parser.parse_args(argv)
+    content, rows = generate(full=args.full)
+    suffix = "_FULL" if args.full else ""
+    output = ROOT / f"internal/FILE_CATALOG{suffix}.md"
+    index = ROOT / f"internal/docs/file_index{suffix}.json"
     if args.check:
         current = output.exists() and output.read_text(encoding="utf-8") == content
         current = current and index.exists() and json.loads(index.read_text(encoding="utf-8")) == rows
-        raise SystemExit(0 if current else 1)
+        return 0 if current else 1
+    output.parent.mkdir(parents=True, exist_ok=True)
+    index.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(content, encoding="utf-8")
     index.write_text(json.dumps(rows, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Indexed {len(rows)} first-party files")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

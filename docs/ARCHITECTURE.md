@@ -1,5 +1,14 @@
 # Architecture, Deployment, Components and Trust Boundaries
 
+## Authority and reading scope
+
+This document owns component responsibilities and trust boundaries. Public contracts
+are in [API_CONTRACTS](API_CONTRACTS.md), persistence concepts in [DATA_MODEL](DATA_MODEL.md),
+and clinical/data safeguards in [SAFETY_AND_EVALUATION](SAFETY_AND_EVALUATION.md).
+Dated implementation sections describe scoped changes, not current hosting acceptance.
+Read only the affected boundary; presentation instructions and historical verification
+snapshots are not prerequisites for routine edits.
+
 ## Current long-term care boundary (2026-10-16)
 
 `LongTermCareService` composes public enrollment, observations and review summaries with read-only event/rule ports and `CareRepository`. `domain/inventory.py` contains pure balance/demand rules; stock logic is not duplicated in UI/Agent/reminders. Concrete memory and same-user-JWT adapters are injected only at `transport/container.py`. Typed DTOs are in `contracts/long_term.py`; no cross-private component imports or new patient privileged path are introduced.
@@ -60,25 +69,22 @@ flowchart TB
 | `backend/reminders` | scheduler and opt-in notifications, idempotency | `schedule_task`, `send_notification` | infer clinical dose from schedule |
 | `backend/voice` | audio ASR/TTS and text fallback | `transcribe`, `synthesise` | autonomous conversation state |
 
-## C. Deployment topology and practical free-tier decisions
+## C. Deployment topology and runtime ownership
 
-```mermaid
-flowchart LR
-  Browser[Mobile / Desktop Browser\nInstalled PWA optional] --> CDN[Vercel Frontend candidate]
-  CDN --> Backend[Railway FastAPI candidate\nFallback Render / equivalent]
-  Backend --> Supabase[(Supabase Free PostgreSQL\nAuth/RLS/pgvector + Private Storage)]
-  Backend --> LLM[Provider LLM via server keys]\n
-  Backend --> HF[Deployed PharmaScan Stage2 / Hugging Face]
-  Backend --> Tencent[Tencent Cloud ASR/TTS OPTIONAL]
-  Dev[Developer + WorkBuddy] -.builds and tests repo.-> Backend
-```
+The configured source layout has three separate services; this is not a statement
+that a particular revision is hosted or production-verified.
 
-- **Hackathon implementation default**: React + TypeScript (Vite) + PWA, Python FastAPI and a single backend orchestrator, PostgreSQL/Supabase Auth/Storage/pgvector, HF Stage2 as a service, optional Tencent ASR/TTS. NO ADP.
-- **Hosting**: Vercel frontend and Railway backend are deployment *candidates*; actual free credits, domain, sleep behavior, credit-card onboarding, trial expiry and 11/03 availability must be checked in account UI. Render/another service is fallback. Do NOT assert deployed success until URL and end-to-end tests pass. Preserve staging vs production env separation.
-- **DB**: Supabase PostgreSQL free project is suitable for prototype, not a zero-cost guarantee at unlimited scale. Private buckets, strict RLS for per-evaluator anonymous users. No raw credentials in source. Test developer setup with local PostgreSQL (Docker Compose if available) or isolated repo fakes when cloud credentials absent; do not change production for tests.
-- **Voice**: first responsive text and browser TTS/web speech fallback behind `SpeechPort`; later add Tencent cloud ASR/TTS only with verified account quotas, secure backend-only secrets, opt-in audio consent; no TRTC needed for MVP.
-- **Notifications**: initial in-app reminders plus optional Web Push (browser+permission dependent); no guarantee of on-time medical notifications from PWA/background push. Future mobile-native local notifications (Capacitor) after pilot. Add browser portrait primary and landscape responsive, do not implement separate duplicated screens.
-- **Auth**: `Try Demo` → Supabase anonymous sign-in → each account gets independent seeded 7-day synthetic data, resettable; authenticate emails for team. An anonymous Supabase user uses the authenticated role and requires owner RLS; isolate per `auth.uid()`; rate limit/CAPTCHA/cleanup. See https://supabase.com/docs/guides/auth/auth-anonymous . No shared mutable demo account.
+| Service | Source-owned entry/configuration | Boundary |
+|---|---|---|
+| Frontend | [frontend/vercel.json](../frontend/vercel.json) | Public Auth configuration; same-origin authenticated API calls; no worker/server secrets |
+| Patient API | [Render Blueprint](../deploy/render/render.yaml), [launcher](../scripts/run_patient_api.py) | Patient JWT/application services; frozen Stage2 contract resources; no worker DB/VAPID private key |
+| Push Dispatcher | [ASGI entry](../deploy/dispatcher/index.py), root [Vercel config](../vercel.json) | Isolated bounded worker, dedicated signing/DB/provider permissions; not a patient API |
+
+Keep the [deployment layout](../deploy/README.md) as the public build/entry reference.
+Shared libraries do not imply shared runtime credentials or background scheduling.
+Source paths, package resources, environment scopes, current provider quotas and hosted
+behavior must be verified for the approved artifact. Local mocks or health responses
+cannot establish production isolation or real notification receipt.
 
 ## D. Critical trust boundaries
 
@@ -108,12 +114,6 @@ User / Timer / Imported reviewed record
 ```
 
 **Public tool set (MVP):** `list_active_medications`, `get_medication_history`, `enroll_medication_draft`, `extract_medication_document`, `confirm_regimen_draft`, `get_visual_references`, `embed_pill_photo`, `match_personal_gallery`, `identify_us_catalogue_candidates`, `check_due_dose`, `record_self_report`, `record_health_observation`, `list_care_tasks`, `prepare_review_summary`, `get_source_backed_medication_info` and `request_caregiver_notification` (last optional). Schema/permissions in API contracts.
-
-## F. PPT architecture diagram guidance (one/two slides)
-
-**Slide 1: User Journey + Runtime Architecture** top: 4 phases (Source/Enroll → Daily Support → Long-term → Review). middle: single Agent Orchestrator and deterministically enforced Safety Gate. bottom: Tools split Vision (HF), OCR, Clinical Knowledge/Advisory DDI, Regimen + Dose DB, Health & Care Tasks; right: Patient and optional linked caregiver. Display arrows showing data/provenance and branch backs.
-
-**Slide 2: Trust Boundary (recommended)** left Patient PWA and authenticated backend; central Agent/Typed Tools with **orange policy gate**; right external inference/knowledge; bottom private PostgreSQL/Storage/trace. Label what can leave backend (cropped image or vector), what cannot (auth secrets, NRIC, real health data), human confirmation and blocked paths; footnote: `Research prototype; no automated drug identity confirmation or dosage changes`.
 
 ## Session 3D: enforced persistent patient boundary (2026-10-14)
 
@@ -227,7 +227,7 @@ Greeting reads preferred display name only for Auth members, never email/UID; pa
 
 Application `ReminderPlanService` projects the existing reviewed active rules/occurrences for settings/calendar/worker. New-version review uses existing `enroll_draft(existing_medication_id=...)` and activation; explicit record-stop calls `end_regimen` without deleting history. Neither path changes B14 or exposes write tools to Gemini.
 
-The independent notification worker is an administrative infrastructure process over repository ports. Its DB access is not imported into patient HTTP. Patient subscription operations use verified principal + same-user JWT + FORCE RLS. Notification delivery rows are patient-read-only. Worker claims are atomic and eligibility is rechecked; provider acceptance is not device receipt. Full setup/limits are in [Reminders](REMINDERS.md). Frozen Stage2 and Gemini provider architecture are unchanged.
+The independent notification worker is an administrative infrastructure process over repository ports. Its DB access is not imported into patient HTTP. Patient subscription operations use verified principal + same-user JWT + FORCE RLS. Notification delivery rows are patient-read-only. Worker claims are atomic and eligibility is rechecked; provider acceptance is not device receipt. Operational configuration remains owner-managed; these boundaries do not prove hosted delivery. Frozen Stage2 and Gemini provider architecture are unchanged.
 
 The internal frontend/backend compatibility marker is now `patient-ux-reminders-v1`; a stale API fails before patient setup/business queries with a restart instruction. Hash navigation leaves an unconsumed Auth callback intact until the identity SDK handles/scrubs it. Photo acquisition and result are separate task layers (`#check` / `#check-result`) while retaining the same selected file; Back/Forward preserves acquisition/result state, and late responses from an unmounted task cannot open an old result.
 

@@ -78,3 +78,23 @@ frontend/playwright-report/
 /.coverage
 /.coverage.*
 /htmlcov/
+
+# Private local instructions, project knowledge and evidence (not history erasure).
+/AGENTS.md
+/CODEBUDDY.md
+/internal/
+/status/
+/evidence/
+/submission_private/
+/prompts/
+/.codebuddy/
+/.workbuddy-ai/
+/.agents/
+/.claude/
+/.aws/
+/.codex/
+/skills-lock.json
+/assets/
+
+# Superseded one-session Console capture; maintained diagnostics live in frontend/src/api.
+/scripts/qa/performance_in_browser.js

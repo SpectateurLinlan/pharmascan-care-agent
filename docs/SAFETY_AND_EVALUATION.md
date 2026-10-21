@@ -1,5 +1,36 @@
 # Clinical Safety, Responsible AI, Engineering Validation & Evaluation
 
+## Authority and verification scope
+
+This document owns clinical limitations, privacy/security invariants and evaluation
+methods. Apply the relevant safeguards to affected behavior; the matrix is a menu of
+risk-based checks, not a requirement to rerun every test for every change. Dated
+results below are historical evidence, never proof of current hosted/device behavior.
+
+## Engineering and provider safety details
+
+Use Python 3.11+ typed contracts/Pydantic v2 and strict TypeScript at their respective
+boundaries. Normalize provider data in a typed adapter. Validate actual schemas and
+permitted example payloads; unknown fields/coverage remain explicit. Use bounded
+timeouts and retries only for safe/idempotent requests; distinguish validation,
+authentication, rate-limit, network and provider failures. No silent simulated success.
+
+Validate upload MIME/extension/content signature, byte/pixel/decompression limits,
+malformed payloads and privacy. Ignore unnecessary EXIF; never execute supplied paths.
+Embedding queries/references require the same model, preprocessing/crop and space;
+check finite values and actual dimensions. Version thresholds from recorded calibration,
+not arbitrary similarity cutoffs. Catalogue seeds require licensed product mapping and
+remain candidates, not verified personal references; packaging is not a loose-pill sample.
+Keep the known single-pill/double-box regression gated until independently validated.
+
+Use focused isolation/replay/unknown-medication/discontinued-plan/no-photo/ambiguous/
+quality-fail/provider-retry/model-mismatch/missing-instruction/auth/false-high-similarity
+cases where affected. Do not weaken assertions, blanket-ignore diagnostics or fabricate
+recognition, tool activity, study metrics or delivery. Logs contain only necessary scrubbed
+correlation/action/version/source metadata; prompt versions and state transitions should
+be reproducible. Feedback/retraining needs separate informed opt-in, provenance,
+withdrawal handling and manual verification. Empty interaction alerts never prove safety.
+
 ## 1. Medical intended-use position (provisional, not legal conclusion)
 
 The patient-facing MVP helps *organise recorded medicines and time-based tasks; compare a pill image with recorded visual references as an aid; record self-reported intake; retrieve sourced general education; and prepare questions for professionals*. It **does not** diagnose, prescribe, independently recommend dosage, clear a patient to take a medicine, identify pill composition with certainty, determine whether ingestion happened, or auto-notify unconnected doctors. Actual claimed purpose/function matters to HSA SaMD classification; no blanket non-medical-device exemption and no predetermined final class. Regulator/clinical assessment and prospective validation are **post-hackathon** requirements for real-world use.
@@ -65,35 +96,6 @@ The patient-facing MVP helps *organise recorded medicines and time-based tasks; 
 - **Personal Gallery:** genuine vs impostor pair distributions and FAR at selected FRR, ambiguity coverage and rejection; test whether catalogue-seeded reference works vs personal gallery. Thresholds selected on validation data, tested held-out; report operating point and failure rate; no arbitrary cosine=.9.
 - **Detection:** 1 pill → 1 bbox, multi-pill count and NMS; provide exact TEVA bug fixture plus observed wrong candidate ranking. High similarity 0.97–0.99 unrelated candidates must be explained as raw visual similarity, not confidence.
 - **Quality:** image-only explanation flags must be computed from explicit image-quality tool; no GPT-created explanations. No packaging-domain generalization claim from loose pill training.
-
-## 6. Scoring/rubric evidence map (10×10; do not invent score forecasts)
-
-| Dimension | Concrete required evidence |
-|---|---|
-| Impact & Relevance | source-based pain points; user scenario; clear scope and real constraints |
-| Human-Centered Design | mobile portrait, older-adult accessibility, Smart Check low burden, consent controls |
-| AI Interaction | multi-step tool selection and adaptive clarification traces; memory across sessions |
-| Technical Execution | schema+migrations, actual API adapter, tests, end-to-end deployed app |
-| Feasibility | independent onboarding; no fictional Singpass/hospital integration; bounded hosting cost; data licensing |
-| Demo & Storytelling | coherent multi-day patient case, true successes/uncertainty, visible safety recovery |
-| Innovation & Creativity | personalised reference gallery linked to versioned regimens and longitudinal support |
-| UX & Accessibility | font contrast/tap targets/voice/text fallback, landscape responsive, 3–5 step practical tasks |
-| Responsible AI & Ethics | abstention, no re-dose, provenance, permissions, versioning, false-high-similarity case |
-| Overall Quality | integrated patient journey + real WorkBuddy evidence and correctly scoped limitations |
-
-## Session 3D security regression evidence
-
-`tests/backend/test_supabase_live.py` is REAL LIVE only with `RUN_SUPABASE_LIVE=1`; otherwise skipped, never counted as live verification. It creates two real anonymous Auth sessions with demo_only metadata, uses their tokens through FastAPI and the Data API, and deliberately issues patient table queries without patient_id filters. A/B read/update/delete/ownership-forgery isolation and own-user positive controls prove the RLS boundary independently of repository WHERE predicates. Both private Storage buckets are tested using synthetic text bytes only: owner upload/read/delete and foreign read/overwrite/delete/path forgery refusal.
-
-The live self-report path checks missing/unconfirmed/wrong-purpose challenges, rollback without consumption/event, explicit confirmation, event semantics, RPC replay, binding conflicts and cross-owner RPC refusal. Local confirmation regressions cover expiry, consumed challenge, wrong owner/purpose, stale session, invalid occurrence, repeated challenge, duplicate confirmation and all three patient choices. Provider mocks verify auth denial, timeout, 4xx/5xx/429, malformed JSON and token redaction; mocks are VERIFIED LOCAL with SIMULATED provider I/O.
-
-Append-only demo enrollment/confirmation/dose history and anonymous Auth identities created by live tests are retained. The tests delete only their own disposable sentinel medications and Storage objects through owner tokens. No patient history deletion or privileged cleanup is performed. `reported_taken` means patient reported taking the dose; visual status remains independent and ingestion_proven remains false.
-
-## Session 03 voice and reference safety evidence
-
-ASR text is untrusted patient input. Confidence is unknown, not invented; review/edit and explicit Send precede normal Agent routing. A spoken self-report can prepare only a confirmation challenge, never prove ingestion or bypass consent. Local tests exercise permission denial, transcript review, provider timeout/failure, empty transcript, and independent medication confirmation using SIMULATED I/O. Real Tencent TTS succeeded; ASR activation failed with FailedOperation.UserNotRegistered, so complete voice/microphone/playback is BLOCKED. No physical microphone or audible playback claim is made.
-
-Real synthetic Stage2 source preview is evidence only, with missing dose/time/duration left unset. No automatic clinical schedule inference or catalogue-to-patient-reference promotion occurs. Gallery/camera and clinical model calibration remain unverified.
 
 ## Continuation 2026-10-14: active browser recognition and immutable source evidence
 

@@ -86,15 +86,16 @@ MediThread 将药物资料、患者自述记录和待咨询问题整理在同一
 | **语音** | 浏览器语音识别与合成；可选腾讯云集成 |
 | **托管** | Vercel 前端、Render API、独立 Web Push Dispatcher |
 
-## 开发状态
+## 开发与验证
 
-**2026 年 10 月 18 日 · 开发分支**
+仓库包含本地实现及版本化 Migration 源文件。代码存在、自动化检查、外部服务验收、
+线上版本和真实设备表现是不同层次的证据，不能互相替代；旧开发报告不能证明当前生产
+Schema 或发布就绪状态。
 
-- **会话连续性：** 已在本地 API、PostgreSQL 和浏览器环境验证，Supabase Migration `026` 已执行。
-- **日期正确性：** 本地修复保留患者当地日期和历史用药计划关联。最新本地患者问答审查 **30 项中通过 10 项、未通过 20 项**；未解决行为见[Deferred Work](docs/DEFERRED_WORK.md)。这不代表真实 Provider 或生产环境已验证。
-- **待发布与验证：** Migration `028` 已通过本地测试，但尚未在生产执行。更新后的前后端代码也尚未部署；药物知识问答、多轮澄清、记录呈现与线上集成验收仍在继续完善。
-
-因此，[线上应用](https://medithread.vercel.app)可能仍为较早版本。功能验收范围见 [Challenge 2 工作流程](docs/CHALLENGE2.md)，发布检查见[部署清单](docs/DEPLOYMENT_CHECKLIST.md)。
+患者记录、已核对用药指示和患者自述，与 AI 或视觉推断分别处理。前端、患者 API 和
+Push Worker 独立配置；生产变更和通知发送需要各自的批准与验证。
+参见[产品工作流程](docs/WORKFLOWS.md)、[安全与评估](docs/SAFETY_AND_EVALUATION.md)
+及[服务入口](deploy/README.md)。
 
 ## 本地运行
 
@@ -112,7 +113,7 @@ python scripts/start_dev.py
 
 启动前根据本地运行模式配置环境变量。具体配置和测试方法请参考[开发指南](docs/DEVELOPMENT.md)。
 
-**更多文档：** [项目结构](docs/PROJECT_STRUCTURE.md) · [对话持久化](docs/CONVERSATIONS.md) · [提醒](docs/REMINDERS.md) · [Render 部署](docs/RENDER_DEPLOYMENT.md) · [服务入口](deploy/README.md)
+**更多文档：** [项目结构](docs/PROJECT_STRUCTURE.md) · [对话持久化](docs/CONVERSATIONS.md) · [长期用药照护](docs/LONG_TERM_CARE.md) · [安全与评估](docs/SAFETY_AND_EVALUATION.md) · [Render 部署](docs/RENDER_DEPLOYMENT.md) · [服务入口](deploy/README.md)
 
 ## 仓库结构
 
@@ -142,4 +143,4 @@ MediThread 的早期开发名称为 *PharmaScan Care*，仓库目录及部分工
 
 **项目源代码**：[Apache-2.0](LICENSE) · [NOTICE](NOTICE) · [第三方许可和数据条款](docs/legal/THIRD_PARTY_NOTICES.md)
 
-维护导航：[Repository Guide](docs/REPOSITORY_GUIDE.md) · [逐文件目录](docs/FILE_CATALOG.md)。
+维护文档：[开发指南](docs/DEVELOPMENT.md) · [项目结构](docs/PROJECT_STRUCTURE.md)。

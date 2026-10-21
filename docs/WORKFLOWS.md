@@ -1,6 +1,19 @@
 # MediThread — Detailed Business, Agent, Activity and Tool Flows
 
-Implemented workflows and current evidence are recorded in the dated runtime sections and [runtime workflows](WORKFLOWS.md). Earlier lifecycle diagrams include design targets; use that matrix to distinguish live integration, local tests and future work. External Stage2 v0.10.0 remains frozen.
+## Public product scope
+
+MediThread helps adults understand recorded medicines, review source-backed plans,
+report taken/not-taken/unsure, record observations and medication-related barriers,
+manage follow-ups, and prepare a review summary. These six areas are observable
+patient workflows, not claims of clinical efficacy or comprehensive disease prevention.
+
+Today, Medicines, Records and Me use the same patient-owned services; Assistant
+retrieves authorized records through typed tools. General knowledge is sourced and
+separate from personal instructions. Caregiver contacts store details; saving one does
+not send an invitation or disclose records. No hospital/Singpass integration, verified
+ingestion, general screening/vaccination service or automatic clinical transfer is implied.
+
+Implemented paths are described in the runtime sections below. Earlier lifecycle diagrams are conceptual design targets, not claims that every depicted integration exists. Dated evidence is limited to its recorded version/environment. External Stage2 v0.10.0 remains frozen.
 
 ## I. The overall medicine lifecycle (Claude's A–D + our agentic extension)
 
@@ -156,16 +169,6 @@ flowchart TD
 
 `reminder_due`/`followup_due`/`user_health_checkin` → get regimen history, counts by reliable status (exclude `unreported` from confirmed failure), maybe ask barrier: forgetful, unavailable medicine, unclear directions, adverse sensations, inconvenience → log own report and optionally health measurement (BP, glucose, symptoms, sleep) → date/unit-aware trend, not causal diagnosis → existing personalized preventive task (screening/vaccination/lifestyle/follow-up) from user/verified guidance → patient-reviewable review summary and pharmacist/doctor questions → next event. Regimen expired: end version, retain history/gallery, stop active scheduling; changed instruction creates new version and reevaluates DDI if mapped.
 
-## VII. Target tool traces (design; actual implemented workflows below)
-
-**Trace A / Enrollment:** `resolve_intent(ADD)` → `extract_document(label)` → `find_product` → `compare_current_regimens` → `request_missing(dose_frequency)` → patient reply → `confirm_source_fields` → `screen_ingredients(coverage)` → `create_versioned_regimen` → `schedule_reminder` → persist.
-
-**Trace B / Normal image:** `get_active_regimen` → `get_current_dose_event` → `image_quality` → `embed_image` → `match_personal_gallery` → `evaluate_evidence` → `explain_limited_match` → user says Taken → `record_self_report` → persist.
-
-**Trace C / Duplicate boxes:** `get_regimen` → `scan_diagnostics` gives two overlapping boxes → `validate_detection` marks count unreliable → no dose-count comparison → `ask_one_pill_crop` → image retry → `embed + match` or abstain → persist unresolved if no reliable evidence.
-
-**Trace D / Late check-in:** `get_history` → `summarize_unconfirmed` → `ask_adherence_barrier` → `record_health_observation` → `get_preventive_tasks` → `prepare_review_summary` → user confirms content/export.
-
 ## VIII. Tool failure / control-flow rules
 
 - Network timeout: present 'visual check unavailable', do not report success; choose no-photo self-report or manual reference verification, persist task as degraded.
@@ -242,7 +245,7 @@ Use the [upgrade-specific Demo A/B/C steps](STAGE2_V010_UPGRADE.md#reproducible-
 
 Primary locations: Today (daily occurrences, prompts and one composer), Medicines (identity/regimen/source/gallery, registration and version history), Records (dose reports, health observations and summaries), Me (profile/Auth/caregiver/preferences/privacy/help/feedback/about). Assistant expands as a task view and Back returns to its actual origin. Root tabs do not replay all prior root visits through app Back. Draft and conversation state survive root switches. Missing deep-link medication context requests selection.
 
-Activated reviewed timed plan -> deterministic rules/occurrences -> automatic reminder projection -> due in-app alert or independently scheduled Web Push -> patient opens Today -> optional report challenge -> explicit B14 confirmation -> atomic dose_event. Reminder delivery/opening never records intake. Editing creates/reviews/activates a new version; stopping the recorded plan retains history and excludes future jobs. Calendar download is a finite one-time import and old events require manual cleanup after changes. [Operational setup and platform limits](REMINDERS.md).
+Activated reviewed timed plan -> deterministic rules/occurrences -> automatic reminder projection -> due in-app alert or independently scheduled Web Push -> patient opens Today -> optional report challenge -> explicit B14 confirmation -> atomic dose_event. Reminder delivery/opening never records intake. Editing creates/reviews/activates a new version; stopping the recorded plan retains history and excludes future jobs. Calendar download is a finite one-time import and old events require manual cleanup after changes. Hosting and device delivery remain separate verification gates; see the [worker trust boundary](ARCHITECTURE.md#worker-dispatch-transport-boundary).
 ## Current medication-related long-term workflow (2026-10-16)
 
 Four root tabs remain Today / Medicines / Records / Me. Today summarizes open care tasks and keeps the same Assistant. Medicines detail owns stock/refill. Records owns barriers, numeric observations/trends and medication review/export. Quick links share these same services and state.

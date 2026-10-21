@@ -86,15 +86,18 @@ See the [architecture](docs/ARCHITECTURE.md), [API contracts](docs/API_CONTRACTS
 | **Speech**                 | Browser speech recognition and synthesis; optional Tencent integration |
 | **Hosting**                | Vercel web app, Render API, separate Web Push dispatcher               |
 
-## Development status
+## Development and verification
 
-**18 October 2026 · Development branch**
+This repository contains local implementation and versioned migration sources. Source
+availability, automated checks, provider acceptance, hosted revisions and real-device
+behavior are different evidence levels; none implies the others. Do not infer current
+production schema or readiness from a dated development report.
 
-- **Conversation continuity:** implemented and verified in local API, PostgreSQL and browser tests. Supabase migration `026` has been applied.
-- **Temporal correctness:** local changes preserve patient-local dates and historical regimen association. The latest local patient-answer audit reported **10 of 30 cases passing**; unresolved outcomes are tracked in [Deferred Work](docs/DEFERRED_WORK.md). This is not provider or production verification.
-- **Pending release work:** audit-contract migration `028` is tested locally but not applied to production. Updated backend/frontend code has not been deployed. Medication knowledge, multi-turn clarification, record presentation and hosted integration checks remain under development.
-
-The [hosted app](https://medithread.vercel.app) may therefore show an earlier build. For the validation scope, see [Challenge 2 workflows](docs/CHALLENGE2.md) and the [deployment checklist](docs/DEPLOYMENT_CHECKLIST.md).
+Patient records, reviewed instructions and self-reports remain distinct from AI or visual
+inference. Deployment uses separately configured frontend, patient API and Push worker;
+production changes and notification sending require their own approval and verification.
+See [product workflows](docs/WORKFLOWS.md), [safety and evaluation](docs/SAFETY_AND_EVALUATION.md)
+and [service entrypoints](deploy/README.md).
 
 ## Run locally
 
@@ -112,7 +115,7 @@ python scripts/start_dev.py
 
 Set environment variables for your intended local mode before starting services. See [development instructions](docs/DEVELOPMENT.md) for configuration and tests.
 
-**Further documentation:** [Project structure](docs/PROJECT_STRUCTURE.md) · [Conversation threads](docs/CONVERSATIONS.md) · [Reminders](docs/REMINDERS.md) · [Render deployment](docs/RENDER_DEPLOYMENT.md) · [Service entrypoints](deploy/README.md)
+**Further documentation:** [Project structure](docs/PROJECT_STRUCTURE.md) · [Conversation threads](docs/CONVERSATIONS.md) · [Long-term care](docs/LONG_TERM_CARE.md) · [Safety and evaluation](docs/SAFETY_AND_EVALUATION.md) · [Render deployment](docs/RENDER_DEPLOYMENT.md) · [Service entrypoints](deploy/README.md)
 
 ## Repository structure
 
@@ -142,4 +145,4 @@ MediThread was previously developed under the working title *PharmaScan Care*, w
 
 **Project source: [Apache-2.0](LICENSE) · [NOTICE](NOTICE) · [Third-party licenses and data terms](docs/legal/THIRD_PARTY_NOTICES.md)
 
-Maintainer navigation: [Repository Guide](docs/REPOSITORY_GUIDE.md) · [File Catalog](docs/FILE_CATALOG.md).
+Maintainer documentation: [Development](docs/DEVELOPMENT.md) · [Project structure](docs/PROJECT_STRUCTURE.md).

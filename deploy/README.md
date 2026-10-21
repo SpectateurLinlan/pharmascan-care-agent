@@ -1,5 +1,10 @@
 # Deployment entrypoints
 
+This file owns public service entry points and build/routing layout. It is not a live
+infrastructure inventory or permission to publish. Dated local failures/results explain
+constraints; verify the chosen artifact and environment before any approved release.
+Detailed private operator procedures are maintained separately and are not public dependencies.
+
 | Service | Files | Service root |
 | --- | --- | --- |
 | Vercel frontend | Existing `frontend/` Vite project | `frontend` |
@@ -22,8 +27,8 @@ Local ASGI routing/import tests verify the relocated module. Vercel Linux packag
 subprocess runtime and real Push delivery still need an approved Preview deployment;
 this layout change does not establish cloud readiness.
 
-See [patient deployment](../docs/RENDER_DEPLOYMENT.md) and
-[notification deployment](../docs/REMINDERS.md).
+See [patient deployment](../docs/RENDER_DEPLOYMENT.md) and the
+[worker dispatch trust boundary](../docs/ARCHITECTURE.md#worker-dispatch-transport-boundary).
 
 ## MediThread frontend routing
 

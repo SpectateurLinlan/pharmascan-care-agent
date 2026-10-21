@@ -1,5 +1,10 @@
 # Patient API on Render Free
 
+This is a reusable configuration guide, not a current deployment-status record.
+"Preparation only" below means the guide itself performs no cloud changes. Service
+existence, deployed revision and resource behavior require separate authorized checks.
+Runtime contract resources must remain at their documented paths.
+
 Preparation only: no service, credentials, migration or deployment is created by
 these files. Use the repository checkout, not an isolated backend wheel.
 

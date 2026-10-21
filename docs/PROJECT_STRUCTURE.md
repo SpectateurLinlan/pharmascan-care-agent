@@ -132,20 +132,30 @@ Worker privileges must not be shared with the patient API or browser bundle.
 | File / directory | Purpose |
 | --- | --- |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Local setup, configuration, running and testing |
-| [CHALLENGE2.md](CHALLENGE2.md) | Six capabilities, Agent workflows and verification limits |
+| [CHALLENGE2.md](WORKFLOWS.md) | Six capabilities, Agent workflows and verification limits |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Components, dependencies and trust boundaries |
 | [API_CONTRACTS.md](API_CONTRACTS.md) | Patient and external provider interfaces |
 | [DATA_MODEL.md](DATA_MODEL.md) | Patient records and persistence boundaries |
 | [SAFETY_AND_EVALUATION.md](SAFETY_AND_EVALUATION.md) | Safety invariants and evidence interpretation |
-| [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) | Hosting and post-deployment smoke checks |
 | [RENDER_DEPLOYMENT.md](RENDER_DEPLOYMENT.md) | Patient API build/start/environment instructions |
-| [REMINDERS.md](REMINDERS.md) | Reminder, queue, Web Push and device requirements |
+| [CONVERSATIONS.md](CONVERSATIONS.md) | Persistent conversation behavior and HTTP contract |
+| [WORKFLOWS.md](WORKFLOWS.md) | Current patient journeys and safety boundaries |
+| [STAGE2_V010_UPGRADE.md](STAGE2_V010_UPGRADE.md) | External vision service integration and limitations |
+| [legal/](legal) | Third-party notices and reuse boundaries |
 | [LONG_TERM_CARE.md](LONG_TERM_CARE.md) | Inventory, barriers, observations and follow-up interfaces |
-| [external/](external/) | Frozen external API contracts required by adapters |
-| [images/](images/) | Approved genuine synthetic-data product screenshots |
-| [legal/](legal/) | Third-party notices and reuse boundaries |
+| [external/](external) | Frozen external API contracts required by adapters |
+| [images/](images) | Approved genuine synthetic-data product screenshots |
 
 ---
 
 Real environment files, credentials, patient uploads, tool instructions and private
 development evidence are not part of this public project structure.
+
+## Documentation responsibilities
+
+`docs/` contains public technical references; `deploy/` contains runtime artifacts
+and public service/build instructions. Local `internal/` holds private requirements,
+proposals, operator procedures and historical evidence. It is excluded from future
+publication; moving a former public file there does not erase existing Git history.
+Runtime schemas, architecture images, LICENSE/NOTICE and third-party notices stay
+public at their active paths. Public documents must not link to ignored private files.

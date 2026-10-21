@@ -20,12 +20,9 @@ def test_cron_creation_stays_inactive_and_refuses_replacing_a_named_job():
     assert "RAISE NOTICE 'Dispatcher request ID: %', signing_key" not in command
 
 
-def test_one_shot_and_scheduled_commands_are_identical():
+def test_scheduled_dispatch_uses_fixed_signed_endpoint_without_bearer_auth():
     sql = (ROOT / "deploy/dispatcher/push-cron.sql").read_text(encoding="utf-8")
     scheduled = sql.split("$command$")[1].strip()
-    guide = (ROOT / "docs/PUSH_OPERATIONS.md").read_text(encoding="utf-8")
-    once = "DO $once$" + guide.split("DO $once$", 1)[1].split("$once$;", 1)[0] + "$once$;"
-    assert once.replace("$once$", "$dispatch$").strip() == scheduled
     assert "https://medithread-push-worker.vercel.app/internal/notifications/dispatch" in scheduled
     assert "'X-Dispatch-Timestamp',stamp,'X-Dispatch-Signature',signature" in scheduled
     assert "'Authorization'" not in scheduled

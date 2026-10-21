@@ -1,5 +1,18 @@
 # Records medication history query
 
+## Restricted late reports and corrections
+
+The existing patient-only [late-report routes](../backend/app/transport/routes/late_reports.py)
+and [application service](../backend/app/application/late_reports.py), gated by
+`ENABLE_LATE_DOSE_REPORTS` and migration033, operate on existing scheduled occurrences
+within seven days. Reviewed source, owner, plan applicability, stale-state checks and a
+separate confirmation bind each write. Corrections append audit entries; original
+reports remain preserved. No arbitrary historical occurrence reconstruction, Agent
+backfill, inventory adjustment or proof of ingestion is implied. Capability configuration
+and source code do not establish that the feature is enabled in a deployed environment.
+Do not roll readers back to raw events after correction data exists without an approved
+compatibility/recovery plan.
+
 The patient frontend calls typed FastAPI APIs, never Supabase tables directly.
 
 - `GET /api/me/medication-history/catalogue`: owned medication registrations and their regimen versions. Identity is by UUID, not name. A regimen version is not automatically a treatment course.
@@ -24,7 +37,7 @@ The selector shows each equal medication name once, ignoring case, repeated whit
 
 `medication_name` resolves exact normalized names only among the authenticated patient's medications, then queries the associated regimen IDs. Selecting a specific regimen narrows that group. Mismatched/foreign names or plans are rejected; name filters are bound into pagination cursors. Thus Amlodipine5/10mg registrations with the same display_name can be browsed together without asserting medical equivalence or changing a product identity.
 
-Authoritative ingredient-based grouping remains a separate optional proposal, not a dependency for display-name browsing. See [the proposal](RECORDS_INGREDIENT_GROUPING_PROPOSAL.md). No schema changes or patient-record merging were performed.
+Authoritative ingredient-based grouping is not currently supported. Display-name browsing does not assert that different products are medically equivalent. No schema changes or patient-record merging were performed.
 
 
 ## Confirmation boundary (2026-10-18)

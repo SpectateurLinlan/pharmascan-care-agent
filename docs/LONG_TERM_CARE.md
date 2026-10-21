@@ -84,6 +84,5 @@ not pretend to backdate live challenges or establish multi-day live intake.
 
 11. 继续 **F**：告诉助手已完成该复查，要求准备完成任务；Agent 查询原任务后提出状态变更，审核并确认后才显示完成。展开历史可见原始 open 及 completed 两次状态。延期、取消使用同一确认流程；尚未提供日期时应先追问，不能猜测。
 
-真实 F Agent 验证已通过上述创建、跨会话读取症状/任务及完成步骤。截图：`outputs/long-term-followup/`；该测试没有实际预约、发送通知或记录服药。受控缺失字段追问目前仅通过 LOCAL/MOCK 测试。
 
-Automated commands and exact current results are in [workflow documentation](WORKFLOWS.md). Physical voice, calendar import and real-device Push remain separate manual gates. `e2e/long-term-care.spec.ts` uses real UI/Supabase; Gemini calls require a second opt-in. No preset successful Agent response is used.
+Choose checks for the affected workflow; [workflow documentation](WORKFLOWS.md) describes behavior, not a current test-results ledger. Physical voice, calendar import and real-device Push remain separate manual gates. `e2e/long-term-care.spec.ts` uses real UI/Supabase; Gemini calls require a second opt-in. No preset successful Agent response is used.
