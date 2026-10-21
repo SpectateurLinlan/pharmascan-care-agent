@@ -81,6 +81,15 @@ class Repository(Generic[T]):
 
 
 class Sources(Repository[SourceDocumentDTO]):
+    def get_many(self, patient_id: UUID, source_ids: list[UUID]) -> list[SourceDocumentDTO]:
+        self.client.check_patient(patient_id)
+        ids = list(dict.fromkeys(source_ids))
+        result = []
+        for offset in range(0, len(ids), 100):
+            selected = ",".join(str(value) for value in ids[offset:offset + 100])
+            result.extend(self.list_complete(patient_id, id=f"in.({selected})"))
+        return result
+
     def add(self, document: SourceDocumentDTO) -> None:
         material = f"pharmascan-synthetic-source::{document.patient_id}::{document.id}"
         self.insert(document, {"is_synthetic": True, "checksum": hashlib.sha256(material.encode()).hexdigest()})
@@ -122,6 +131,20 @@ class Medications(Repository[PatientMedicationDTO]):
 
 
 class Regimens(Repository[RegimenVersionDTO]):
+    def list_for_medications(
+        self, patient_id: UUID, medication_ids: list[UUID], *, active_only: bool = False,
+    ) -> list[RegimenVersionDTO]:
+        self.client.check_patient(patient_id)
+        ids = list(dict.fromkeys(medication_ids))
+        result = []
+        for offset in range(0, len(ids), 100):
+            selected = ",".join(str(value) for value in ids[offset:offset + 100])
+            result.extend(self.list_complete(
+                patient_id, patient_medication_id=f"in.({selected})", order="version_no,id",
+                **({"state": "eq.active"} if active_only else {})
+            ))
+        return result
+
     def list_for_medication(self, patient_id: UUID, medication_id: UUID) -> list[RegimenVersionDTO]:
         return self.list(patient_id, patient_medication_id=f"eq.{medication_id}", order="version_no")
 
@@ -265,6 +288,17 @@ class Occurrences(Repository[DoseOccurrenceDTO]):
 
 
 class Events(Repository[DoseEventDTO]):
+    def list_for_occurrences(self, patient_id: UUID, occurrence_ids: list[UUID]) -> list[DoseEventDTO]:
+        self.client.check_patient(patient_id)
+        ids = list(dict.fromkeys(occurrence_ids))
+        result = []
+        # Bound URL size; complete pagination must never turn a missing page
+        # into an apparently unreported dose. Use this adapter's effective view.
+        for offset in range(0, len(ids), 100):
+            selected = ",".join(str(value) for value in ids[offset:offset + 100])
+            result.extend(self.list_complete(patient_id, occurrence_id=f"in.({selected})"))
+        return result
+
     def find_by_idempotency_key(self, patient_id: UUID, key: str) -> DoseEventDTO | None:
         self.client.check_patient(patient_id)
         rows = [

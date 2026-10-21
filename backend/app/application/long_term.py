@@ -23,7 +23,7 @@ from ..contracts.long_term import (
 from ..contracts.ports import Clock, DoseEventRepository, DoseRuleRepository
 from ..domain.errors import NotFoundError, ValidationError
 from ..domain.inventory import count_unit, scheduled_daily_requirement
-from .enrollment import MedicationEnrollmentService
+from .enrollment import MedicationEnrollmentService, MedicationReadContext
 from .observations import ObservationService
 from .review_summary import ReviewSummaryService
 
@@ -55,17 +55,27 @@ class LongTermCareService:
             raise NotFoundError("Regimen not found for this patient")
         return row
 
-    def inventory(self, patient_id: UUID, medication_id: UUID, timezone: str = "Asia/Singapore") -> StockStatus:
-        self._medication(patient_id, medication_id)
+    def inventory(
+        self, patient_id: UUID, medication_id: UUID, timezone: str = "Asia/Singapore",
+        *, context: MedicationReadContext | None = None,
+    ) -> StockStatus:
+        if context is None:
+            self._medication(patient_id, medication_id)
+        else:
+            context.check_patient(patient_id)
+            if medication_id not in context.by_medication:
+                raise NotFoundError("Medication not found for this patient")
         rows = self._repo.stock(patient_id, medication_id)
-        regimens = self._enrollment.list_regimens(patient_id, medication_id)
+        regimens = (context.by_medication[medication_id] if context is not None
+                    else self._enrollment.list_regimens(patient_id, medication_id))
         label_quantities = []
         seen_sources = set()
         for regimen in regimens:
             if not regimen.source_id or regimen.source_id in seen_sources:
                 continue
             seen_sources.add(regimen.source_id)
-            source = self._enrollment.get_source(patient_id, regimen.source_id)
+            source = (context.sources.get(regimen.source_id) if context is not None
+                      else self._enrollment.get_source(patient_id, regimen.source_id))
             evidence = source.extraction_evidence if source else None
             # Multi-product documents require an explicit per-product mapping.
             if evidence and len(evidence.candidates) == 1:
@@ -341,14 +351,17 @@ class LongTermCareService:
             raise ValidationError("Choose 7 or 30 days")
         now = self._clock.now()
         notes = self._observations.list(patient_id, now - timedelta(days=days), now + timedelta(microseconds=1))
-        summary = self._summaries.generate(patient_id, "week" if days == 7 else "month", timezone=timezone)
+        context = self._enrollment.read_context(patient_id)
+        summary = self._summaries.generate(
+            patient_id, "week" if days == 7 else "month", timezone=timezone, context=context
+        )
         barriers = [row for row in self.barriers(patient_id) if row.occurred_at >= now - timedelta(days=days)]
-        stocks = [self.inventory(patient_id, row.id, timezone) for row in self._enrollment.list_medications(patient_id)]
+        stocks = [self.inventory(patient_id, row.id, timezone, context=context) for row in context.medications]
         tasks = self.actionable_tasks(patient_id, timezone)
         sources = []
-        for medication in self._enrollment.list_medications(patient_id):
-            for regimen in self._enrollment.list_regimens(patient_id, medication.id):
-                source = self._enrollment.get_source(patient_id, regimen.source_id) if regimen.source_id else None
+        for medication in context.medications:
+            for regimen in context.by_medication[medication.id]:
+                source = context.sources.get(regimen.source_id)
                 sources.append(
                     {
                         "medication_id": str(medication.id),

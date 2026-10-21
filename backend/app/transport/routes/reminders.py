@@ -16,6 +16,7 @@ from ...contracts.notifications import DeliveryResult
 from ...contracts.push import PushConfiguration, PushSubscriptionInput, PushSubscriptionRecord
 from ...contracts.reminders import ReminderDTO, ReminderStatusDTO
 from ...domain.errors import ProviderUnavailableError
+from ...timing import timed_stage
 from ..auth import AuthenticatedPrincipal
 from ..deps import ApplicationContainer, get_container, get_principal
 
@@ -28,12 +29,13 @@ def alerts(
 ):
     if container.reminder_alerts is None or container.preferences is None:
         raise ProviderUnavailableError("Scheduled reminder alerts unavailable")
-    preference = container.preferences.get(principal.patient_id)
-    if not preference.reminders_enabled:
-        return []
-    return container.reminder_alerts.current(
-        principal.patient_id, lead_minutes=preference.reminder_lead_minutes, timezone=preference.timezone
-    )
+    with timed_stage("business"):
+        preference = container.preferences.get(principal.patient_id)
+        if not preference.reminders_enabled:
+            return []
+        return container.reminder_alerts.current(
+            principal.patient_id, lead_minutes=preference.reminder_lead_minutes, timezone=preference.timezone
+        )
 
 
 class SnoozeRequest(BaseModel):

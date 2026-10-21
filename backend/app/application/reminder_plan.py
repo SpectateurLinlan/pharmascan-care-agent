@@ -48,15 +48,20 @@ class ReminderPlanService:
             for regimen in self._regimens.list_for_medication(patient_id, medication.id):
                 if regimen.state != RegimenState.ACTIVE or regimen.is_prn:
                     continue
-                for occurrence in self._schedule.materialize(patient_id=patient_id, regimen_id=regimen.id, days=days):
-                    if occurrence.status == OccurrenceStatus.CLOSED or self._events.find_by_occurrence(
-                        patient_id, occurrence.id
-                    ):
+                occurrences = self._schedule.materialize(patient_id=patient_id, regimen_id=regimen.id, days=days)
+                open_rows = [row for row in occurrences if row.status != OccurrenceStatus.CLOSED]
+                reported = {row.occurrence_id for row in self._events.list_for_occurrences(
+                    patient_id, [row.id for row in open_rows]
+                )}
+                candidates = [row for row in open_rows if row.id not in reported]
+                deadlines = self._reminders.deadlines(patient_id, candidates)
+                for occurrence in candidates:
+                    if occurrence.status == OccurrenceStatus.CLOSED:
                         continue
                     snooze = snoozes.get(occurrence.id)
                     remind_at = snooze.remind_at if snooze else occurrence.due_at - timedelta(minutes=lead_minutes)
                     # Expired notifications must not be replayed after a long outage.
-                    deadline = self._reminders.deadline(patient_id, occurrence)
+                    deadline = deadlines[occurrence.id]
                     if now >= deadline or remind_at >= deadline or remind_at < now - timedelta(minutes=15):
                         continue
                     result.append(

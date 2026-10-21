@@ -445,6 +445,16 @@ class PostgresSourceDocumentRepository:
             )
         return _source_document(row) if row else None
 
+    def get_many(self, patient_id: UUID, source_ids: list[UUID]) -> list[SourceDocumentDTO]:
+        if not source_ids:
+            return []
+        with self._session(patient_id) as conn:
+            rows = _rows(conn, "SELECT id,patient_id,source_kind,review_status,reviewed_at,demo_only,"
+                         "dose_basis,extraction_evidence FROM public.source_documents "
+                         "WHERE patient_id=%s AND id=ANY(%s)",
+                         (patient_id, list(dict.fromkeys(source_ids))))
+        return [_source_document(row) for row in rows]
+
     def add(self, document: SourceDocumentDTO) -> None:
         with self._session(document.patient_id) as conn:
             ensure_patient_profile(conn, document.patient_id)
@@ -664,6 +674,18 @@ class PostgresRegimenVersionRepository:
                 (patient_id, regimen_id),
             )
         return _regimen(row) if row else None
+
+    def list_for_medications(
+        self, patient_id: UUID, medication_ids: list[UUID], *, active_only: bool = False,
+    ) -> list[RegimenVersionDTO]:
+        if not medication_ids:
+            return []
+        with self._session(patient_id) as conn:
+            rows = _rows(conn, f"SELECT {self._COLUMNS} FROM public.regimen_versions "
+                         "WHERE patient_id=%s AND patient_medication_id=ANY(%s) "
+                         + ("AND state='active' " if active_only else "") + "ORDER BY version_no,id",
+                         (patient_id, list(dict.fromkeys(medication_ids))))
+        return [_regimen(row) for row in rows]
 
     def list_for_medication(self, patient_id: UUID, medication_id: UUID) -> list[RegimenVersionDTO]:
         with self._session(patient_id) as conn:
@@ -1059,6 +1081,18 @@ class PostgresDoseEventRepository:
         self._read_columns = self._COLUMNS + (
             ", reported_late, actual_administration_at" if include_late_reports else ""
         )
+
+    def list_for_occurrences(self, patient_id: UUID, occurrence_ids: list[UUID]) -> list[DoseEventDTO]:
+        if not occurrence_ids:
+            return []
+        with self._session(patient_id) as conn:
+            rows = _rows(
+                conn,
+                f"SELECT {self._read_columns} FROM {self._read_table} "
+                "WHERE patient_id = %s AND occurrence_id = ANY(%s)",
+                (patient_id, list(dict.fromkeys(occurrence_ids))),
+            )
+        return [_dose_event(row) for row in rows]
 
     def find_by_idempotency_key(self, patient_id: UUID, key: str) -> DoseEventDTO | None:
         with self._session(patient_id) as conn:

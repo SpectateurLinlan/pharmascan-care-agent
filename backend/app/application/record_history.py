@@ -48,15 +48,15 @@ class RecordHistoryService:
         owned = {row.id for row in medications}
         if any(row.patient_medication_id not in owned for row in plans):
             raise ProviderUnavailableError("Record relationships could not be verified.")
-        sources = {}
+        sources = {row.id: row for row in self._enrollment.get_sources(
+            owner, [row.source_id for row in plans if row.source_id]
+        )}
         result = []
         for row in plans:
             try:
                 frequency = FrequencyRuleDTO.model_validate(row.frequency_rule) if row.frequency_rule else None
             except SchemaError as error:
                 raise ProviderUnavailableError("The recorded plan frequency could not be read.") from error
-            if row.source_id and row.source_id not in sources:
-                sources[row.source_id] = self._enrollment.get_source(owner, row.source_id)
             source = sources.get(row.source_id)
             strength = (
                 source.dose_basis.strength_text

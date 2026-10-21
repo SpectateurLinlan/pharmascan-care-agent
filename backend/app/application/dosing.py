@@ -44,6 +44,7 @@ from ..contracts.dto import (
     DoseOccurrenceDTO,
     DoseRuleDTO,
     DueDoseResultDTO,
+    PatientMedicationDTO,
     RegimenVersionDTO,
     ReportSummaryDTO,
     SelfReportChallengeResultDTO,
@@ -131,6 +132,13 @@ class DoseScheduleService:
         when the patient reports taking it (no inferred occurrence).
         """
         regimen = self._require_regimen(patient_id, regimen_id)
+        return self._materialize_owned(patient_id, regimen, days)
+
+    def _materialize_owned(
+        self, patient_id: UUID, regimen: RegimenVersionDTO, days: int,
+        window_rows: list[DoseOccurrenceDTO] | None = None,
+    ) -> list[DoseOccurrenceDTO]:
+        regimen_id = regimen.id
         if regimen.state != RegimenState.ACTIVE:
             raise ValidationError("Occurrences are generated only for an active regimen")
         if regimen.is_prn:
@@ -144,6 +152,13 @@ class DoseScheduleService:
             datetime(local_today.year, local_today.month, local_today.day, tzinfo=tz) + timedelta(days=days)
         ).astimezone(UTC)
         generated: list[DoseOccurrenceDTO] = []
+        # One owned, bounded snapshot replaces a remote lookup for every slot.
+        # New slots still use the canonical post-insert read below for races.
+        existing_rows = self._occurrences.list_for_regimen(patient_id, regimen_id, window_start, horizon_end)
+        existing_by_key = {row.generation_key: row for row in existing_rows}
+        if window_rows is not None:
+            window_rows.extend(existing_rows)
+        window_ids = {row.id for row in existing_rows}
 
         for rule in self._rules.list_for_regimen(patient_id, regimen_id):
             if rule.rule_kind != RuleKind.SCHEDULED or not rule.enabled:
@@ -157,7 +172,7 @@ class DoseScheduleService:
                 if due_at < (regimen.effective_from or window_start):
                     continue
                 key = f"{regimen_id}:{rule.id}:{due_at.astimezone(UTC).isoformat()}"
-                existing = self._occurrences.find_by_generation_key(patient_id, key)
+                existing = existing_by_key.get(key)
                 if existing is not None:
                     generated.append(existing)
                     continue
@@ -182,6 +197,9 @@ class DoseScheduleService:
                 ):
                     raise ValidationError("Could not verify the scheduled occurrence. Please retry.")
                 generated.append(persisted)
+                if window_rows is not None and persisted.id not in window_ids:
+                    window_rows.append(persisted)
+                    window_ids.add(persisted.id)
         return sorted(generated, key=lambda o: o.due_at)
 
     def planned_instants(self, *, patient_id: UUID, regimen_id: UUID, start: datetime, end: datetime) -> list[datetime]:
@@ -189,10 +207,61 @@ class DoseScheduleService:
         regimen = self._require_regimen(patient_id, regimen_id)
         if regimen.is_prn or regimen.effective_from is None:
             return []
+        return self._planned_from_records(regimen, self._rules.list_for_regimen(patient_id, regimen_id), start, end)
+
+    def planned_windows(
+        self, *, patient_id: UUID, regimen_id: UUID, windows: list[tuple[datetime, datetime]],
+    ) -> list[list[datetime]]:
+        """One owned plan/rule read for a bounded set of independent projections."""
+        if not 1 <= len(windows) <= 4:
+            raise ValidationError("Schedule projections are limited to four windows")
+        regimen = self._require_regimen(patient_id, regimen_id)
+        return self.planned_windows_for_plan(patient_id=patient_id, regimen=regimen, windows=windows)
+
+    def planned_windows_for_plan(
+        self, *, patient_id: UUID, regimen: RegimenVersionDTO, windows: list[tuple[datetime, datetime]],
+    ) -> list[list[datetime]]:
+        """Project an already-owned DTO within one read, without retained state."""
+        if regimen.patient_id != patient_id or not 1 <= len(windows) <= 4:
+            raise ValidationError("Invalid owned schedule projection")
+        if regimen.is_prn or regimen.effective_from is None:
+            return [[] for _ in windows]
+        rules = self._rules.list_for_regimen(patient_id, regimen.id)
+        return [self._planned_from_records(regimen, rules, start, end) for start, end in windows]
+
+    def attention_deadlines(
+        self, patient_id: UUID, occurrences: list[DoseOccurrenceDTO], *, zone: ZoneInfo | None = None,
+    ) -> dict[UUID, datetime]:
+        """Read each owned plan/rule set once for this projection; retain nothing."""
+        from ..domain.dose_attention import attention_deadline
+
+        zone = zone or self._tz.local_tz(patient_id)
+        grouped = {}
+        for occurrence in occurrences:
+            if occurrence.patient_id != patient_id:
+                raise ValidationError("Occurrence does not belong to this patient")
+            grouped.setdefault(occurrence.regimen_id, []).append(occurrence)
+        result = {}
+        for regimen_id, rows in grouped.items():
+            regimen = self._require_regimen(patient_id, regimen_id)
+            rules = self._rules.list_for_regimen(patient_id, regimen_id)
+            days = {}
+            for occurrence in rows:
+                start = occurrence.due_at.astimezone(zone).replace(hour=0, minute=0, second=0, microsecond=0)
+                end = (start + timedelta(days=1)).astimezone(UTC)
+                if start not in days:
+                    days[start] = self._planned_from_records(regimen, rules, start.astimezone(UTC), end)
+                following = next((moment for moment in days[start] if moment > occurrence.due_at), None)
+                result[occurrence.id] = attention_deadline(occurrence.due_at, following, end)
+        return result
+
+    def _planned_from_records(self, regimen, rules, start, end) -> list[datetime]:
+        if regimen.is_prn or regimen.effective_from is None:
+            return []
         if end <= start or end - start > timedelta(days=2):
             raise ValidationError("Calendar schedule reads are limited to two days")
         moments = set()
-        for rule in self._rules.list_for_regimen(patient_id, regimen_id):
+        for rule in rules:
             if rule.rule_kind != RuleKind.SCHEDULED or not rule.enabled:
                 continue
             zone = ZoneInfo(rule.timezone)
@@ -353,6 +422,23 @@ class DoseScheduleService:
         bounded so a long-untouched regimen does not resurface ancient doses.
         """
         regimen = self._require_regimen(patient_id, regimen_id)
+        return self._find_due_owned(patient_id, regimen, at, attention_only)
+
+    def read_due(
+        self, *, patient_id: UUID, regimen_id: UUID, attention_only: bool = False,
+    ) -> tuple[RegimenVersionDTO, DueDoseResultDTO]:
+        """One owned read operation; confirmation still independently rereads state."""
+        regimen = self._require_regimen(patient_id, regimen_id)
+        if regimen.is_prn:
+            return regimen, DueDoseResultDTO(occurrence=None, medication_display_name="", is_prn=True)
+        window_rows = [] if attention_only else None
+        self._materialize_owned(patient_id, regimen, 2, window_rows)
+        return regimen, self._find_due_owned(
+            patient_id, regimen, None, attention_only, window_rows
+        )
+
+    def _find_due_owned(self, patient_id, regimen, at, attention_only, generated=None) -> DueDoseResultDTO:
+        regimen_id = regimen.id
         moment = at or self._clock.now()
         if (
             regimen.course_end_date
@@ -372,7 +458,9 @@ class DoseScheduleService:
             day = moment.astimezone(self._tz.local_tz(patient_id)).date()
             start, end = local_day_window(day, self._tz.local_tz(patient_id).key)
             rows = sorted(
-                self._occurrences.list_for_regimen(patient_id, regimen_id, start, end), key=lambda row: row.due_at
+                (self._occurrences.list_for_regimen(patient_id, regimen_id, start, end)
+                 if generated is None else [row for row in generated if start <= row.due_at < end]),
+                key=lambda row: row.due_at,
             )
             for index, row in enumerate(rows):
                 following = rows[index + 1].due_at if index + 1 < len(rows) else None
@@ -807,12 +895,29 @@ class SelfReportService:
         medication = self._medications.get(patient_id, regimen.patient_medication_id)
         name = medication.display_name if medication else ""
 
-        all_events = self._events.list_for_patient(patient_id, window_start, window_end)
+        return self._history_owned(patient_id, regimen, name, window_start, window_end)
+
+    def history_for_plan(
+        self, *, patient_id: UUID, regimen: RegimenVersionDTO, medication: PatientMedicationDTO,
+        window_start: datetime, window_end: datetime,
+    ) -> list[DoseHistoryEntryDTO]:
+        """Reuse explicitly owned read DTOs, never a confirmation/write authority."""
+        if (regimen.patient_id != patient_id or medication.patient_id != patient_id
+                or regimen.patient_medication_id != medication.id):
+            raise ValidationError("Invalid owned medication history")
+        return self._history_owned(patient_id, regimen, medication.display_name, window_start, window_end)
+
+    def _history_owned(self, patient_id, regimen, name, window_start, window_end) -> list[DoseHistoryEntryDTO]:
+        regimen_id = regimen.id
+        all_events = self._events.list_for_patient(patient_id, window_start, window_end) if regimen.is_prn else []
         occurrences = self._occurrences.list_for_regimen(patient_id, regimen_id, window_start, window_end)
+        effective_events = {row.occurrence_id: row for row in self._events.list_for_occurrences(
+            patient_id, [row.id for row in occurrences]
+        )}
 
         entries: list[DoseHistoryEntryDTO] = []
         for occurrence in occurrences:
-            event = self._events.find_by_occurrence(patient_id, occurrence.id)
+            event = effective_events.get(occurrence.id)
             if event is not None and event.regimen_id != regimen_id:
                 raise ValidationError("Dose event and occurrence regimen differ")
             entries.append(

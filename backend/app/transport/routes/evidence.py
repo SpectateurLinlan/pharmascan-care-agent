@@ -17,6 +17,7 @@ from ...contracts.medication_evidence import (
     SourceEvidenceView,
 )
 from ...domain.errors import ProviderUnavailableError, ValidationError
+from ...timing import timed_stage
 from ..auth import AuthenticatedPrincipal
 from ..deps import ApplicationContainer, get_container, get_principal
 
@@ -150,11 +151,12 @@ def review(
 def gallery(
     principal: AuthenticatedPrincipal = Depends(get_principal), container: ApplicationContainer = Depends(get_container)
 ):
-    rows = container.gallery.list(principal.patient_id)
-    if container.library_files:
-        for row in rows:
-            row["pdf_file_count"] = len(container.library_files.list(principal.patient_id, row["medication"].id))
-    return rows
+    with timed_stage("business"):
+        rows = container.gallery.list(principal.patient_id)
+        if container.library_files:
+            for row in rows:
+                row["pdf_file_count"] = len(container.library_files.list(principal.patient_id, row["medication"].id))
+        return rows
 
 
 @router.get("/gallery/{medication_id}/files")
@@ -199,11 +201,12 @@ def image(
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ):
-    return Response(
-        container.gallery.image(principal.patient_id, image_id),
-        media_type="image/png",
-        headers={"Cache-Control": "no-store"},
-    )
+    with timed_stage("business"):
+        return Response(
+            container.gallery.image(principal.patient_id, image_id),
+            media_type="image/png",
+            headers={"Cache-Control": "no-store"},
+        )
 
 
 @router.post("/gallery/{medication_id}/images", response_model=GalleryUploadResult)

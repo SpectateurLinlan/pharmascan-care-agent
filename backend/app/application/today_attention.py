@@ -26,8 +26,9 @@ def read_today_attention(
     day = now.astimezone(ZoneInfo(timezone)).date()
     start, end = local_day_window(day, timezone)
     plans = []
-    for medication in enrollment.list_medications(owner):
-        plan = enrollment.find_active_regimen(owner, medication.id)
+    context = enrollment.read_context(owner, include_sources=False, active_only=True)
+    for medication in context.medications:
+        plan = next(iter(context.by_medication[medication.id]), None)
         if not plan or medication.archived_at or (plan.effective_from and plan.effective_from > now):
             continue
         if (
@@ -48,14 +49,17 @@ def read_today_attention(
             # Do not treat a legacy/default anchor as a verified interval plan.
             plans.append(TodayPlan(regimen_id=plan.id, state="unavailable", unrecorded_times=[]))
             continue
-        moments = schedule.planned_instants(patient_id=owner, regimen_id=plan.id, start=start, end=end)
-        history = reports.history(patient_id=owner, regimen_id=plan.id, window_start=start, window_end=min(end, now))
+        moments, future_moments = schedule.planned_windows_for_plan(
+            patient_id=owner, regimen=plan,
+            windows=[(start, end), (now, now + timedelta(days=2))],
+        )
+        history = reports.history_for_plan(
+            patient_id=owner, regimen=plan, medication=medication, window_start=start, window_end=min(end, now)
+        )
         future = next(
             (
                 moment
-                for moment in schedule.planned_instants(
-                    patient_id=owner, regimen_id=plan.id, start=now, end=now + timedelta(days=2)
-                )
+                for moment in future_moments
                 if moment > now
             ),
             None,

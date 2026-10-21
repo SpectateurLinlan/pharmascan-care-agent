@@ -48,12 +48,35 @@ class PersonalGalleryService:
         images = self._repo.list(patient_id, "images")
         tasks = self._repo.list(patient_id, "tasks")
         source_links = self._repo.list(patient_id, "sources")
-        embedded_ids = {row.image_id for row in self._repo.list(patient_id, "embeddings")}
+        # Embeddings affect only independently eligible references. Ordinary
+        # evidence photos never need vector payloads for their gallery metadata.
+        needs_embeddings = any(
+            isinstance(row, MedicationImage) and row.eligibility == "eligible"
+            and row.eligibility_reason == ACTIVE_REFERENCE_REASON
+            and row.deleted_at is None and not row.gallery_removed
+            for row in images
+        )
+        embedded_ids = ({row.image_id for row in self._repo.list(patient_id, "embeddings")}
+                        if needs_embeddings else set())
         result = []
         today = self._clock.now().astimezone(self._timezone.local_tz(patient_id)).date()
         medications = self._repo.medications(patient_id)
+        regimens_by_medication = {row.id: [] for row in medications}
+        all_regimens = self._enrollment.list_regimens_for_medications(patient_id, [row.id for row in medications])
+        for row in all_regimens:
+            regimens_by_medication[row.patient_medication_id].append(row)
+        source_ids = {
+            source_id for source_id in [
+                *(row.source_id for row in medications),
+                *(row.source_id for row in all_regimens),
+                *(getattr(row, "source_id", None) for row in images),
+                *(getattr(row, "source_id", None) for row in source_links),
+                *(source_id for row in tasks for source_id in row.source_ids),
+            ] if source_id is not None
+        }
+        sources = {row.id: row for row in self._enrollment.get_sources(patient_id, list(source_ids))}
         for medication in medications:
-            regimens = self._enrollment.list_regimens(patient_id, medication.id)
+            regimens = regimens_by_medication[medication.id]
             current = [
                 row
                 for row in regimens
@@ -103,7 +126,7 @@ class PersonalGalleryService:
             source_documents = [
                 document
                 for source_id in medication_sources
-                if (document := self._enrollment.get_source(patient_id, source_id)) is not None
+                if (document := sources.get(source_id)) is not None
             ]
             updated_at = max(
                 [row.created_at for row in photos]

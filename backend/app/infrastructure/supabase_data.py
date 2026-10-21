@@ -13,6 +13,7 @@ import httpx
 
 from ..config import validate_publishable_key
 from ..domain.errors import AuthenticationRequiredError, ProviderUnavailableError, RegimenOverlapError, ValidationError
+from ..timing import current_timing, timed_data_operation, timed_stage
 
 LOGGER = logging.getLogger(__name__)
 
@@ -49,8 +50,13 @@ class SupabaseDataClient:
     ) -> Any:
         # Requests are bounded; writes are not retried implicitly. The caller
         # can retry with its stable idempotency key after an uncertain outcome.
+        timing = current_timing.get()
+        if timing is not None:
+            timing.data_requests += 1
         try:
-            with nullcontext(self._client) if self._client is not None else self._client_factory() as client:
+            with timed_stage("data"), timed_data_operation(path, method, params) as response_size, (
+                nullcontext(self._client) if self._client is not None else self._client_factory()
+            ) as client:
                 response = client.request(
                     method,
                     self._base_url + path,
@@ -59,6 +65,7 @@ class SupabaseDataClient:
                     headers={**self._headers, "Prefer": prefer},
                     timeout=15,
                 )
+                response_size[0] = len(response.content)
         except httpx.HTTPError:
             raise ProviderUnavailableError("Supabase Data API unavailable") from None
         if response.status_code in (401, 403):

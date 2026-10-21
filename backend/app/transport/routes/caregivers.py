@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends
 from ...application.caregivers import CaregiverService
 from ...contracts.caregivers import CaregiverContact, CaregiverCreate, CaregiverDetails
 from ...domain.errors import ProviderUnavailableError
+from ...timing import timed_stage
 from ..auth import AuthenticatedPrincipal
 from ..deps import ApplicationContainer, get_container, get_principal
 
@@ -23,7 +24,8 @@ def service(container: ApplicationContainer = Depends(get_container)) -> Caregiv
 def list_contacts(
     principal: AuthenticatedPrincipal = Depends(get_principal), application: CaregiverService = Depends(service)
 ):
-    return application.list(principal.patient_id)
+    with timed_stage("business"):
+        return application.list(principal.patient_id)
 
 
 @router.post("", response_model=CaregiverContact)

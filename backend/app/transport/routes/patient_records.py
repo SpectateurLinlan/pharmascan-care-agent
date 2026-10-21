@@ -12,6 +12,7 @@ from ...contracts.observations import Observation, ObservationInput
 from ...contracts.record_history import HistoryCatalogue, MedicationHistoryPage
 from ...contracts.review_summary import ReviewSummary
 from ...domain.errors import ProviderUnavailableError
+from ...timing import timed_stage
 from ..auth import AuthenticatedPrincipal
 from ..deps import ApplicationContainer, get_container, get_principal
 
@@ -22,13 +23,14 @@ router = APIRouter(prefix="/api/me", tags=["patient-records"])
 def today_attention(
     principal: AuthenticatedPrincipal = Depends(get_principal), container: ApplicationContainer = Depends(get_container)
 ):
-    return read_today_attention(
-        owner=principal.patient_id,
-        enrollment=container.enrollment,
-        schedule=container.schedule,
-        reports=container.self_report,
-        clock=container.clock,
-    )
+    with timed_stage("business"):
+        return read_today_attention(
+            owner=principal.patient_id,
+            enrollment=container.enrollment,
+            schedule=container.schedule,
+            reports=container.self_report,
+            clock=container.clock,
+        )
 
 
 @router.get("/medication-history/catalogue", response_model=HistoryCatalogue)

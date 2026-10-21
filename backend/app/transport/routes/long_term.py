@@ -17,6 +17,7 @@ from ...contracts.long_term import (
     TaskUpdate,
 )
 from ...domain.errors import ProviderUnavailableError
+from ...timing import timed_stage
 from ..auth import AuthenticatedPrincipal
 from ..deps import ApplicationContainer, get_container, get_principal
 
@@ -37,7 +38,8 @@ def zone(container: ApplicationContainer, principal: AuthenticatedPrincipal) -> 
 
 @router.get("/inventory/{medication_id}", response_model=StockStatus)
 def inventory(medication_id: UUID, principal: Owner, container: Container):
-    return care(container).inventory(principal.patient_id, medication_id, zone(container, principal))
+    with timed_stage("business"):
+        return care(container).inventory(principal.patient_id, medication_id, zone(container, principal))
 
 
 @router.post("/inventory/{medication_id}", response_model=StockStatus)
@@ -62,7 +64,8 @@ def create_task(values: CareTaskInput, principal: Owner, container: Container):
 
 @router.post("/care-tasks/refresh", response_model=list[CareTask])
 def refresh_followups(principal: Owner, container: Container):
-    return care(container).refresh_refill_tasks(principal.patient_id, zone(container, principal))
+    with timed_stage("business"):
+        return care(container).refresh_refill_tasks(principal.patient_id, zone(container, principal))
 
 
 @router.post("/care-tasks/{task_id}", response_model=CareTask)

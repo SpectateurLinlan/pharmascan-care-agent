@@ -20,6 +20,7 @@ from ..contracts.medication_evidence import (
     VisualReferenceSet,
 )
 from ..domain.errors import ProviderUnavailableError, ValidationError
+from ..timing import current_timing, timed_stage
 from .supabase_data import SupabaseDataClient
 
 MODELS = {
@@ -365,8 +366,11 @@ class SupabaseImageStore:
     def _request(self, method: str, path: str, data: bytes | None = None) -> bytes:
         if not path.startswith(f"{self._patient}/") or ".." in path:
             raise ValidationError("Invalid private object path")
+        timing = current_timing.get()
+        if timing is not None:
+            timing.storage_requests += 1
         try:
-            with self._factory() as client:
+            with timed_stage("storage"), self._factory() as client:
                 response = client.request(
                     method,
                     self._url + f"/storage/v1/object/{self._bucket_id}/" + path,

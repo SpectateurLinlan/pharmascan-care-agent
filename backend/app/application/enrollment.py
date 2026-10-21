@@ -57,6 +57,28 @@ from .timezone import LOCAL_TZ_PROVIDER, LocalTzProvider
 CONFIRMATION_TTL = timedelta(minutes=10)
 
 
+class MedicationReadContext:
+    """Explicit owned DTO snapshot for one read operation; never a write authority."""
+
+    def __init__(
+        self, patient_id: UUID, medications: list[PatientMedicationDTO],
+        regimens: list[RegimenVersionDTO], sources: list[SourceDocumentDTO],
+    ):
+        if any(row.patient_id != patient_id for row in [*medications, *regimens, *sources]):
+            raise NotFoundError("Medication context not found for this patient")
+        self.patient_id = patient_id
+        self.medications = medications
+        self.regimens = regimens
+        self.sources = {row.id: row for row in sources}
+        self.by_medication = {row.id: [] for row in medications}
+        for row in regimens:
+            self.by_medication.setdefault(row.patient_medication_id, []).append(row)
+
+    def check_patient(self, patient_id: UUID) -> None:
+        if patient_id != self.patient_id:
+            raise NotFoundError("Medication context not found for this patient")
+
+
 def _normalise_local_time(value: str) -> str:
     """Return a canonical ``HH:MM`` string, rejecting malformed input.
 
@@ -110,6 +132,23 @@ class MedicationEnrollmentService:
 
     def get_source(self, patient_id: UUID, source_id: UUID) -> SourceDocumentDTO | None:
         return self._sources.get(patient_id, source_id)
+
+    def get_sources(self, patient_id: UUID, source_ids: list[UUID]) -> list[SourceDocumentDTO]:
+        return self._sources.get_many(patient_id, source_ids)
+
+    def list_regimens_for_medications(self, patient_id: UUID, medication_ids: list[UUID]) -> list[RegimenVersionDTO]:
+        return self._regimens.list_for_medications(patient_id, medication_ids)
+
+    def read_context(
+        self, patient_id: UUID, *, include_sources: bool = True, active_only: bool = False,
+    ) -> MedicationReadContext:
+        medications = self.list_medications(patient_id)
+        regimens = self._regimens.list_for_medications(
+            patient_id, [row.id for row in medications], active_only=active_only
+        )
+        sources = (self.get_sources(patient_id, [row.source_id for row in regimens if row.source_id])
+                   if include_sources else [])
+        return MedicationReadContext(patient_id, medications, regimens, sources)
 
     def list_source_fields(self, patient_id: UUID, source_id: UUID) -> list[SourceFieldDTO]:
         """Return fields only after confirming the source belongs to this patient."""

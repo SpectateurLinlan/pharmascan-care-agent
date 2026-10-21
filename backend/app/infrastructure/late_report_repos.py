@@ -32,6 +32,14 @@ def effective_memory_events(store, as_of=None):
 
 
 class MemoryLateReports:
+    def histories(self, patient_id, occurrence_ids):
+        selected = set(occurrence_ids)
+        return sorted(
+            [row for row in self.store.late_reports.values()
+             if row.patient_id == patient_id and row.occurrence_id in selected],
+            key=lambda row: row.version,
+        )
+
     def __init__(self, store):
         self.store = store
 
@@ -110,6 +118,20 @@ class MemoryLateReports:
 
 
 class SupabaseLateReports:
+    def histories(self, patient_id, occurrence_ids):
+        self.client.check_patient(patient_id)
+        ids = list(dict.fromkeys(occurrence_ids))
+        result = []
+        for offset in range(0, len(ids), 20):
+            selected = ",".join(str(value) for value in ids[offset:offset + 20])
+            result.extend(
+                LateReportRecord.model_validate(row) for row in self.client.all_rows(
+                    "dose_report_entries", patient_id=f"eq.{patient_id}",
+                    occurrence_id=f"in.({selected})", order="version.asc,id.asc",
+                )
+            )
+        return sorted(result, key=lambda row: row.version)
+
     def __init__(self, client):
         self.client = client
 
@@ -153,6 +175,17 @@ class SupabaseLateReports:
 
 
 class PostgresLateReports:
+    def histories(self, patient_id, occurrence_ids):
+        if not occurrence_ids:
+            return []
+        with self.session(patient_id) as conn:
+            rows = conn.execute(
+                "SELECT * FROM public.dose_report_entries WHERE patient_id=%s "
+                "AND occurrence_id=ANY(%s) ORDER BY version,id",
+                (patient_id, list(dict.fromkeys(occurrence_ids))),
+            ).fetchall()
+        return [LateReportRecord.model_validate(dict(row)) for row in rows]
+
     def __init__(self, session):
         self.session = session
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from fastapi import Query, Request
 
+from ..timing import timed_stage
 from .auth import AuthenticatedPrincipal
 from .container import ApplicationContainer
 
@@ -25,7 +26,8 @@ def get_container(request: Request) -> ApplicationContainer:
         scoped = getattr(request.state, "patient_container", None)
         if scoped is None:
             principal = get_principal(request, request.query_params.get("client_id"))
-            scoped = container.patient_factory(principal)
+            with timed_stage("compose"):
+                scoped = container.patient_factory(principal)
             request.state.patient_container = scoped
         return scoped
     return container
@@ -52,10 +54,11 @@ def get_principal(
     if existing is not None:
         return existing
     container = request.app.state.container
-    principal = container.auth.resolve(
-        authorization=request.headers.get("authorization"),
-        client_id=client_id,
-    )
+    with timed_stage("auth"):
+        principal = container.auth.resolve(
+            authorization=request.headers.get("authorization"),
+            client_id=client_id,
+        )
     request.state.principal = principal
     return principal
 

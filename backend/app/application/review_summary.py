@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from ..contracts.ports import Clock, DoseEventRepository, DoseOccurrenceRepository
 from ..contracts.review_summary import ReviewSummary, SummaryMedication
 from ..domain.errors import NotFoundError, ValidationError
-from .enrollment import MedicationEnrollmentService
+from .enrollment import MedicationEnrollmentService, MedicationReadContext
 from .observations import ObservationService
 
 
@@ -30,6 +30,7 @@ class ReviewSummaryService:
         period: Literal["week", "month", "course"],
         regimen_id: UUID | None = None,
         timezone: str = "Asia/Singapore",
+        *, context: MedicationReadContext | None = None,
     ) -> ReviewSummary:
         now, zone = self._clock.now(), ZoneInfo(timezone)
         local = now.astimezone(zone)
@@ -59,8 +60,11 @@ class ReviewSummaryService:
         reported_occurrences = {row.occurrence_id for row in all_reports if row.occurrence_id is not None}
         medications = []
         summary_occurrences = set()
-        for medication in self._enrollment.list_medications(patient_id):
-            for regimen in self._enrollment.list_regimens(patient_id, medication.id):
+        if context is None:
+            context = self._enrollment.read_context(patient_id, include_sources=False)
+        context.check_patient(patient_id)
+        for medication in context.medications:
+            for regimen in context.by_medication[medication.id]:
                 if selected and regimen.id != selected.id:
                     continue
                 if not regimen.effective_from or regimen.effective_from > end:

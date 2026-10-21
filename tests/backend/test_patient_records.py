@@ -121,6 +121,9 @@ def test_materialization_returns_the_stored_winner_id_after_a_generation_race(wi
     winner = uuid4()
 
     class RacingRepository:
+        def list_for_regimen(self, owner, regimen, start, end):
+            return wired.occurrences.list_for_regimen(owner, regimen, start, end)
+
         def find_by_generation_key(self, owner, key):
             return wired.occurrences.find_by_generation_key(owner, key)
 

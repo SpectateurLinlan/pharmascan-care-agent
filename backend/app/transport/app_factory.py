@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from time import perf_counter
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +16,7 @@ from starlette.concurrency import run_in_threadpool
 
 from ..config import Settings
 from ..domain.errors import DomainError
+from ..timing import RequestTiming, current_timing, timed_stage
 from .container import ApplicationContainer, build_container_from_settings
 from .error_mapping import domain_error_handler
 from .routes import agent as agent_routes
@@ -87,12 +89,22 @@ def create_app(container: ApplicationContainer | None = None, settings: Settings
     async def request_resources(request, call_next):
         # Only the request owns its user-token HTTP pool. Never share it across
         # identities or retain it after a response/failure.
+        timing = RequestTiming()
+        token = current_timing.set(timing)
+        started = perf_counter()
         try:
-            return await call_next(request)
+            response = await call_next(request)
         finally:
-            scoped = getattr(request.state, "patient_container", None)
-            if scoped is not None and scoped.close_request is not None:
-                await run_in_threadpool(scoped.close_request)
+            try:
+                scoped = getattr(request.state, "patient_container", None)
+                if scoped is not None and scoped.close_request is not None:
+                    with timed_stage("cleanup"):
+                        await run_in_threadpool(scoped.close_request)
+            finally:
+                timing.milliseconds["app"] = (perf_counter() - started) * 1000
+                current_timing.reset(token)
+        response.headers["Server-Timing"] = timing.header()
+        return response
 
     configured_origin = effective_settings.app_origin if effective_settings is not None else None
     app.add_middleware(
@@ -106,6 +118,7 @@ def create_app(container: ApplicationContainer | None = None, settings: Settings
             "http://127.0.0.1:4173",
         ],
         allow_credentials=False,
+        expose_headers=["Server-Timing"],
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization", "X-Speech-Consent", "X-Stage2-Consent", "X-Demo-Only"],
     )

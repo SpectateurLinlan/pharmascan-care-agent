@@ -75,6 +75,10 @@ class InMemorySourceDocumentRepository:
     def get(self, patient_id: UUID, source_id: UUID) -> SourceDocumentDTO | None:
         return self._store.sources.get((patient_id, source_id))
 
+    def get_many(self, patient_id: UUID, source_ids: list[UUID]) -> list[SourceDocumentDTO]:
+        selected = set(source_ids)
+        return [row for (owner, key), row in self._store.sources.items() if owner == patient_id and key in selected]
+
     def add(self, document: SourceDocumentDTO) -> None:
         self._store.sources[(document.patient_id, document.id)] = document
 
@@ -131,6 +135,17 @@ class InMemoryRegimenVersionRepository:
 
     def get(self, patient_id: UUID, regimen_id: UUID) -> RegimenVersionDTO | None:
         return self._store.regimens.get((patient_id, regimen_id))
+
+    def list_for_medications(
+        self, patient_id: UUID, medication_ids: list[UUID], *, active_only: bool = False,
+    ) -> list[RegimenVersionDTO]:
+        selected = set(medication_ids)
+        return sorted(
+            [row for (owner, _), row in self._store.regimens.items()
+             if owner == patient_id and row.patient_medication_id in selected
+             and (not active_only or row.state.value == "active")],
+            key=lambda row: (row.version_no, row.id),
+        )
 
     def list_for_medication(self, patient_id: UUID, medication_id: UUID) -> list[RegimenVersionDTO]:
         rows = [
@@ -253,6 +268,15 @@ class InMemoryDoseEventRepository:
 
     def __init__(self, store: InMemoryStore) -> None:
         self._store = store
+
+    def list_for_occurrences(self, patient_id: UUID, occurrence_ids: list[UUID]) -> list[DoseEventDTO]:
+        from .late_report_repos import effective_memory_events
+
+        selected = set(occurrence_ids)
+        return [
+            row for row in effective_memory_events(self._store)
+            if row.patient_id == patient_id and row.occurrence_id in selected
+        ]
 
     def find_by_idempotency_key(self, patient_id: UUID, key: str) -> DoseEventDTO | None:
         for (owner, _), event in self._store.events.items():

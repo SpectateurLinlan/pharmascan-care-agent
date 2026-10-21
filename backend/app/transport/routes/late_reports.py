@@ -13,6 +13,7 @@ from ...contracts.late_reports import (
     LateReportRecord,
 )
 from ...domain.errors import ProviderUnavailableError
+from ...timing import timed_stage
 from ..auth import AuthenticatedPrincipal
 from ..deps import ApplicationContainer, get_container, get_principal
 
@@ -31,7 +32,8 @@ def recent(
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ):
-    return service(container).recent(principal.patient_id, include_reported)
+    with timed_stage("business"):
+        return service(container).recent(principal.patient_id, include_reported)
 
 
 @router.get("/doses/{occurrence_id}/late-reports", response_model=DoseReportAudit)

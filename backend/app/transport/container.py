@@ -573,13 +573,17 @@ def build_supabase_container(
 
         root.conversational_model = build_gemini_model(key=settings.gemini_api_key, model=settings.gemini_model)
 
+    import httpx
+
+    # Load the verified trust store once per root, not twice per patient request.
+    # Clients, connection pools and user credentials remain request-scoped.
+    tls_context = httpx.create_ssl_context()
+
     def for_patient(principal: AuthenticatedPrincipal) -> ApplicationContainer:
         if not principal.authenticated or not principal.access_token:
             raise ConfigError("Verified user context required")
-        import httpx
-
-        http = httpx.Client()
-        knowledge_http = httpx.Client()
+        http = httpx.Client(verify=tls_context)
+        knowledge_http = httpx.Client(verify=tls_context)
 
         def close_request() -> None:
             http.close()

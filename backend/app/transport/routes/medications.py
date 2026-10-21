@@ -92,8 +92,9 @@ def regimen_history(
     container: ApplicationContainer = Depends(get_container),
 ) -> list[RegimenHistoryItem]:
     result = []
-    for medication in container.enrollment.list_medications(principal.patient_id):
-        for regimen in container.enrollment.list_regimens(principal.patient_id, medication.id):
+    context = container.enrollment.read_context(principal.patient_id, include_sources=False)
+    for medication in context.medications:
+        for regimen in context.by_medication[medication.id]:
             result.append(
                 RegimenHistoryItem(
                     patient_edited=regimen.patient_edited,
@@ -125,15 +126,16 @@ def list_medications(
 ) -> MedicationListResponse:
     patient_id = principal.patient_id
     summaries: list[MedicationSummary] = []
-    for medication in container.enrollment.list_medications(patient_id):
-        regimen = container.enrollment.find_active_regimen(patient_id, medication.id)
+    context = container.enrollment.read_context(patient_id, active_only=True)
+    for medication in context.medications:
+        regimen = next((row for row in context.by_medication[medication.id] if row.state.value == "active"), None)
         if regimen is None:
             continue
         summaries.append(
             MedicationSummary(
                 dose_basis=(
                     source.dose_basis
-                    if regimen.source_id and (source := container.enrollment.get_source(patient_id, regimen.source_id))
+                    if regimen.source_id and (source := context.sources.get(regimen.source_id))
                     else None
                 ),
                 medication_id=medication.id,

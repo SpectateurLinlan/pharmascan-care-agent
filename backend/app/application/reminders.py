@@ -42,6 +42,11 @@ class ReminderService:
         following = next((moment for moment in moments if moment > occurrence.due_at), None)
         return attention_deadline(occurrence.due_at, following, end)
 
+    def deadlines(self, patient_id: UUID, occurrences: list[DoseOccurrenceDTO]) -> dict[UUID, datetime]:
+        if self._schedule is None:
+            raise ValidationError("Reminder schedule is unavailable")
+        return self._schedule.attention_deadlines(patient_id, occurrences, zone=self._tz.local_tz(patient_id))
+
     def snooze(self, *, patient_id: UUID, occurrence_id: UUID, minutes: int) -> ReminderDTO:
         if not 1 <= minutes <= 1440:
             raise ValidationError("Reminder delay must be 1 to 1440 minutes")
@@ -75,9 +80,8 @@ class ReminderService:
         for row in rows:
             occurrence = self._occurrences.get(patient_id, row.occurrence_id)
             if occurrence is not None and occurrence.status != OccurrenceStatus.CLOSED:
-                if self._clock.now() >= self.deadline(patient_id, occurrence) or row.remind_at >= self.deadline(
-                    patient_id, occurrence
-                ):
+                deadline = self.deadline(patient_id, occurrence)
+                if self._clock.now() >= deadline or row.remind_at >= deadline:
                     continue
                 regimen = self._regimens.get(patient_id, occurrence.regimen_id)
                 if regimen is not None and regimen.state == RegimenState.ACTIVE:
