@@ -30,7 +30,7 @@ it('presents six supported capabilities, a three-step workflow, trust guidance a
 });
 
 it('uses the package manifest as the single application version source',()=>{
- expect(appVersionLabel).toBe(`v${packageMetadata.version} Beta`);
+ expect(appVersionLabel).toBe(`v${packageMetadata.version}`);
 });
 
 it('keeps privacy and feedback actions on existing destinations',()=>{
