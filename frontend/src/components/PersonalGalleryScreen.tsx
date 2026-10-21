@@ -33,7 +33,7 @@ export function PersonalGalleryScreen({onSources,onMedicationDetail,onMedication
  useEffect(()=>{setFilesData(null);if(!selected){setFilesLoading(false);return;}let live=true;setFilesLoading(true);setFilesError(null);void api.medicationFiles(selected).then(value=>{if(live)setFilesData(value);}).catch(caught=>{if(live)setFilesError(caught);}).finally(()=>{if(live)setFilesLoading(false);});return()=>{live=false;};},[selected]);
  function acceptFile(candidate:File|null){if(!candidate){setFile(null);setDuplicatePhotoId(null);return;}if(!['image/png','image/jpeg'].includes(candidate.type)||candidate.size>8_000_000){setError(new Error(t('Choose a PNG or JPEG image no larger than 8 MB.')));return;}setError(null);setDuplicatePhotoId(null);setFile(candidate);}
  async function load(){try{setRows(await api.personalGallery());if(selected){try{setFilesData(await api.medicationFiles(selected));setFilesError(null);}catch(caught){setFilesError(caught);}}setError(null);}catch(caught){setError(caught);}finally{setLoading(false);}}
- useEffect(()=>{let live=true;if(api.personalGallery)void api.personalGallery().then(data=>{if(live){setRows(data);setLoading(false);}}).catch(caught=>{if(live){setError(caught);setLoading(false);}});return()=>{live=false;};},[]);
+ useEffect(()=>{let live=true;void Promise.resolve().then(()=>{if(!live||!api.personalGallery)return;return api.personalGallery().then(data=>{if(live){setRows(data);setLoading(false);}}).catch(caught=>{if(live){setError(caught);setLoading(false);}});});return()=>{live=false;};},[]);
  useEffect(()=>{
   const dialog=uploadOpen?uploadDialogRef.current:detailPhoto?photoDialogRef.current:detailSource?sourceDialogRef.current:null;
   if(!dialog)return;

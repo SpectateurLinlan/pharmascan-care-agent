@@ -12,6 +12,7 @@ import type {DoseBasis,DoseDisplay} from './dose';
 
 import { accessToken,existingAccessToken } from './auth';
 import { observeDiagnosticResponse } from './diagnosticContract';
+import {beginApiTiming,emitApiTiming,errors,readJsonWithTiming} from './workflowPerformanceContract';
 
 const CLIENT_STORAGE_KEY = 'pharmascan.client_id';
 
@@ -51,8 +52,11 @@ export function clientId(): string {
   return generated;
 }
 
-async function fetchResponse(path: string, init?: RequestInit,tokenProvider=accessToken): Promise<Response> {
-  const token = await tokenProvider();
+async function fetchResponse(path: string, init?: RequestInit,tokenProvider=accessToken,timing=import.meta.env.DEV?beginApiTiming(path,init?.method??'GET'):null): Promise<Response> {
+  let token:string|null;
+  try{token=await tokenProvider();}
+  catch(caught){if(import.meta.env.DEV&&timing)emitApiTiming({...timing,kind:'response',end:performance.now(),auth_ms:performance.now()-timing.start,status:null,error:'SDK_UNAVAILABLE'});throw caught;}
+  const authFinished=timing?performance.now():0;
   const controller=new AbortController();
   const abort=()=>controller.abort();
   if(init?.signal?.aborted)controller.abort();else init?.signal?.addEventListener('abort',abort,{once:true});
@@ -68,7 +72,7 @@ async function fetchResponse(path: string, init?: RequestInit,tokenProvider=acce
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
-  }catch(caught){if(controller.signal.aborted&&!init?.signal?.aborted)throw new Error('Connection timed out. Please try again.');throw caught;}finally{clearTimeout(timer);init?.signal?.removeEventListener('abort',abort);}
+  }catch(caught){if(import.meta.env.DEV&&timing)emitApiTiming({...timing,kind:'response',end:performance.now(),auth_ms:authFinished-timing.start,fetch_ms:performance.now()-authFinished,status:null,error:'NETWORK_FAILURE'});if(controller.signal.aborted&&!init?.signal?.aborted)throw new Error('Connection timed out. Please try again.');throw caught;}finally{clearTimeout(timer);init?.signal?.removeEventListener('abort',abort);}
 
   if (!response.ok) {
     let body: ApiErrorBody = {
@@ -87,9 +91,11 @@ async function fetchResponse(path: string, init?: RequestInit,tokenProvider=acce
       // Non-JSON error body: keep the generic message.
     }
     observeDiagnosticResponse(path,response.status,Boolean(token),body.message);
+    if(import.meta.env.DEV&&timing){const dependency=/^Supabase rejected data operation \(HTTP (\d{3}); code ([A-Z0-9]{5}|PGRST\d{3}|unknown)\)$/.exec(body.message);emitApiTiming({...timing,kind:'response',end:performance.now(),auth_ms:authFinished-timing.start,fetch_ms:performance.now()-authFinished,status:response.status,error:errors.includes(body.code as typeof errors[number])?body.code:'other',...(dependency?{dependency_status:Number(dependency[1]),dependency_code:dependency[2]}:{})});}
     throw new ApiError(response.status, body);
   }
   observeDiagnosticResponse(path,response.status,Boolean(token));
+  if(import.meta.env.DEV&&timing){const control=response.headers?.get('Cache-Control')??'';const cache_policy=['no-store','no-cache','private','public'].find(value=>control.split(',').some(part=>part.trim()===value))??'unspecified';emitApiTiming({...timing,kind:'response',end:performance.now(),auth_ms:authFinished-timing.start,fetch_ms:performance.now()-authFinished,status:response.status,cache_policy});}
   return response;
 }
 
@@ -104,8 +110,26 @@ export function readDiagnosticCounts(path:'/api/me/medications'|'/api/me/regimen
  });
 }
 
+// Share overlapping reads only. Never retain settled patient data, share a
+// caller's AbortSignal, or reuse a read started before a write.
+const pendingReads=new Map<string,Promise<unknown>>();
+let writeRevision=0;
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  return (await (await fetchResponse(path, init)).json()) as T;
+  const method=(init?.method??'GET').toUpperCase();
+  if(method!=='GET')writeRevision++;
+  if(method!=='GET'||init?.signal||!/^\/api\/(me\/(dose-follow-ups|today-attention)|reminders\/alerts)(\?|$)/.test(path)){
+    return readJsonWithTiming<T>(await fetchResponse(path, init),path);
+  }
+  const revision=writeRevision;
+  const timing=import.meta.env.DEV?beginApiTiming(path,'GET'):null;
+  let token:string|null;
+  try{token=await accessToken();}catch(caught){if(import.meta.env.DEV&&timing)emitApiTiming({...timing,kind:'response',end:performance.now(),auth_ms:performance.now()-timing.start,status:null,error:'SDK_UNAVAILABLE'});throw caught;}
+  const key=`${revision}\0${token??''}\0${path}`;
+  const existing=pendingReads.get(key);
+  if(existing){const auth_ms=timing?performance.now()-timing.start:0;try{return await existing as T;}finally{if(import.meta.env.DEV&&timing)emitApiTiming({...timing,kind:'response',end:performance.now(),auth_ms,status:null,shared:true});}}
+  const pending=fetchResponse(path,init,async()=>token,timing).then(response=>readJsonWithTiming<T>(response,path));
+  pendingReads.set(key,pending);
+  try{return await pending;}finally{if(pendingReads.get(key)===pending)pendingReads.delete(key);}
 }
 
 export interface SpeechCapabilities { cloud_tts_allowed: boolean; available: boolean; provider: string; review_required: true; raw_audio_retained: false }

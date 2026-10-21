@@ -2,6 +2,8 @@
 // AUTOMATED/SIMULATED component wiring; real providers are tested separately.
 import {afterEach,expect,it,vi} from 'vitest';
 import {act,cleanup,fireEvent,render,screen,waitFor,within} from '@testing-library/react';
+import {StrictMode} from 'react';
+import {PrivateEvidencePhoto} from './PrivateEvidencePhoto';
 import {api,type EvidenceTask,type GalleryEntry,type GalleryImage,type RegimenHistoryItem,type MedicationKnowledge,type MedicationLibrarySource,type MedicationFiles} from '../api/client';
 import {EvidenceEnrollmentScreen} from './EvidenceEnrollmentScreen';
 import {PersonalGalleryScreen} from './PersonalGalleryScreen';
@@ -102,6 +104,27 @@ it('allows continuing the selected saved task while discarding the earlier pendi
  expect(screen.queryByRole('heading',{name:'DEMO Metformin'})).toBeNull();expect(api.sendMessage).not.toHaveBeenCalled();
 });
 const photo:GalleryImage={id:'DEMO-image',medication_id:'DEMO-med',image_kind:'loose_pill',source_description:'DEMO reviewed sample',reviewed:true,eligibility:'eligible',eligibility_reason:'patient_reviewed_visual_reference_only',created_at:'2026-10-15T00:00:00Z'};
+it('acquires one authenticated photo under StrictMode and revokes its object URL on unmount',async()=>{
+ mocks();const view=render(<StrictMode><PrivateEvidencePhoto photo={photo}/></StrictMode>);
+ await screen.findByRole('img');expect(api.referencePhoto).toHaveBeenCalledTimes(1);
+ expect(URL.createObjectURL).toHaveBeenCalledTimes(1);view.unmount();
+ expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:DEMO');
+});
+it('does not acquire a photo for a disposed effect and ignores late image responses',async()=>{
+ mocks();const early=render(<PrivateEvidencePhoto photo={photo}/>);early.unmount();
+ await act(async()=>{await Promise.resolve();});expect(api.referencePhoto).not.toHaveBeenCalled();
+ let finish!:(blob:Blob)=>void;vi.mocked(api.referencePhoto).mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
+ const view=render(<PrivateEvidencePhoto photo={photo}/>);await act(async()=>{await Promise.resolve();});view.unmount();
+ await act(async()=>{finish(new Blob(['DEMO']));});expect(URL.createObjectURL).not.toHaveBeenCalled();
+});
+it('loads the gallery once under StrictMode while preserving explicit retry after a photo failure',async()=>{
+ mocks();render(<StrictMode><PersonalGalleryScreen/></StrictMode>);
+ await waitFor(()=>expect(api.personalGallery).toHaveBeenCalledTimes(1));cleanup();
+ vi.mocked(api.referencePhoto).mockRejectedValueOnce(new Error('DEMO unavailable')).mockResolvedValue(new Blob(['DEMO']));
+ render(<StrictMode><PrivateEvidencePhoto photo={photo}/></StrictMode>);
+ fireEvent.click(await screen.findByRole('button',{name:'Retry loading photo'}));
+ await screen.findByRole('img');expect(api.referencePhoto).toHaveBeenCalledTimes(2);
+});
 const entry:GalleryEntry={evidence_task_id:'DEMO-task',medication:{id:'DEMO-med',display_name:'DEMO Metformin',identity_status:'user_reviewed_document'},product:task.product,status:'current',regimens:[{id:'DEMO-regimen',state:'active',version_no:1,course_start_date:'2026-10-15',course_end_date:'2026-10-21',dose_amount:1,dose_unit:'tablet'}],images:[photo],eligible_count:1};
 function fileResponse(row:GalleryEntry):MedicationFiles{return{file_management_available:true,medication_id:row.medication.id,files:row.images.map(image=>({id:image.id,image_id:image.id,image_ids:[image.id],name:image.source_description,format:'PNG',content_type:'image',photo_description:image.image_kind,purpose_tags:['evidence',...(image.eligibility==='eligible'?['appearance_reference' as const]:[])],created_at:image.created_at,eligibility:image.eligibility,eligibility_reason:image.eligibility_reason,sources:[]})),source_records:[],regimens:[]};}
 const detailEndedPlan:RegimenHistoryItem={regimen_id:'DEMO-stopped',medication_id:'DEMO-med',supersedes_id:null,display_name:'DEMO Metformin',version_no:1,state:'ended',effective_from:null,effective_to:'2026-10-18T00:00:00Z',course_start_date:'2026-10-01',course_end_date:'2026-10-31',dose_amount:1,dose_unit:'tablet',food_instruction:null,is_prn:false,local_times:['08:00']};
