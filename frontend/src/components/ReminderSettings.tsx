@@ -6,22 +6,26 @@ import type {CareTask} from '../api/care';
 import {AutoDismissNotice,ErrorNotice} from './primitives';
 import {careLabel} from './followUpCopy';
 import {BottomSheet} from './BottomSheet';
+import {ReminderLeadSelect} from './ReminderLeadSelect';
 
-const reminderLeadChoices=[0,15,30,60] as const;
-
-export function CalendarExportAction(){
+export function CalendarExportAction({initialOptions,port,onDirtyChange}:{
+ initialOptions?:CalendarExportOptions;port?:(options:CalendarExportOptions)=>Promise<Blob>;
+ onDirtyChange?:((dirty:boolean)=>void)|undefined;
+}={}){
  const {t,preferences}=useLanguage();
  const [busy,setBusy]=useState(false),[dialogOpen,setDialogOpen]=useState(false),[error,setError]=useState<string|null>(null),[toastKey,setToastKey]=useState(0);
  const [range,setRange]=useState<CalendarExportOptions['range']>('30'),[customStart,setCustomStart]=useState(''),[customEnd,setCustomEnd]=useState('');
  const [includeMedications,setIncludeMedications]=useState(true),[includeTasks,setIncludeTasks]=useState(true);
- const exportLock=useRef(false);
+ const exportLock=useRef(false),live=useRef(true);
+ useEffect(()=>{live.current=true;return()=>{live.current=false;};},[]);
+ useEffect(()=>{onDirtyChange?.(dialogOpen||busy);return()=>onDirtyChange?.(false);},[dialogOpen,busy,onDirtyChange]);
  function dateInPatientTimezone(){
   const parts=new Intl.DateTimeFormat('en-CA',{timeZone:preferences.timezone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
   const values=Object.fromEntries(parts.map(part=>[part.type,part.value]));
   return `${values.year}-${values.month}-${values.day}`;
  }
  function addCalendarDays(value:string,days:number){const [year,month,day]=value.split('-').map(Number) as [number,number,number];return new Date(Date.UTC(year,month-1,day+days)).toISOString().slice(0,10);}
- function openDialog(){const today=dateInPatientTimezone();setRange('30');setCustomStart(today);setCustomEnd(today);setIncludeMedications(true);setIncludeTasks(true);setError(null);setDialogOpen(true);}
+ function openDialog(){const today=dateInPatientTimezone();setRange(initialOptions?.range??'30');setCustomStart(initialOptions?.start_date??today);setCustomEnd(initialOptions?.end_date??today);setIncludeMedications(initialOptions?.include_medications??true);setIncludeTasks(initialOptions?.include_tasks??true);setError(null);setDialogOpen(true);}
  function validateSelection():CalendarExportOptions|null{
   if(!includeMedications&&!includeTasks){setError('Select at least one type of reminder to export.');return null;}
   if(range!=='custom')return {range,include_medications:includeMedications,include_tasks:includeTasks};
@@ -47,7 +51,8 @@ export function CalendarExportAction(){
   exportLock.current=true;
   setBusy(true);setError(null);
   try{
-   const blob=await api.reminderCalendar(options);const content=await blob.text();
+   const blob=await (port?port(options):api.reminderCalendar(options));const content=await blob.text();
+   if(!live.current)return;
    const eventStarts=(content.match(/^BEGIN:VEVENT\r?$/gm)??[]).length,eventEnds=(content.match(/^END:VEVENT\r?$/gm)??[]).length;
    if(!content.trim()||!/^BEGIN:VCALENDAR\r?$/m.test(content)||!/^VERSION:2\.0\r?$/m.test(content)||!/^END:VCALENDAR\r?$/m.test(content)||eventStarts<1||eventStarts!==eventEnds)throw new Error('invalid-calendar-file');
    const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='pharmascan-reminders.ics';link.hidden=true;document.body.append(link);link.click();link.remove();window.setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -105,7 +110,6 @@ export function ReminderSettings({onOpenCareTask,multipleCareRemindersEnabled=fa
  const uniqueTaskReminders=taskReminders.filter((row,index,all)=>all.findIndex(candidate=>candidate.task.id===row.task.id)===index);
  const firstTaskReminder=uniqueTaskReminders[0];
  const currentLead=preferences.reminder_lead_minutes;
- const supportedLead=reminderLeadChoices.some(value=>value===currentLead);
  return <div className="reminder-settings">
   <section className="card reminder-settings__section" aria-labelledby="reminder-schedule-title">
    <h2 id="reminder-schedule-title" className="card__title">{t('Reminder Schedule')}</h2>
@@ -114,12 +118,7 @@ export function ReminderSettings({onOpenCareTask,multipleCareRemindersEnabled=fa
     <button type="button" role="switch" aria-label={t('Medication Reminders')} aria-checked={enabled} aria-busy={preferenceBusy} disabled={preferenceBusy} className="patient-switch" onClick={()=>void persistPreference({reminders_enabled:!enabled},'Medication reminder preference saved.')}><span/></button>
    </div>
    {preferenceBusy?<p className="reminder-status" role="status">{t('Saving medication reminder preference…')}</p>:null}
-   {enabled?<label className="reminder-lead-control" htmlFor="reminder-lead-time"><span>{t('Reminder Lead Time')}</span>
-    <select id="reminder-lead-time" disabled={preferenceBusy} value={currentLead} onChange={event=>{const value=Number(event.target.value);if(Number.isInteger(value)&&value>=0&&value<=120)void persistPreference({reminder_lead_minutes:value},'Reminder lead time saved.');}}>
-     {!supportedLead?<option value={currentLead}>{t('Current setting: {minutes} minutes').replace('{minutes}',String(currentLead))}</option>:null}
-     <option value={0}>{t('At scheduled time')}</option><option value={15}>{t('15 minutes before')}</option><option value={30}>{t('30 minutes before')}</option><option value={60}>{t('1 hour before')}</option>
-    </select>
-   </label>:null}
+   {enabled?<ReminderLeadSelect value={currentLead} disabled={preferenceBusy} onChange={value=>{void persistPreference({reminder_lead_minutes:value},'Reminder lead time saved.');}}/>:null}
 
    <div className="reminder-settings__subsection">
     {rows?.length?<>

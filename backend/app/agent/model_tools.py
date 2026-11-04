@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import date
+from time import monotonic
 from types import MappingProxyType
 from typing import Literal
 from uuid import UUID
@@ -14,9 +15,11 @@ from ..application.long_term import LongTermCareService
 from ..application.medication_understanding import MedicationUnderstandingService
 from ..application.observations import ObservationService
 from ..application.visual_check import VisualCheckService
+from ..contracts.agent_execution import tracked_step
 from ..contracts.chat_photo import PHOTO_READ_TOOLS
 from ..contracts.enums import AgentIntent, ToolName, ToolStatus
 from ..contracts.long_term import CareReview
+from ..contracts.medication_names import NameCandidate
 from ..contracts.observations import HealthNoteReview
 from ..contracts.ports import Clock
 from ..contracts.visual_check import VisualCheckRequest
@@ -169,6 +172,9 @@ class ExecutedTool:
 
 
 class ModelTools:
+    def validate_name_candidate(self, candidate: NameCandidate, *, text: str | None = None) -> bool:
+        return self._understanding is not None and self._understanding.validate_name_candidate(candidate, text=text)
+
     def __init__(
         self,
         *,
@@ -246,6 +252,7 @@ class ModelTools:
             "existing_product_candidates": [str(key) for key in task.possible_duplicate_ids],
         }
 
+    @tracked_step("tool")
     def execute(
         self,
         *,
@@ -259,6 +266,11 @@ class ModelTools:
     ) -> ExecutedTool:
         if name not in SPECS:
             raise ValidationError("Unknown model tool")
+        if not turn.persistence.can_save_task and name not in {
+            "list_active_medications",
+            "get_medication_understanding",
+        }:
+            raise ValidationError("This operation requires the visible save-and-review step")
         if turn.photo_context is not None and name not in PHOTO_READ_TOOLS:
             raise ValidationError(
                 "Photo evidence cannot authorize record actions; send a separate explicit text message"
@@ -276,6 +288,7 @@ class ModelTools:
                 patient_id=patient_id,
                 session_id=session_id,
                 turn=AgentTurn(
+                    persistence=turn.persistence,
                     text=turn.text,
                     language=turn.language,
                     slots={
@@ -306,6 +319,7 @@ class ModelTools:
                 session = self._fallback.get_session(patient_id=patient_id, session_id=session_id)
                 if not params.get("medication_id") and session and session.context.referenced_medication_id:
                     params["medication_id"] = session.context.referenced_medication_id
+            started_monotonic = monotonic()
             understanding = self._understanding.explain(
                 patient_id=patient_id,
                 **params,
@@ -334,13 +348,18 @@ class ModelTools:
                     session_id=session_id,
                     correlation_id=correlation_id,
                     client_turn_id=client_turn_id,
+                    retain_content=turn.persistence.save_context,
+                    content_guard=turn.persistence.guard,
+                    trace_writer=turn.persistence.trace_writer,
                 ),
                 result,
+                started_monotonic=started_monotonic,
             )
             return ExecutedTool(data=payload, intent=AgentIntent.CLARIFICATION, results=[result])
         if name in CARE_SPECS:
             if self._long_term is None:
                 raise ProviderUnavailableError("Long-term care unavailable")
+            started_monotonic = monotonic()
             output = execute_care_tool(
                 self._long_term,
                 name=name,
@@ -372,8 +391,12 @@ class ModelTools:
                     session_id=session_id,
                     correlation_id=correlation_id,
                     client_turn_id=client_turn_id,
+                    retain_content=turn.persistence.save_context,
+                    content_guard=turn.persistence.guard,
+                    trace_writer=turn.persistence.trace_writer,
                 ),
                 result,
+                started_monotonic=started_monotonic,
             )
             return ExecutedTool(
                 data=output.data, intent=AgentIntent.CLARIFICATION, results=[result], care_review=output.review
@@ -413,6 +436,9 @@ class ModelTools:
             )
         base = {
             "patient_id": patient_id,
+            "retain_content": turn.persistence.save_context,
+            "content_guard": turn.persistence.guard,
+            "trace_writer": turn.persistence.trace_writer,
             "session_id": session_id,
             "correlation_id": correlation_id,
             "client_turn_id": client_turn_id,
@@ -434,6 +460,7 @@ class ModelTools:
                     patient_id=patient_id,
                     session_id=session_id,
                     turn=AgentTurn(
+                        persistence=turn.persistence,
                         text=turn.text,
                         language=turn.language,
                         slots={**params, "intake_status": params["intake_status"]},
@@ -496,7 +523,7 @@ class ModelTools:
             reply = self._fallback.handle_turn(
                 patient_id=patient_id,
                 session_id=session_id,
-                turn=AgentTurn(text=turn.text, language=turn.language, slots=slots),
+                turn=AgentTurn(persistence=turn.persistence, text=turn.text, language=turn.language, slots=slots),
             )
             return ExecutedTool(
                 data={

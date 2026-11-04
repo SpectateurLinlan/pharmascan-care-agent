@@ -10,9 +10,28 @@ from google import genai
 from google.genai import errors
 from pydantic import ValidationError
 
+from ..contracts.agent_execution import ProviderUsage, bounded_timeout, current_execution, tracked_step
 from ..contracts.model import FunctionCall, ModelProviderError, ModelReply
 
 LOGGER = logging.getLogger(__name__)
+
+
+def bounded_request(request: httpx.Request) -> None:
+    if control := current_execution.get():
+        control.sdk_attempt()
+        remaining = control.remaining(12)
+        request.extensions["timeout"] = {
+            key: min(value, remaining) if value is not None else remaining
+            for key, value in request.extensions.get(
+                "timeout",
+                {
+                    "connect": 12,
+                    "read": 12,
+                    "write": 12,
+                    "pool": 12,
+                },
+            ).items()
+        }
 
 
 def bounded_retry_response(response: httpx.Response) -> None:
@@ -52,7 +71,7 @@ def gemini_http_options() -> dict:
     return {
         "api_version": "v1",
         "timeout": 12000,
-        "client_args": {"event_hooks": {"response": [bounded_retry_response]}},
+        "client_args": {"event_hooks": {"request": [bounded_request], "response": [bounded_retry_response]}},
         "retry_options": {
             "attempts": 1,
             "initial_delay": 0.75,
@@ -68,9 +87,13 @@ class GeminiModel:
     def __init__(self, *, model: str, client_factory: Callable[[], genai.Client]):
         self.model, self._factory = model, client_factory
 
+    @tracked_step("model")
     def create(
         self, *, history: list[dict[str, object]], tools: list[dict[str, object]], instruction: str
     ) -> ModelReply:
+        control = current_execution.get()
+        if control:
+            control.model_started(self.model, instruction, tools)
         try:
             with self._factory() as client:
                 result = client.interactions.create(
@@ -80,8 +103,24 @@ class GeminiModel:
                     system_instruction=instruction,
                     store=False,
                     generation_config={"thinking_level": "low", "max_output_tokens": 1024},
-                    timeout=12,
+                    timeout=bounded_timeout(12),
                 )
+                sdk_usage = getattr(result, "usage", None)
+                usage = (
+                    ProviderUsage(
+                        input_tokens=getattr(sdk_usage, "total_input_tokens", None),
+                        output_tokens=getattr(sdk_usage, "total_output_tokens", None),
+                        total_tokens=getattr(sdk_usage, "total_tokens", None),
+                        cached_input_tokens=getattr(sdk_usage, "total_cached_tokens", None),
+                    )
+                    if sdk_usage is not None
+                    else None
+                )
+                from ..application.agent_runtime_metadata import model_name
+
+                returned_model = model_name(getattr(result, "model", None))
+                if control:
+                    control.model_returned(returned_model, usage)
                 replay = [step.model_dump(mode="json", exclude_none=True) for step in result.steps]
                 calls = [
                     FunctionCall.model_validate(
@@ -92,7 +131,13 @@ class GeminiModel:
                 ]
                 if len(json.dumps(replay)) > 30000:
                     raise ModelProviderError("schema")
-                return ModelReply(text=result.output_text or "", calls=calls, replay=replay)
+                return ModelReply(
+                    text=result.output_text or "",
+                    calls=calls,
+                    replay=replay,
+                    usage=usage,
+                    returned_model=returned_model,
+                )
         except errors.APIError as exc:
             LOGGER.warning("Gemini request failed model=%s status=%s", self.model, exc.code)
             category = "quota" if exc.code == 429 else "unavailable"

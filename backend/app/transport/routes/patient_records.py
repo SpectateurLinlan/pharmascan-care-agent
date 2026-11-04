@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 
 from ...application.record_history import HistoryRange
 from ...application.today_attention import TodayAttention, read_today_attention
@@ -14,6 +14,7 @@ from ...contracts.review_summary import ReviewSummary
 from ...domain.errors import ProviderUnavailableError
 from ...timing import timed_stage
 from ..auth import AuthenticatedPrincipal
+from ..care_binding import bound_care
 from ..deps import ApplicationContainer, get_container, get_principal
 
 router = APIRouter(prefix="/api/me", tags=["patient-records"])
@@ -85,10 +86,21 @@ def save_observation(
     payload: ObservationInput,
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
+    assistant_task: UUID | None = Header(default=None, alias="X-Assistant-Task"),
+    assistant_revision: int | None = Header(default=None, ge=1, alias="X-Assistant-Revision"),
 ):
     if not container.observations:
         raise ProviderUnavailableError("Health records unavailable")
-    return container.observations.save(principal.patient_id, payload)
+    return bound_care(
+        container,
+        principal.patient_id,
+        assistant_task,
+        assistant_revision,
+        {"observation.add", "observation.edit"},
+        payload.id,
+        payload,
+        lambda: container.observations.save(principal.patient_id, payload),
+    )
 
 
 @router.delete("/health-observations/{observation_id}")
@@ -96,11 +108,26 @@ def delete_observation(
     observation_id: UUID,
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
+    assistant_task: UUID | None = Header(default=None, alias="X-Assistant-Task"),
+    assistant_revision: int | None = Header(default=None, ge=1, alias="X-Assistant-Revision"),
 ):
     if not container.observations:
         raise ProviderUnavailableError("Health records unavailable")
-    container.observations.delete(principal.patient_id, observation_id)
-    return {"deleted": True}
+
+    def delete():
+        container.observations.delete(principal.patient_id, observation_id)
+        return {"deleted": True}
+
+    return bound_care(
+        container,
+        principal.patient_id,
+        assistant_task,
+        assistant_revision,
+        {"observation.delete"},
+        observation_id,
+        None,
+        delete,
+    )
 
 
 @router.get("/review-summary", response_model=ReviewSummary)

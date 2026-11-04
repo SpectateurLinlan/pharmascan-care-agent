@@ -5,6 +5,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .assistant_explanations import ExplanationStep
+from .medication_facts import UseFact
+from .medication_names import NameResolution
+
 
 class KnowledgeDTO(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -46,6 +50,9 @@ class KnowledgeResult(KnowledgeDTO):
     reason: str
     match_scope: Literal["US_label_product_family", "US_label_ingredient"] = "US_label_product_family"
     candidate_count: int = 0
+    coverage: Literal["complete", "partial", "unknown"] | None = None
+    use_facts: tuple[UseFact, ...] = ()
+    withheld_reasons: tuple[str, ...] = ()
     sources: list[LabelSource] = Field(default_factory=list)
     use_statement: str | None = None
     use_statement_zh: str | None = None
@@ -83,6 +90,8 @@ class ReviewedInstructions(KnowledgeDTO):
 
 class MedicationUnderstanding(KnowledgeDTO):
     clarification_required: bool = False
+    name_resolution: NameResolution | None = None
+    explanations: tuple[ExplanationStep, ...] = ()
     medication_id: UUID | None = None
     regimen_id: UUID | None = None
     question: Literal["general_use", "personal_instructions", "personal_reason"]

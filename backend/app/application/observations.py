@@ -25,6 +25,9 @@ class ObservationService:
     def list(self, patient_id: UUID, start: datetime, end: datetime) -> list[Observation]:
         return self._repository.list(patient_id, start, end)
 
+    def get(self, patient_id: UUID, observation_id: UUID) -> Observation | None:
+        return self._repository.get(patient_id, observation_id)
+
     def save(self, patient_id: UUID, values: ObservationInput) -> Observation:
         if not values.confirmed:
             raise ValidationError("Confirm before saving your health note")

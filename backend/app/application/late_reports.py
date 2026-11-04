@@ -14,7 +14,13 @@ from ..contracts.dto import (
     SourceDocumentDTO,
 )
 from ..contracts.enums import IntakeStatus
-from ..contracts.late_reports import DoseFollowUp, LateReportChallenge, LateReportRecord, LateReportRepository
+from ..contracts.late_reports import (
+    DoseFollowUp,
+    DoseReportAudit,
+    LateReportChallenge,
+    LateReportRecord,
+    LateReportRepository,
+)
 from ..contracts.ports import Clock, ConfirmationChallengeRepository, DoseEventRepository, IdGenerator
 from ..contracts.temporal import local_day_window
 from ..domain.dose_attention import attention_deadline
@@ -113,7 +119,16 @@ class LateReportService:
             notes=latest.notes if latest else "",
         )
 
-    def recent(self, patient_id: UUID, include_reported: bool = False) -> dict:
+    def audit(self, patient_id: UUID, occurrence_id: UUID) -> DoseReportAudit:
+        if self.schedule.get_occurrence(patient_id, occurrence_id) is None:
+            raise NotFoundError("Scheduled occurrence not found for this patient")
+        return DoseReportAudit(original=self.repository.original(patient_id, occurrence_id),
+                               corrections=self.repository.history(patient_id, occurrence_id))
+
+    def find_confirmation(self, patient_id: UUID, binding_key: str):
+        return self.challenges.find_by_idempotency_key(patient_id, binding_key)
+
+    def recent(self, patient_id: UUID, include_reported: bool = False, *, materialize_current: bool = True) -> dict:
         now, zone = self.clock.now(), self.schedule.local_timezone(patient_id)
         candidates = []
         context = self.enrollment.read_context(patient_id)
@@ -122,7 +137,7 @@ class LateReportService:
             for plan in context.by_medication[medicine.id]:
                 if plan.is_prn or plan.state.value in {"draft", "pending_clarification"}:
                     continue
-                if plan.state.value == "active":
+                if materialize_current and plan.state.value == "active":
                     self.schedule.materialize(patient_id=patient_id, regimen_id=plan.id, days=1)
                 rows = self.enrollment_occurrences(patient_id, plan.id, now)
                 events = {

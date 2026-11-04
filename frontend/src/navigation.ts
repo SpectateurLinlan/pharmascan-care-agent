@@ -12,6 +12,7 @@ const parents: Record<string,string> = {
 const normalize = (value:string) => value === 'history' ? 'records' : value;
 function authCallback(){return /(?:access_token|refresh_token)=/.test(window.location.hash)||new URLSearchParams(window.location.search).has('code');}
 function valid(value:string) {return roots.some(root=>root===value)||Object.hasOwn(parents,value);}
+export const isCareRoute=(value:string):boolean=>valid(value);
 function initial():string[] {
   const route=normalize(window.location.hash.slice(1).split('?')[0]||'today');
   const stored:unknown=window.history.state?.careRoute;

@@ -6,22 +6,42 @@ from uuid import UUID, uuid5
 from ..contracts.conversation_history import ConversationHistoryRepository, HistoryEntry, HistoryPage, HistoryTurn
 from ..contracts.ports import Clock
 from ..contracts.privacy import bounded_text
+from ..contracts.workflow_messages import AppendLegacyHistory
 from ..domain.errors import ValidationError
+from .workflow_message_policy import DEFAULT_PERSISTENCE, MessagePersistencePolicy
 
 
 class ConversationHistoryService:
     def __init__(self, repository: ConversationHistoryRepository, clock: Clock):
         self._repository, self._clock = repository, clock
 
-    def append(self, patient_id: UUID, session_id: UUID, turn_id: str, text: str, message: str) -> None:
-        self._repository.append(
-            HistoryTurn(
-                id=uuid5(session_id, turn_id),
-                patient_id=patient_id,
-                session_id=session_id,
-                user_text=bounded_text(text, 2000),
-                assistant_text=bounded_text(message, 4000),
-                created_at=self._clock.now(),
+    def append(
+        self,
+        patient_id: UUID,
+        session_id: UUID,
+        turn_id: str,
+        text: str,
+        message: str,
+        *,
+        policy: MessagePersistencePolicy = DEFAULT_PERSISTENCE,
+    ) -> bool:
+        if policy.messages is not None:
+            if not policy.save_history:
+                return False
+            row = HistoryTurn(id=uuid5(session_id, turn_id), patient_id=patient_id, session_id=session_id,
+                              user_text=bounded_text(text, 2000), assistant_text=bounded_text(message, 4000),
+                              created_at=self._clock.now())
+            return policy.execute(patient_id, AppendLegacyHistory(turn=row)) is not None
+        return policy.write_history(
+            lambda: self._repository.append(
+                HistoryTurn(
+                    id=uuid5(session_id, turn_id),
+                    patient_id=patient_id,
+                    session_id=session_id,
+                    user_text=bounded_text(text, 2000),
+                    assistant_text=bounded_text(message, 4000),
+                    created_at=self._clock.now(),
+                )
             )
         )
 

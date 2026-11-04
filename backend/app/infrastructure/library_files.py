@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from threading import Lock
+from contextlib import contextmanager
+from copy import deepcopy
+from functools import wraps
+from threading import RLock
 from uuid import UUID
 
 from ..contracts.library_files import LibraryFileDTO
@@ -10,12 +13,43 @@ from ..domain.errors import NotFoundError, ProviderUnavailableError, ValidationE
 from .supabase_data import SupabaseDataClient
 
 
+def _file_locked(method):
+    @wraps(method)
+    def call(self,*args,**kwargs):
+        with self._lock:
+            return method(self,*args,**kwargs)
+    return call
+
+
 class MemoryMedicationLibraryFiles:
     def __init__(self) -> None:
         self._files: dict[tuple[UUID, UUID], LibraryFileDTO] = {}
-        self._lock = Lock()
+        self._lock = RLock()
         self.audit: list[dict[str, object]] = []
+        self._revisions: dict[UUID,int] = {}
 
+    @contextmanager
+    def local_transaction(self):
+        with self._lock:
+            files,audit,revisions=deepcopy(self._files),deepcopy(self.audit),dict(self._revisions)
+            try:
+                yield
+            except BaseException:
+                self._files.clear()
+                self._files.update(files)
+                self.audit[:]=audit
+                self._revisions.clear()
+                self._revisions.update(revisions)
+                raise
+
+    def revision(self, owner):
+        with self._lock:
+            return self._revisions.get(owner,0)
+
+    def _changed(self, owner):
+        self._revisions[owner]=self._revisions.get(owner,0)+1
+
+    @_file_locked
     def list_for_medication(self, patient_id: UUID, medication_id: UUID) -> list[LibraryFileDTO]:
         return [
             file
@@ -23,8 +57,13 @@ class MemoryMedicationLibraryFiles:
             if owner == patient_id and file.medication_id == medication_id and file.deleted_at is None
         ]
 
+    @_file_locked
     def get(self, patient_id: UUID, file_id: UUID) -> LibraryFileDTO | None:
         return self._files.get((patient_id, file_id))
+
+    @_file_locked
+    def references(self, patient_id: UUID, path: str) -> list[LibraryFileDTO]:
+        return [row for (owner,_),row in self._files.items() if owner==patient_id and row.storage_path==path]
 
     def add_if_absent(self, file: LibraryFileDTO) -> tuple[LibraryFileDTO, bool]:
         with self._lock:
@@ -41,9 +80,11 @@ class MemoryMedicationLibraryFiles:
             if existing:
                 return existing, True
             self._files[(file.patient_id, file.id)] = file
+            self._changed(file.patient_id)
             self.audit.append({"action": "uploaded", "file_id": file.id, "actor_id": file.patient_id})
             return file, False
 
+    @_file_locked
     def update(
         self, patient_id: UUID, file_id: UUID, expected_version: int, *, title: str, category: str, description: str
     ) -> LibraryFileDTO:
@@ -61,6 +102,7 @@ class MemoryMedicationLibraryFiles:
             }
         )
         self._files[(patient_id, file_id)] = new
+        self._changed(patient_id)
         self.audit.append(
             {
                 "action": "metadata_updated",
@@ -72,6 +114,7 @@ class MemoryMedicationLibraryFiles:
         )
         return new
 
+    @_file_locked
     def tombstone(self, patient_id: UUID, file_id: UUID, confirmed: bool, occurred_at) -> tuple[str, bool]:
         old = self.get(patient_id, file_id)
         if old is None:
@@ -85,6 +128,7 @@ class MemoryMedicationLibraryFiles:
                 update={"deleted_at": occurred_at, "cleanup_pending": True, "version": old.version + 1}
             )
             self._files[(patient_id, file_id)] = new
+            self._changed(patient_id)
             self.audit.append(
                 {
                     "action": "deleted",
@@ -97,10 +141,12 @@ class MemoryMedicationLibraryFiles:
             return old.storage_path, True
         return old.storage_path, old.cleanup_pending
 
+    @_file_locked
     def acknowledge_cleanup(self, patient_id: UUID, file_id: UUID) -> None:
         old = self.get(patient_id, file_id)
         if old and old.deleted_at is not None and old.cleanup_pending:
             self._files[(patient_id, file_id)] = old.model_copy(update={"cleanup_pending": False})
+            self._changed(patient_id)
 
 
 class SupabaseMedicationLibraryFiles:

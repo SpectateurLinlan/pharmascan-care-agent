@@ -20,6 +20,7 @@ from ..timing import RequestTiming, current_timing, timed_stage
 from .container import ApplicationContainer, build_container_from_settings
 from .error_mapping import domain_error_handler
 from .routes import agent as agent_routes
+from .routes import assistant_workflows as workflow_routes
 from .routes import caregivers as caregiver_routes
 from .routes import demo as demo_routes
 from .routes import doses as dose_routes
@@ -97,7 +98,11 @@ def create_app(container: ApplicationContainer | None = None, settings: Settings
         finally:
             try:
                 scoped = getattr(request.state, "patient_container", None)
-                if scoped is not None and scoped.close_request is not None:
+                if (
+                    scoped is not None
+                    and scoped.close_request is not None
+                    and not getattr(request.state, "stream_owns_resources", False)
+                ):
                     with timed_stage("cleanup"):
                         await run_in_threadpool(scoped.close_request)
             finally:
@@ -118,7 +123,7 @@ def create_app(container: ApplicationContainer | None = None, settings: Settings
             "http://127.0.0.1:4173",
         ],
         allow_credentials=False,
-        expose_headers=["Server-Timing"],
+        expose_headers=["Server-Timing", "X-Agent-Run-ID"],
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization", "X-Speech-Consent", "X-Stage2-Consent", "X-Demo-Only"],
     )
@@ -130,6 +135,7 @@ def create_app(container: ApplicationContainer | None = None, settings: Settings
     app.include_router(medication_routes.router)
     app.include_router(dose_routes.router)
     app.include_router(agent_routes.router)
+    app.include_router(workflow_routes.router)
     app.include_router(speech_routes.router)
     app.include_router(source_routes.router)
     app.include_router(reminder_routes.router)

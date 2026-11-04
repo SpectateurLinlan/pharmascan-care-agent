@@ -33,6 +33,11 @@ class DTO(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
 
+class MedicationIdentityReviewDTO(DTO):
+    source_id: UUID
+    medication_name: str
+
+
 #: Charset/length the database enforces on both ``dose_events.idempotency_key``
 #: and ``confirmation_challenges.idempotency_key``
 #: (``^[A-Za-z0-9_.:-]{1,128}$`` in supabase/migrations/202610130001_core.sql).

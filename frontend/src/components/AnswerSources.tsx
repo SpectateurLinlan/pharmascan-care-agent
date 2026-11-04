@@ -12,7 +12,7 @@ export function AnswerSources({traces}:{traces:ToolTrace[]}){
     const date='effective_time' in source?String(source.effective_time):'';const version='version' in source?String(source.version):'';
     const name='label_name' in source&&typeof source.label_name==='string'?source.label_name:'';
     const excerpts='sections' in source&&Array.isArray(source.sections)?source.sections.flatMap((section:unknown)=>
-     section&&typeof section==='object'&&'field' in section&&section.field==='indications_and_usage'&&'text' in section&&typeof section.text==='string'?[section.text]:[]):[];
+     section&&typeof section==='object'&&'field' in section&&['indications_and_usage','purpose'].includes(String(section.field))&&'text' in section&&typeof section.text==='string'?[section.text]:[]):[];
     links.set(url.href,{label:`${t('US drug label')}${name?` — ${name}`:''} · ${date} · v${version}`,excerpts});
    }catch{continue;}
   }

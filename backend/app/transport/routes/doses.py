@@ -26,10 +26,10 @@ from __future__ import annotations
 from datetime import timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 
 from ...contracts.dto import DoseEventInput
-from ...domain.errors import DuplicateEventError, NotFoundError
+from ...domain.errors import DuplicateEventError, NotFoundError, ValidationError
 from ...domain.policy import intake_status_from_patient_choice
 from ..auth import AuthenticatedPrincipal
 from ..deps import ApplicationContainer, get_container, get_principal
@@ -90,11 +90,7 @@ def due_dose(
     )
 
 
-@router.post(
-    "/doses/{occurrence_id}/report/challenge",
-    response_model=ReportChallengeResponse,
-)
-def request_report_challenge(
+def _request_report_challenge(
     occurrence_id: UUID | None,
     payload: ReportChallengeRequest,
     principal: AuthenticatedPrincipal = Depends(get_principal),
@@ -179,8 +175,7 @@ def request_report_challenge(
     )
 
 
-@router.post("/doses/{occurrence_id}/report", response_model=SelfReportResponse)
-def report_dose(
+def _report_dose(
     occurrence_id: UUID | None,
     payload: SelfReportRequest,
     principal: AuthenticatedPrincipal = Depends(get_principal),
@@ -240,14 +235,120 @@ def report_dose(
     )
 
 
+def _assistant_report_action(
+    container, owner, task, revision, regimen, occurrence, key, confirm, write, *, payload=None, session_id=None
+):
+    if task is None and revision is None:
+        return write()
+    if task is None or revision is None or container.assistant_reports is None:
+        raise ValidationError("The patient report needs its current Assistant task and revision")
+    service = container.assistant_reports
+    if service.transactions is None:
+        return service.run(owner, task, revision, regimen, occurrence, key, confirm, write)
+    values = DoseEventInput(
+        regimen_id=regimen,
+        occurrence_id=occurrence,
+        idempotency_key=key,
+        intake_status=intake_status_from_patient_choice(payload.intake_status),
+        event_time=container.clock.now(),
+    )
+    result = service.run(
+        owner,
+        task,
+        revision,
+        regimen,
+        occurrence,
+        key,
+        confirm,
+        write,
+        values=values,
+        challenge_id=getattr(payload, "challenge_id", None),
+        session_id=session_id,
+    )
+    if confirm:
+        event = result.event
+        return SelfReportResponse(
+            event_id=event.id if event else result.existing_event_id,
+            intake_status=values.intake_status.value,
+            visual_status="not_checked",
+            already_recorded=result.already_recorded,
+        )
+    challenge = result.challenge
+    return ReportChallengeResponse(
+        challenge_id=challenge.id,
+        occurrence_id=challenge.occurrence_id,
+        regimen_id=challenge.regimen_id,
+        session_id=challenge.session_id,
+        session_state="awaiting_confirmation",
+        session_state_version=challenge.session_state_version,
+        expires_at=challenge.expires_at,
+        summary=_summary_response(result.summary),
+    )
+
+
+@router.post("/doses/{occurrence_id}/report/challenge", response_model=ReportChallengeResponse)
+def request_report_challenge(
+    occurrence_id: UUID | None,
+    payload: ReportChallengeRequest,
+    principal: AuthenticatedPrincipal = Depends(get_principal),
+    session_id: UUID | None = Query(default=None),
+    container: ApplicationContainer = Depends(get_container),
+    assistant_task: UUID | None = Header(default=None, alias="X-Assistant-Task"),
+    assistant_revision: int | None = Header(default=None, ge=1, alias="X-Assistant-Revision"),
+) -> ReportChallengeResponse:
+    return _assistant_report_action(
+        container,
+        principal.patient_id,
+        assistant_task,
+        assistant_revision,
+        payload.regimen_id,
+        occurrence_id,
+        payload.idempotency_key,
+        False,
+        lambda: _request_report_challenge(occurrence_id, payload, principal, session_id, container),
+        payload=payload,
+        session_id=session_id,
+    )
+
+
+@router.post("/doses/{occurrence_id}/report", response_model=SelfReportResponse)
+def report_dose(
+    occurrence_id: UUID | None,
+    payload: SelfReportRequest,
+    principal: AuthenticatedPrincipal = Depends(get_principal),
+    container: ApplicationContainer = Depends(get_container),
+    assistant_task: UUID | None = Header(default=None, alias="X-Assistant-Task"),
+    assistant_revision: int | None = Header(default=None, ge=1, alias="X-Assistant-Revision"),
+) -> SelfReportResponse:
+    if (assistant_task is not None or assistant_revision is not None) and payload.occurrence_id not in {
+        None,
+        occurrence_id,
+    }:
+        raise ValidationError("The report occurrence does not match its current patient action")
+    return _assistant_report_action(
+        container,
+        principal.patient_id,
+        assistant_task,
+        assistant_revision,
+        payload.regimen_id,
+        occurrence_id,
+        payload.idempotency_key,
+        True,
+        lambda: _report_dose(occurrence_id, payload, principal, container),
+        payload=payload,
+    )
+
+
 @router.post("/prn/report/challenge", response_model=ReportChallengeResponse)
 def request_prn_report_challenge(
     payload: ReportChallengeRequest,
     principal: AuthenticatedPrincipal = Depends(get_principal),
     session_id: UUID | None = Query(default=None),
     container: ApplicationContainer = Depends(get_container),
+    assistant_task: UUID | None = Header(default=None, alias="X-Assistant-Task"),
+    assistant_revision: int | None = Header(default=None, ge=1, alias="X-Assistant-Revision"),
 ) -> ReportChallengeResponse:
-    return request_report_challenge(None, payload, principal, session_id, container)
+    return request_report_challenge(None, payload, principal, session_id, container, assistant_task, assistant_revision)
 
 
 @router.post("/prn/report", response_model=SelfReportResponse)
@@ -255,8 +356,10 @@ def report_prn_dose(
     payload: SelfReportRequest,
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
+    assistant_task: UUID | None = Header(default=None, alias="X-Assistant-Task"),
+    assistant_revision: int | None = Header(default=None, ge=1, alias="X-Assistant-Revision"),
 ) -> SelfReportResponse:
-    return report_dose(None, payload, principal, container)
+    return report_dose(None, payload, principal, container, assistant_task, assistant_revision)
 
 
 @router.get("/me/dose-history", response_model=DoseHistoryResponse)

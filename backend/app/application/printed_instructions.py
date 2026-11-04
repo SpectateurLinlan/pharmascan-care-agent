@@ -65,5 +65,10 @@ def validate_printed_review(draft: RegimenDraftInput, parts: PrintedInstructions
         ):
             raise ValidationError("Review the printed interval and first-dose date/time; blank time defaults to 08:00")
     if parts.times_per_day and not parts.as_needed and parts.every_hours is None:
-        if draft.is_prn or not draft.frequency_rule or len(draft.frequency_rule.local_times) != parts.times_per_day:
+        if (
+            draft.is_prn
+            or not draft.frequency_rule
+            or draft.frequency_rule.kind != "daily"
+            or len(draft.frequency_rule.local_times) != parts.times_per_day
+        ):
             raise ValidationError("Review the printed daily frequency and explicitly choose the required times")

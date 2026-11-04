@@ -27,6 +27,7 @@ from ..contracts.dto import (
     ToolTraceDTO,
 )
 from ..contracts.reminders import ReminderDTO
+from .clinical_memory import ClinicalMemory, ClinicalRows
 
 
 class SystemClock:
@@ -52,17 +53,20 @@ class InMemoryStore:
 
         self.late_reports: dict = {}
         self.late_report_lock = RLock()
+        self.session_lock = RLock()
         self.draft_deletions: dict = {}
         self.reminders: dict[tuple[UUID, UUID], ReminderDTO] = {}
-        self.sources: dict[tuple[UUID, UUID], SourceDocumentDTO] = {}
-        self.source_fields: dict[tuple[UUID, UUID], SourceFieldDTO] = {}
-        self.medications: dict[tuple[UUID, UUID], PatientMedicationDTO] = {}
-        self.regimens: dict[tuple[UUID, UUID], RegimenVersionDTO] = {}
-        self.dose_rules: dict[tuple[UUID, UUID], DoseRuleDTO] = {}
-        self.occurrences: dict[tuple[UUID, UUID], DoseOccurrenceDTO] = {}
+        self.clinical = ClinicalMemory()
+        self.enrollment_operations: dict = {}
+        self.sources: ClinicalRows[SourceDocumentDTO] = ClinicalRows(self.clinical)
+        self.source_fields: ClinicalRows[SourceFieldDTO] = ClinicalRows(self.clinical)
+        self.medications: ClinicalRows[PatientMedicationDTO] = ClinicalRows(self.clinical)
+        self.regimens: ClinicalRows[RegimenVersionDTO] = ClinicalRows(self.clinical)
+        self.dose_rules: ClinicalRows[DoseRuleDTO] = ClinicalRows(self.clinical, track_revision=False)
+        self.occurrences: ClinicalRows[DoseOccurrenceDTO] = ClinicalRows(self.clinical, track_revision=False)
         self.events: dict[tuple[UUID, UUID], DoseEventDTO] = {}
         self.sessions: dict[tuple[UUID, UUID], AgentSessionDTO] = {}
-        self.challenges: dict[tuple[UUID, UUID], ConfirmationChallengeDTO] = {}
+        self.challenges: ClinicalRows[ConfirmationChallengeDTO] = ClinicalRows(self.clinical, track_revision=False)
         self.traces: dict[tuple[UUID, UUID], ToolTraceDTO] = {}
 
 
@@ -137,13 +141,21 @@ class InMemoryRegimenVersionRepository:
         return self._store.regimens.get((patient_id, regimen_id))
 
     def list_for_medications(
-        self, patient_id: UUID, medication_ids: list[UUID], *, active_only: bool = False,
+        self,
+        patient_id: UUID,
+        medication_ids: list[UUID],
+        *,
+        active_only: bool = False,
     ) -> list[RegimenVersionDTO]:
         selected = set(medication_ids)
         return sorted(
-            [row for (owner, _), row in self._store.regimens.items()
-             if owner == patient_id and row.patient_medication_id in selected
-             and (not active_only or row.state.value == "active")],
+            [
+                row
+                for (owner, _), row in self._store.regimens.items()
+                if owner == patient_id
+                and row.patient_medication_id in selected
+                and (not active_only or row.state.value == "active")
+            ],
             key=lambda row: (row.version_no, row.id),
         )
 
@@ -274,7 +286,8 @@ class InMemoryDoseEventRepository:
 
         selected = set(occurrence_ids)
         return [
-            row for row in effective_memory_events(self._store)
+            row
+            for row in effective_memory_events(self._store)
             if row.patient_id == patient_id and row.occurrence_id in selected
         ]
 
@@ -326,7 +339,12 @@ class InMemoryAgentSessionRepository:
         return self._store.sessions.get((patient_id, session_id))
 
     def add(self, session: AgentSessionDTO) -> None:
-        self._store.sessions[(session.patient_id, session.id)] = session
+        with self._store.session_lock:
+            if self.is_owned_by_other_patient(session.patient_id, session.id):
+                from ..domain.errors import ValidationError
+
+                raise ValidationError("A session identifier cannot be shared between patients")
+            self._store.sessions[(session.patient_id, session.id)] = session
 
     def update(self, session: AgentSessionDTO) -> None:
         self._store.sessions[(session.patient_id, session.id)] = session
@@ -337,6 +355,12 @@ class InMemoryAgentSessionRepository:
             if key[0] == patient_id:
                 context = session.context.model_copy(update={"recent_turns": [], "conversation_summary": ""})
                 self._store.sessions[key] = session.model_copy(update={"context": context})
+
+    def detach_conversations(self, patient_id: UUID) -> None:
+        """Mirror the native FK detachment after an explicit full history clear."""
+        for key, session in tuple(self._store.sessions.items()):
+            if key[0] == patient_id:
+                self._store.sessions[key] = session.model_copy(update={"conversation_id": None})
 
     def is_owned_by_other_patient(self, patient_id: UUID, session_id: UUID) -> bool:
         """Ownership probe: a session id may never be shared across patients."""

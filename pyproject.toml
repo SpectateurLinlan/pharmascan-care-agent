@@ -31,6 +31,9 @@ dev = [
 [tool.setuptools]
 package-dir = {"" = "backend"}
 
+[tool.setuptools.package-data]
+app = ["resources/*.json"]
+
 # Only the isolated Vercel project reads this. Render uses run_patient_api.py.
 [tool.vercel]
 entrypoint = "deploy.dispatcher.index:app"

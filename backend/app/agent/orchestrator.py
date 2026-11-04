@@ -18,12 +18,14 @@ from datetime import datetime, timedelta
 from typing import Any, Literal, Protocol
 from uuid import UUID
 
+from ..application.workflow_message_policy import DEFAULT_PERSISTENCE, MessagePersistencePolicy
 from ..contracts.agent_context import CandidateReference, ClarificationContext
 from ..contracts.chat_photo import ChatPhotoContext
 from ..contracts.dto import AgentSessionDTO, PendingSelfReportDTO
 from ..contracts.enums import AgentIntent, ToolName, ToolStatus
 from ..contracts.long_term import CareReview
 from ..contracts.medication_dialogue import MedicationChoice, MedicationSelection
+from ..contracts.medication_names import NameChoice, NameSelection
 from ..contracts.navigation_context import NavigationContext
 from ..contracts.observations import HealthNoteReview
 from ..contracts.ports import AgentSessionRepository, Clock, IdGenerator
@@ -87,6 +89,8 @@ class AgentTurn:
     photo_context: ChatPhotoContext | None = None
     navigation_context: NavigationContext | None = None
     medication_selection: MedicationSelection | None = None
+    name_selection: NameSelection | None = None
+    persistence: MessagePersistencePolicy = field(default_factory=MessagePersistencePolicy)
 
     @property
     def patient_text(self) -> str:
@@ -98,6 +102,7 @@ class AgentTurn:
 
 @dataclass(frozen=True)
 class AgentReply:
+    name_choice: NameChoice | None = field(default=None, kw_only=True)
     medication_choice: MedicationChoice | None = field(default=None, kw_only=True)
     care_request: CareReview | None = field(default=None, kw_only=True)
     health_note_request: HealthNoteReview | None = field(default=None, kw_only=True)
@@ -265,6 +270,7 @@ class AgentOrchestrator:
         clock: Clock,
         ids: IdGenerator,
         max_steps: int = MAX_STEPS_PER_TURN,
+        persistence: MessagePersistencePolicy = DEFAULT_PERSISTENCE,
     ) -> None:
         self._registry = registry
         self._sessions = sessions
@@ -272,6 +278,7 @@ class AgentOrchestrator:
         self._clock = clock
         self._ids = ids
         self._max_steps = max_steps
+        self._persistence = persistence
 
     # -- session handling ----------------------------------------------------
 
@@ -287,7 +294,9 @@ class AgentOrchestrator:
             "[degraded: deterministic rule routing, not a live LLM] "
         )
 
-    def start_session(self, *, patient_id: UUID) -> AgentSessionDTO:
+    def start_session(
+        self, *, patient_id: UUID, persistence: MessagePersistencePolicy | None = None
+    ) -> AgentSessionDTO:
         now = self._clock.now()
         session = AgentSessionDTO(
             id=self._ids.new_id(),
@@ -299,7 +308,7 @@ class AgentOrchestrator:
             updated_at=now,
             expires_at=now + SESSION_TTL,
         )
-        self._sessions.add(session)
+        (persistence or self._persistence).persist_session(self._sessions, session, create=True)
         return session
 
     def get_session(self, *, patient_id: UUID, session_id: UUID) -> AgentSessionDTO | None:
@@ -326,6 +335,8 @@ class AgentOrchestrator:
 
     def interval_enrollment_turn(self, *, patient_id: UUID, session_id: UUID, turn: AgentTurn) -> AgentReply | None:
         """Collect an interval anchor in this owned live session; never activate a plan."""
+        if not turn.persistence.can_save_task:
+            return None
         import re
 
         from ..contracts.agent_context import PendingIntervalEnrollment
@@ -353,17 +364,19 @@ class AgentOrchestrator:
         }
         if pending and not requested and not (clock or dates or default):
             # Changing topic/cancelling discards the pending action, not clinical history.
-            self._sessions.update(
+            turn.persistence.persist_session(
+                self._sessions,
                 session.model_copy(
                     update={"context": session.context.model_copy(update={"pending_interval_enrollment": None})}
-                )
+                ),
             )
             return None
         if pending and self._clock.now() >= pending.expires_at:
-            self._sessions.update(
+            turn.persistence.persist_session(
+                self._sessions,
                 session.model_copy(
                     update={"context": session.context.model_copy(update={"pending_interval_enrollment": None})}
-                )
+                ),
             )
             return AgentReply(
                 message="首次时间核对已过期，请重新填写计划。没有激活药物。"
@@ -405,15 +418,17 @@ class AgentOrchestrator:
             except ValueError:
                 pass  # Keep the explicit date request below; no invalid date is persisted.
         if pending.local_time and pending.course_start_date:
-            self._sessions.update(
+            turn.persistence.persist_session(
+                self._sessions,
                 session.model_copy(
                     update={"context": session.context.model_copy(update={"pending_interval_enrollment": None})}
-                )
+                ),
             )
             reply = self.handle_turn(
                 patient_id=patient_id,
                 session_id=session_id,
                 turn=AgentTurn(
+                    persistence=turn.persistence,
                     text=turn.text,
                     language=turn.language,
                     slots={
@@ -464,12 +479,58 @@ class AgentOrchestrator:
             language=turn.language,
             results=[],
         ).model_copy(update={"pending_interval_enrollment": pending})
-        self._sessions.update(session.model_copy(update={"context": context}))
+        turn.persistence.persist_session(self._sessions, session.model_copy(update={"context": context}))
         return AgentReply(
             message=message,
             intent=AgentIntent.MEDICATION_ENROLLMENT,
             session_id=session_id,
             session_state=session.state,
+        )
+
+    def _ephemeral_read_reply(self, patient_id: UUID, session: AgentSessionDTO, turn: AgentTurn) -> AgentReply:
+        """Fallback without business writes, retained context or response excerpts."""
+        from .patient_read_reply import medication_list_reply
+
+        results = []
+        if needs_urgent_help_notice(turn.text):
+            message = urgent_help_notice(turn.language)
+        elif any(
+            token in turn.text.casefold()
+            for token in (
+                "list my medications",
+                "show my medications",
+                "what medications",
+                "有哪些药",
+                "用药清单",
+            )
+        ):
+            result = self._registry.execute(
+                ToolName.LIST_ACTIVE_MEDICATIONS,
+                ListActiveMedicationsRequest(
+                    patient_id=patient_id,
+                    session_id=session.id,
+                    correlation_id=self._ids.new_id(),
+                    client_turn_id=str(turn.slots.get("client_turn_id", "no-save")),
+                    retain_content=False,
+                ),
+            )
+            results.append(result)
+            message = medication_list_reply(result, turn.language)
+        else:
+            message = (
+                "本次办理不保存。您可以继续整理资料；如需正式保存，请选择“现在保存药物并继续核对”。"
+                if turn.language == "zh"
+                else "This workflow is not being saved. "
+                "You can keep preparing the details; "
+                "choose Save this medication and continue review before saving a business change."
+            )
+        return AgentReply(
+            message=message,
+            intent=AgentIntent.CLARIFICATION,
+            session_id=session.id,
+            session_state=session.state,
+            tool_results=results,
+            mode="records_only",
         )
 
     def handle_turn(self, *, patient_id: UUID, session_id: UUID, turn: AgentTurn) -> AgentReply:
@@ -492,7 +553,7 @@ class AgentOrchestrator:
                 updated_at=now,
                 expires_at=now + SESSION_TTL,
             )
-            self._sessions.add(session)
+            turn.persistence.persist_session(self._sessions, session, create=True)
         if self._clock.now() >= session.expires_at:
             return AgentReply(
                 message=(
@@ -506,6 +567,8 @@ class AgentOrchestrator:
                 session_state="expired",
             )
 
+        if not turn.persistence.can_save_task:
+            return self._ephemeral_read_reply(patient_id, session, turn)
         if turn.photo_context is not None and not needs_urgent_help_notice(turn.text):
             message = turn.photo_context.patient_summary(turn.language)
             context = record_context(
@@ -516,7 +579,7 @@ class AgentOrchestrator:
                 language=turn.language,
                 results=[],
             )
-            self._sessions.update(session.model_copy(update={"context": context}))
+            turn.persistence.persist_session(self._sessions, session.model_copy(update={"context": context}))
             return AgentReply(
                 message=message, intent=AgentIntent.CLARIFICATION, session_id=session_id, session_state=session.state
             )
@@ -531,7 +594,7 @@ class AgentOrchestrator:
                 language=turn.language,
                 results=[],
             )
-            self._sessions.update(session.model_copy(update={"context": context}))
+            turn.persistence.persist_session(self._sessions, session.model_copy(update={"context": context}))
             return AgentReply(
                 message=message,
                 intent=AgentIntent.CLARIFICATION,
@@ -551,6 +614,7 @@ class AgentOrchestrator:
             if len(matches) == 1 and clarification.requested_intake_status:
                 selected = matches[0]
                 turn = AgentTurn(
+                    persistence=turn.persistence,
                     text=turn.text,
                     language=turn.language,
                     slots={
@@ -567,6 +631,7 @@ class AgentOrchestrator:
             and not turn.slots.get("regimen_id")
         ):
             turn = AgentTurn(
+                persistence=turn.persistence,
                 text=turn.text,
                 language=turn.language,
                 slots={
@@ -598,10 +663,11 @@ class AgentOrchestrator:
                 results=[],
             )
             context = context.model_copy(update={"awaiting_clarification": None})
-            self._sessions.update(
+            turn.persistence.persist_session(
+                self._sessions,
                 session.model_copy(
                     update={"context": context, "state": "collecting", "state_version": session.state_version + 1}
-                )
+                ),
             )
             return AgentReply(message=message, intent=intent, session_id=session.id, session_state="collecting")
         confirming_report = intent == AgentIntent.DOSE_SELF_REPORT and bool(turn.slots.get("confirm_challenge_id"))
@@ -626,7 +692,7 @@ class AgentOrchestrator:
                 else session.state_version + 1,
             }
         )
-        self._sessions.update(session)
+        turn.persistence.persist_session(self._sessions, session)
 
         results: list[ToolResult] = []
         message: str
@@ -634,6 +700,8 @@ class AgentOrchestrator:
         pending_report = None
 
         for step_index in range(self._max_steps):
+            if not turn.persistence.can_save_task:
+                return self._ephemeral_read_reply(patient_id, session, turn)
             planned = self._plan(intent, turn, session, results)
             if planned is None:
                 break
@@ -644,12 +712,16 @@ class AgentOrchestrator:
             if result.requires_confirmation:
                 requires_confirmation = True
                 if not reuse_pending:
-                    session = self._mark_awaiting_confirmation(session)
+                    session = self._mark_awaiting_confirmation(session, turn.persistence)
                 if isinstance(request, RecordSelfReportRequest) and request.confirmed_challenge_id is None:
                     try:
                         issued = self._registry.prepare_self_report_confirmation(
-                            request, session_state_version=session.state_version
+                            request,
+                            session_state_version=session.state_version,
+                            persistence=turn.persistence,
                         )
+                        if issued is None:
+                            return self._ephemeral_read_reply(patient_id, session, turn)
                         pending_report = PendingSelfReportDTO(
                             challenge_id=issued.challenge.id,
                             occurrence_id=issued.challenge.occurrence_id,
@@ -715,7 +787,7 @@ class AgentOrchestrator:
             results=results,
         )
         context = context.model_copy(update={"awaiting_clarification": awaiting, "active_task": intent.value})
-        self._sessions.update(session.model_copy(update={"context": context}))
+        turn.persistence.persist_session(self._sessions, session.model_copy(update={"context": context}))
         return AgentReply(
             message=message,
             intent=intent,
@@ -756,6 +828,9 @@ class AgentOrchestrator:
         executed = {r.tool_name for r in done}
         base = {
             "patient_id": session.patient_id,
+            "retain_content": turn.persistence.save_context,
+            "content_guard": turn.persistence.guard,
+            "trace_writer": turn.persistence.trace_writer,
             "session_id": session.id,
             "correlation_id": turn.slots.get("correlation_id", self._ids.new_id()),
             "client_turn_id": str(turn.slots.get("client_turn_id", "turn-1")),
@@ -941,7 +1016,11 @@ class AgentOrchestrator:
         # that would produce a plausible-but-irrelevant answer.
         return None
 
-    def _mark_awaiting_confirmation(self, session: AgentSessionDTO) -> AgentSessionDTO:
+    def _mark_awaiting_confirmation(
+        self,
+        session: AgentSessionDTO,
+        persistence: MessagePersistencePolicy | None = None,
+    ) -> AgentSessionDTO:
         updated = session.model_copy(
             update={
                 "state": "awaiting_confirmation",
@@ -949,7 +1028,7 @@ class AgentOrchestrator:
                 "state_version": session.state_version + 1,
             }
         )
-        self._sessions.update(updated)
+        (persistence or self._persistence).persist_session(self._sessions, updated)
         return updated
 
     @staticmethod

@@ -1,5 +1,7 @@
 """Patient JWT SQL operation; storage cleanup uses the Storage API, not SQL."""
 
+from contextlib import contextmanager
+from copy import deepcopy
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -7,7 +9,7 @@ from pydantic import ValidationError as SchemaError
 
 from ..contracts.draft_deletion import DraftDeletionResult, DraftKind
 from ..contracts.medication_evidence import PrivateImageStore
-from ..domain.errors import NotFoundError, ProviderUnavailableError, ValidationError
+from ..domain.errors import NotFoundError, ProviderUnavailableError, StaleVersionError, ValidationError
 from .evidence_repos import MemoryEvidenceRepository
 from .memory_repos import InMemoryStore
 from .supabase_data import SupabaseDataClient
@@ -49,9 +51,30 @@ class SupabaseDraftDeletion:
                     "/rest/v1/rpc/ack_draft_image_cleanup",
                     body={"p_kind": kind, "p_id": str(target), "p_path": path},
                 )
-            except ProviderUnavailableError:
+            except (ProviderUnavailableError, StaleVersionError):
                 pending = True
         return DraftDeletionResult(medication_deleted=receipt.medication_deleted, cleanup_pending=pending)
+
+
+class SupabaseDraftDeletionReceipts:
+    """Observation only: never repeats deletion or acknowledges physical cleanup."""
+
+    def __init__(self, client: SupabaseDataClient):
+        self._client = client
+
+    def receipt(self, owner: UUID, kind: DraftKind, target: UUID) -> DraftDeletionResult | None:
+        self._client.check_patient(owner)
+        if kind not in {"draft", "source"}:
+            raise ValidationError("Choose a supported unfinished registration")
+        raw = self._client.request(
+            "POST", "/rest/v1/rpc/assistant_draft_deletion_result", body={"p_kind": kind, "p_target": str(target)}
+        )
+        if raw is None:
+            return None
+        try:
+            return DraftDeletionResult.model_validate(raw)
+        except (ValueError, TypeError):
+            raise ProviderUnavailableError("Actual native deletion receipt is unavailable") from None
 
 
 class MemoryDraftDeletion:
@@ -60,7 +83,49 @@ class MemoryDraftDeletion:
     def __init__(self, store: InMemoryStore, evidence: MemoryEvidenceRepository, storage: PrivateImageStore):
         self._store, self._evidence, self._storage = store, evidence, storage
 
-    def delete(self, owner: UUID, kind: DraftKind, target: UUID) -> DraftDeletionResult:
+    def receipt(self, owner: UUID, kind: DraftKind, target: UUID) -> DraftDeletionResult | None:
+        record = self._store.draft_deletions.get((owner, kind, target))
+        return (
+            DraftDeletionResult(medication_deleted=record["medication_deleted"], cleanup_pending=bool(record["paths"]))
+            if record is not None
+            else None
+        )
+
+    @contextmanager
+    def local_transaction(self):
+        with self._store.clinical.lock, self._evidence.local_transaction():
+            tables = [
+                self._store.challenges,
+                self._store.regimens,
+                self._store.source_fields,
+                self._store.sources,
+                self._store.medications,
+            ]
+            snapshots = [deepcopy(table.rows) for table in tables]
+            revisions, receipts = deepcopy(self._store.clinical.revisions), deepcopy(self._store.draft_deletions)
+            try:
+                yield
+            except BaseException:
+                for table, snapshot in zip(tables, snapshots, strict=True):
+                    table.rows = snapshot
+                self._store.clinical.revisions.clear()
+                self._store.clinical.revisions.update(revisions)
+                self._store.draft_deletions.clear()
+                self._store.draft_deletions.update(receipts)
+                raise
+
+    def current_version(self, owner: UUID, kind: DraftKind, target: UUID) -> int | None:
+        if kind == "source":
+            row = self._evidence.get(owner, "tasks", target)
+            return row.version if row is not None else None
+        row = self._store.regimens.get((owner, target))
+        return row.version_no if row is not None else None
+
+    def delete_metadata(self, owner: UUID, kind: DraftKind, target: UUID) -> DraftDeletionResult:
+        with self.local_transaction():
+            return self._stage_delete(owner, kind, target)
+
+    def _stage_delete(self, owner: UUID, kind: DraftKind, target: UUID) -> DraftDeletionResult:
         key = (owner, kind, target)
         if key not in self._store.draft_deletions:
             task = self._evidence.get(owner, "tasks", target) if kind == "source" else None
@@ -128,7 +193,11 @@ class MemoryDraftDeletion:
             if whole:
                 self._store.medications.pop((owner, med), None)
             self._store.draft_deletions[key] = {"medication_deleted": whole, "paths": paths}
-        receipt = self._store.draft_deletions[key]
+        return self.receipt(owner, kind, target)
+
+    def delete(self, owner: UUID, kind: DraftKind, target: UUID) -> DraftDeletionResult:
+        self.delete_metadata(owner, kind, target)
+        receipt = self._store.draft_deletions[(owner, kind, target)]
         for path in list(receipt["paths"]):
             try:
                 self._storage.delete(path)

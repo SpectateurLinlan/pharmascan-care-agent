@@ -4,6 +4,7 @@ import {useLanguage} from '../language';
 import {regimenStatusLabelKey} from '../regimenHistoryModel';
 import {ErrorNotice} from './primitives';
 import {BottomSheet} from './BottomSheet';
+import {StopPlanReview} from './StopPlanReview';
 import {InventoryPanel} from './InventoryPanel';
 import {PrivateEvidencePhoto} from './PrivateEvidencePhoto';
 import {Icon} from './Icon';
@@ -153,7 +154,7 @@ export function MedicationDetail({row,summary,onHistory,onGallery,onCheck,onEdit
   </section>
 
   <section className="medication-regimen-management" aria-labelledby="regimen-management-title"><h2 id="regimen-management-title">{t('Regimen management')}</h2>{row.state==='active'?<><p>{t('Stopping tracking keeps past medication records. Follow your clinician’s instructions about your medicine.')}</p><button className="danger" onClick={()=>{setError(null);setStopping(true);}}>{t('Stop tracking this regimen')}</button></>:<p>{t(status)}</p>}</section>
-  {stopping?<BottomSheet title={t('Stop this recorded plan?')} busy={busy} onCancel={()=>setStopping(false)}><p>{t("This stops reminders in MediThread and keeps past records. It does not advise changing your medication. Follow your clinician's instructions.")}</p><p>{t('Previously imported calendar events must be updated or removed in your calendar app.')}</p><button className="primary" disabled={busy} onClick={()=>{setBusy(true);void api.endPlan(row.regimen_id).then(()=>{setStopping(false);onChanged?.();}).catch(setError).finally(()=>setBusy(false));}}>{t('Confirm stop')}</button>{error?<ErrorNotice error={error}/>:null}<button disabled={busy} onClick={()=>setStopping(false)}>{t('Cancel')}</button></BottomSheet>:null}
+  {stopping?<StopPlanReview busy={busy} error={error} onCancel={()=>setStopping(false)} onConfirm={()=>{setBusy(true);void api.endPlan(row.regimen_id).then(()=>{setStopping(false);onChanged?.();}).catch(setError).finally(()=>setBusy(false));}}/>:null}
   {previewPhoto?<BottomSheet title={t('Photo preview')} onCancel={()=>setPreviewPhoto(null)}><div className="medication-photo-preview"><PrivateEvidencePhoto photo={previewPhoto}/><p>{t(previewPhoto.image_kind==='loose_pill'?'Loose pill':previewPhoto.image_kind==='blister'?'Blister':'Packaging or source')} · {new Date(previewPhoto.created_at).toLocaleDateString(locale,{timeZone:preferences.timezone})}</p><p>{t('This image is linked to this medication as reference evidence. It does not confirm ingestion.')}</p><button onClick={()=>setPreviewPhoto(null)}>{t('Close photo preview')}</button></div></BottomSheet>:null}
 
   {error&&!stopping?<ErrorNotice error={error}/>:null}

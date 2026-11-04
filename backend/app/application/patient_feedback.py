@@ -17,3 +17,6 @@ class FeedbackService:
         return self._repository.save(
             PatientFeedback(**payload.model_dump(), patient_id=patient_id, created_at=self._clock.now())
         )
+
+    def get(self, patient_id: UUID, feedback_id: UUID) -> PatientFeedback | None:
+        return self._repository.get(patient_id, feedback_id)

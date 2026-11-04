@@ -95,6 +95,11 @@ class Settings:
     auth_mode: str
     source: str
     model_provider: str = "deterministic"
+    assistant_knowledge_v2_enabled: bool = False
+    assistant_workflows_enabled: bool = False
+    assistant_native_media_enabled: bool = False
+    assistant_progress_enabled: bool = False
+    assistant_evidence_dsn: str | None = field(default=None, repr=False)
     gemini_api_key: str | None = field(default=None, repr=False)
     gemini_model: str = "gemini-3.5-flash-lite"
     gemini_thinking_level: str = "low"
@@ -170,6 +175,15 @@ class Settings:
             auth_mode=(read("AUTH_MODE") or "demo").strip().lower(),
             source=str(path) if path is not None else "process_environment",
             model_provider=model_provider,
+            assistant_knowledge_v2_enabled=(read("ASSISTANT_KNOWLEDGE_V2_ENABLED") or "").lower()
+            in {"1", "true", "yes"},
+            assistant_workflows_enabled=(read("ASSISTANT_WORKFLOWS_ENABLED") or "").lower() in {"1", "true", "yes"},
+            assistant_native_media_enabled=(read("ASSISTANT_NATIVE_MEDIA_ENABLED") or "").lower()
+            in {"1", "true", "yes"},
+            assistant_progress_enabled=(read("ASSISTANT_PROGRESS_ENABLED") or "").lower() in {"1", "true", "yes"},
+            # Evidence credentials are explicit process configuration only; the
+            # ordinary dotenv/database URL must never supply a privileged fallback.
+            assistant_evidence_dsn=(os.environ.get("ASSISTANT_EVIDENCE_DSN") or "").strip() or None,
             gemini_api_key=read("GEMINI_API_KEY"),
             gemini_model=read("GEMINI_MODEL") or "gemini-3.5-flash-lite",
             demo_agent_daily_turn_limit=int(limit),

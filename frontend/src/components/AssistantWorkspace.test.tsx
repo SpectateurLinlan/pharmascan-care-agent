@@ -4,6 +4,56 @@ import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/reac
 import {StrictMode,useState} from 'react';
 import {AssistantScreen} from './AssistantScreen';
 import {api,type AgentMessageResponse} from '../api/client';
+import * as workflowTransport from '../api/assistantWorkflows';
+import * as streamTransport from '../api/assistantWorkflowStream';
+
+it('reconciles a disconnected running stream without enabling a dead stop or repeating the POST',async()=>{
+ const manifest=vi.spyOn(workflowTransport.workflowApi,'capabilities').mockResolvedValue({contract_version:1,enabled:true,progress_enabled:true,capabilities:[]});
+ const list=vi.spyOn(workflowTransport.workflowApi,'list').mockResolvedValue([]);
+ const send=vi.spyOn(streamTransport,'sendWorkflowStream').mockImplementation(async(_input,runId)=>{throw new streamTransport.WorkflowStreamError('running',runId);});
+ const status=vi.spyOn(workflowTransport,'readWorkflowRun').mockImplementation(async runId=>({status:'cancelled',metadata:{run_id:runId},events:[]}));
+ try{
+  render(<Host/>);const input=screen.getByRole('textbox');
+  fireEvent.change(input,{target:{value:'DEMO interrupted request'}});fireEvent.keyDown(input,{key:'Enter'});
+  const check=await screen.findByRole('button',{name:'Check processing status'});
+  expect(screen.queryByRole('button',{name:'Stop processing'})).toBeNull();
+  expect(input).toHaveProperty('value','DEMO interrupted request');
+  fireEvent.click(check);await screen.findByText('Processing stopped. Completed changes remain saved.');
+  expect(send).toHaveBeenCalledOnce();expect(api.sendMessage).not.toHaveBeenCalled();expect(status).toHaveBeenCalledOnce();
+ }finally{manifest.mockRestore();list.mockRestore();send.mockRestore();status.mockRestore();}
+});
+
+it('stops an owned recovered running task after its stream controller is gone',async()=>{
+ const manifest=vi.spyOn(workflowTransport.workflowApi,'capabilities').mockResolvedValue({contract_version:1,enabled:true,progress_enabled:true,capabilities:[]});
+ const list=vi.spyOn(workflowTransport.workflowApi,'list').mockResolvedValue([]);
+ const send=vi.spyOn(streamTransport,'sendWorkflowStream').mockImplementation(async(_input,runId)=>{throw new streamTransport.WorkflowStreamError('unknown',runId);});
+ const status=vi.spyOn(workflowTransport,'readWorkflowRun').mockImplementation(async runId=>({status:'running',metadata:{run_id:runId},events:[]}));
+ const cancel=vi.spyOn(workflowTransport,'cancelWorkflowRun').mockImplementation(async runId=>({status:'cancelled',metadata:{run_id:runId},events:[]}));
+ try{
+  render(<Host/>);const input=screen.getByRole('textbox');
+  fireEvent.change(input,{target:{value:'DEMO recovered task'}});fireEvent.keyDown(input,{key:'Enter'});
+  fireEvent.click(await screen.findByRole('button',{name:'Check processing status'}));
+  fireEvent.click(await screen.findByRole('button',{name:'Stop processing'}));
+  await waitFor(()=>expect(cancel).toHaveBeenCalledOnce());
+  expect(cancel).toHaveBeenCalledWith(vi.mocked(send).mock.calls[0]![1]);
+  expect(send).toHaveBeenCalledOnce();expect(api.sendMessage).not.toHaveBeenCalled();
+ }finally{manifest.mockRestore();list.mockRestore();send.mockRestore();status.mockRestore();cancel.mockRestore();}
+});
+
+it.each(['absent','unknown-version'])('uses the legacy message API with an %s workflow contract',async contract=>{
+ const manifest=vi.spyOn(workflowTransport.workflowApi,'capabilities');
+ if(contract==='absent')manifest.mockRejectedValue(new Error('DEMO old backend'));
+ else manifest.mockResolvedValue({contract_version:2,enabled:true,capabilities:[]} as unknown as workflowTransport.WorkflowCapabilities);
+ const stream=vi.spyOn(streamTransport,'sendWorkflowStream');
+ const current=vi.spyOn(workflowTransport.workflowApi,'sendMessage');
+ try{
+  vi.mocked(api.sendMessage).mockResolvedValue(reply);
+  render(<Host/>);const input=screen.getByRole('textbox');
+  fireEvent.change(input,{target:{value:'DEMO compatibility'}});fireEvent.keyDown(input,{key:'Enter'});
+  await screen.findByText('DEMO answer');
+  expect(api.sendMessage).toHaveBeenCalledOnce();expect(stream).not.toHaveBeenCalled();expect(current).not.toHaveBeenCalled();
+ }finally{manifest.mockRestore();stream.mockRestore();current.mockRestore();}
+});
 vi.mock('../api/client',()=>({ApiError:class extends Error{},api:{recentTurns:vi.fn(),sendMessage:vi.fn(),newConversation:vi.fn(),conversationHistory:vi.fn(),agentUsage:vi.fn()}}));
 beforeEach(()=>{localStorage.removeItem('pharmascan.agent-session');vi.mocked(api.recentTurns).mockResolvedValue([]);vi.mocked(api.conversationHistory).mockResolvedValue({entries:[],next_before:null});vi.mocked(api.agentUsage).mockResolvedValue({llm_user_turns:2,model_requests:2,limit:20,usage_date:'2026-10-18',next_reset_at:'2026-10-19T00:00:00+08:00'});});
 afterEach(()=>{cleanup();vi.resetAllMocks();});
@@ -20,7 +70,8 @@ it('edits inline without opening, sends once, and displays the pending patient m
  let finish!:(value:AgentMessageResponse)=>void;vi.mocked(api.sendMessage).mockReturnValue(new Promise(resolve=>{finish=resolve;}));render(<Host/>);
  const input=screen.getByRole('textbox');fireEvent.focus(input);fireEvent.change(input,{target:{value:'DEMO question'}});expect(screen.queryByRole('dialog')).toBeNull();
  fireEvent.keyDown(input,{key:'Enter'});fireEvent.keyDown(input,{key:'Enter'});
- expect(api.sendMessage).toHaveBeenCalledOnce();expect(screen.getByText('DEMO question')).toBeTruthy();expect(screen.queryByRole('dialog')).toBeNull();
+ expect(screen.getByText('DEMO question')).toBeTruthy();expect(screen.queryByRole('dialog')).toBeNull();
+ await waitFor(()=>expect(api.sendMessage).toHaveBeenCalledOnce());
  await act(async()=>finish(reply));await screen.findByText('DEMO answer');expect(screen.getAllByText('DEMO question')).toHaveLength(1);
  fireEvent.click(screen.getByRole('button',{name:'Open full chat'}));expect(document.querySelector('.conversation-workspace')).toBeTruthy();expect(screen.getByText('DEMO answer')).toBeTruthy();
  expect(screen.queryByLabelText('Save new conversations')).toBeNull();expect(api.conversationHistory).not.toHaveBeenCalled();

@@ -1,5 +1,6 @@
 """Patient UX preferences; language is not a clinical regimen instruction."""
 
+from contextlib import AbstractContextManager
 from datetime import datetime
 from typing import Literal, Protocol
 from uuid import UUID
@@ -53,3 +54,6 @@ class PreferenceUpdate(BaseModel):
 class PreferenceRepository(Protocol):
     def get(self, patient_id: UUID) -> Preferences: ...
     def save(self, patient_id: UUID, changes: PreferenceUpdate) -> Preferences: ...
+    def history_fence(self) -> AbstractContextManager[None]:
+        """Local history checks/publication serialize with native preference saves."""
+        ...

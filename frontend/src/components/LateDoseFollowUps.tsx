@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState,type FormEvent} from 'react';
 import {api} from '../api/client';
-import type {DoseFollowUp,DoseFollowUps,LateReason,LateReportChallenge,DoseReportAudit,LateStatus} from '../api/doseFollowUps';
+import type {DoseFollowUp,DoseFollowUps,LateReason,LateReportChallenge,LateReportInput,LateReportRecord,DoseReportAudit,LateStatus} from '../api/doseFollowUps';
 import {useLanguage} from '../language';
 import {patientInstant} from '../patientDateTime';
 import {careTaskLocalDate} from '../careTaskCalendar';
@@ -38,11 +38,22 @@ export function LateDoseFollowUps({enabled=true,todayOnly=false,showHeading=true
   {selected?<LateDoseSheet item={selected} zone={zone} onCancel={()=>choose(null)} onSaved={()=>{choose(null);setSaved(true);setRetry(value=>value+1);window.dispatchEvent(new Event('pharmascan:reminder-refresh'));}}/>:null}
  </section>;
 }
-function LateDoseSheet({item,zone,onCancel,onSaved}:{item:DoseFollowUp;zone:string;onCancel:()=>void;onSaved:()=>void}){
- const {language,t}=useLanguage(),c=careCopy(language);const [status,setStatus]=useState<LateStatus|null>(item.intake_status),[date,setDate]=useState(''),[time,setTime]=useState(''),[reason,setReason]=useState<LateReason|''>(''),[notes,setNotes]=useState('');
+export interface LateReportPatientPort {
+ history:(id:string)=>Promise<DoseReportAudit>;
+ prepare:(id:string,values:LateReportInput)=>Promise<LateReportChallenge>;
+ confirm:(id:string,challenge:LateReportChallenge)=>Promise<LateReportRecord>;
+}
+export interface LateReportDraft {status:LateStatus|null;date:string;time:string;reason:LateReason|'';notes:string}
+const defaultLatePort:LateReportPatientPort={history:id=>api.lateReportHistory(id),prepare:(id,values)=>api.prepareLateReport(id,values),confirm:(id,summary)=>api.confirmLateReport(id,summary)};
+export function LateDoseSheet({item,zone,onCancel,onSaved,patient=defaultLatePort,onCheckResult,draft,onDraftChange}:{item:DoseFollowUp;zone:string;onCancel:()=>void;onSaved:()=>void|Promise<void>;patient?:LateReportPatientPort;onCheckResult?:(()=>Promise<void>)|undefined;draft?:LateReportDraft|null;onDraftChange?:(draft:LateReportDraft)=>void}){
+ const {language,t}=useLanguage(),c=careCopy(language);const [status,setStatus]=useState<LateStatus|null>(draft?.status??item.intake_status),[date,setDate]=useState(draft?.date??''),[time,setTime]=useState(draft?.time??''),[reason,setReason]=useState<LateReason|''>(draft?.reason??''),[notes,setNotes]=useState(draft?.notes??'');
+ const draftCallback=useRef(onDraftChange);draftCallback.current=onDraftChange;
+ useEffect(()=>{draftCallback.current?.({status,date,time,reason,notes});},[status,date,time,reason,notes]);
  const [challenge,setChallenge]=useState<LateReportChallenge|null>(null),[history,setHistory]=useState<DoseReportAudit>({original:null,corrections:[]}),[historyError,setHistoryError]=useState<unknown>(null),[error,setError]=useState<unknown>(null),[issues,setIssues]=useState<Record<string,string>>({}),[busy,setBusy]=useState(false);
- const key=useRef(crypto.randomUUID()),form=useRef<HTMLFormElement>(null);
- useEffect(()=>{let live=true;void api.lateReportHistory(item.occurrence_id).then(value=>{if(live)setHistory(value);}).catch(caught=>{if(live)setHistoryError(caught);});return()=>{live=false;};},[item.occurrence_id]);
+ const [uncertain,setUncertain]=useState(false);
+ const key=useRef(crypto.randomUUID()),form=useRef<HTMLFormElement>(null),sending=useRef(false),summaryHeading=useRef<HTMLHeadingElement>(null);
+ useEffect(()=>{if(challenge)summaryHeading.current?.focus();},[challenge]);
+ useEffect(()=>{let live=true;void patient.history(item.occurrence_id).then(value=>{if(live)setHistory(value);}).catch(caught=>{if(live)setHistoryError(caught);});return()=>{live=false;};},[item.occurrence_id,patient]);
  const when=(value:string)=>new Date(value).toLocaleString(language==='zh'?'zh-CN':'en-SG',{timeZone:zone});
  const reasons:Record<LateReason,string>={forgot_to_record:c('Forgot to record','忘记记录'),app_unavailable:c('Could not use the app','当时无法使用应用'),unsure_time:c('Do not remember the time','不记得具体时间'),correcting_record:c('Correcting a previous report','更正之前的自述'),other:c('Other','其他')};
  async function review(event:FormEvent){event.preventDefault();const errors:Record<string,string>={};const actual=status==='reported_taken'&&(date||time)?patientInstant(date,time,zone):null;
@@ -51,14 +62,16 @@ function LateDoseSheet({item,zone,onCancel,onSaved}:{item:DoseFollowUp;zone:stri
   if(status==='reported_taken'&&(date||time)&&(!actual||Date.parse(actual)>Date.now()))errors.date=c('Enter a valid past date and time, or leave both empty if unknown.','请填写有效的过去日期和时间；不记得时可同时留空。');
   if(notes.length>1000)errors.notes=c('Use at most 1000 characters.','备注最多1000字。');
   setIssues(errors);if(Object.keys(errors).length){form.current?.querySelector<HTMLElement>(`[name="${Object.keys(errors)[0]}"]`)?.focus();return;}
-  setBusy(true);setError(null);try{setChallenge(await api.prepareLateReport(item.occurrence_id,{id:key.current,intake_status:status!,actual_administration_at:actual,reason:reason as LateReason,notes,expected_report_id:item.report_id}));}catch(caught){setError(caught);}finally{setBusy(false);}
+  if(sending.current||uncertain)return;sending.current=true;
+  setBusy(true);setError(null);try{setChallenge(await patient.prepare(item.occurrence_id,{id:key.current,intake_status:status!,actual_administration_at:actual,reason:reason as LateReason,notes,expected_report_id:item.report_id}));}catch(caught){setError(caught);}finally{sending.current=false;setBusy(false);}
  }
- async function confirm(){if(!challenge||busy)return;setBusy(true);setError(null);try{await api.confirmLateReport(item.occurrence_id,challenge);onSaved();}catch(caught){setError(caught);}finally{setBusy(false);}}
+ async function confirm(){if(!challenge||busy||sending.current||uncertain)return;sending.current=true;setBusy(true);setError(null);try{await patient.confirm(item.occurrence_id,challenge);await onSaved();}catch(caught){setError(caught);if(onCheckResult)setUncertain(true);}finally{sending.current=false;setBusy(false);}}
  const fieldError=(name:string)=>issues[name]?<span role="alert" id={`late-${name}`} className="followup-error">{issues[name]}</span>:null;
  return <BottomSheet className="care-flow" title={`${c('Report dose status','补记服药情况')} · ${item.medication_name}`} onCancel={onCancel} busy={busy}>
   <p>{c('Scheduled','计划服用')}: {when(item.due_at)} ({zone})</p><p>{item.strength_text} · {c('Plan version','计划版本')} {item.version_no??1}{item.dose_amount!==null&&item.dose_unit?` · ${item.dose_amount} ${t(item.dose_unit)}`:''}</p>
   {error?<FollowUpError error={error}/>:null}
-  {challenge?<><h3>{c('Review your report','请核对您的自述')}</h3><p>{careLabel(challenge.proposed.intake_status,language,t)}</p><p>{c('Actual administration time','实际服用时间')}: {challenge.proposed.actual_administration_at?when(challenge.proposed.actual_administration_at):c('Not provided','未提供')}</p><p>{reasons[challenge.proposed.reason]}</p>{challenge.proposed.notes?<p>{challenge.proposed.notes}</p>:null}<p>{c('The recording time is saved on submission. Your original report is preserved. This is a patient report, not proof of ingestion.','提交时将保存记录时间，并保留原有自述。这是患者自述，不代表已证实吞服。')}</p><p>{c('No additional dose is recommended by this workflow.','此流程不会建议您额外服药。')}</p><div className="followup-actions"><button disabled={busy} onClick={()=>{key.current=crypto.randomUUID();setChallenge(null);}}>{c('Back to edit','返回编辑')}</button><button className="primary" disabled={busy||Date.parse(challenge.expires_at)<=Date.now()} onClick={()=>void confirm()}>{c('Confirm report','确认记录')}</button></div></>:<form ref={form} noValidate onSubmit={event=>void review(event)}>
+  {uncertain?<><p role="status">{c('The report result needs checking before another submission.','自述结果仍需核查，请先核查再提交。')}</p><button type="button" disabled={busy} onClick={async()=>{if(sending.current)return;sending.current=true;setBusy(true);try{await onCheckResult?.();}catch(caught){setError(caught);}finally{sending.current=false;setBusy(false);}}}>{c('Check report result','核查自述结果')}</button></>:null}
+  {challenge?<><h3 ref={summaryHeading} tabIndex={-1}>{c('Review your report','请核对您的自述')}</h3><p>{careLabel(challenge.proposed.intake_status,language,t)}</p><p>{c('Actual administration time','实际服用时间')}: {challenge.proposed.actual_administration_at?when(challenge.proposed.actual_administration_at):c('Not provided','未提供')}</p><p>{reasons[challenge.proposed.reason]}</p>{challenge.proposed.notes?<p>{challenge.proposed.notes}</p>:null}<p>{c('The recording time is saved on submission. Your original report is preserved. This is a patient report, not proof of ingestion.','提交时将保存记录时间，并保留原有自述。这是患者自述，不代表已证实吞服。')}</p><p>{c('No additional dose is recommended by this workflow.','此流程不会建议您额外服药。')}</p><div className="followup-actions"><button disabled={busy||uncertain} onClick={()=>{key.current=crypto.randomUUID();setChallenge(null);}}>{c('Back to edit','返回编辑')}</button><button className="primary" disabled={busy||uncertain||Date.parse(challenge.expires_at)<=Date.now()} onClick={()=>void confirm()}>{c('Confirm report','确认记录')}</button></div></>:<form ref={form} noValidate onSubmit={event=>void review(event)}>
    <fieldset aria-describedby={issues.status?'late-status':undefined}><legend>{c('What happened?','本次实际情况')}</legend>{(['reported_taken','reported_not_taken','unsure'] as const).map(value=><label key={value}><input type="radio" name="status" checked={status===value} onChange={()=>setStatus(value)}/>{t(value)}</label>)}</fieldset>{fieldError('status')}
    {status==='reported_taken'?<><p>{c('Actual administration time, if remembered (optional)','实际服用时间（如记得，可选）')}</p><div className="followup-grid"><label className="field">{c('Administration date','实际服用日期')}<input type="date" name="date" value={date} onChange={e=>setDate(e.target.value)} aria-invalid={!!issues.date} aria-describedby={issues.date?'late-date':undefined}/></label><label className="field">{c('Administration time','实际服用时刻')}<input type="time" value={time} onChange={e=>setTime(e.target.value)}/></label></div>{fieldError('date')}</>:null}
    <label className="field">{c('Reason (required)','补记或更正原因（必填）')}<select name="reason" value={reason} onChange={e=>setReason(e.target.value as LateReason|'')} aria-invalid={!!issues.reason} aria-describedby={issues.reason?'late-reason':undefined}><option value="">{c('Choose a reason','请选择原因')}</option>{Object.entries(reasons).map(([value,label])=><option value={value} key={value}>{label}</option>)}</select>{fieldError('reason')}</label>

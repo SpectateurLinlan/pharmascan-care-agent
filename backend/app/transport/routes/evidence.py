@@ -2,9 +2,9 @@
 
 from typing import Literal
 from urllib.parse import quote
-from uuid import UUID
+from uuid import UUID, uuid5
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from pydantic import BaseModel, ConfigDict
 from starlette.concurrency import run_in_threadpool
 
@@ -20,6 +20,7 @@ from ...domain.errors import ProviderUnavailableError, ValidationError
 from ...timing import timed_stage
 from ..auth import AuthenticatedPrincipal
 from ..deps import ApplicationContainer, get_container, get_principal
+from ..media_binding import bound_media
 
 router = APIRouter(prefix="/api/evidence", tags=["patient-evidence"])
 
@@ -31,6 +32,12 @@ class ReviewRequest(BaseModel):
     distinct_product_confirmed: bool = False
     product_category: Literal["unknown", "POM", "P", "GSL", "supplement"] = "unknown"
     replace_active_plan: bool = False
+
+
+class SavedOriginalRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    attachment_id: UUID
+    confirmed: Literal[True]
 
 
 class PhotoManagementRequest(BaseModel):
@@ -115,6 +122,8 @@ async def attach(
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ):
+    if "x-assistant-task" in request.headers or "x-assistant-revision" in request.headers:
+        raise ValidationError("Use the saved-original patient action for an Assistant source task")
     content = await image_content(request)
     return await run_in_threadpool(
         container.evidence_enrollment.attach,
@@ -129,13 +138,58 @@ async def attach(
     )
 
 
+@router.post("/tasks/{task_id}/saved-original", response_model=EnrollmentTask)
+def save_original(
+    task_id: UUID,
+    payload: SavedOriginalRequest,
+    response: Response,
+    assistant_task: UUID = Header(alias="X-Assistant-Task"),
+    assistant_revision: int = Header(alias="X-Assistant-Revision", ge=1),
+    principal: AuthenticatedPrincipal = Depends(get_principal),
+    container: ApplicationContainer = Depends(get_container),
+):
+    if container.assistant_sources is None or container.assistant_attachments is None:
+        raise ProviderUnavailableError("Assistant source saving is unavailable")
+    if container.assistant_medications and container.assistant_medications.handles_source_task(
+        principal.patient_id, assistant_task
+    ):
+        response.headers["Cache-Control"] = "no-store"
+        return container.assistant_medications.save_source(
+            principal.patient_id, assistant_task, assistant_revision, task_id, payload.attachment_id
+        )
+    context = container.assistant_attachments.context(principal.patient_id, assistant_task, assistant_revision)
+    # Server-derived immutable binding; neither provider assertions nor a result ID
+    # can be supplied by the caller. Retrying a lost response uses the same receipt.
+    key = uuid5(assistant_task, f"source-save:{assistant_revision}:{task_id}:{payload.attachment_id}")
+    result = container.assistant_sources.save(context, task_id, payload.attachment_id, key)
+    response.headers["Cache-Control"] = "no-store"
+    return result
+
+
 @router.post("/tasks/{task_id}/review", response_model=EnrollmentTask)
 def review(
     task_id: UUID,
     payload: ReviewRequest,
+    assistant_task: UUID | None = Header(default=None, alias="X-Assistant-Task"),
+    assistant_revision: int | None = Header(default=None, ge=1, alias="X-Assistant-Revision"),
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ):
+    if assistant_task is not None or assistant_revision is not None:
+        if assistant_task is None or assistant_revision is None:
+            raise ValidationError("Source review needs its current Assistant task and revision")
+        if container.assistant_sources is None or container.assistant_attachments is None:
+            raise ProviderUnavailableError("Assistant source review is unavailable")
+        if container.assistant_medications and container.assistant_medications.handles_source_task(
+            principal.patient_id, assistant_task
+        ):
+            return container.assistant_medications.review_registration(
+                principal.patient_id, assistant_task, assistant_revision, task_id, payload
+            )
+        context = container.assistant_attachments.context(principal.patient_id, assistant_task, assistant_revision)
+        return container.assistant_sources.review(
+            context, task_id, draft=payload.draft, **payload.model_dump(exclude={"draft"})
+        )
     return container.evidence_enrollment.prepare_review(
         patient_id=principal.patient_id,
         task_id=task_id,
@@ -217,21 +271,48 @@ async def upload(
     source_description: str = Query(min_length=1, max_length=200),
     reviewed: bool = Query(default=False),
     for_comparison: bool = Query(default=False),
+    task: UUID | None = Header(default=None, alias="X-Assistant-Task"),
+    revision: int | None = Header(default=None, alias="X-Assistant-Revision"),
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ):
     content = await image_content(request)
+    consent = request.headers.get("x-stage2-consent") == "true"
+
+    def write():
+        return container.gallery.upload_with_status(
+            patient_id=principal.patient_id,
+            medication_id=medication_id,
+            image=content,
+            image_kind=image_kind,
+            source_description=source_description,
+            reviewed=reviewed,
+            for_comparison=for_comparison,
+            consent=consent,
+            demo_only=request.headers.get("x-demo-only") == "true",
+        )
+
+    if task is None and revision is None:
+        return (
+            await run_in_threadpool(container.assistant_media.run_unbound, principal.patient_id, write)
+            if container.assistant_media
+            else await run_in_threadpool(write)
+        )
+    if task is None or revision is None or container.assistant_photo_upload is None:
+        raise ValidationError("The photo upload needs its current Assistant task and revision")
     return await run_in_threadpool(
-        container.gallery.upload_with_status,
-        patient_id=principal.patient_id,
-        medication_id=medication_id,
-        image=content,
-        image_kind=image_kind,
-        source_description=source_description,
-        reviewed=reviewed,
-        for_comparison=for_comparison,
-        consent=request.headers.get("x-stage2-consent") == "true",
-        demo_only=request.headers.get("x-demo-only") == "true",
+        container.assistant_photo_upload.run,
+        principal.patient_id,
+        task,
+        revision,
+        medication_id,
+        content,
+        image_kind,
+        source_description,
+        reviewed,
+        for_comparison,
+        consent,
+        write,
     )
 
 
@@ -256,23 +337,47 @@ async def check(
 @router.post("/images/{image_id}/retire", response_model=MedicationImage)
 def retire_reference(
     image_id: UUID,
+    confirmed: bool = Query(default=False),
+    task: UUID | None = Header(default=None, alias="X-Assistant-Task"),
+    revision: int | None = Header(default=None, alias="X-Assistant-Revision"),
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ):
-    return container.gallery.retire(principal.patient_id, image_id)
+    return bound_media(
+        container,
+        principal.patient_id,
+        task,
+        revision,
+        {"gallery.photo.retire"},
+        image_id,
+        {},
+        confirmed,
+        lambda: container.gallery.retire(principal.patient_id, image_id),
+    )
 
 
 @router.patch("/images/{image_id}", response_model=MedicationImage)
 def manage_reference_photo(
     image_id: UUID,
     body: PhotoManagementRequest,
+    task: UUID | None = Header(default=None, alias="X-Assistant-Task"),
+    revision: int | None = Header(default=None, alias="X-Assistant-Revision"),
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ):
     if container.library_files is None:
         raise ProviderUnavailableError("File management is not enabled for this database release.")
-    result = container.gallery.manage_image(principal.patient_id, image_id, **body.model_dump())
-    return result
+    return bound_media(
+        container,
+        principal.patient_id,
+        task,
+        revision,
+        {"gallery.photo." + body.action},
+        image_id,
+        body.model_dump(),
+        body.confirmed,
+        lambda: container.gallery.manage_image(principal.patient_id, image_id, **body.model_dump()),
+    )
 
 
 @router.post("/gallery/{medication_id}/pdfs")
@@ -282,22 +387,49 @@ async def upload_library_pdf(
     filename: str = Query(min_length=1, max_length=240),
     category: Literal["prescription", "pharmacy_document", "medication_instructions", "other"] = Query(default="other"),
     description: str = Query(default="", max_length=500),
+    confirmed: bool = Query(default=False),
+    task: UUID | None = Header(default=None, alias="X-Assistant-Task"),
+    revision: int | None = Header(default=None, alias="X-Assistant-Revision"),
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ):
     if container.library_files is None:
         raise ProviderUnavailableError("PDF files are not enabled for this database release.")
     content = await pdf_content(request)
-    file, duplicate = await run_in_threadpool(
-        container.library_files.upload,
-        patient_id=principal.patient_id,
-        medication_id=medication_id,
-        filename=filename,
-        content_type=request.headers.get("content-type", "").split(";")[0].strip().lower(),
-        data=content,
-        category=category,
-        description=description,
-    )
+
+    def write():
+        return container.library_files.upload(
+            patient_id=principal.patient_id,
+            medication_id=medication_id,
+            filename=filename,
+            content_type="application/pdf",
+            data=content,
+            category=category,
+            description=description,
+        )
+
+    if task is None and revision is None:
+        file, duplicate = (
+            await run_in_threadpool(container.assistant_media.run_unbound, principal.patient_id, write)
+            if container.assistant_media
+            else await run_in_threadpool(write)
+        )
+    elif task is None or revision is None or container.assistant_pdf_upload is None:
+        raise ValidationError("The PDF upload needs its current Assistant task and revision")
+    else:
+        file, duplicate = await run_in_threadpool(
+            container.assistant_pdf_upload.run,
+            principal.patient_id,
+            task,
+            revision,
+            medication_id,
+            content,
+            filename,
+            category,
+            description,
+            confirmed,
+            write,
+        )
     return {"file": file, "duplicate": duplicate}
 
 
@@ -329,22 +461,43 @@ def library_pdf_content(
 def update_library_pdf(
     file_id: UUID,
     body: PdfMetadataRequest,
+    confirmed: bool = Query(default=False),
+    task: UUID | None = Header(default=None, alias="X-Assistant-Task"),
+    revision: int | None = Header(default=None, alias="X-Assistant-Revision"),
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ):
     if container.library_files is None:
         raise ProviderUnavailableError("PDF files are not enabled for this database release.")
-    return container.library_files.update(principal.patient_id, file_id, **body.model_dump())
+    return bound_media(
+        container,
+        principal.patient_id,
+        task,
+        revision,
+        {"library.pdf.edit"},
+        file_id,
+        body.model_dump(),
+        confirmed,
+        lambda: container.library_files.update(principal.patient_id, file_id, **body.model_dump()),
+    )
 
 
 @router.delete("/library-files/{file_id}")
 def delete_library_pdf(
     file_id: UUID,
     confirmed: bool = Query(default=False),
+    task: UUID | None = Header(default=None, alias="X-Assistant-Task"),
+    revision: int | None = Header(default=None, alias="X-Assistant-Revision"),
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ):
     if container.library_files is None:
         raise ProviderUnavailableError("PDF files are not enabled for this database release.")
-    container.library_files.delete(principal.patient_id, file_id, confirmed=confirmed)
-    return {"deleted": True}
+
+    def remove():
+        container.library_files.delete(principal.patient_id, file_id, confirmed=confirmed)
+        return {"deleted": True}
+
+    return bound_media(
+        container, principal.patient_id, task, revision, {"library.pdf.delete"}, file_id, {}, confirmed, remove
+    )

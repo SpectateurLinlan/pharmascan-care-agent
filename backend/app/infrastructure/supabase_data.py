@@ -47,6 +47,7 @@ class SupabaseDataClient:
         body: object = None,
         prefer: str = "return=representation",
         include_total: bool = False,
+        timeout_seconds: float = 15,
     ) -> Any:
         # Requests are bounded; writes are not retried implicitly. The caller
         # can retry with its stable idempotency key after an uncertain outcome.
@@ -63,7 +64,7 @@ class SupabaseDataClient:
                     params=params,
                     json=body,
                     headers={**self._headers, "Prefer": prefer},
-                    timeout=15,
+                    timeout=timeout_seconds,
                 )
                 response_size[0] = len(response.content)
         except httpx.HTTPError:

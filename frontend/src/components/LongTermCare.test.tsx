@@ -64,6 +64,7 @@ it('task summary reports unavailable reads and refreshes through the existing re
  vi.mocked(api.refreshFollowUps).mockRejectedValueOnce(new Error('DEMO unavailable')).mockResolvedValue([]);render(<CareTaskSummary onOpen={vi.fn()}/>);await screen.findByRole('alert');expect(screen.queryByText('No pending medication follow-ups.')).toBeNull();window.dispatchEvent(new Event('pharmascan:reminder-refresh'));await screen.findByText('No pending medication follow-ups.');expect(api.refreshFollowUps).toHaveBeenCalledTimes(2);
 });
 it('task confirmation is separate from a proposed appointment and cannot create a dose event',async()=>{
+ vi.spyOn(Date,'now').mockReturnValue(Date.parse('2026-10-16T00:00:00Z'));
  const task={id:'demo-task',category:'medication_review' as const,title:'DEMO review',due_at:'2026-10-23T08:00:00Z',medication_id:null,regimen_id:null,notes:'DEMO patient-reported',confirmed:false};
  const saved=vi.fn();vi.mocked(api.createCareTask).mockResolvedValue({...task,patient_id:'demo-user',status:'open',source:'patient_reported',version:1,history:[],created_at:'2026-10-16T00:00:00Z',updated_at:'2026-10-16T00:00:00Z',demo_only:true});
  render(<CareReviewSheet proposal={{action:'task',task}} onCancel={vi.fn()} onSaved={saved}/>);expect(api.createCareTask).not.toHaveBeenCalled();fireEvent.click(screen.getByRole('button',{name:'Confirm record'}));await waitFor(()=>expect(saved).toHaveBeenCalledOnce());expect(api.createCareTask).toHaveBeenCalledWith({...task,confirmed:true});expect(api.recordStock).not.toHaveBeenCalled();

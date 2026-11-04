@@ -145,3 +145,12 @@ The application checks before draft writes and rechecks on activation. Database 
 This is an MVP representation restriction, **not a medical judgment** that same-name products, different doses or PRN plus scheduled instructions are inherently wrong. Reliable professional instructions may legitimately require combinations this MVP cannot represent. Exact normalized-name matching is conservative and does not establish ingredient/strength/form equivalence. Do not automatically stop, merge or delete existing plans. Explicitly ending an obsolete application record is distinct from advising a patient to stop taking medicine.
 
 The opt-in `tests/backend/test_regimen_overlap_live.py` exercises real same-user JWT persistence, reviewed/B14 activation, conservative PRN conflicts, stop-and-replace, dose-event idempotency/history, independent concurrent Data API activations and cross-owner RLS. These are database/application checks, not hosted browser acceptance or evidence of clinical appropriateness. The concurrent transport gate synchronizes real requests and does not mock the provider response.
+
+
+## Persistent workflow technical media records
+
+Unnumbered SQL review sources describe native-file intent and observation journals under the separate evidence owner. Records contain operation/owner/key, digest, MIME/size, nonce/generation and technical state; they contain no uploaded bytes, user text, bearer token or clinical authorization. Observation records are immutable and correlated to a claimed intent.
+
+The permanent deleting-key exclusion admits exactly one Assistant-copy ticket or native-file ticket. Both writer classes and native reference publication check the same key fence. Source identity, reviewed instructions, clinical facts, native metadata and workflow result receipts retain their existing owners and transactions. A technical byte proof never establishes a reviewed drug identity.
+
+Unknown external writers cannot be settled by age or a later 404. Empty-only down candidates refuse populated new journals and retain protective proof hooks; recovery must preserve original data, observations, receipts and deleting exclusions. These are source contracts, not evidence that a migration, role grant or database acceptance has run.

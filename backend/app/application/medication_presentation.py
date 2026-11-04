@@ -14,6 +14,8 @@ def general_use_text(knowledge: KnowledgeResult, language: str) -> str:
     # Preserve every indication qualifier (population, adjuncts, release, etc.).
     # Strip only the source product's grammatical subject, not its clinical text.
     text = knowledge.use_statement or ""
+    if knowledge.use_facts:
+        return text  # Scoped quotes may have a preceding population restriction.
     match = re.fullmatch(r".+? (?:is|are) indicated (for|as) (.+)", text, re.I | re.S)
     if not match:
         return text

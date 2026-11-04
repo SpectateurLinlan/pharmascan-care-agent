@@ -21,9 +21,24 @@ function mockFetch(status: number, body: unknown) {
 }
 
 describe('api client', () => {
+  it('binds a draft deletion to the current assistant task without changing the original confirmation body',async()=>{
+    const fetchMock=mockFetch(200,{deleted:true,medication_deleted:true,cleanup_pending:false});
+    vi.stubGlobal('fetch',fetchMock);
+    await api.deleteDraft('draft','DEMO-draft',{task_id:'DEMO-task',expected_revision:4});
+    expect(fetchMock.mock.calls[0]![1].headers['X-Assistant-Revision']).toBe('4');
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body)).toEqual({confirmed:true});
+  });
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.mocked(accessToken).mockResolvedValue(null);
+  });
+
+  it('binds an assistant stop confirmation to the current task and revision',async()=>{
+    const fetchMock=mockFetch(200,{regimen_id:'DEMO-plan',state:'ended'});
+    vi.stubGlobal('fetch',fetchMock);
+    await api.endPlan('DEMO-plan',{task_id:'DEMO-task',expected_revision:4});
+    expect(fetchMock.mock.calls[0]![1].headers['X-Assistant-Task']).toBe('DEMO-task');
+    expect(fetchMock.mock.calls[0]![1].headers['X-Assistant-Revision']).toBe('4');
   });
 
   it('starts a new owned conversation without reusing the current session',async()=>{
@@ -139,6 +154,18 @@ describe('api client', () => {
     expect(url.pathname).not.toContain('/api/api/');
   });
 
+  it('binds original-name confirmation to the current saved draft without accepting a source or patient override', async () => {
+    const fetchMock=mockFetch(200,{reviewed_name_count:1});
+    vi.stubGlobal('fetch',fetchMock);
+    await api.reviewOriginalIdentity('DEMO-regimen',{task_id:'DEMO-task',expected_revision:4});
+    const init=fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('/api/medications/drafts/DEMO-regimen/identity-review?');
+    expect(init.method).toBe('POST');
+    expect(new Headers(init.headers).get('X-Assistant-Task')).toBe('DEMO-task');
+    expect(new Headers(init.headers).get('X-Assistant-Revision')).toBe('4');
+    expect(JSON.parse(init.body as string)).toEqual({confirmed:true});
+  });
+
   it('posts a draft as JSON', async () => {
     const fetchMock = mockFetch(200, {
       medication_id: 'm',
@@ -159,5 +186,20 @@ describe('api client', () => {
       medication_name: 'Amlodipine',
       dose_amount: 5,
     });
+  });
+
+  it('saves an existing original with independent confirmation and binds source review to the current task', async()=>{
+    const fetchMock=mockFetch(200,{id:'DEMO-source'});vi.stubGlobal('fetch',fetchMock);
+    const binding={task_id:'DEMO-task',expected_revision:7};
+    await api.saveEvidenceOriginal('DEMO-source','DEMO-original',binding);
+    let init=fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('/api/evidence/tasks/DEMO-source/saved-original?');
+    expect(JSON.parse(init.body as string)).toEqual({attachment_id:'DEMO-original',confirmed:true});
+    expect(new Headers(init.headers).get('X-Assistant-Revision')).toBe('7');
+    const draft={medication_name:'DEMO medicine',dose_amount:1,dose_unit:'tablet',frequency_rule:null,is_prn:true,food_instruction:'DEMO instructions'};
+    await api.reviewEvidence('DEMO-source',draft,false,{},binding);
+    init=fetchMock.mock.calls[1]?.[1] as RequestInit;
+    expect(new Headers(init.headers).get('X-Assistant-Task')).toBe('DEMO-task');
+    expect(JSON.parse(init.body as string)).toEqual({draft,patient_reviewed:true,distinct_product_confirmed:false});
   });
 });

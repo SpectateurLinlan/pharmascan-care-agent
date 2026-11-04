@@ -1,6 +1,9 @@
 """Memory and same-user JWT health-note adapters."""
 
+from contextlib import contextmanager
+from copy import deepcopy
 from datetime import datetime
+from threading import RLock
 from uuid import UUID
 
 from ..contracts.observations import Observation
@@ -10,23 +13,48 @@ from .supabase_data import SupabaseDataClient
 class MemoryObservations:
     def __init__(self):
         self._rows: dict[tuple[UUID, UUID], Observation] = {}
+        self._revisions: dict[UUID,int] = {}
+        self._lock=RLock()
+
+    def revision(self,owner):
+        with self._lock:
+            return self._revisions.get(owner,0)
+
+    @contextmanager
+    def local_transaction(self):
+        with self._lock:
+            rows,revisions=deepcopy(self._rows),dict(self._revisions)
+            try:
+                yield
+            except BaseException:
+                self._rows.clear()
+                self._rows.update(rows)
+                self._revisions.clear()
+                self._revisions.update(revisions)
+                raise
 
     def get(self, patient_id: UUID, observation_id: UUID) -> Observation | None:
-        return self._rows.get((patient_id, observation_id))
+        with self._lock:
+            return self._rows.get((patient_id, observation_id))
 
     def list(self, patient_id: UUID, start: datetime, end: datetime) -> list[Observation]:
-        return sorted(
-            [row for (owner, _), row in self._rows.items() if owner == patient_id and start <= row.occurred_at < end],
-            key=lambda row: row.occurred_at,
-            reverse=True,
-        )[:500]
+        with self._lock:
+            return sorted(
+                [row for (owner, _), row in self._rows.items()
+                 if owner == patient_id and start <= row.occurred_at < end],
+                key=lambda row: row.occurred_at, reverse=True,
+            )[:500]
 
     def save(self, record: Observation) -> Observation:
-        self._rows[record.patient_id, record.id] = record
-        return record
+        with self._lock:
+            self._rows[record.patient_id, record.id] = record
+            self._revisions[record.patient_id]=self._revisions.get(record.patient_id,0)+1
+            return record
 
     def delete(self, patient_id: UUID, observation_id: UUID) -> None:
-        self._rows.pop((patient_id, observation_id), None)
+        with self._lock:
+            if self._rows.pop((patient_id, observation_id), None) is not None:
+                self._revisions[patient_id]=self._revisions.get(patient_id,0)+1
 
 
 class SupabaseObservations:

@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints
 
+from .medication_names import NameChoice
+
 
 class MedicationOption(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -39,6 +41,7 @@ class MedicationDialogue(BaseModel):
     topic: Literal["medication", "other"] = "medication"
     listed: list[MedicationOption] = Field(default_factory=list, max_length=10)
     choice: MedicationChoice | None = None
+    name_choice: NameChoice | None = None
     conversation_id: UUID | None = None
     candidate_version: str = Field(default="", max_length=64)
     subject_name: str | None = Field(default=None, max_length=160)

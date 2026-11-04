@@ -1,0 +1,2948 @@
+{
+  "version": 1,
+  "fixture_version": "1.0.0",
+  "synthetic": true,
+  "required_capabilities": [
+    "medication.enroll",
+    "medication.draft.resume",
+    "medication.draft.delete",
+    "medication.source.add",
+    "medication.source.review",
+    "medication.plan.change",
+    "medication.plan.end",
+    "medication.plan.view",
+    "medication.setup.list",
+    "medication.today",
+    "medication.due",
+    "medication.status",
+    "medication.history",
+    "medication.source.view",
+    "record.catalogue",
+    "record.history",
+    "record.summary",
+    "record.visit.prepare",
+    "medication.knowledge",
+    "medication.instructions",
+    "dose.report",
+    "dose.prn.report",
+    "dose.late.review",
+    "dose.correction.review",
+    "observation.list",
+    "observation.add",
+    "observation.delete",
+    "inventory.view",
+    "barrier.list",
+    "followup.list",
+    "inventory.count",
+    "barrier.add",
+    "followup.add",
+    "followup.contacted",
+    "followup.complete",
+    "followup.defer",
+    "followup.cancel",
+    "gallery.list",
+    "gallery.photo.view",
+    "gallery.photo.add",
+    "gallery.photo.edit",
+    "gallery.photo.remove",
+    "gallery.photo.delete",
+    "gallery.photo.retire",
+    "image.compare",
+    "source.preview",
+    "library.list",
+    "library.pdf.view",
+    "library.pdf.download",
+    "library.pdf.add",
+    "library.pdf.edit",
+    "library.pdf.delete",
+    "reminder.list",
+    "reminder.snooze",
+    "reminder.settings",
+    "reminder.calendar.export",
+    "notification.status",
+    "notification.subscribe",
+    "notification.unsubscribe",
+    "notification.test",
+    "caregiver.list",
+    "caregiver.add",
+    "caregiver.edit",
+    "caregiver.delete",
+    "preference.language",
+    "preference.text",
+    "preference.voice",
+    "preference.reminder",
+    "preference.privacy",
+    "preference.timezone",
+    "profile.edit",
+    "profile.view",
+    "account.status",
+    "account.login",
+    "account.link",
+    "account.password",
+    "account.signout",
+    "conversation.list",
+    "conversation.view",
+    "conversation.resume",
+    "conversation.new",
+    "conversation.clear",
+    "assistant.usage",
+    "speech.input",
+    "speech.playback",
+    "feedback.submit",
+    "help.open",
+    "guide.start",
+    "navigation.open",
+    "observation.edit",
+    "followup.edit"
+  ],
+  "cases": [
+    {
+      "id": "medication.enroll.prepare.en",
+      "version": 1,
+      "capability_id": "medication.enroll",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: medication.enroll"
+      ],
+      "expected_facts": {
+        "capability_id": "medication.enroll",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "medication.draft.resume.prepare.zh",
+      "version": 1,
+      "capability_id": "medication.draft.resume",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: medication.draft.resume"
+      ],
+      "expected_facts": {
+        "capability_id": "medication.draft.resume",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "medication.draft.delete.prepare.en",
+      "version": 1,
+      "capability_id": "medication.draft.delete",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: medication.draft.delete"
+      ],
+      "expected_facts": {
+        "capability_id": "medication.draft.delete",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "medication.source.add.prepare.zh",
+      "version": 1,
+      "capability_id": "medication.source.add",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: medication.source.add"
+      ],
+      "expected_facts": {
+        "capability_id": "medication.source.add",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "medication.source.review.prepare.en",
+      "version": 1,
+      "capability_id": "medication.source.review",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: medication.source.review"
+      ],
+      "expected_facts": {
+        "capability_id": "medication.source.review",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "medication.plan.change.prepare.zh",
+      "version": 1,
+      "capability_id": "medication.plan.change",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: medication.plan.change"
+      ],
+      "expected_facts": {
+        "capability_id": "medication.plan.change",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "medication.plan.end.prepare.en",
+      "version": 1,
+      "capability_id": "medication.plan.end",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: medication.plan.end"
+      ],
+      "expected_facts": {
+        "capability_id": "medication.plan.end",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "medication.plan.view.prepare.zh",
+      "version": 1,
+      "capability_id": "medication.plan.view",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: medication.plan.view"
+      ],
+      "expected_facts": {
+        "capability_id": "medication.plan.view",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "medication.setup.list.prepare.en",
+      "version": 1,
+      "capability_id": "medication.setup.list",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: medication.setup.list"
+      ],
+      "expected_facts": {
+        "capability_id": "medication.setup.list",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "medication.today.prepare.zh",
+      "version": 1,
+      "capability_id": "medication.today",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: medication.today"
+      ],
+      "expected_facts": {
+        "capability_id": "medication.today",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "medication.due.prepare.en",
+      "version": 1,
+      "capability_id": "medication.due",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: medication.due"
+      ],
+      "expected_facts": {
+        "capability_id": "medication.due",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "medication.status.prepare.zh",
+      "version": 1,
+      "capability_id": "medication.status",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: medication.status"
+      ],
+      "expected_facts": {
+        "capability_id": "medication.status",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "medication.history.prepare.en",
+      "version": 1,
+      "capability_id": "medication.history",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: medication.history"
+      ],
+      "expected_facts": {
+        "capability_id": "medication.history",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "medication.source.view.prepare.zh",
+      "version": 1,
+      "capability_id": "medication.source.view",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: medication.source.view"
+      ],
+      "expected_facts": {
+        "capability_id": "medication.source.view",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "record.catalogue.prepare.en",
+      "version": 1,
+      "capability_id": "record.catalogue",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: record.catalogue"
+      ],
+      "expected_facts": {
+        "capability_id": "record.catalogue",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "record.history.prepare.zh",
+      "version": 1,
+      "capability_id": "record.history",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: record.history"
+      ],
+      "expected_facts": {
+        "capability_id": "record.history",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "record.summary.prepare.en",
+      "version": 1,
+      "capability_id": "record.summary",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: record.summary"
+      ],
+      "expected_facts": {
+        "capability_id": "record.summary",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "record.visit.prepare.prepare.zh",
+      "version": 1,
+      "capability_id": "record.visit.prepare",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: record.visit.prepare"
+      ],
+      "expected_facts": {
+        "capability_id": "record.visit.prepare",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "medication.knowledge.prepare.en",
+      "version": 1,
+      "capability_id": "medication.knowledge",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: medication.knowledge"
+      ],
+      "expected_facts": {
+        "capability_id": "medication.knowledge",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "medication.instructions.prepare.zh",
+      "version": 1,
+      "capability_id": "medication.instructions",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: medication.instructions"
+      ],
+      "expected_facts": {
+        "capability_id": "medication.instructions",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "dose.report.prepare.en",
+      "version": 1,
+      "capability_id": "dose.report",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: dose.report"
+      ],
+      "expected_facts": {
+        "capability_id": "dose.report",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "dose.prn.report.prepare.zh",
+      "version": 1,
+      "capability_id": "dose.prn.report",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: dose.prn.report"
+      ],
+      "expected_facts": {
+        "capability_id": "dose.prn.report",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "dose.late.review.prepare.en",
+      "version": 1,
+      "capability_id": "dose.late.review",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: dose.late.review"
+      ],
+      "expected_facts": {
+        "capability_id": "dose.late.review",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "dose.correction.review.prepare.zh",
+      "version": 1,
+      "capability_id": "dose.correction.review",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: dose.correction.review"
+      ],
+      "expected_facts": {
+        "capability_id": "dose.correction.review",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "observation.list.prepare.en",
+      "version": 1,
+      "capability_id": "observation.list",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: observation.list"
+      ],
+      "expected_facts": {
+        "capability_id": "observation.list",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "observation.add.prepare.zh",
+      "version": 1,
+      "capability_id": "observation.add",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: observation.add"
+      ],
+      "expected_facts": {
+        "capability_id": "observation.add",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "observation.delete.prepare.en",
+      "version": 1,
+      "capability_id": "observation.delete",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: observation.delete"
+      ],
+      "expected_facts": {
+        "capability_id": "observation.delete",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "inventory.view.prepare.zh",
+      "version": 1,
+      "capability_id": "inventory.view",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: inventory.view"
+      ],
+      "expected_facts": {
+        "capability_id": "inventory.view",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "barrier.list.prepare.en",
+      "version": 1,
+      "capability_id": "barrier.list",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: barrier.list"
+      ],
+      "expected_facts": {
+        "capability_id": "barrier.list",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "followup.list.prepare.zh",
+      "version": 1,
+      "capability_id": "followup.list",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: followup.list"
+      ],
+      "expected_facts": {
+        "capability_id": "followup.list",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "inventory.count.prepare.en",
+      "version": 1,
+      "capability_id": "inventory.count",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: inventory.count"
+      ],
+      "expected_facts": {
+        "capability_id": "inventory.count",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "barrier.add.prepare.zh",
+      "version": 1,
+      "capability_id": "barrier.add",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: barrier.add"
+      ],
+      "expected_facts": {
+        "capability_id": "barrier.add",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "followup.add.prepare.en",
+      "version": 1,
+      "capability_id": "followup.add",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: followup.add"
+      ],
+      "expected_facts": {
+        "capability_id": "followup.add",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "followup.contacted.prepare.zh",
+      "version": 1,
+      "capability_id": "followup.contacted",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: followup.contacted"
+      ],
+      "expected_facts": {
+        "capability_id": "followup.contacted",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "followup.complete.prepare.en",
+      "version": 1,
+      "capability_id": "followup.complete",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: followup.complete"
+      ],
+      "expected_facts": {
+        "capability_id": "followup.complete",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "followup.defer.prepare.zh",
+      "version": 1,
+      "capability_id": "followup.defer",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: followup.defer"
+      ],
+      "expected_facts": {
+        "capability_id": "followup.defer",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "followup.cancel.prepare.en",
+      "version": 1,
+      "capability_id": "followup.cancel",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: followup.cancel"
+      ],
+      "expected_facts": {
+        "capability_id": "followup.cancel",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "gallery.list.prepare.zh",
+      "version": 1,
+      "capability_id": "gallery.list",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: gallery.list"
+      ],
+      "expected_facts": {
+        "capability_id": "gallery.list",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "gallery.photo.view.prepare.en",
+      "version": 1,
+      "capability_id": "gallery.photo.view",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: gallery.photo.view"
+      ],
+      "expected_facts": {
+        "capability_id": "gallery.photo.view",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "gallery.photo.add.prepare.zh",
+      "version": 1,
+      "capability_id": "gallery.photo.add",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: gallery.photo.add"
+      ],
+      "expected_facts": {
+        "capability_id": "gallery.photo.add",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "gallery.photo.edit.prepare.en",
+      "version": 1,
+      "capability_id": "gallery.photo.edit",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: gallery.photo.edit"
+      ],
+      "expected_facts": {
+        "capability_id": "gallery.photo.edit",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "gallery.photo.remove.prepare.zh",
+      "version": 1,
+      "capability_id": "gallery.photo.remove",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: gallery.photo.remove"
+      ],
+      "expected_facts": {
+        "capability_id": "gallery.photo.remove",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "gallery.photo.delete.prepare.en",
+      "version": 1,
+      "capability_id": "gallery.photo.delete",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: gallery.photo.delete"
+      ],
+      "expected_facts": {
+        "capability_id": "gallery.photo.delete",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "gallery.photo.retire.prepare.zh",
+      "version": 1,
+      "capability_id": "gallery.photo.retire",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: gallery.photo.retire"
+      ],
+      "expected_facts": {
+        "capability_id": "gallery.photo.retire",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "image.compare.prepare.en",
+      "version": 1,
+      "capability_id": "image.compare",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: image.compare"
+      ],
+      "expected_facts": {
+        "capability_id": "image.compare",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "source.preview.prepare.zh",
+      "version": 1,
+      "capability_id": "source.preview",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: source.preview"
+      ],
+      "expected_facts": {
+        "capability_id": "source.preview",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "library.list.prepare.en",
+      "version": 1,
+      "capability_id": "library.list",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: library.list"
+      ],
+      "expected_facts": {
+        "capability_id": "library.list",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "library.pdf.view.prepare.zh",
+      "version": 1,
+      "capability_id": "library.pdf.view",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: library.pdf.view"
+      ],
+      "expected_facts": {
+        "capability_id": "library.pdf.view",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "library.pdf.download.prepare.en",
+      "version": 1,
+      "capability_id": "library.pdf.download",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: library.pdf.download"
+      ],
+      "expected_facts": {
+        "capability_id": "library.pdf.download",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "library.pdf.add.prepare.zh",
+      "version": 1,
+      "capability_id": "library.pdf.add",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: library.pdf.add"
+      ],
+      "expected_facts": {
+        "capability_id": "library.pdf.add",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "library.pdf.edit.prepare.en",
+      "version": 1,
+      "capability_id": "library.pdf.edit",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: library.pdf.edit"
+      ],
+      "expected_facts": {
+        "capability_id": "library.pdf.edit",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "library.pdf.delete.prepare.zh",
+      "version": 1,
+      "capability_id": "library.pdf.delete",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: library.pdf.delete"
+      ],
+      "expected_facts": {
+        "capability_id": "library.pdf.delete",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "reminder.list.prepare.en",
+      "version": 1,
+      "capability_id": "reminder.list",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: reminder.list"
+      ],
+      "expected_facts": {
+        "capability_id": "reminder.list",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "reminder.snooze.prepare.zh",
+      "version": 1,
+      "capability_id": "reminder.snooze",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: reminder.snooze"
+      ],
+      "expected_facts": {
+        "capability_id": "reminder.snooze",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "reminder.settings.prepare.en",
+      "version": 1,
+      "capability_id": "reminder.settings",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: reminder.settings"
+      ],
+      "expected_facts": {
+        "capability_id": "reminder.settings",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "reminder.calendar.export.prepare.zh",
+      "version": 1,
+      "capability_id": "reminder.calendar.export",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: reminder.calendar.export"
+      ],
+      "expected_facts": {
+        "capability_id": "reminder.calendar.export",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "notification.status.prepare.en",
+      "version": 1,
+      "capability_id": "notification.status",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: notification.status"
+      ],
+      "expected_facts": {
+        "capability_id": "notification.status",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "notification.subscribe.prepare.zh",
+      "version": 1,
+      "capability_id": "notification.subscribe",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: notification.subscribe"
+      ],
+      "expected_facts": {
+        "capability_id": "notification.subscribe",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "notification.unsubscribe.prepare.en",
+      "version": 1,
+      "capability_id": "notification.unsubscribe",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: notification.unsubscribe"
+      ],
+      "expected_facts": {
+        "capability_id": "notification.unsubscribe",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "notification.test.prepare.zh",
+      "version": 1,
+      "capability_id": "notification.test",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: notification.test"
+      ],
+      "expected_facts": {
+        "capability_id": "notification.test",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "caregiver.list.prepare.en",
+      "version": 1,
+      "capability_id": "caregiver.list",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: caregiver.list"
+      ],
+      "expected_facts": {
+        "capability_id": "caregiver.list",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "caregiver.add.prepare.zh",
+      "version": 1,
+      "capability_id": "caregiver.add",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: caregiver.add"
+      ],
+      "expected_facts": {
+        "capability_id": "caregiver.add",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "caregiver.edit.prepare.en",
+      "version": 1,
+      "capability_id": "caregiver.edit",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: caregiver.edit"
+      ],
+      "expected_facts": {
+        "capability_id": "caregiver.edit",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "caregiver.delete.prepare.zh",
+      "version": 1,
+      "capability_id": "caregiver.delete",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: caregiver.delete"
+      ],
+      "expected_facts": {
+        "capability_id": "caregiver.delete",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "preference.language.prepare.en",
+      "version": 1,
+      "capability_id": "preference.language",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: preference.language"
+      ],
+      "expected_facts": {
+        "capability_id": "preference.language",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "preference.text.prepare.zh",
+      "version": 1,
+      "capability_id": "preference.text",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: preference.text"
+      ],
+      "expected_facts": {
+        "capability_id": "preference.text",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "preference.voice.prepare.en",
+      "version": 1,
+      "capability_id": "preference.voice",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: preference.voice"
+      ],
+      "expected_facts": {
+        "capability_id": "preference.voice",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "preference.reminder.prepare.zh",
+      "version": 1,
+      "capability_id": "preference.reminder",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: preference.reminder"
+      ],
+      "expected_facts": {
+        "capability_id": "preference.reminder",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "preference.privacy.prepare.en",
+      "version": 1,
+      "capability_id": "preference.privacy",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: preference.privacy"
+      ],
+      "expected_facts": {
+        "capability_id": "preference.privacy",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "preference.timezone.prepare.zh",
+      "version": 1,
+      "capability_id": "preference.timezone",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: preference.timezone"
+      ],
+      "expected_facts": {
+        "capability_id": "preference.timezone",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "profile.edit.prepare.en",
+      "version": 1,
+      "capability_id": "profile.edit",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: profile.edit"
+      ],
+      "expected_facts": {
+        "capability_id": "profile.edit",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "profile.view.prepare.zh",
+      "version": 1,
+      "capability_id": "profile.view",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: profile.view"
+      ],
+      "expected_facts": {
+        "capability_id": "profile.view",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "account.status.prepare.en",
+      "version": 1,
+      "capability_id": "account.status",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: account.status"
+      ],
+      "expected_facts": {
+        "capability_id": "account.status",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "account.login.prepare.zh",
+      "version": 1,
+      "capability_id": "account.login",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: account.login"
+      ],
+      "expected_facts": {
+        "capability_id": "account.login",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "account.link.prepare.en",
+      "version": 1,
+      "capability_id": "account.link",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: account.link"
+      ],
+      "expected_facts": {
+        "capability_id": "account.link",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "account.password.prepare.zh",
+      "version": 1,
+      "capability_id": "account.password",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: account.password"
+      ],
+      "expected_facts": {
+        "capability_id": "account.password",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "account.signout.prepare.en",
+      "version": 1,
+      "capability_id": "account.signout",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: account.signout"
+      ],
+      "expected_facts": {
+        "capability_id": "account.signout",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "conversation.list.prepare.zh",
+      "version": 1,
+      "capability_id": "conversation.list",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: conversation.list"
+      ],
+      "expected_facts": {
+        "capability_id": "conversation.list",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "conversation.view.prepare.en",
+      "version": 1,
+      "capability_id": "conversation.view",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: conversation.view"
+      ],
+      "expected_facts": {
+        "capability_id": "conversation.view",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "conversation.resume.prepare.zh",
+      "version": 1,
+      "capability_id": "conversation.resume",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: conversation.resume"
+      ],
+      "expected_facts": {
+        "capability_id": "conversation.resume",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "conversation.new.prepare.en",
+      "version": 1,
+      "capability_id": "conversation.new",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: conversation.new"
+      ],
+      "expected_facts": {
+        "capability_id": "conversation.new",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "conversation.clear.prepare.zh",
+      "version": 1,
+      "capability_id": "conversation.clear",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: conversation.clear"
+      ],
+      "expected_facts": {
+        "capability_id": "conversation.clear",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "assistant.usage.prepare.en",
+      "version": 1,
+      "capability_id": "assistant.usage",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: assistant.usage"
+      ],
+      "expected_facts": {
+        "capability_id": "assistant.usage",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "speech.input.prepare.zh",
+      "version": 1,
+      "capability_id": "speech.input",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: speech.input"
+      ],
+      "expected_facts": {
+        "capability_id": "speech.input",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "speech.playback.prepare.en",
+      "version": 1,
+      "capability_id": "speech.playback",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: speech.playback"
+      ],
+      "expected_facts": {
+        "capability_id": "speech.playback",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "feedback.submit.prepare.zh",
+      "version": 1,
+      "capability_id": "feedback.submit",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: feedback.submit"
+      ],
+      "expected_facts": {
+        "capability_id": "feedback.submit",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "help.open.prepare.en",
+      "version": 1,
+      "capability_id": "help.open",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: help.open"
+      ],
+      "expected_facts": {
+        "capability_id": "help.open",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "guide.start.prepare.zh",
+      "version": 1,
+      "capability_id": "guide.start",
+      "language": "zh",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: guide.start"
+      ],
+      "expected_facts": {
+        "capability_id": "guide.start",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "navigation.open.prepare.en",
+      "version": 1,
+      "capability_id": "navigation.open",
+      "language": "en",
+      "risk": "medium",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: navigation.open"
+      ],
+      "expected_facts": {
+        "capability_id": "navigation.open",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "observation.edit.prepare.zh",
+      "version": 1,
+      "capability_id": "observation.edit",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: observation.edit"
+      ],
+      "expected_facts": {
+        "capability_id": "observation.edit",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "followup.edit.prepare.en",
+      "version": 1,
+      "capability_id": "followup.edit",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "capability_prepare",
+      "turns": [
+        "DEMO typed capability: followup.edit"
+      ],
+      "expected_facts": {
+        "capability_id": "followup.edit",
+        "clinical_unchanged": true,
+        "business_result": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare"
+    },
+    {
+      "id": "enrollment.manual.en",
+      "version": 1,
+      "capability_id": "medication.enroll",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "manual_enrollment",
+      "turns": [
+        "Add a medication",
+        "manual",
+        "Name: DEMO evaluation medicine; strength: 200mg; dose: 1 tablet; twice daily",
+        "08:00, 20:00"
+      ],
+      "expected_facts": {
+        "method": "manual",
+        "has_name": true,
+        "ready_for_review": true,
+        "active_regimens": 0
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare",
+      "additional_phases": [],
+      "allow_degraded": false,
+      "require_receipt": false
+    },
+    {
+      "id": "enrollment.native.en",
+      "version": 1,
+      "capability_id": "medication.enroll",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "native_enrollment",
+      "turns": [
+        "DEMO explicit native enrollment"
+      ],
+      "expected_facts": {
+        "saved": true,
+        "active_regimens": 1,
+        "one_regimen": true
+      },
+      "forbidden_effects": [],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "readback",
+      "additional_phases": [
+        "prepare",
+        "patient_confirmation"
+      ],
+      "allow_degraded": false,
+      "require_receipt": true
+    },
+    {
+      "id": "knowledge.knowledge_not_found.en",
+      "version": 1,
+      "capability_id": "medication.knowledge",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "knowledge_not_found",
+      "turns": [
+        "ibuprofen"
+      ],
+      "expected_facts": {
+        "knowledge_status": "no_reliable_match",
+        "has_sources": false,
+        "has_knowledge": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [
+        "knowledge.lookup:not_found"
+      ],
+      "environment": "local_memory",
+      "phase": "read",
+      "additional_phases": [
+        "prepare"
+      ],
+      "allow_degraded": true,
+      "require_receipt": false
+    },
+    {
+      "id": "knowledge.knowledge_timeout.en",
+      "version": 1,
+      "capability_id": "medication.knowledge",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "knowledge_timeout",
+      "turns": [
+        "ibuprofen"
+      ],
+      "expected_facts": {
+        "knowledge_status": "unavailable",
+        "has_sources": false,
+        "has_knowledge": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [
+        "knowledge.lookup:unavailable"
+      ],
+      "environment": "local_memory",
+      "phase": "read",
+      "additional_phases": [
+        "prepare"
+      ],
+      "allow_degraded": true,
+      "require_receipt": false
+    },
+    {
+      "id": "knowledge.name_confirmation.en",
+      "version": 1,
+      "capability_id": "medication.knowledge",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "name_confirmation",
+      "turns": [
+        "ibuprofne"
+      ],
+      "expected_facts": {
+        "asked_confirmation": true,
+        "no_lookup_before_choice": true,
+        "has_knowledge": true,
+        "has_sources": true,
+        "knowledge_coverage": "partial"
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [
+        "knowledge.lookup:partial"
+      ],
+      "environment": "local_memory",
+      "phase": "read",
+      "additional_phases": [
+        "prepare"
+      ],
+      "allow_degraded": false,
+      "require_receipt": false
+    },
+    {
+      "id": "photo.failure.en",
+      "version": 1,
+      "capability_id": "medication.enroll",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "photo_failure",
+      "turns": [
+        "DEMO synthetic photo"
+      ],
+      "expected_facts": {
+        "original_retained": true,
+        "recoverable": true,
+        "no_medication": true
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare",
+      "additional_phases": [],
+      "allow_degraded": true,
+      "require_receipt": false
+    },
+    {
+      "id": "privacy.no_save.en",
+      "version": 1,
+      "capability_id": "medication.enroll",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "no_save",
+      "turns": [
+        "DEMO ephemeral enrollment"
+      ],
+      "expected_facts": {
+        "no_saved_task": true,
+        "no_saved_original": true,
+        "no_history": true,
+        "no_body_in_controls": true
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare",
+      "additional_phases": [],
+      "allow_degraded": false,
+      "require_receipt": false
+    },
+    {
+      "id": "feedback.native.en",
+      "version": 1,
+      "capability_id": "feedback.submit",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "native_feedback",
+      "turns": [
+        "DEMO feedback body"
+      ],
+      "expected_facts": {
+        "saved": true,
+        "replayed_same_receipt": true,
+        "native_record_matches": true
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "readback",
+      "additional_phases": [
+        "prepare",
+        "patient_confirmation"
+      ],
+      "allow_degraded": false,
+      "require_receipt": true
+    },
+    {
+      "id": "contact.native.en",
+      "version": 1,
+      "capability_id": "caregiver.add",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "native_contact",
+      "turns": [
+        "DEMO consenting contact"
+      ],
+      "expected_facts": {
+        "saved": true,
+        "one_contact": true,
+        "sharing_disabled": true
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "readback",
+      "additional_phases": [
+        "prepare",
+        "patient_confirmation"
+      ],
+      "allow_degraded": false,
+      "require_receipt": true
+    },
+    {
+      "id": "observation.native.en",
+      "version": 1,
+      "capability_id": "observation.add",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "native_observation",
+      "turns": [
+        "DEMO patient observation"
+      ],
+      "expected_facts": {
+        "saved": true,
+        "native_record_matches": true
+      },
+      "forbidden_effects": [],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "readback",
+      "additional_phases": [
+        "prepare",
+        "patient_confirmation"
+      ],
+      "allow_degraded": false,
+      "require_receipt": true
+    },
+    {
+      "id": "ownership.foreign.en",
+      "version": 1,
+      "capability_id": "profile.view",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "cross_owner",
+      "turns": [
+        "DEMO another owner request"
+      ],
+      "expected_facts": {
+        "foreign_read_denied": true,
+        "clinical_unchanged": true
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "read",
+      "additional_phases": [],
+      "allow_degraded": false,
+      "require_receipt": false
+    },
+    {
+      "id": "authority.stale.en",
+      "version": 1,
+      "capability_id": "feedback.submit",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "stale_action",
+      "turns": [
+        "DEMO stale confirmation"
+      ],
+      "expected_facts": {
+        "stale_refused": true,
+        "nothing_saved": true
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "patient_action",
+      "additional_phases": [],
+      "allow_degraded": false,
+      "require_receipt": false
+    },
+    {
+      "id": "provider.real.en",
+      "version": 1,
+      "capability_id": "medication.knowledge",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "provider_required",
+      "turns": [
+        "DEMO real provider acceptance requires separate approval"
+      ],
+      "expected_facts": {
+        "has_knowledge": true,
+        "has_sources": true
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "provider",
+      "phase": "read",
+      "additional_phases": [],
+      "allow_degraded": false,
+      "require_receipt": false
+    },
+    {
+      "id": "enrollment.manual.zh",
+      "version": 1,
+      "capability_id": "medication.enroll",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "manual_enrollment",
+      "turns": [
+        "我想添加一种药物",
+        "手动录入",
+        "药名：DEMO 布洛芬；规格：200mg；每次1片；每日2次",
+        "08:00, 20:00"
+      ],
+      "expected_facts": {
+        "method": "manual",
+        "has_name": true,
+        "ready_for_review": true,
+        "active_regimens": 0
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare",
+      "additional_phases": [],
+      "allow_degraded": false,
+      "require_receipt": false
+    },
+    {
+      "id": "enrollment.native.zh",
+      "version": 1,
+      "capability_id": "medication.enroll",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "native_enrollment",
+      "turns": [
+        "DEMO explicit native enrollment"
+      ],
+      "expected_facts": {
+        "saved": true,
+        "active_regimens": 1,
+        "one_regimen": true
+      },
+      "forbidden_effects": [],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "readback",
+      "additional_phases": [
+        "prepare",
+        "patient_confirmation"
+      ],
+      "allow_degraded": false,
+      "require_receipt": true
+    },
+    {
+      "id": "knowledge.knowledge_not_found.zh",
+      "version": 1,
+      "capability_id": "medication.knowledge",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "knowledge_not_found",
+      "turns": [
+        "布洛芬"
+      ],
+      "expected_facts": {
+        "knowledge_status": "no_reliable_match",
+        "has_sources": false,
+        "has_knowledge": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [
+        "knowledge.lookup:not_found"
+      ],
+      "environment": "local_memory",
+      "phase": "read",
+      "additional_phases": [
+        "prepare"
+      ],
+      "allow_degraded": true,
+      "require_receipt": false
+    },
+    {
+      "id": "knowledge.knowledge_timeout.zh",
+      "version": 1,
+      "capability_id": "medication.knowledge",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "knowledge_timeout",
+      "turns": [
+        "布洛芬"
+      ],
+      "expected_facts": {
+        "knowledge_status": "unavailable",
+        "has_sources": false,
+        "has_knowledge": false
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [
+        "knowledge.lookup:unavailable"
+      ],
+      "environment": "local_memory",
+      "phase": "read",
+      "additional_phases": [
+        "prepare"
+      ],
+      "allow_degraded": true,
+      "require_receipt": false
+    },
+    {
+      "id": "knowledge.name_confirmation.zh",
+      "version": 1,
+      "capability_id": "medication.knowledge",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "name_confirmation",
+      "turns": [
+        "布洛分"
+      ],
+      "expected_facts": {
+        "asked_confirmation": true,
+        "no_lookup_before_choice": true,
+        "has_knowledge": true,
+        "has_sources": true,
+        "knowledge_coverage": "partial"
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [
+        "knowledge.lookup:partial"
+      ],
+      "environment": "local_memory",
+      "phase": "read",
+      "additional_phases": [
+        "prepare"
+      ],
+      "allow_degraded": false,
+      "require_receipt": false
+    },
+    {
+      "id": "photo.failure.zh",
+      "version": 1,
+      "capability_id": "medication.enroll",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "photo_failure",
+      "turns": [
+        "DEMO synthetic photo"
+      ],
+      "expected_facts": {
+        "original_retained": true,
+        "recoverable": true,
+        "no_medication": true
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare",
+      "additional_phases": [],
+      "allow_degraded": true,
+      "require_receipt": false
+    },
+    {
+      "id": "privacy.no_save.zh",
+      "version": 1,
+      "capability_id": "medication.enroll",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "no_save",
+      "turns": [
+        "DEMO ephemeral enrollment"
+      ],
+      "expected_facts": {
+        "no_saved_task": true,
+        "no_saved_original": true,
+        "no_history": true,
+        "no_body_in_controls": true
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "prepare",
+      "additional_phases": [],
+      "allow_degraded": false,
+      "require_receipt": false
+    },
+    {
+      "id": "feedback.native.zh",
+      "version": 1,
+      "capability_id": "feedback.submit",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "native_feedback",
+      "turns": [
+        "DEMO feedback body"
+      ],
+      "expected_facts": {
+        "saved": true,
+        "replayed_same_receipt": true,
+        "native_record_matches": true
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "readback",
+      "additional_phases": [
+        "prepare",
+        "patient_confirmation"
+      ],
+      "allow_degraded": false,
+      "require_receipt": true
+    },
+    {
+      "id": "contact.native.zh",
+      "version": 1,
+      "capability_id": "caregiver.add",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "native_contact",
+      "turns": [
+        "DEMO consenting contact"
+      ],
+      "expected_facts": {
+        "saved": true,
+        "one_contact": true,
+        "sharing_disabled": true
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "readback",
+      "additional_phases": [
+        "prepare",
+        "patient_confirmation"
+      ],
+      "allow_degraded": false,
+      "require_receipt": true
+    },
+    {
+      "id": "observation.native.zh",
+      "version": 1,
+      "capability_id": "observation.add",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "native_observation",
+      "turns": [
+        "DEMO patient observation"
+      ],
+      "expected_facts": {
+        "saved": true,
+        "native_record_matches": true
+      },
+      "forbidden_effects": [],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "readback",
+      "additional_phases": [
+        "prepare",
+        "patient_confirmation"
+      ],
+      "allow_degraded": false,
+      "require_receipt": true
+    },
+    {
+      "id": "ownership.foreign.zh",
+      "version": 1,
+      "capability_id": "profile.view",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "cross_owner",
+      "turns": [
+        "DEMO another owner request"
+      ],
+      "expected_facts": {
+        "foreign_read_denied": true,
+        "clinical_unchanged": true
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "read",
+      "additional_phases": [],
+      "allow_degraded": false,
+      "require_receipt": false
+    },
+    {
+      "id": "authority.stale.zh",
+      "version": 1,
+      "capability_id": "feedback.submit",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "stale_action",
+      "turns": [
+        "DEMO stale confirmation"
+      ],
+      "expected_facts": {
+        "stale_refused": true,
+        "nothing_saved": true
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "local_memory",
+      "phase": "patient_action",
+      "additional_phases": [],
+      "allow_degraded": false,
+      "require_receipt": false
+    },
+    {
+      "id": "provider.real.zh",
+      "version": 1,
+      "capability_id": "medication.knowledge",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "provider_required",
+      "turns": [
+        "DEMO real provider acceptance requires separate approval"
+      ],
+      "expected_facts": {
+        "has_knowledge": true,
+        "has_sources": true
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [],
+      "environment": "provider",
+      "phase": "read",
+      "additional_phases": [],
+      "allow_degraded": false,
+      "require_receipt": false
+    },
+    {
+      "id": "knowledge.matched.0.en",
+      "version": 1,
+      "capability_id": "medication.knowledge",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "knowledge_matched",
+      "turns": [
+        "IBUPROFEN"
+      ],
+      "expected_facts": {
+        "has_knowledge": true,
+        "has_sources": true,
+        "personal_dosing_authority": false,
+        "knowledge_coverage": "partial"
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [
+        "knowledge.lookup:partial"
+      ],
+      "environment": "local_memory",
+      "phase": "read",
+      "additional_phases": [
+        "prepare"
+      ],
+      "allow_degraded": false,
+      "require_receipt": false
+    },
+    {
+      "id": "knowledge.matched.1.en",
+      "version": 1,
+      "capability_id": "medication.knowledge",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "knowledge_matched",
+      "turns": [
+        "ibuprofen"
+      ],
+      "expected_facts": {
+        "has_knowledge": true,
+        "has_sources": true,
+        "personal_dosing_authority": false,
+        "knowledge_coverage": "partial"
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [
+        "knowledge.lookup:partial"
+      ],
+      "environment": "local_memory",
+      "phase": "read",
+      "additional_phases": [
+        "prepare"
+      ],
+      "allow_degraded": false,
+      "require_receipt": false
+    },
+    {
+      "id": "knowledge.matched.2.en",
+      "version": 1,
+      "capability_id": "medication.knowledge",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "knowledge_matched",
+      "turns": [
+        "IbUpRoFeN"
+      ],
+      "expected_facts": {
+        "has_knowledge": true,
+        "has_sources": true,
+        "personal_dosing_authority": false,
+        "knowledge_coverage": "partial"
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [
+        "knowledge.lookup:partial"
+      ],
+      "environment": "local_memory",
+      "phase": "read",
+      "additional_phases": [
+        "prepare"
+      ],
+      "allow_degraded": false,
+      "require_receipt": false
+    },
+    {
+      "id": "knowledge.matched.3.en",
+      "version": 1,
+      "capability_id": "medication.knowledge",
+      "language": "en",
+      "risk": "high",
+      "setup_fixture": "knowledge_matched",
+      "turns": [
+        "ｉｂｕｐｒｏｆｅｎ"
+      ],
+      "expected_facts": {
+        "has_knowledge": true,
+        "has_sources": true,
+        "personal_dosing_authority": false,
+        "knowledge_coverage": "partial"
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [
+        "knowledge.lookup:partial"
+      ],
+      "environment": "local_memory",
+      "phase": "read",
+      "additional_phases": [
+        "prepare"
+      ],
+      "allow_degraded": false,
+      "require_receipt": false
+    },
+    {
+      "id": "knowledge.matched.4.zh",
+      "version": 1,
+      "capability_id": "medication.knowledge",
+      "language": "zh",
+      "risk": "high",
+      "setup_fixture": "knowledge_matched",
+      "turns": [
+        "布洛芬"
+      ],
+      "expected_facts": {
+        "has_knowledge": true,
+        "has_sources": true,
+        "personal_dosing_authority": false,
+        "knowledge_coverage": "partial"
+      },
+      "forbidden_effects": [
+        "clinical_writes"
+      ],
+      "required_explanations": [
+        "knowledge.lookup:partial"
+      ],
+      "environment": "local_memory",
+      "phase": "read",
+      "additional_phases": [
+        "prepare"
+      ],
+      "allow_degraded": false,
+      "require_receipt": false
+    }
+  ]
+}

@@ -1,13 +1,14 @@
+import type {SupportClientActions} from './AssistantSupportActions';
 import {Icon} from './Icon';
 import {ConversationSurface} from './ConversationSurface';
 import {ConversationHistoryBrowser} from './ConversationHistoryBrowser';
-import {MedicationChoices} from './MedicationChoices';
+import {MedicationChoices,MedicationNameChoices} from './MedicationChoices';
 import {AnswerSources} from './AnswerSources';
 import { useLanguage } from '../language';
 import { useEffect, useRef, useState } from 'react';
-import { api, type AgentUsage, type AgentMessageResponse, type ConversationEntry, type ChatPhotoContext, type NavigationContext, type MedicationSelection } from '../api/client';
+import { api, type AgentUsage, type AgentMessageResponse, type ConversationEntry, type ChatPhotoContext, type NavigationContext, type MedicationSelection, type NameSelection } from '../api/client';
 import {photoEvidence} from '../photoEvidence';
-import {answerExplanation,toolTraceLabel} from '../assistantResponsePresentation';
+import {answerExplanation,explanationStepsFromTrace,presentExplanation} from '../assistantResponsePresentation';
 import { ErrorNotice } from './primitives';
 import { VoiceInput } from './VoiceInput';
 import {BrowserTts} from '../browserTts';
@@ -15,8 +16,15 @@ import {ConfirmReportSheet} from './ConfirmReportSheet';
 import {CareReviewSheet} from './CareReviewSheet';
 import type {CareReview} from '../api/care';
 import {useImageConsent} from '../imageConsent';
+import {workflowApi,cancelWorkflowRun,readWorkflowRun,type RunProgress,type RunStatus,type WorkflowEvent,type WorkflowView,type WorkflowMessageResponse} from '../api/assistantWorkflows';
+import {sendWorkflowStream,WorkflowStreamError} from '../api/assistantWorkflowStream';
+import {AssistantProgress} from './AssistantProgress';
+import {AssistantWorkflow} from './AssistantWorkflow';
+import {AssistantWorkflowOriginals} from './AssistantWorkflowOriginals';
+import {WorkflowMemory,type WorkflowFile} from '../assistantWorkflowState';
 
-export function AssistantScreen({ sessionId, onSession, ownerId, compact = false, workspace = false, todayEntry = false, clearRevision = 0, active = true, onChanged,onVisualCheck,onHealthReview,onExpand,onViewTodayMedication,onClose,onSourceReturn,contextSlots={} }: {
+export function AssistantScreen({ sessionId, onSession, ownerId, compact = false, workspace = false, todayEntry = false, clearRevision = 0, active = true, onChanged,onVisualCheck,onHealthReview,onExpand,onViewTodayMedication,onClose,onSourceReturn,onSupportNavigate,onGuide,onConversationCleared,contextSlots={} }: {
+  onSupportNavigate?:SupportClientActions['navigate'];onGuide?:()=>void;onConversationCleared?:()=>void;
   onSourceReturn?:(source:NavigationContext)=>void;onClose?:()=>void;contextSlots?:Record<string,unknown>;
   sessionId: string | null; onSession: (id: string) => void; ownerId?:string; compact?: boolean; workspace?:boolean; todayEntry?:boolean; clearRevision?:number; onExpand?:()=>void; onViewTodayMedication?:()=>void; active?:boolean; onChanged?: () => void;onVisualCheck?:(id:string|null)=>void;onHealthReview?:(description:string)=>void;
 }) {
@@ -29,6 +37,76 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
   const [careProposal,setCareProposal]=useState<CareReview|null>(null);
   const [text, setText] = useState('');
   const [conversationId,setConversationId]=useState<string|null>(null);
+  const [workflow,setWorkflow]=useState<WorkflowView|null>(null);
+  const enrollmentPhotoTask=(workflow?.capability_id==='medication.enroll'||workflow?.capability_id==='medication.source.add')&&workflow.state!=='completed'&&workflow.state!=='cancelled';
+  const [workflowFormDirty,setWorkflowFormDirty]=useState(false);
+  const workflowMemory=useRef(new WorkflowMemory(ownerId??''));
+  const workflowWorkspace=useRef<string>(crypto.randomUUID());
+  const workflowAvailability=useRef(Promise.resolve(false));
+  const progressEnabled=useRef(false);
+  const activeRun=useRef<{id:string;controller:AbortController}|null>(null);
+  const blockedTurns=useRef(new Set<string>());
+  const [runProgress,setRunProgress]=useState<{id:string;owner:string|undefined;status:RunStatus|'connecting'|'unknown';event:RunProgress|null;stopping:boolean}|null>(null);
+  const [workflowSupported,setWorkflowSupported]=useState(false);
+  const [savedWorkflows,setSavedWorkflows]=useState<WorkflowView[]>([]);
+  const [savedTasksOpen,setSavedTasksOpen]=useState(false);
+  const [savedTasksError,setSavedTasksError]=useState(false);
+  const [savedTasksLoading,setSavedTasksLoading]=useState(false);
+  const pendingWorkflowEvent=useRef<{task:string;event:WorkflowEvent}|null>(null);
+  const [uploadingTask,setUploadingTask]=useState<string|null>(null);
+  const revoking=useRef(false);
+  const savedTasksRequest=useRef(0);
+  async function loadSavedTasks(){
+    const owner=currentOwner.current,request=++savedTasksRequest.current;
+    setSavedTasksLoading(true);setSavedTasksError(false);
+    const current=()=>mounted.current&&currentOwner.current===owner&&savedTasksRequest.current===request;
+    try{const rows=await workflowApi.list(undefined,true);if(current())setSavedWorkflows(rows.filter(row=>!['completed','cancelled'].includes(row.state)));}
+    catch{if(current())setSavedTasksError(true);}
+    finally{if(current())setSavedTasksLoading(false);}
+  }
+  useEffect(()=>{
+    let live=true;const requestOwner=ownerId;
+    progressEnabled.current=false;activeRun.current?.controller.abort();activeRun.current=null;setRunProgress(null);blockedTurns.current.clear();
+    workflowMemory.current.reset(ownerId??'');
+    setSavedWorkflows([]);setSavedTasksOpen(false);setSavedTasksError(false);setWorkflowSupported(false);
+    setWorkflow(null);setWorkflowFormDirty(false);workflowWorkspace.current=crypto.randomUUID();pendingWorkflowEvent.current=null;
+    const manifest=workflowApi.capabilities();
+    workflowAvailability.current=manifest.then(value=>{if(live)progressEnabled.current=value.enabled&&value.contract_version===1&&value.progress_enabled===true;return value.enabled&&value.contract_version===1;}).catch(()=>false);
+    void manifest.then(async value=>{
+      const supported=value.enabled&&value.contract_version===1;
+      if(!live||currentOwner.current!==requestOwner)return;
+      setWorkflowSupported(supported);if(!supported)return;
+      await loadSavedTasks();
+    }).catch(()=>{if(live)setSavedTasksLoading(false);});
+    return()=>{live=false;activeRun.current?.controller.abort();activeRun.current=null;};
+  },[ownerId]);
+  async function stopRun(){
+    const run=runProgress,owner=currentOwner.current;
+    if(!run||run.owner!==owner||!['running','cancelling'].includes(run.status))return;
+    setRunProgress(previous=>previous?.id===run.id?{...previous,stopping:true}:previous);
+    try{const snapshot=await cancelWorkflowRun(run.id);if(mounted.current&&currentOwner.current===owner)setRunProgress(previous=>previous?.id===run.id?{...previous,status:snapshot.status,event:snapshot.events.at(-1)??previous.event,stopping:snapshot.status==='cancelling'}:previous);}
+    catch(caught){if(mounted.current&&currentOwner.current===owner){setRunProgress(previous=>previous?.id===run.id?{...previous,stopping:false}:previous);setError(caught);}}
+  }
+  async function checkRun(){
+    const run=runProgress,owner=currentOwner.current;if(!run||run.owner!==owner)return;
+    try{const snapshot=await readWorkflowRun(run.id);if(mounted.current&&currentOwner.current===owner)setRunProgress(previous=>previous?.id===run.id?{...previous,status:snapshot.status,event:snapshot.events.at(-1)??previous.event,stopping:snapshot.status==='cancelling'}:previous);}
+    catch(caught){if(mounted.current&&currentOwner.current===owner)setError(caught);}
+  }
+  function applyWorkflow(view:WorkflowView|null){
+    if(view){if(!workflowMemory.current.remember(view))return false;if(view.workspace_id)workflowWorkspace.current=view.workspace_id;}
+    setWorkflow(view);return true;
+  }
+
+  async function saveWorkflowPhoto(task:WorkflowView,file:WorkflowFile,owner:string|undefined,currentView:string){
+    setUploadingTask(task.task_id);
+    try{
+      const response=await workflowApi.uploadOriginal(task.task_id,file.upload_id,file.file,task.revision,file.source_kind,photoConsent);
+      if(!mounted.current||currentOwner.current!==owner||viewKey.current!==currentView)return null;
+      if(!applyWorkflow(response.workflow))return null;
+      workflowMemory.current.acknowledge(task.task_id,file.upload_id,response.attachment.id);
+      return response.workflow;
+    }finally{if(mounted.current&&currentOwner.current===owner)setUploadingTask(null);}
+  }
   const [olderCursor,setOlderCursor]=useState<string|null>(null);
   const [viewSlots,setViewSlots]=useState(contextSlots);
   const [source,setSource]=useState<NavigationContext|null>(null);
@@ -41,7 +119,7 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
   useEffect(()=>{if(workspace)setHistoryOpen(wideWorkspace);},[workspace,wideWorkspace]);
   const [selectedHistory,setSelectedHistory]=useState<ConversationEntry|null>(null);
   const sending=useRef(false);
-  const outgoing=useRef(new Map<string,{id:string;text:string;photo:File|null;context?:ChatPhotoContext;selection?:MedicationSelection}>());
+  const outgoing=useRef(new Map<string,{id:string;text:string;photo:File|null;context?:ChatPhotoContext;selection?:MedicationSelection|NameSelection}>());
   useEffect(()=>{if(compact){setHistoryOpen(false);setSelectedHistory(null);}},[compact]);
   const [photo,setPhoto]=useState<File|null>(null);
   const [photoType,setPhotoType]=useState<'pharmacy_label'|'prescription'|'package'>('pharmacy_label');
@@ -68,7 +146,7 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
   useEffect(()=>{const element=timeline.current;if(!element||selectedHistory||element.getClientRects().length===0)return;const anchor=scrollAnchor.current;scrollAnchor.current=null;element.scrollTop=anchor?element.scrollHeight-anchor.height+anchor.top:element.scrollHeight;},[turns.length,recent.length,pendingText,conversationId,historyOpen,selectedHistory,visibleLiveTurns]);
   const [reportStates,setReportStates]=useState<Record<number,string>>({});
   const [confirmationIndex,setConfirmationIndex]=useState<number|null>(null);
-  type Snapshot={session:string|null;conversation:string|null;text:string;photo:File|null;photoType:typeof photoType;turns:AgentMessageResponse[];recent:typeof recent;sentTexts:string[];sentPhotoNames:string[];slots:Record<string,unknown>;source:NavigationContext|null;cursor:string|null;reportStates:Record<number,string>};
+  type Snapshot={workflowTask:string|null;session:string|null;conversation:string|null;text:string;photo:File|null;photoType:typeof photoType;turns:AgentMessageResponse[];recent:typeof recent;sentTexts:string[];sentPhotoNames:string[];slots:Record<string,unknown>;source:NavigationContext|null;cursor:string|null;reportStates:Record<number,string>};
   const views=useRef(new Map<string,Snapshot>());
   const selectionKey=ownerId?`pharmascan.conversation:${ownerId}`:null;
   const selectionLoaded=useRef<string|null>(null);
@@ -117,19 +195,19 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
     }
   },[turns,confirmationIndex]);
   const handledClear=useRef(0);
-  useEffect(()=>{if(clearRevision===handledClear.current)return;handledClear.current=clearRevision;recentLoad.current+=1;loadedSession.current=sessionId;setRecent([]);setTurns([]);setSentTexts([]);setSentPhotoNames([]);setReportStates({});setConfirmationIndex(null);setHistoryOpen(false);views.current.clear();outgoing.current.clear();setConversationId(null);if(selectionKey)localStorage.removeItem(selectionKey);setViewSlots({});setSource(null);setCareProposal(null);},[clearRevision,sessionId]);
+  useEffect(()=>{if(clearRevision===handledClear.current)return;handledClear.current=clearRevision;applyWorkflow(null);recentLoad.current+=1;loadedSession.current=sessionId;setRecent([]);setTurns([]);setSentTexts([]);setSentPhotoNames([]);setReportStates({});setConfirmationIndex(null);setHistoryOpen(false);views.current.clear();outgoing.current.clear();setConversationId(null);if(selectionKey)localStorage.removeItem(selectionKey);setViewSlots({});setSource(null);setCareProposal(null);},[clearRevision,sessionId]);
   useEffect(()=>{if(conversationId||!sessionId||loadedSession.current===sessionId||!api.recentTurns)return;let live=true;const version=++recentLoad.current;void Promise.resolve().then(()=>{if(!live)return;return api.recentTurns(sessionId).then(rows=>{if(live&&version===recentLoad.current&&loadedSession.current!==sessionId){loadedSession.current=sessionId;setRecent(rows);}}).catch(()=>{if(live&&version===recentLoad.current)setError(new Error('Could not restore recent conversation. Your medication records have not changed.'));});});return()=>{live=false;};},[sessionId,clearRevision,conversationId]);
 
   useEffect(()=>{let live=true; void Promise.resolve().then(()=>{if(!live||!api.agentUsage)return;return api.agentUsage().then(value=>{if(live)setUsage(value);}).catch(()=>{if(live)setUsage(null);});});return()=>{live=false;};},[]);
 
-  async function send(selection?:MedicationSelection,selectionLabel?:string) {
+  async function send(selection?:MedicationSelection|NameSelection,selectionLabel?:string) {
     const failed=outgoing.current.get(viewKey.current);
     if(!selection&&!text.trim()&&!photo&&failed?.selection){selection=failed.selection;selectionLabel=failed.text;}
     const attachment=selection?null:photo;
-    if (sending.current||busy||(!selection&&!text.trim()&&!attachment)) return;
+    if (sending.current||busy||workflowFormDirty||(!selection&&!text.trim()&&!attachment)) return;
     setConversationExpanded(true);
     if(text.trim().length>2000){setError(new Error(t('Keep your message within 2000 characters.')));return;}
-    if(attachment&&!photoConsent){setError(new Error(t('Allow photo processing before sending this image.')));return;}
+    if(attachment&&!photoConsent&&!(enrollmentPhotoTask&&workflow.save_mode==='allowed')){setError(new Error(t('Allow photo processing before sending this image.')));return;}
     if(attachment&&attachment.size>8_000_000){setError(new Error(t('Choose an image smaller than 8 MB.')));return;}
     sending.current=true;setPendingText(selectionLabel??(text.trim()||t('Photo attached')));
     setReportNotice('');
@@ -139,10 +217,31 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
     const sentView=viewKey.current;
     const question=selectionLabel??text.trim();
     const previousRequest=outgoing.current.get(sentView);
-    const request:{id:string;text:string;photo:File|null;context?:ChatPhotoContext;selection?:MedicationSelection}=previousRequest&&previousRequest.text===question&&previousRequest.photo===attachment&&previousRequest.selection?.choice_id===selection?.choice_id?previousRequest:{id:`turn-${crypto.randomUUID()}`,text:question,photo:attachment,...(selection?{selection}:{})};
+    const request:{id:string;text:string;photo:File|null;context?:ChatPhotoContext;selection?:MedicationSelection|NameSelection}=previousRequest&&previousRequest.text===question&&previousRequest.photo===attachment&&JSON.stringify(previousRequest.selection)===JSON.stringify(selection)?previousRequest:{id:`turn-${crypto.randomUUID()}`,text:question,photo:attachment,...(selection?{selection}:{})};
     outgoing.current.set(sentView,request);
+    if(blockedTurns.current.has(request.id)){sending.current=false;setPendingText('');setError(new Error(language==='zh'?'请先核对处理状态、对话或已保存草稿，避免重复办理。':'Check processing status, conversation history or saved drafts before repeating this request.'));return;}
+    setRunProgress(null);
     setBusy(true); setError(null);
     try {
+      if(attachment&&enrollmentPhotoTask){
+        workflowMemory.current.remember(workflow);
+        const pending=workflowMemory.current.addFile(workflow.task_id,attachment,photoType);
+        if(workflow.save_mode==='allowed'){
+          await saveWorkflowPhoto(workflow,pending,sentOwner,sentView);
+        }else{
+          const result=await workflowApi.previewImage(workflow.task_id,crypto.randomUUID(),attachment,workflow.revision,photoType,photoConsent);
+          if(!mounted.current||currentOwner.current!==sentOwner||viewKey.current!==sentView)return;
+          applyWorkflow({...workflow,revision:result.revision,state:result.outcome==='failed'?'failed_recoverable':'collecting',
+            visible_fields:result.outcome==='success'&&result.fields?{...result.fields,...workflow.visible_fields,page_photo_previewed:true}:workflow.visible_fields,
+            prompt_key:'assistant.enrollment.ephemeral_photo'});
+          if(result.outcome==='success'&&result.fields){
+            const page=workflowMemory.current.ephemeral(workflow.task_id);
+            if(page){const validated=await workflowApi.preview(workflow.task_id,page);if(!mounted.current||currentOwner.current!==sentOwner||viewKey.current!==sentView)return;applyWorkflow(validated);}
+          }
+        }
+        if(mounted.current&&currentOwner.current===sentOwner&&viewKey.current===sentView){setPhoto(null);outgoing.current.delete(sentView);}
+        return;
+      }
       let photoContext:ChatPhotoContext|undefined=request.context;
       if(attachment&&!photoContext){
         const route=await api.checkInput(attachment);
@@ -155,19 +254,94 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
         }
         request.context=photoContext;
       }
-      const reply = await api.sendMessage({ conversation_id:conversationId, ...(source?{navigation_context:{page:source.page,medication_id:source.medication_id??null,regimen_id:source.regimen_id??null}}:{}),text: question, ...(photoContext?{photo_context:photoContext}:{}), language, session_id: sessionId,
-        client_turn_id: request.id, slots: viewSlots, ...(request.selection?{medication_selection:request.selection}:{}) });
+      const input = { conversation_id:conversationId, ...(source?{navigation_context:{page:source.page,medication_id:source.medication_id??null,regimen_id:source.regimen_id??null}}:{}),text: question, ...(photoContext?{photo_context:photoContext}:{}), language, session_id: sessionId,
+        client_turn_id: request.id, slots: viewSlots, ...(request.selection?('candidate_id' in request.selection?{name_selection:request.selection}:{medication_selection:request.selection}):{}) };
+      const useWorkflow=workflow!==null||await workflowAvailability.current;
+      if(!mounted.current||currentOwner.current!==sentOwner||viewKey.current!==sentView)return;
+      const workflowInput={...input,workspace_id:workflowWorkspace.current,...(workflow?{task_id:workflow.task_id,expected_revision:workflow.revision,save_mode:workflow.save_mode,...(workflow.save_mode==='ephemeral'?{ephemeral:{capability_id:workflow.capability_id,fields:workflow.input_fields??workflow.visible_fields}}:{})}:{})};
+      let response:WorkflowMessageResponse|null=null;
+      if(useWorkflow&&progressEnabled.current){
+        const id=crypto.randomUUID(),controller=new AbortController();activeRun.current={id,controller};
+        setRunProgress({id,owner:sentOwner,status:'connecting',event:null,stopping:false});
+        response=await sendWorkflowStream(workflowInput,id,{signal:controller.signal,onEvent:event=>{
+          if(mounted.current&&currentOwner.current===sentOwner&&viewKey.current===sentView)setRunProgress(previous=>previous?.id===id?{...previous,event,status:event.status,stopping:event.status==='cancelling'}:previous);
+        }});
+      }else if(useWorkflow)response=await workflowApi.sendMessage(workflowInput);
+      const reply = useWorkflow?response!.reply:await api.sendMessage(input);
       if (!mounted.current||currentOwner.current!==sentOwner) return;
+      if(useWorkflow)applyWorkflow(response!.workflow);
       outgoing.current.delete(sentView);
       // Timeline pagination keeps stable indices; model context is bounded separately.
-      setHistoryRevision(value=>value+1);if(reply.history_saved===false)setError(new Error('Could not save this conversation. Your answer is still available.'));loadedSession.current=reply.session_id;setSentTexts(previous=>[...previous,question]);
+      setHistoryRevision(value=>value+1);if(reply.history_saved===false&&response?.workflow?.save_mode!=='ephemeral')setError(new Error('Could not save this conversation. Your answer is still available.'));loadedSession.current=reply.session_id;setSentTexts(previous=>[...previous,question]);
       setSentPhotoNames(previous=>[...previous,attachment?.name??'']);
       if(reply.conversation_id){setConversationId(reply.conversation_id);viewKey.current=reply.conversation_id;if(selectionKey&&reply.history_saved)localStorage.setItem(selectionKey,reply.conversation_id);}
       if(reply.pending_report)setConfirmationIndex(turns.length);
-      setUsage(reply.usage??null); window.localStorage.setItem("pharmascan.agent-session",reply.session_id); onSession(reply.session_id); setTurns(previous => [...previous.map(row=>({...row,medication_choice:null})), reply]); if(!selection){setText('');setPhoto(null);}
+      setUsage(reply.usage??null); window.localStorage.setItem("pharmascan.agent-session",reply.session_id); onSession(reply.session_id); setTurns(previous => [...previous.map(row=>({...row,medication_choice:null,name_choice:null})), reply]); if(!selection){setText('');setPhoto(null);}
       if (playbackOptions.current.active && playbackOptions.current.enabled && playbackOptions.current.autoplay && playbackOptions.current.language===sentLanguage) void readAloud(reply.message,turns.length);
-    } catch (caught) { if (mounted.current&&currentOwner.current===sentOwner) setError(caught); }
-    finally { if(currentOwner.current===sentOwner){sending.current=false;if (mounted.current){setBusy(false);setPendingText('');}} }
+    } catch (caught) {
+      if(caught instanceof WorkflowStreamError)blockedTurns.current.add(request.id);
+      if (mounted.current&&currentOwner.current===sentOwner){
+        if(caught instanceof WorkflowStreamError)setRunProgress(previous=>previous?.id===caught.runId?{...previous,status:['completed','cancelled','failed'].includes(caught.status)?caught.status:'unknown',stopping:false}:previous);
+        setError(caught instanceof WorkflowStreamError&&language==='zh'?new Error(caught.status==='cancelled'?'处理已停止，已完成的更改会保留。':'回答连接已结束，请先查看处理状态、对话或已保存草稿，再决定下一步。'):caught);
+      }
+    }
+    finally { if(currentOwner.current===sentOwner){activeRun.current=null;sending.current=false;if (mounted.current){setBusy(false);setPendingText('');}} }
+  }
+
+  async function refreshWorkflow(){
+    if(!workflow||busy)return;
+    const task=workflow,owner=currentOwner.current,view=viewKey.current;
+    const current=()=>mounted.current&&currentOwner.current===owner&&viewKey.current===view;
+    setBusy(true);setError(null);
+    try{
+      let latest=await workflowApi.view(task.task_id);if(!current())return;
+      const sourceCapture=['library.pdf.add','gallery.photo.add','medication.source.add','medication.source.review','dose.report','dose.prn.report','dose.late.review','dose.correction.review','observation.add','observation.edit','observation.delete','inventory.count','barrier.add','followup.add','followup.edit','followup.contacted','followup.complete','followup.defer','followup.cancel','gallery.photo.edit','gallery.photo.remove','gallery.photo.delete','gallery.photo.retire','library.pdf.edit','library.pdf.delete'].includes(latest.capability_id)&&latest.save_mode==='allowed'&&latest.result_ref!==null&&!['completed','cancelled','suspended'].includes(latest.state);
+      if(sourceCapture){latest=await workflowApi.event(latest.task_id,{event_id:crypto.randomUUID(),expected_revision:latest.revision,kind:'report_business_result',values:{}},undefined);if(!current())return;}
+      const page=workflowMemory.current.ephemeral(task.task_id);
+      if(latest.save_mode==='ephemeral'&&page)latest=await workflowApi.preview(task.task_id,page);
+      if(current()&&applyWorkflow(latest)&&(sourceCapture||task.state!=='completed'&&latest.state==='completed'&&['medication.enroll','medication.draft.resume','dose.report','dose.prn.report','dose.late.review','dose.correction.review','observation.add','observation.edit','observation.delete','inventory.count','barrier.add','followup.add','followup.edit','followup.contacted','followup.complete','followup.defer','followup.cancel','medication.plan.change','medication.plan.end','medication.draft.delete'].includes(latest.capability_id)))onChanged?.();
+    }catch(caught){if(current())setError(caught);}
+    finally{if(current())setBusy(false);}
+  }
+
+  async function workflowEvent(event:WorkflowEvent){
+    if(workflow&&event.kind==='cancel_save'&&uploadingTask===workflow.task_id){
+      if(revoking.current)return;
+      revoking.current=true;
+      const task=workflow,owner=currentOwner.current,view=viewKey.current;
+      const isCurrent=()=>mounted.current&&currentOwner.current===owner&&viewKey.current===view;
+      try{
+        const latest=await workflowApi.view(task.task_id);
+        if(!isCurrent())return;
+        const result=latest.save_mode==='ephemeral'?latest:await workflowApi.event(task.task_id,{...event,expected_revision:latest.revision},undefined);
+        if(isCurrent()&&applyWorkflow(result))workflowMemory.current.revokeUploads(task.task_id);
+      }catch(caught){if(isCurrent())setError(caught);}
+      finally{revoking.current=false;}
+      return;
+    }
+    if(!workflow||busy||sending.current)return;
+    const task=workflow,owner=currentOwner.current,view=viewKey.current;
+    if(event.kind==='allow_save'&&photo&&!['gallery.photo.add','library.pdf.add','image.compare','source.preview'].includes(task.capability_id)){workflowMemory.current.remember(task);workflowMemory.current.addFile(task.task_id,photo,photoType);}
+    const pending=pendingWorkflowEvent.current;
+    const request=pending?.task===task.task_id&&pending.event.expected_revision===event.expected_revision&&pending.event.kind===event.kind&&JSON.stringify(pending.event.values)===JSON.stringify(event.values)?pending.event:event;
+    pendingWorkflowEvent.current={task:task.task_id,event:request};
+    sending.current=true;setBusy(true);setError(null);
+    try{
+      const result=await workflowApi.event(task.task_id,request,event.kind==='allow_save'?workflowMemory.current.pagePayload(task.task_id):task.save_mode==='ephemeral'?{capability_id:task.capability_id,fields:task.input_fields??task.visible_fields}:undefined);
+      if(mounted.current&&currentOwner.current===owner&&viewKey.current===view){
+        pendingWorkflowEvent.current=null;if(!applyWorkflow(result))return;
+        if(event.kind==='cancel_save')workflowMemory.current.revokeUploads(task.task_id);
+        if(event.kind==='allow_save'&&result.save_mode==='allowed'&&result.storage_state==='saved'&&!['gallery.photo.add','library.pdf.add','image.compare','source.preview'].includes(result.capability_id)){
+          let current:WorkflowView|null=result;
+          for(const file of workflowMemory.current.files(result.task_id).filter(row=>!row.attachment_id)){
+            if(!current)break;current=await saveWorkflowPhoto(current,file,owner,view);
+          }
+          if(current)setPhoto(null);
+        }
+        if(mounted.current&&currentOwner.current===owner&&viewKey.current===view)return workflowMemory.current.get(result.task_id)??undefined;
+      }
+    }catch(caught){if(mounted.current&&currentOwner.current===owner&&viewKey.current===view)setError(caught);}
+    finally{if(currentOwner.current===owner){sending.current=false;if(mounted.current)setBusy(false);}}
   }
 
   async function readAloud(message: string, index: number) {
@@ -212,15 +386,15 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
   }
 
   function showCurrentConversation(){if(!wideWorkspace)setHistoryOpen(false);setSelectedHistory(null);requestAnimationFrame(()=>focusMessage());}
-  function rememberView(){views.current.set(viewKey.current,{session:sessionId,conversation:conversationId,text,photo,photoType,turns,recent,sentTexts,sentPhotoNames,slots:viewSlots,source,cursor:olderCursor,reportStates});}
-  function returnTemporary(){const entry=[...views.current.entries()].reverse().find(([key,row])=>key!==viewKey.current&&!row.conversation&&(row.text||row.photo||row.turns.length||row.recent.length));if(!entry)return;rememberView();const [key,row]=entry;viewKey.current=key;setConversationId(null);if(selectionKey)localStorage.removeItem(selectionKey);if(row.session){loadedSession.current=row.session;onSession(row.session);}setText(row.text);setPhoto(row.photo);setPhotoType(row.photoType);setTurns(row.turns);setRecent(row.recent);setSentTexts(row.sentTexts);setSentPhotoNames(row.sentPhotoNames);setViewSlots(row.slots);setSource(row.source);setOlderCursor(row.cursor);setReportStates(row.reportStates);}
-  async function selectConversation(id:string){
+  function rememberView(){views.current.set(viewKey.current,{workflowTask:workflow?.task_id??null,session:sessionId,conversation:conversationId,text,photo,photoType,turns,recent,sentTexts,sentPhotoNames,slots:viewSlots,source,cursor:olderCursor,reportStates});}
+  function returnTemporary(){const entry=[...views.current.entries()].reverse().find(([key,row])=>key!==viewKey.current&&!row.conversation&&(row.text||row.photo||row.turns.length||row.recent.length));if(!entry)return;rememberView();const [key,row]=entry;viewKey.current=key;applyWorkflow(row.workflowTask?workflowMemory.current.get(row.workflowTask):null);setConversationId(null);if(selectionKey)localStorage.removeItem(selectionKey);if(row.session){loadedSession.current=row.session;onSession(row.session);}setText(row.text);setPhoto(row.photo);setPhotoType(row.photoType);setTurns(row.turns);setRecent(row.recent);setSentTexts(row.sentTexts);setSentPhotoNames(row.sentPhotoNames);setViewSlots(row.slots);setSource(row.source);setOlderCursor(row.cursor);setReportStates(row.reportStates);}
+  async function selectConversation(id:string,restoredTask?:WorkflowView,prepared?:Awaited<ReturnType<typeof api.resumeConversation>>){
     if(sending.current||busy||turns.some(row=>Boolean(row.pending_report))||careProposal)return;
     rememberView();const requestOwner=currentOwner.current;sending.current=true;setBusy(true);setError(null);stopPlayback();recentLoad.current+=1;
     try{
-      const saved=views.current.get(id);
-      const [resumed,page]=await Promise.all([saved?.session?Promise.resolve({session_id:saved.session}):api.resumeConversation(id),api.conversation(id)]);if(!mounted.current||currentOwner.current!==requestOwner)return;
-      viewKey.current=id;setConversationId(id);setOlderCursor(page.next_before);
+      const saved=restoredTask||prepared?undefined:views.current.get(id);
+      const [resumed,page]=await Promise.all([prepared?Promise.resolve(prepared):saved?.session?Promise.resolve({session_id:saved.session}):api.resumeConversation(id),api.conversation(id)]);if(!mounted.current||currentOwner.current!==requestOwner)return;
+      viewKey.current=id;applyWorkflow(restoredTask??(saved?.workflowTask?workflowMemory.current.get(saved.workflowTask):null));setConversationId(id);setOlderCursor(page.next_before);
       loadedSession.current=resumed.session_id;onSession(resumed.session_id);localStorage.setItem('pharmascan.agent-session',resumed.session_id);if(selectionKey)localStorage.setItem(selectionKey,id);
       setRecent(saved?.recent??page.entries.map(row=>({user:row.user_text,assistant:row.assistant_text,photo:row.photo_attached})));setTurns(saved?.turns??[]);setSentTexts(saved?.sentTexts??[]);setSentPhotoNames(saved?.sentPhotoNames??[]);setReportStates(saved?.reportStates??{});setConfirmationIndex(null);setSelectedHistory(null);if(!wideWorkspace)setHistoryOpen(false);
       setText(saved?.text??'');setPhoto(saved?.photo??null);setPhotoType(saved?.photoType??'pharmacy_label');setViewSlots(saved?.slots??{});setSource(saved?.source??null);
@@ -229,17 +403,47 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
   }
   useEffect(()=>{if(!selectionKey||selectionLoaded.current===selectionKey||!api.resumeConversation)return;selectionLoaded.current=selectionKey;const saved=localStorage.getItem(selectionKey);if(saved)void selectConversation(saved);},[selectionKey]);
   async function earlierMessages(){if(!conversationId||!olderCursor||busy)return;const requestOwner=currentOwner.current;setBusy(true);try{const page=await api.conversation(conversationId,olderCursor);if(currentOwner.current!==requestOwner)return;retainScroll();setRecent(previous=>[...page.entries.map(row=>({user:row.user_text,assistant:row.assistant_text,photo:row.photo_attached})),...previous]);setOlderCursor(page.next_before);}catch(caught){if(currentOwner.current===requestOwner)setError(caught);}finally{if(currentOwner.current===requestOwner)setBusy(false);}}
-  const workspaceLocked=busy||turns.some(row=>Boolean(row.pending_report))||careProposal!==null;
-  async function newConversation(){
-    if(workspaceLocked||sending.current)return;
+  const workspaceLocked=busy||workflowFormDirty||turns.some(row=>Boolean(row.pending_report))||careProposal!==null;
+  async function newConversation(restoredTask?:WorkflowView,prepared?:Awaited<ReturnType<typeof api.newConversation>>){
+    if((prepared?busy||turns.some(row=>Boolean(row.pending_report))||careProposal!==null:workspaceLocked)||sending.current)return;
     rememberView();sending.current=true;setBusy(true);setError(null);if(!wideWorkspace)setHistoryOpen(false);
     const requestOwner=currentOwner.current;
-    try{const session=await api.newConversation();if(!mounted.current||currentOwner.current!==requestOwner)return;
+    try{const session=prepared??await api.newConversation();if(!mounted.current||currentOwner.current!==requestOwner)return;
       stopPlayback();setSpeaking(false);recentLoad.current+=1;loadedSession.current=session.session_id;
       window.localStorage.setItem('pharmascan.agent-session',session.session_id);onSession(session.session_id);
-      setConversationId(null);viewKey.current=`temporary:${crypto.randomUUID()}`;if(selectionKey)localStorage.removeItem(selectionKey);setText('');setPhoto(null);setViewSlots({});setSource(null);setOlderCursor(null);
+      setConversationId(null);applyWorkflow(restoredTask??null);pendingWorkflowEvent.current=null;viewKey.current=`temporary:${crypto.randomUUID()}`;if(selectionKey)localStorage.removeItem(selectionKey);setText('');setPhoto(null);setViewSlots({});setSource(null);setOlderCursor(null);
       setTurns([]);setRecent([]);setSentTexts([]);setSentPhotoNames([]);setReportStates({});setConfirmationIndex(null);setReportNotice('');
     }catch(caught){if(mounted.current&&currentOwner.current===requestOwner)setError(caught);}finally{if(currentOwner.current===requestOwner){sending.current=false;if(mounted.current)setBusy(false);}}
+  }
+  async function resumeDraftWorkflow(){
+    if(!workflow||workspaceLocked||sending.current)return;
+    const task=workflow,owner=currentOwner.current,view=viewKey.current;
+    sending.current=true;setBusy(true);setError(null);
+    const current=()=>mounted.current&&currentOwner.current===owner&&viewKey.current===view;
+    try{
+      const restored=await workflowApi.resumeDraft(task.task_id,task.revision);
+      if(!current())return;
+      sending.current=false;setBusy(false);
+      if(restored.conversation_id)await selectConversation(restored.conversation_id,restored);
+      else await newConversation(restored);
+      if(currentOwner.current===owner)setSavedTasksOpen(false);
+    }catch(caught){if(current())setError(caught);}
+    finally{if(mounted.current&&currentOwner.current===owner){sending.current=false;setBusy(false);}}
+  }
+  async function restoreWorkflow(task:string){
+    if(workspaceLocked||sending.current)return;
+    const owner=currentOwner.current;
+    try{
+      let restored=await workflowApi.view(task);
+      if(!mounted.current||currentOwner.current!==owner)return;
+      if(!restored.workspace_id)throw new Error('This task cannot be restored by this app version.');
+      const page=workflowMemory.current.ephemeral(task);
+      if(restored.save_mode==='ephemeral'&&page)restored=await workflowApi.preview(task,page);
+      if(!mounted.current||currentOwner.current!==owner)return;
+      if(restored.conversation_id)await selectConversation(restored.conversation_id,restored);
+      else await newConversation(restored);
+      if(currentOwner.current===owner)setSavedTasksOpen(false);
+    }catch(caught){if(mounted.current&&currentOwner.current===owner)setError(caught);}
   }
   const newButton=<button className="icon-button" aria-label={t('New conversation')} title={t('New conversation')} disabled={workspaceLocked} onClick={()=>void newConversation()}><Icon name="plus"/></button>;
   const historyToggle=<button className="icon-button" aria-label={t('Conversation history')} title={t(historyOpen?'Hide conversation sidebar':'Show conversation sidebar')} aria-expanded={historyOpen} aria-controls="assistant-conversation-history" disabled={workspaceLocked} onClick={()=>setHistoryOpen(value=>!value)}><Icon name="panel"/></button>;
@@ -274,6 +478,7 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
         <p className="user-message">{sentPhotoNames[index]?<span className="chat-photo-note">{t('Photo attached')}: {sentPhotoNames[index]}<br/></span>:null}{sentTexts[index]}</p>
         <p>{turn.medication_choice?.prompt||patientMessage(turn.message)}</p>
         {turn.medication_choice?<MedicationChoices choice={turn.medication_choice} disabled={busy||index!==turns.length-1} onChoose={(choice,label)=>void send(choice,label)}/>:null}
+        {turn.name_choice?<MedicationNameChoices choice={turn.name_choice} disabled={busy||index!==turns.length-1} onChoose={(choice,label)=>void send(choice,label)}/>:null}
         <AnswerSources traces={turn.tool_traces}/>
         {turn.health_note_request?<button onClick={()=>onHealthReview?.(turn.health_note_request?.description??'')}>{t('Review health note')}</button>:null}
         {turn.care_request?<button onClick={()=>setCareProposal(turn.care_request??null)}>{t('Review medication-care record')}</button>:null}
@@ -285,12 +490,16 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
           <button className="icon-button speech-toggle" aria-label={t(speaking&&speakingIndex===index?'Stop audio':'Play response')} aria-pressed={speaking&&speakingIndex===index} onClick={()=>{if(speaking&&speakingIndex===index){stopPlayback();setSpeaking(false);}else void readAloud(turn.message,index);}} disabled={!preferences.voice_enabled}><Icon name="speaker"/></button>
         </div>
         <details><summary>{t('How this answer was made')}</summary><p>{t(answerExplanation(turn.mode))}</p>
-          <ul>{turn.tool_traces.map((trace, traceIndex) => <li key={traceIndex}>{toolTraceLabel(trace)}: {trace.status}{trace.error_code?` (${trace.error_code})`:''}</li>)}</ul>
+          <ul>{turn.tool_traces.flatMap(explanationStepsFromTrace).map((step, stepIndex) => <li key={stepIndex}>{presentExplanation(step,language)}</li>)}</ul>
         </details>
       </li>)}
     </ul> : null}</details>:null}
 
-    {pendingText?<div className="turn pending-message"><p className="user-message">{pendingText}</p>{busy?<p role="status">{t('Checking your records...')}</p>:null}</div>:null}
+    {workflowSupported?<section aria-label={t('Unfinished tasks')}><button type="button" disabled={workspaceLocked} aria-expanded={savedTasksOpen} onClick={()=>setSavedTasksOpen(value=>!value)}>{t('Unfinished tasks')}</button>{savedTasksOpen?<div>{savedTasksLoading?<p role="status">{t('Loading tasks...')}</p>:savedTasksError?<p role="status">{t('Could not load unfinished tasks. Try again.')}</p>:savedWorkflows.length?<ul>{savedWorkflows.map(row=><li key={row.task_id}><button disabled={workspaceLocked} onClick={()=>void restoreWorkflow(row.task_id)}>{t('Resume task')}: {typeof row.visible_fields.medication_name==='string'?row.visible_fields.medication_name:t(row.save_mode==='ephemeral'?'Unsaved task':'Saved task')}</button></li>)}</ul>:<p>{t('No unfinished tasks.')}</p>}</div>:null}</section>:null}
+    {savedTasksOpen&&savedTasksError?<button disabled={savedTasksLoading} onClick={()=>void loadSavedTasks()}>{t('Retry loading tasks')}</button>:null}
+    {!selectedHistory&&workflow?<><AssistantWorkflow clientActions={{adoptNew:session=>newConversation(undefined,session),adoptResume:(id,session)=>selectConversation(id,undefined,session),cleared:()=>{applyWorkflow(null);onConversationCleared?.();},navigate:onSupportNavigate,guide:onGuide,transcript:value=>{setText(value);focusMessage();},play:value=>readAloud(value,-1),stop:()=>{stopPlayback();setSpeaking(false);},voiceEnabled:preferences.voice_enabled,active}} key={`${ownerId}:${workflow.task_id}`} view={workflow} busy={busy} sessionId={sessionId} onClinicalChanged={onChanged} canRevoke={uploadingTask===workflow.task_id} onEvent={workflowEvent} onDirtyChange={setWorkflowFormDirty} onRefresh={()=>void refreshWorkflow()} onUpload={()=>photoInput.current?.click()} onResumeDraft={resumeDraftWorkflow} onView={applyWorkflow} onOriginalUploadState={(task,active)=>{if(currentOwner.current!==ownerId)return;if(active)setUploadingTask(task);else setUploadingTask(current=>current===task?null:current);}}/><AssistantWorkflowOriginals key={`${ownerId}:${workflow.task_id}:${workflow.save_mode}`} view={workflow} files={workflowMemory.current.files(workflow.task_id)} busy={busy} consent={photoConsent} onConsent={setPhotoConsent} onView={applyWorkflow}/></>:null}
+    {runProgress?<AssistantProgress language={language} {...runProgress} onStop={()=>void stopRun()} onCheck={()=>void checkRun()}/>:null}
+    {pendingText?<div className="turn pending-message"><p className="user-message">{pendingText}</p>{busy&&!runProgress?<p role="status">{t('Checking your records...')}</p>:null}</div>:null}
     {workspace&&busy&&!pendingText?<p role="status">{t('Starting a new conversation?')}</p>:null}
     {active&&error ? <ErrorNotice error={error} /> : null}
     {workspace&&reportNotice ? <p role="status">{t(reportNotice)}</p> : null}
@@ -312,7 +521,7 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
         <label>{t('Photo type')} <select value={photoType} onChange={event=>setPhotoType(event.target.value as typeof photoType)}>
           <option value="pharmacy_label">{t('Pharmacy label')}</option><option value="prescription">{t('Prescription')}</option><option value="package">{t('Medicine packaging')}</option>
         </select></label>
-        <label className="photo-consent"><input type="checkbox" checked={photoConsent} onChange={event=>setPhotoConsent(event.target.checked)}/>{t('Allow photo processing. The image is not saved; extracted details may appear in saved chats.')}</label>
+        <label className="photo-consent"><input type="checkbox" checked={photoConsent} onChange={event=>setPhotoConsent(event.target.checked)}/>{t(enrollmentPhotoTask?(workflow.save_mode==='allowed'?'Allow photo processing. The original will be saved with this task.':'Allow photo processing. This app will not save the original; refreshing loses the page copy.'):'Allow photo processing. The image is not saved; extracted details may appear in saved chats.')}</label>
       </div>
       <button type="button" className="icon-button" aria-label={t('Remove photo')} onClick={()=>setPhoto(null)}><Icon name="close"/></button>
     </div>:null}
@@ -329,7 +538,7 @@ export function AssistantScreen({ sessionId, onSession, ownerId, compact = false
         <span className="sr-only">{t('AI conversations left today')}: {remaining} / {usage.limit} · {t('Resets at midnight Singapore time')}</span>
       </span>:null}
       {preferences.voice_enabled ? <VoiceInput key={`${language}:${viewKey.current}`} onTranscript={setText} disabled={busy||!active} /> : null}
-      <button className="primary composer-send" aria-label={t(busy?'Sending...':'Send')} title={t(busy?'Sending...':'Send')} onClick={() => void send()} disabled={busy || (!text.trim()&&!photo) || Boolean(photo&&!photoConsent)} aria-busy={busy}>{workspace?<Icon name="send"/>:t('Send')}</button>
+      <button className="primary composer-send" aria-label={t(busy?'Sending...':'Send')} title={t(busy?'Sending...':'Send')} onClick={() => void send()} disabled={busy || workflowFormDirty || (!text.trim()&&!photo) || Boolean(photo&&!photoConsent&&!(enrollmentPhotoTask&&workflow.save_mode==='allowed'))} aria-busy={busy}>{workspace?<Icon name="send"/>:t('Send')}</button>
     </div>
     {usage&&compact&&todayEntry?<p className="today-assistant__allowance" role="status" title={`${t('AI conversations left today')} · ${t('Resets at midnight Singapore time')}`}>{t('AI conversations left today')}: {remaining} / {usage.limit}</p>:null}
     {usage&&!compact ? <p className="ai-allowance" role="status"><span className="allowance-detail">{t('AI conversations left today')}: {remaining} / {usage.limit} · {t('Resets at midnight Singapore time')}{usage.llm_user_turns>=usage.limit?`. ${t('Your medication records, reports and reminders still work.')}`:''}</span><span className="allowance-compact" aria-hidden="true">AI: {remaining} / {usage.limit}</span></p> : null}

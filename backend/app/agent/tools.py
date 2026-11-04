@@ -6,12 +6,15 @@ declares its parameters as a frozen DTO; nothing accepts a raw dict.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date
 from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic.json_schema import SkipJsonSchema
 
+from ..contracts.dto import ToolTraceDTO
 from ..contracts.enums import ToolName, ToolStatus
 
 
@@ -27,6 +30,13 @@ class ToolRequest(ToolDTO):
     """
 
     patient_id: UUID
+    retain_content: bool = True
+    content_guard: SkipJsonSchema[Callable[[Callable[[], None]], bool] | None] = Field(
+        default=None,
+        exclude=True,
+        repr=False,
+    )
+    trace_writer: SkipJsonSchema[Callable[[ToolTraceDTO], bool] | None] = Field(default=None, exclude=True, repr=False)
     session_id: UUID
     correlation_id: UUID
     client_turn_id: str = Field(min_length=1, max_length=128)

@@ -17,9 +17,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..contracts.chat_photo import ChatPhotoContext
 from ..contracts.dose_display import DoseBasis
-from ..contracts.dto import IDEMPOTENCY_KEY_PATTERN, PendingSelfReportDTO
+from ..contracts.dto import IDEMPOTENCY_KEY_PATTERN, MedicationIdentityReviewDTO, PendingSelfReportDTO
+from ..contracts.enrollment_workflow import EnrollmentFields
 from ..contracts.long_term import CareReview
 from ..contracts.medication_dialogue import MedicationChoice, MedicationSelection
+from ..contracts.medication_names import NameChoice, NameSelection
 from ..contracts.navigation_context import NavigationInput
 from ..contracts.observations import HealthNoteReview
 from ..contracts.quota import Usage
@@ -71,6 +73,7 @@ class DemoStartResponse(BaseModel):
 
 
 class AgentMessageRequest(Request):
+    name_selection: NameSelection | None = None
     medication_selection: MedicationSelection | None = None
     conversation_id: UUID | None = None
     navigation_context: NavigationInput | None = None
@@ -95,6 +98,7 @@ class ToolTraceResponse(BaseModel):
 
 
 class AgentMessageResponse(BaseModel):
+    name_choice: NameChoice | None = None
     medication_choice: MedicationChoice | None = None
     conversation_id: UUID | None = None
     history_saved: bool | None = None
@@ -173,6 +177,10 @@ class DraftCreateResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     medication_id: UUID
+    review_inputs: EnrollmentFields | None = None
+    version_no: int | None = None
+    source_reviewed: bool = False
+    identity_review: MedicationIdentityReviewDTO | None = None
     regimen_id: UUID
     state: str
     source_id: UUID

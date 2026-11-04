@@ -20,6 +20,12 @@ const guideTranslations:Record<string,string>={
 };
 const guideEnglishLabels:Record<string,string>={'Guide Back':'Back','Guide Next':'Next','Guide Finish':'Finish'};
 const translations:Record<string,string>={
+ 'Retry loading tasks':'重试读取办理进度',
+ 'Unfinished tasks':'未完成的办理','Loading tasks...':'正在读取办理进度…','Could not load unfinished tasks. Try again.':'暂时无法读取未完成的办理，请重试。','No unfinished tasks.':'没有未完成的办理。','Resume task':'继续办理','Unsaved task':'未保存的办理','Saved task':'已保存的办理',
+ 'This task cannot be restored by this app version.':'当前应用版本无法恢复这项办理。',
+ "The assistant is following the app's guided process. You will review any changes that require confirmation.":'助手正在按应用流程办理，需要确认的变更会先供您核对。',
+ 'Allow photo processing. The original will be saved with this task.':'允许处理这张照片。原图将随本次办理保存。',
+ 'Allow photo processing. This app will not save the original; refreshing loses the page copy.':'允许处理这张照片。本应用不保存原图，刷新后将丢失页面上的原图。',
  'Saved health notes':'已保存的健康感受',
  'Saved difficulty records':'已保存的困难记录',
  'Filter records':'筛选记录',
@@ -657,8 +663,11 @@ Object.assign(translations, {
  // --- medication enrollment (two perceived steps) -------------------------
  'Check the details below. Nothing becomes an active plan until you confirm.':'请核对以下内容。在您确认之前，不会生成已启用的计划。',
  'I have checked these details against my original instructions.':'我已对照原始服用说明核对过以上内容。',
+ 'Original medication name':'原记录中的药物名称',
+ 'I checked the original medication name against its source.':'我已对照来源核对原记录中的药物名称。',
  'Please check this before I save it':'请在保存前核对',
  'Review and add':'核对并添加',
+ 'Add this medication':'添加此药物',
  'Edit details':'修改详情',
  'Back to details':'返回填写详情',
  'Add another':'再添加一个',
@@ -754,7 +763,7 @@ Object.assign(translations,{
 const defaults={preferred_language:'en',speech_locale:'en-SG',text_size:'standard',voice_enabled:true,tts_autoplay:false,reminders_enabled:true,reminder_lead_minutes:0,timezone:'Asia/Singapore'} as const;
 type PlaybackPreferences={ttsProvider:'browser'|'tencent';speechRate:number;setTtsProvider:(provider:'browser'|'tencent')=>void;setSpeechRate:(rate:number)=>void};
 type Profile=Pick<PatientPreferences,'display_name'|'preferred_language'|'speech_locale'|'text_size'|'text_scale_percent'|'voice_enabled'|'tts_autoplay'|'conversation_history_enabled'|'reminder_lead_minutes'|'reminders_enabled'|'timezone'>;
-const Context=createContext<PlaybackPreferences & {textScale:number;previewTextScale:(value:number|null)=>void;language:Language;preferences:Profile;setLanguage:(value:Language)=>void;updatePreferences:(value:PreferenceUpdate)=>Promise<void>;savePreferences:(value:PreferenceUpdate)=>Promise<boolean>;loadPreferences:()=>Promise<void>;preferenceError:string}>({textScale:100,previewTextScale:()=>undefined,ttsProvider:'browser',speechRate:.9,setTtsProvider:()=>undefined,setSpeechRate:()=>undefined,language:'en',preferences:defaults,setLanguage:()=>undefined,updatePreferences:async()=>undefined,savePreferences:async()=>false,loadPreferences:async()=>undefined,preferenceError:''});
+const Context=createContext<PlaybackPreferences & {textScale:number;previewTextScale:(value:number|null)=>void;language:Language;preferences:Profile;setLanguage:(value:Language)=>void;updatePreferences:(value:PreferenceUpdate)=>Promise<void>;savePreferences:(value:PreferenceUpdate)=>Promise<boolean>;loadPreferences:()=>Promise<PatientPreferences|undefined>;preferenceError:string}>({textScale:100,previewTextScale:()=>undefined,ttsProvider:'browser',speechRate:.9,setTtsProvider:()=>undefined,setSpeechRate:()=>undefined,language:'en',preferences:defaults,setLanguage:()=>undefined,updatePreferences:async()=>undefined,savePreferences:async()=>false,loadPreferences:async()=>undefined,preferenceError:''});
 export function LanguageProvider({children}:{children:ReactNode}) {
  const [ttsProvider,setTtsProvider]=useState<'browser'|'tencent'>('browser'),[speechRate,setSpeechRate]=useState(.9);
  const [preferences,setValue]=useState<Profile>(defaults),[preferenceError,setError]=useState('');
@@ -762,7 +771,7 @@ export function LanguageProvider({children}:{children:ReactNode}) {
  const [previewScale,previewTextScale]=useState<number|null>(null);
  const textScale=previewScale??preferences.text_scale_percent??(preferences.text_size==='large'?125:100);
  useEffect(()=>{const root=document.documentElement,previous=root.style.getPropertyValue('--font-scale'),previousScale=root.getAttribute('data-text-scale');root.style.setProperty('--font-scale',String(textScale/100));root.setAttribute('data-text-scale',String(textScale));return()=>{if(previous)root.style.setProperty('--font-scale',previous);else root.style.removeProperty('--font-scale');if(previousScale===null)root.removeAttribute('data-text-scale');else root.setAttribute('data-text-scale',previousScale);};},[textScale]);
- const loadPreferences=useCallback(async()=>{const value=await api.preferences();setValue(value);setError('');},[]);
+ const loadPreferences=useCallback(async()=>{const value=await api.preferences();setValue(value);setError('');return value;},[]);
  async function savePreferences(value:PreferenceUpdate):Promise<boolean>{setError('');if(value.preferred_language)setLanguagePreview(value.preferred_language);try{const saved=await api.updatePreferences(value);setValue(saved);return true;}catch{setError('Could not save preferences. Your previous preference is retained.');return false;}finally{if(value.preferred_language)setLanguagePreview(null);}}
  async function updatePreferences(value:PreferenceUpdate){await savePreferences(value);}
  function setLanguage(value:Language){void updatePreferences({preferred_language:value});}

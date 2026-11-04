@@ -8,7 +8,7 @@ declare global{interface Window{medithreadWorkflows?:Controller}}
 const stages=['auth','compose','business','data','storage','cleanup','app'];
 const criticalDataStages=new Set(['patient_profiles','patient_medications','regimen_versions','source_documents','dose_rules','dose_occurrences','effective_dose_events','dose_events'].flatMap(table=>['read','write'].flatMap(method=>['one','batch','regimen','medication','source','window','list'].map(shape=>`db_${table}_${method}_${shape}`))));
 const codes=['PGRST100','PGRST102','PGRST116','PGRST200','PGRST202','PGRST204','PGRST205','23503','23505','22023','22P02','42P01','42703','42883','P7501','P7502','P7504','unknown'];
-const vocabulary=new Set([...endpointLabels,...workflows,...errors,...codes,'normal-cache','cache-disabled','cold-browser','navigate','reload','back_forward','prerender','GET','POST','PUT','PATCH','DELETE','other','start','response','body','loading','ready','error','unavailable','unknown','route_enter','content_candidate','today_essential_ready','bootstrap_error','language_interaction','language_visible','image_error','no-store','no-cache','private','public','unspecified']);
+const vocabulary=new Set([...endpointLabels,...workflows,...errors,...codes,'normal-cache','cache-disabled','cold-browser','navigate','reload','back_forward','prerender','GET','POST','PUT','PATCH','DELETE','other','start','response','body','loading','ready','error','unavailable','unknown','route_enter','app_shell_visible','content_candidate','today_essential_ready','bootstrap_error','language_interaction','language_visible','image_error','no-store','no-cache','private','public','unspecified']);
 const keys=new Set(['version','sequence','cache','navigation','resources','api','checkpoints','longtasks','images','endpoint','workflow','resource','id','shared','method','kind','start','end','duration','auth_ms','fetch_ms','status','error','dependency_status','dependency_code','transfer','encoded','decoded','ttfb','pre_request','download','server_timing','data_calls','storage_calls','cache_policy',...stages,...criticalDataStages,'calls','max_ms','bytes','type','dom_interactive','dom_loaded','load_end','response_start','response_end','fetch_start','worker_start','boot_ms','state','at','visit','load_ms','decode_after_load_ms','post_decode_frames_ms','failed','unobservable','observed_ms','storage_available','dropped','candidate_ms','language_ms']);
 function sanitize(value:unknown,depth=0):unknown{
  if(depth>8)return null;
@@ -39,7 +39,7 @@ export function installWorkflowDiagnostics(target:Window){
   run={version:2,sequence:Math.max(0,...captures.map(item=>Number(item.sequence)||0))+1,cache,navigation:{boot_ms:target.performance.now()},resources:[],api:[],checkpoints:[],longtasks:[],images:[]};
   captures.push(run);captures=captures.slice(-6);const capture=run;
   const observers:PerformanceObserver[]=[];const pending=new Map<number,string>(),identities=new Map<string,number>();
-  let essentialReady=false;
+  let essentialReady=false,shellVisible=false;
   let visit=0,route=workflowFromHash(target.location.hash),entered=target.performance.now(),candidate=false,frame=0,previousHash:string|null=null;
   let languageClick:number|null=null,previousLanguage:string|null=null;
   const identity=(raw:string)=>{try{const url=new URL(raw,target.location.origin);if(url.protocol==='data:')return 0;if(url.pathname.startsWith('/storage/v1/'))url.search='';const key=url.href;let id=identities.get(key);if(id===undefined){id=identities.size+1;if(identities.size<1500)identities.set(key,id);}return id;}catch{return 0;}};
@@ -81,6 +81,8 @@ export function installWorkflowDiagnostics(target:Window){
   }
   function inspect(){
    frame=0;scanImages();const main=target.document.querySelector('#main-content');const state=main?.getAttribute('data-load-state');
+   const shell=[target.document.querySelector('.companion-header'),main?.querySelector('h1'),target.document.querySelector('.patient-nav')];
+   if(!shellVisible&&shell.every(element=>element&&(!element.checkVisibility||element.checkVisibility()))){shellVisible=true;push(capture.checkpoints,{workflow:route,kind:'app_shell_visible',at:target.performance.now(),visit});}
    if(state==='error'&&!candidate){push(capture.checkpoints,{workflow:route,kind:'bootstrap_error',at:target.performance.now(),visit});candidate=true;}
    const busy=[...pending.values()].some(endpoint=>(relevant[route]??[]).includes(endpoint));
    const failed=capture.api.some(row=>row.workflow===route&&row.kind==='response'&&Number(row.start)>=entered&&(row.error||Number(row.status)>=400));

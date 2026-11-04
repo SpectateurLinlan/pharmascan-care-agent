@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from contextlib import AbstractContextManager
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal, Protocol
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .dto import PatientMedicationDTO, RegimenDraftInput, SourceDocumentDTO
+from .dto import PatientMedicationDTO, RegimenDraftInput, SourceDocumentDTO, SourceFieldDTO
 from .vision import EmbeddingResult, MatchOutcome, ModelMetadata
+from .workflow_attachments import WorkflowEnrollmentSource
 
 
 class EvidenceDTO(BaseModel):
@@ -147,6 +151,74 @@ class EvidenceRepository(Protocol):
     def acknowledge_image_cleanup(self, patient_id: UUID, image_id: UUID) -> None: ...
     def update_task(self, task: EnrollmentTask, expected_version: int) -> None: ...
     def medications(self, patient_id: UUID) -> list[PatientMedicationDTO]: ...
+
+
+@dataclass(frozen=True, kw_only=True)
+class EvidenceSourcePublication:
+    """Request-memory proposal. Never an HTTP input or workflow/model payload."""
+
+    source: SourceDocumentDTO
+    fields: tuple[SourceFieldDTO, ...]
+    medication: PatientMedicationDTO
+    create_medication: bool
+    prior_task: EnrollmentTask | None
+    task: EnrollmentTask
+    image: MedicationImage
+    link: SourceLink
+    derived_image: bytes = field(repr=False)
+    expected_clinical_revision: int | None = None
+    workflow_task_id: UUID | None = None
+    attachment_id: UUID | None = None
+    original_checksum: str | None = None
+
+
+class EvidenceSourceSnapshot(EvidenceDTO):
+    source: SourceDocumentDTO
+    fields: tuple[SourceFieldDTO,...] = Field(max_length=20)
+    medication: PatientMedicationDTO
+    task: EnrollmentTask
+    image: MedicationImage
+    link: SourceLink
+    derived_byte_size: int = Field(strict=True,ge=1,le=8_000_000)
+
+
+class EvidenceOriginalReferences(Protocol):
+    def original_sources(self, owner: UUID, attachment_id: UUID) -> tuple[UUID, ...]: ...
+
+
+class EvidenceEnrollmentWritePort(Protocol):
+    def revision(self, owner: UUID) -> int: ...
+    def workflow_owner(self, owner: UUID, task_id: UUID) -> UUID | None: ...
+    def lookup(self, owner: UUID, action_key: UUID) -> EnrollmentTask | None: ...
+    def lookup_original(
+        self,
+        owner: UUID,
+        action_key: UUID,
+        workflow_task_id: UUID,
+        attachment_id: UUID,
+    ) -> EnrollmentTask | None: ...
+    def publish_once(self, owner: UUID, action_key: UUID, prepared: EvidenceSourcePublication) -> EnrollmentTask: ...
+    def bind_existing_original(
+        self,
+        owner: UUID,
+        action_key: UUID,
+        task: EnrollmentTask,
+        source: WorkflowEnrollmentSource,
+        checksum: str,
+    ) -> EnrollmentTask: ...
+    def review_unactivated(
+        self,
+        owner: UUID,
+        task_id: UUID,
+        expected_version: int,
+        expected_clinical_revision: int,
+        apply: Callable[[], EnrollmentTask],
+    ) -> EnrollmentTask: ...
+
+
+class LocalEvidenceEnrollmentWritePort(EvidenceEnrollmentWritePort, EvidenceOriginalReferences, Protocol):
+    """Memory-only rollback scope; the remote implementation uses one domain RPC."""
+    def local_transaction(self) -> AbstractContextManager[None]: ...
 
 
 class PrivateImageStore(Protocol):

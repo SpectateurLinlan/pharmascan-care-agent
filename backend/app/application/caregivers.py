@@ -14,6 +14,9 @@ class CaregiverService:
     def list(self, patient_id: UUID) -> list[CaregiverContact]:
         return self._repository.list(patient_id)
 
+    def get(self, patient_id: UUID, contact_id: UUID) -> CaregiverContact | None:
+        return self._repository.get(patient_id, contact_id)
+
     def create(self, patient_id: UUID, details: CaregiverCreate) -> CaregiverContact:
         previous = self._repository.get(patient_id, details.id)
         fields = CaregiverDetails.model_validate(details.model_dump(exclude={"id"})).model_dump()

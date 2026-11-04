@@ -12,7 +12,7 @@ from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query, Response
 from pydantic import BaseModel, ConfigDict
 
 from ...contracts.dose_display import DoseDisplay, DoseDisplayInput
@@ -163,7 +163,12 @@ def resume_draft(
     container: ApplicationContainer = Depends(get_container),
 ) -> DraftCreateResponse:
     result = container.enrollment.resume_draft(principal.patient_id, regimen_id)
+    source = container.enrollment.get_source(principal.patient_id, result.regimen.source_id)
     return DraftCreateResponse(
+        identity_review=container.enrollment.original_identity_review(principal.patient_id, regimen_id),
+        review_inputs=container.enrollment.review_inputs(principal.patient_id, regimen_id),
+        version_no=result.regimen.version_no,
+        source_reviewed=bool(source and source.reviewed_at),
         medication_id=result.medication.id,
         regimen_id=result.regimen.id,
         state=result.regimen.state.value,
@@ -240,8 +245,31 @@ def end_plan(
     payload: EndPlanRequest,
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
+    assistant_task: UUID | None = Header(default=None, alias="X-Assistant-Task"),
+    assistant_revision: int | None = Header(default=None, ge=1, alias="X-Assistant-Revision"),
 ):
-    row = container.enrollment.end_regimen(patient_id=principal.patient_id, regimen_id=regimen_id)
+    def stop():
+        return container.enrollment.end_regimen(patient_id=principal.patient_id, regimen_id=regimen_id)
+
+    if assistant_task is not None or assistant_revision is not None:
+        if assistant_task is None or assistant_revision is None or container.assistant_workflows is None:
+            raise ValidationError("The assistant patient action needs its current task and revision")
+        if container.assistant_medications:
+            row = container.assistant_medications.maintain(
+                principal.patient_id, assistant_task, assistant_revision, regimen_id
+            )
+            return {"regimen_id": row.id, "state": row.state}
+        row = container.assistant_workflows.guarded_patient_action(
+            principal.patient_id,
+            assistant_task,
+            assistant_revision,
+            capability_id="medication.plan.end",
+            target_id=regimen_id,
+            target_kind="regimen",
+            write=stop,
+        )
+    else:
+        row = stop()
     return {"regimen_id": row.id, "state": row.state}
 
 
@@ -254,6 +282,11 @@ def review_draft(
 ) -> DraftReviewResponse:
     """Patient confirms extracted fields; required for any activation."""
     patient_id = principal.patient_id
+    coordinator = container.assistant_medications
+    regimen_id = coordinator.source_regimen(patient_id, source_id) if coordinator else None
+    if regimen_id is not None:
+        count = coordinator.review_source(patient_id, regimen_id, source_id, payload.field_ids)
+        return DraftReviewResponse(reviewed_field_count=count, source_id=source_id)
     count = container.enrollment.review_source_fields(
         patient_id=patient_id, source_id=source_id, field_ids=payload.field_ids
     )
@@ -284,13 +317,17 @@ def request_challenge(
     if regimen is None:
         raise NotFoundError(f"Regimen {regimen_id} not found")
 
-    session = container.orchestrator.await_confirmation(patient_id=patient_id, session_id=session_id)
-    challenge, _token = container.enrollment.request_activation_challenge(
-        patient_id=patient_id,
-        regimen_id=regimen_id,
-        session_id=session_id,
-        session_state_version=session.state_version,
-    )
+    coordinator = container.assistant_medications
+    if coordinator and coordinator.handles_regimen(patient_id, regimen_id):
+        challenge, session = coordinator.challenge(patient_id, regimen_id, session_id)
+    else:
+        session = container.orchestrator.await_confirmation(patient_id=patient_id, session_id=session_id)
+        challenge, _token = container.enrollment.request_activation_challenge(
+            patient_id=patient_id,
+            regimen_id=regimen_id,
+            session_id=session_id,
+            session_state_version=session.state_version,
+        )
     return ConfirmChallengeResponse(
         regimen_id=regimen_id,
         challenge_id=challenge.id,
@@ -321,14 +358,25 @@ def activate(
 ) -> ConfirmActivateResponse:
     """Consume a confirmed challenge and activate the regimen version."""
     patient_id = principal.patient_id
-    container.enrollment.confirm_challenge(patient_id=patient_id, challenge_id=payload.challenge_id)
-    activated = container.enrollment.activate_regimen(
-        patient_id=patient_id,
-        regimen_id=payload.regimen_id,
-        challenge_id=payload.challenge_id,
-        session_state=payload.session_state,
-        session_state_version=payload.session_state_version,
-    )
+    coordinator = container.assistant_medications
+    if coordinator and coordinator.handles_regimen(patient_id, payload.regimen_id):
+        activated = coordinator.activate(
+            patient_id,
+            payload.regimen_id,
+            payload.challenge_id,
+            payload.session_id,
+            payload.session_state,
+            payload.session_state_version,
+        )
+    else:
+        container.enrollment.confirm_challenge(patient_id=patient_id, challenge_id=payload.challenge_id)
+        activated = container.enrollment.activate_regimen(
+            patient_id=patient_id,
+            regimen_id=payload.regimen_id,
+            challenge_id=payload.challenge_id,
+            session_state=payload.session_state,
+            session_state_version=payload.session_state_version,
+        )
     return ConfirmActivateResponse(
         regimen_id=activated.regimen.id,
         state=activated.regimen.state.value,
@@ -346,6 +394,65 @@ class DeleteDraftRequest(BaseModel):
     confirmed: Literal[True]
 
 
+class IdentityReviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    confirmed: Literal[True]
+
+
+@router.post("/medications/drafts/{regimen_id}/identity-review")
+def review_original_identity(
+    regimen_id: UUID,
+    payload: IdentityReviewRequest,
+    assistant_task: UUID = Header(alias="X-Assistant-Task"),
+    assistant_revision: int = Header(alias="X-Assistant-Revision", ge=1),
+    principal: AuthenticatedPrincipal = Depends(get_principal),
+    container: ApplicationContainer = Depends(get_container),
+):
+    if container.assistant_workflows is None:
+        raise ProviderUnavailableError("Assistant draft identity review is unavailable")
+    coordinator = container.assistant_medications
+    if coordinator and coordinator.handles_regimen(principal.patient_id, regimen_id):
+        count = coordinator.review_identity(principal.patient_id, assistant_task, assistant_revision, regimen_id)
+        return {"reviewed_name_count": count}
+    service = container.assistant_workflows
+    view = service.view(principal.patient_id, assistant_task)
+    if view.capability_id not in {
+        "medication.enroll",
+        "medication.plan.change",
+        "medication.draft.resume",
+        "medication.source.add",
+        "medication.source.review",
+    }:
+        raise ValidationError("This task cannot review medication identity")
+    count = service.guarded_patient_action(
+        principal.patient_id,
+        assistant_task,
+        assistant_revision,
+        capability_id=view.capability_id,
+        target_id=regimen_id,
+        target_kind="regimen",
+        write=lambda: container.enrollment.review_original_identity(principal.patient_id, regimen_id),
+    )
+    return {"reviewed_name_count": count}
+
+
+@router.get("/medications/unfinished/{kind}/{target}/receipt", response_model=DraftDeletionResult)
+def deletion_receipt(
+    kind: DraftKind,
+    target: UUID,
+    response: Response,
+    principal: AuthenticatedPrincipal = Depends(get_principal),
+    container: ApplicationContainer = Depends(get_container),
+):
+    if container.draft_deletion is None:
+        raise ProviderUnavailableError("Draft deletion unavailable")
+    receipt = container.draft_deletion.receipt(principal.patient_id, kind, target)
+    if receipt is None:
+        raise NotFoundError("Deletion receipt not found")
+    response.headers["Cache-Control"] = "no-store"
+    return receipt
+
+
 @router.delete("/medications/unfinished/{kind}/{target}", response_model=DraftDeletionResult)
 def delete_unfinished(
     kind: DraftKind,
@@ -353,7 +460,29 @@ def delete_unfinished(
     payload: DeleteDraftRequest,
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
+    assistant_task: UUID | None = Header(default=None, alias="X-Assistant-Task"),
+    assistant_revision: int | None = Header(default=None, ge=1, alias="X-Assistant-Revision"),
 ):
     if container.draft_deletion is None:
         raise ProviderUnavailableError("Draft deletion unavailable")
-    return container.draft_deletion.delete(principal.patient_id, kind, target, payload.confirmed)
+
+    def remove():
+        return container.draft_deletion.delete(principal.patient_id, kind, target, payload.confirmed)
+
+    if assistant_task is not None or assistant_revision is not None:
+        if assistant_task is None or assistant_revision is None or container.assistant_workflows is None:
+            raise ValidationError("The assistant patient action needs its current task and revision")
+        if container.assistant_medications:
+            return container.assistant_medications.maintain(
+                principal.patient_id, assistant_task, assistant_revision, target, deleting=True, draft_kind=kind
+            )
+        return container.assistant_workflows.guarded_patient_action(
+            principal.patient_id,
+            assistant_task,
+            assistant_revision,
+            capability_id="medication.draft.delete",
+            target_id=target,
+            target_kind="regimen" if kind == "draft" else "enrollment_task",
+            write=remove,
+        )
+    return remove()

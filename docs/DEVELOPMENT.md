@@ -111,3 +111,12 @@ Auth. The existing `release-review.spec.ts` also runs against this frontend with
 | **Notifications** | Caregiver contacts/consent do not prove delivery. Hosted/device delivery requires separately scoped evidence; source configuration is not proof of receipt and this is not a native system alarm. |
 | **Saved chats** | Opt-in viewing: up to 200 exchanges / last 30 days. Older/excess rows are purged on a later append, not a timer. Explicit Clear leaves clinical records separate. |
 | **Product scope** | Medication management and treatment-related follow-up. General screening, vaccines, prescribing and automatic pharmacy ordering are outside this release. Native apps and broader authorised caregiver delivery remain future work. |
+
+
+## Persistent workflow offline preparation
+
+`ASSISTANT_NATIVE_MEDIA_ENABLED` defaults to false. It controls the task-independent native verified-storage bridge separately from `ASSISTANT_WORKFLOWS_ENABLED`; flags do not grant target authorization. The restricted evidence connection is lazy and must be configured by an approved operator procedure before accepted bridge use. Missing verification fails closed before external file writes.
+
+Run `python scripts/qa/inspect_assistant_evidence_scope.py` for an offline source/role inventory. It performs no network calls and reports execution readiness as false. `run_assistant_acceptance.py --persistence-preflight --persistence-profile <private-json> --persistence-purpose sql_read` validates explicit admission only, preserves zero provider budget and exits 2 with `NOT_RUN`; it does not execute acceptance or load `.env`.
+
+The live definitions in `test_persistent_workflow_sql_live.py` and `test_persistent_workflow_storage_live.py` remain skipped without explicit opt-in, exact target/hash approval and operation scope. Use the existing private execution runbook for the target-specific checklist; never place profiles, tokens, uploads or acceptance evidence in public source artifacts. Do not install proof hooks alone on an active legacy native application.

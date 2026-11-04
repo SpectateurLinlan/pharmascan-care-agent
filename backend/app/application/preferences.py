@@ -12,6 +12,9 @@ class PreferenceService:
     def get(self, patient_id: UUID) -> Preferences:
         return self._repository.get(patient_id)
 
+    def history_fence(self):
+        return self._repository.history_fence()
+
     def save(self, patient_id: UUID, changes: PreferenceUpdate) -> Preferences:
         if changes.text_scale_percent is not None:
             changes = changes.model_copy(

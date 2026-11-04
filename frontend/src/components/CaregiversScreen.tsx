@@ -5,6 +5,7 @@ import {BottomSheet} from './BottomSheet';
 import {AutoDismissNotice,ErrorNotice} from './primitives';
 import {Screen} from '../ui/primitives';
 import {Icon} from './Icon';
+import {CaregiverDetailsFields} from './CaregiverDetailsFields';
 
 type Draft={id:string;name:string;relationship:string;contact_type:'email'|'phone';contact_value:string;consent:boolean;editing:boolean};
 export function CaregiversScreen({newId=()=>crypto.randomUUID()}: {newId?:()=>string}) {
@@ -37,12 +38,7 @@ export function CaregiversScreen({newId=()=>crypto.randomUUID()}: {newId?:()=>st
   </section>
   {draft?<BottomSheet title={t(draft.editing?'Edit contact':'Add care contact')} busy={busy} onCancel={()=>{setDraft(null);setError(null);}}>
     <form onSubmit={event=>{event.preventDefault();void save();}}>
-      <label className="field">{t('Contact name')}<input required maxLength={80} autoComplete="off" value={draft.name} onChange={event=>setDraft({...draft,name:event.target.value})}/></label>
-      <label className="field">{t('Relationship (optional)')}<input maxLength={80} autoComplete="off" value={draft.relationship} onChange={event=>setDraft({...draft,relationship:event.target.value})}/></label>
-      <label className="field">{t('Contact method')}<select value={draft.contact_type} onChange={event=>setDraft({...draft,contact_type:event.target.value==='phone'?'phone':'email',contact_value:''})}><option value="email">{t('Email')}</option><option value="phone">{t('Phone')}</option></select></label>
-      <label className="field">{t(draft.contact_type==='email'?'Email address':'Phone with country code')}<input required type={draft.contact_type==='email'?'email':'tel'} maxLength={254} autoComplete="off" value={draft.contact_value} onChange={event=>setDraft({...draft,contact_value:event.target.value})}/></label>
-      <label className="consent"><input type="checkbox" checked={draft.consent} onChange={event=>setDraft({...draft,consent:event.target.checked})}/>{t('I have this person’s permission to save their details. This only stores the contact — it does not share my records.')}</label>
-      <p className="notice">{t('Your confirmation is not independent verification.')}</p>
+      <CaregiverDetailsFields draft={draft} busy={busy} onChange={next=>setDraft({...draft,...next})}/>
       {error?<ErrorNotice error={error}/>:null}
       <div className="actions"><button type="button" disabled={busy} onClick={()=>{setDraft(null);setError(null);}}>{t('Cancel')}</button><button className="primary" type="submit" disabled={busy||!draft.consent||!draft.name.trim()||!draft.contact_value.trim()}>{t('Save contact')}</button></div>
     </form>

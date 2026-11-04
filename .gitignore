@@ -67,6 +67,7 @@ nul
 # Generated browser QA output (no Auth storage state is recorded).
 /outputs/
 frontend/test-results/
+/test-results/
 frontend/playwright-report/
 
 # Private uploads and generated material. Development-only exclusions are local.

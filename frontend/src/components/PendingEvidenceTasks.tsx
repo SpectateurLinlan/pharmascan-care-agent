@@ -3,7 +3,7 @@ import {useLanguage} from '../language';
 import {Card,ErrorNotice} from './primitives';
 import {useState} from 'react';
 import {api} from '../api/client';
-import {BottomSheet} from './BottomSheet';
+import {DeleteDraftReview} from './DeleteDraftReview';
 import {ApiError} from '../api/client';
 
 function deleteFailureMessage(error:unknown,t:(value:string)=>string){
@@ -23,7 +23,7 @@ export function PendingEvidenceTasks({entries,error,onRetry,onContinue,onResume}
    {row.name} · {t(row.kind==='draft'?'Review the saved plan':row.conflicting?'Sources need clarification':'Supplement medication information')}
   </button><button className="danger" disabled={busy} onClick={()=>{setFailure(null);setTarget(row);}}>{t('Delete draft')}</button></div>)}
   {cleanup?<p role="status">{t('Draft deleted. Photo cleanup needs a retry.')} <button disabled={busy} onClick={()=>void remove(cleanup)}>{t('Retry photo cleanup')}</button></p>:null}
-  {target?<BottomSheet title={t('Delete this draft?')} busy={busy} onCancel={()=>{if(!busy)setTarget(null);}}><p>{target.name}</p><p>{t('This removes the unconfirmed registration and its exclusive draft data. Confirmed history and shared sources are kept. This cannot be undone.')}</p>{failure?<div className="draft-delete-error" role="alert"><p>{deleteFailureMessage(failure,t)}</p><button disabled={busy} onClick={()=>void remove(target)}>{t('Retry deletion')}</button></div>:null}<button className="danger" disabled={busy} onClick={()=>void remove(target)}>{t('Confirm delete')}</button><button disabled={busy} onClick={()=>setTarget(null)}>{t('Cancel')}</button></BottomSheet>:failure?<ErrorNotice error={failure}/>:null}
+  {target?<DeleteDraftReview name={target.name} busy={busy} error={failure} failureMessage={failure?deleteFailureMessage(failure,t):undefined} onCancel={()=>{if(!busy)setTarget(null);}} onConfirm={()=>void remove(target)}/>:failure?<ErrorNotice error={failure}/>:null}
   {entries?.length===0&&!error?<p>{t('No unfinished medication setup.')}</p>:null}
  </Card>;
 }

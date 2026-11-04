@@ -26,7 +26,8 @@ it('labels records-only medication education by its actual action without claimi
  fireEvent.change(screen.getByLabelText('Review your message before sending'),{target:{value:'Nifedipine LA有什么作用'}});
  fireEvent.click(screen.getByRole('button',{name:'Send'}));
  await screen.findByText('DEMO sourced medicine information');
- expect(screen.getByText('get_medication_understanding: blocked (PROVIDER_UNAVAILABLE)')).toBeTruthy();
+ expect(screen.getByText('The reviewed medication instructions could not be read.')).toBeTruthy();
+ expect(screen.queryByText('get_medication_understanding: blocked (PROVIDER_UNAVAILABLE)')).toBeNull();
  expect(screen.getByText('This answer uses application tools and available sources, without AI-generated interpretation.')).toBeTruthy();
  expect(screen.queryByText('This answer uses the available records and rules; AI is temporarily unavailable.')).toBeNull();
 });

@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "alias": "布洛芬",
+      "canonical_name": "IBUPROFEN",
+      "language": "zh",
+      "source_url": "https://www.drugoffice.gov.hk/eps/do/tc/consumer/news_informations/knowledge_on_medicines/anti_inflammation_and_painkilling_drugs.html",
+      "source_checked_at": "2026-10-25",
+      "scope": "ingredient",
+      "reviewed": true
+    },
+    {
+      "alias": "Ibuprofen",
+      "canonical_name": "IBUPROFEN",
+      "language": "en",
+      "source_url": "https://www.drugoffice.gov.hk/eps/do/tc/consumer/news_informations/knowledge_on_medicines/anti_inflammation_and_painkilling_drugs.html",
+      "source_checked_at": "2026-10-25",
+      "scope": "ingredient",
+      "reviewed": true
+    }
+  ]
+}

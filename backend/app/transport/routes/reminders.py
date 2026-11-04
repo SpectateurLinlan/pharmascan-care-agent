@@ -1,12 +1,14 @@
 """Authenticated reminder preferences; app active/reopen delivery only."""
 
 from datetime import UTC, date, datetime, time, timedelta
+from typing import Annotated
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Header, Query, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ValidationError as SchemaValidationError
 
 from ...application.calendar_export import calendar_export
 from ...application.push_test import PushTestLimited
@@ -14,8 +16,9 @@ from ...application.reminder_alerts import DoseReminderAlert
 from ...application.reminder_plan import PlannedReminder
 from ...contracts.notifications import DeliveryResult
 from ...contracts.push import PushConfiguration, PushSubscriptionInput, PushSubscriptionRecord
+from ...contracts.reminder_workflow import CalendarFields
 from ...contracts.reminders import ReminderDTO, ReminderStatusDTO
-from ...domain.errors import ProviderUnavailableError
+from ...domain.errors import ProviderUnavailableError, ValidationError
 from ...timing import timed_stage
 from ..auth import AuthenticatedPrincipal
 from ..deps import ApplicationContainer, get_container, get_principal
@@ -49,12 +52,32 @@ def snooze(
     payload: SnoozeRequest,
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
+    assistant_task: Annotated[UUID | None, Header(alias="X-Assistant-Task")] = None,
+    assistant_revision: Annotated[int | None, Header(alias="X-Assistant-Revision", ge=1)] = None,
+    patient_confirmed: Annotated[bool, Header(alias="X-Patient-Confirmed")] = False,
 ) -> ReminderDTO:
     if container.reminders is None:
         raise ProviderUnavailableError("Reminder preferences unavailable")
-    return container.reminders.snooze(
-        patient_id=principal.patient_id, occurrence_id=payload.occurrence_id, minutes=payload.minutes
-    )
+
+    def write():
+        return container.reminders.snooze(
+            patient_id=principal.patient_id, occurrence_id=payload.occurrence_id, minutes=payload.minutes
+        )
+
+    service = container.assistant_reminder_writes
+    if assistant_task is not None or assistant_revision is not None:
+        if service is None or assistant_task is None or assistant_revision is None:
+            raise ValidationError("Use a complete current reminder task binding")
+        return service.run(
+            principal.patient_id,
+            assistant_task,
+            assistant_revision,
+            "reminder.snooze",
+            payload,
+            patient_confirmed,
+            write,
+        )
+    return service.run_unbound(principal.patient_id, write) if service else write()
 
 
 @router.get("", response_model=list[ReminderStatusDTO])
@@ -86,11 +109,46 @@ def calendar(
     include_medications: bool = Query(default=True),
     include_tasks: bool = Query(default=True),
     days: int | None = Query(default=None, ge=1, le=31),
+    task: Annotated[UUID | None, Header(alias="X-Assistant-Task")] = None,
+    revision: Annotated[int | None, Header(alias="X-Assistant-Revision")] = None,
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
 ):
-    from ...domain.errors import ValidationError
+    def read():
+        return _calendar_response(
+            range_name=range_name,
+            start_date=start_date,
+            end_date=end_date,
+            include_medications=include_medications,
+            include_tasks=include_tasks,
+            days=days,
+            principal=principal,
+            container=container,
+        )
 
+    if task is None and revision is None:
+        return read()
+    if task is None or revision is None or container.assistant_reminder_reads is None:
+        raise ValidationError("The calendar needs its current Assistant task and revision")
+    if days is not None:
+        raise ValidationError("Use the current typed Assistant calendar range")
+    try:
+        options = CalendarFields(
+            range=range_name or "30",
+            start_date=start_date,
+            end_date=end_date,
+            include_medications=include_medications,
+            include_tasks=include_tasks,
+        )
+    except SchemaValidationError:
+        raise ValidationError("Check the current calendar options") from None
+    return container.assistant_reminder_reads.calendar(principal.patient_id, task, revision, options, read)
+
+
+def _calendar_response(
+    *, range_name, start_date, end_date, include_medications, include_tasks, days, principal, container
+):
+    """Existing native calendar calculation; both bound/unbound callers use it unchanged."""
     if container.reminder_plan is None or container.preferences is None:
         raise ProviderUnavailableError("Calendar export unavailable")
     if not include_medications and not include_tasks:
@@ -154,13 +212,23 @@ def calendar(
 
 @router.get("/push/config", response_model=PushConfiguration)
 def push_config(
-    principal: AuthenticatedPrincipal = Depends(get_principal), container: ApplicationContainer = Depends(get_container)
+    principal: AuthenticatedPrincipal = Depends(get_principal),
+    container: ApplicationContainer = Depends(get_container),
+    assistant_task: Annotated[UUID | None, Header(alias="X-Assistant-Task")] = None,
+    assistant_revision: Annotated[int | None, Header(alias="X-Assistant-Revision", ge=1)] = None,
 ):
-    return {
-        "available": bool(container.push_public_key),
-        "public_key": container.push_public_key,
-        "test_available": container.push_test is not None,
-    }
+    value = PushConfiguration(
+        available=bool(container.push_public_key),
+        public_key=container.push_public_key,
+        test_available=container.push_test is not None,
+    )
+    if assistant_task is not None or assistant_revision is not None:
+        if assistant_task is None or assistant_revision is None or container.assistant_notifications is None:
+            raise ValidationError("Use a complete current notification task binding")
+        return container.assistant_notifications.configuration(
+            principal.patient_id, assistant_task, assistant_revision, value, principal.authenticated
+        )
+    return value
 
 
 @router.post("/push/current", response_model=PushSubscriptionRecord | None)
@@ -180,28 +248,47 @@ class PushTestRequest(BaseModel):
     request_id: UUID
 
 
+def _notification_action(container, principal, capability, task_id, revision, confirmed, write, **native):
+    if task_id is None and revision is None:
+        return write()
+    if task_id is None or revision is None or container.assistant_notifications is None:
+        raise ValidationError("Use a complete current notification task binding")
+    return container.assistant_notifications.run(
+        principal.patient_id, task_id, revision, capability, confirmed, write, **native
+    )
+
+
 @router.post("/push/test", response_model=DeliveryResult)
 def test_push(
     payload: PushTestRequest,
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
+    assistant_task: Annotated[UUID | None, Header(alias="X-Assistant-Task")] = None,
+    assistant_revision: Annotated[int | None, Header(alias="X-Assistant-Revision", ge=1)] = None,
+    patient_confirmed: Annotated[bool, Header(alias="X-Patient-Confirmed")] = False,
 ):
     if not principal.authenticated or container.push_test is None or container.push_subscriptions is None:
         raise ProviderUnavailableError("Web Push test unavailable")
-    try:
-        return container.push_test.send(
-            principal.patient_id,
-            payload.subscription_id,
-            payload.request_id,
-            container.push_subscriptions,
-            container.preferences.get(principal.patient_id).preferred_language if container.preferences else "en",
-        )
-    except PushTestLimited:
-        return JSONResponse(
-            {"code": "RATE_LIMITED", "message": "Wait one minute before another test.", "rule_id": None},
-            status_code=429,
-            headers={"Retry-After": "60"},
-        )
+
+    def write():
+        try:
+            return container.push_test.send(
+                principal.patient_id,
+                payload.subscription_id,
+                payload.request_id,
+                container.push_subscriptions,
+                container.preferences.get(principal.patient_id).preferred_language if container.preferences else "en",
+            )
+        except PushTestLimited:
+            return JSONResponse(
+                {"code": "RATE_LIMITED", "message": "Wait one minute before another test.", "rule_id": None},
+                status_code=429,
+                headers={"Retry-After": "60"},
+            )
+
+    return _notification_action(
+        container, principal, "notification.test", assistant_task, assistant_revision, patient_confirmed, write
+    )
 
 
 @router.get("/push/subscriptions", response_model=list[PushSubscriptionRecord])
@@ -218,10 +305,22 @@ def subscribe(
     payload: PushSubscriptionInput,
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
+    assistant_task: Annotated[UUID | None, Header(alias="X-Assistant-Task")] = None,
+    assistant_revision: Annotated[int | None, Header(alias="X-Assistant-Revision", ge=1)] = None,
+    patient_confirmed: Annotated[bool, Header(alias="X-Patient-Confirmed")] = False,
 ):
     if container.push_subscriptions is None or not container.push_public_key:
         raise ProviderUnavailableError("Web Push has not been configured")
-    return container.push_subscriptions.save(principal.patient_id, payload)
+    return _notification_action(
+        container,
+        principal,
+        "notification.subscribe",
+        assistant_task,
+        assistant_revision,
+        patient_confirmed,
+        lambda: container.push_subscriptions.save(principal.patient_id, payload),
+        subscription=payload,
+    )
 
 
 @router.delete("/push/subscriptions/{subscription_id}", status_code=204)
@@ -229,10 +328,22 @@ def unsubscribe(
     subscription_id: UUID,
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
+    assistant_task: Annotated[UUID | None, Header(alias="X-Assistant-Task")] = None,
+    assistant_revision: Annotated[int | None, Header(alias="X-Assistant-Revision", ge=1)] = None,
+    patient_confirmed: Annotated[bool, Header(alias="X-Patient-Confirmed")] = False,
 ):
     if container.push_subscriptions is None:
         raise ProviderUnavailableError("Push subscriptions unavailable")
-    container.push_subscriptions.revoke(principal.patient_id, subscription_id)
+    _notification_action(
+        container,
+        principal,
+        "notification.unsubscribe",
+        assistant_task,
+        assistant_revision,
+        patient_confirmed,
+        lambda: container.push_subscriptions.revoke(principal.patient_id, subscription_id),
+        subscription_id=subscription_id,
+    )
     return Response(status_code=204)
 
 
@@ -241,8 +352,20 @@ def unsubscribe_current(
     payload: PushSubscriptionInput,
     principal: AuthenticatedPrincipal = Depends(get_principal),
     container: ApplicationContainer = Depends(get_container),
+    assistant_task: Annotated[UUID | None, Header(alias="X-Assistant-Task")] = None,
+    assistant_revision: Annotated[int | None, Header(alias="X-Assistant-Revision", ge=1)] = None,
+    patient_confirmed: Annotated[bool, Header(alias="X-Patient-Confirmed")] = False,
 ):
     if container.push_subscriptions is None:
         raise ProviderUnavailableError("Push subscriptions unavailable")
-    container.push_subscriptions.revoke_endpoint(principal.patient_id, payload.endpoint)
+    _notification_action(
+        container,
+        principal,
+        "notification.unsubscribe",
+        assistant_task,
+        assistant_revision,
+        patient_confirmed,
+        lambda: container.push_subscriptions.revoke_endpoint(principal.patient_id, payload.endpoint),
+        endpoint=payload.endpoint,
+    )
     return Response(status_code=204)

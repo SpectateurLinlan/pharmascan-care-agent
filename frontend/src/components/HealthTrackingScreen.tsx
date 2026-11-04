@@ -1,7 +1,7 @@
 import {useEffect,useState} from 'react';
 import {api,type HealthObservation,type MedicationSummary,type ObservationInput,type Measurement} from '../api/client';
 import {useLanguage} from '../language';
-import {BottomSheet} from './BottomSheet';
+import {ObservationReviewSheet} from './ObservationReviewSheet';
 import {Card,ErrorNotice} from './primitives';
 import {Screen} from '../ui/primitives';
 
@@ -24,12 +24,12 @@ export function HealthTrackingScreen({medications,initialDescription=''}:{medica
  <button className="primary" disabled={!description.trim()||busy} onClick={()=>{const time=occurredAt?new Date(occurredAt):editing?new Date(editing.occurred_at):new Date();if(Number.isNaN(time.getTime())){setError(new Error('Choose a valid time.'));return;}setPending({...measurement,id:editing?.id??crypto.randomUUID(),description:description.trim(),occurred_at:time.toISOString(),severity,notes:notes||null,medication_id:medication||null,confirmed:false});}}>{t('Review health note')}</button>
  </div>{notice?<p role="status">{t(notice)}</p>:null}{error?<ErrorNotice error={error}/>:null}</Card>
  <Card title="Saved health notes">{!rows.length?<div><p>{t('No health notes yet. Record how you feel to keep track of changes.')}</p><button onClick={()=>document.getElementById('health-description')?.focus()}>{t('Record how you feel')}</button></div>:rows.map(row=><article className="health-note" key={row.id}><time>{new Date(row.occurred_at).toLocaleString(language==='zh'?'zh-CN':'en-SG',{timeZone:preferences.timezone})}</time><p>{row.description}</p>{row.notes?<p>{row.notes}</p>:null}<div className="actions"><button onClick={()=>{setEditing(row);setDescription(row.description);setNotes(row.notes??'');setMedication(row.medication_id??'');setSeverity(row.severity);setOccurredAt('');setMeasurement({kind:row.kind??'note',value:row.value??null,secondary_value:row.secondary_value??null,unit:row.unit??null});document.documentElement.scrollTop=0;}}>{t('Edit')}</button><button onClick={()=>setDeleting(row.id)}>{t('Delete')}</button></div></article>)}</Card>
- {pending?<BottomSheet title={t('Save this health note?')} busy={busy} onCancel={()=>setPending(null)}><p>{pending.description}</p><p>{t('This records your experience without diagnosing a cause.')}</p><div className="actions"><button className="primary" disabled={busy} onClick={()=>void save()}>{t('Confirm record')}</button><button disabled={busy} onClick={()=>setPending(null)}>{t('Cancel')}</button></div></BottomSheet>:null}
- {deleting?<BottomSheet title={t('Delete this health note?')} busy={busy} onCancel={()=>setDeleting(null)}><p>{t('Your medication and dose records will not change.')}</p><div className="actions"><button disabled={busy} onClick={()=>setDeleting(null)}>{t('Cancel')}</button><button disabled={busy} onClick={()=>{setBusy(true);void api.deleteObservation(deleting).then(async()=>{setDeleting(null);await refresh();}).catch(setError).finally(()=>setBusy(false));}}>{t('Delete')}</button></div></BottomSheet>:null}
+ {pending?<ObservationReviewSheet linkedLabel={medications.find(row=>row.medication_id===pending.medication_id)?.display_name} record={pending} busy={busy} onConfirm={()=>void save()} onCancel={()=>setPending(null)}/>:null}
+ {deleting?<ObservationReviewSheet deleting record={rows.find(row=>row.id===deleting)??{description:''}} busy={busy} onCancel={()=>setDeleting(null)} onConfirm={()=>{setBusy(true);void api.deleteObservation(deleting).then(async()=>{setDeleting(null);await refresh();}).catch(setError).finally(()=>setBusy(false));}}/>:null}
  </Screen>;
 }
 
-function MeasurementFields({value,onChange}:{value:Measurement;onChange:(next:Measurement)=>void}){
+export function MeasurementFields({value,onChange}:{value:Measurement;onChange:(next:Measurement)=>void}){
  const {t}=useLanguage();const kind=value.kind??'note';
  const units:Record<string,Measurement['unit']>={blood_pressure:'mmHg',blood_glucose:'mmol/L',weight:'kg',sleep:'hours',mood:'score'};
  return <><label className="field">{t('Observation type')}<select value={kind} onChange={event=>onChange({kind:event.target.value as NonNullable<Measurement['kind']>,value:null,secondary_value:null,unit:units[event.target.value]??null})}>{['note','blood_pressure','blood_glucose','weight','sleep','mood'].map(item=><option key={item} value={item}>{t(item)}</option>)}</select></label>

@@ -15,8 +15,16 @@ from ..contracts.conversation_threads import (
 )
 from ..contracts.ports import AgentSessionRepository, Clock
 from ..contracts.privacy import bounded_text
+from ..contracts.workflow_messages import (
+    AppendConversationTurn,
+    BindConversationSession,
+    ClaimConversationTurn,
+    CreateConversation,
+    FailConversationTurn,
+)
 from ..domain.errors import NotFoundError, ValidationError
 from .preferences import PreferenceService
+from .workflow_message_policy import DEFAULT_PERSISTENCE, MessagePersistencePolicy
 
 
 class ConversationThreadService:
@@ -40,7 +48,10 @@ class ConversationThreadService:
             raise NotFoundError("Conversation not found for this patient")
         return row
 
-    def create(self, owner: UUID, conversation_id: UUID, text: str, photo: bool) -> ConversationSummary:
+    def create(self, owner: UUID, conversation_id: UUID, text: str, photo: bool,
+               *, policy: MessagePersistencePolicy = DEFAULT_PERSISTENCE) -> ConversationSummary | None:
+        if not policy.save_history:
+            return None
         self._consented(owner)
         existing = self._repository.get(owner, conversation_id)
         if existing is not None:
@@ -51,8 +62,9 @@ class ConversationThreadService:
             title = ""
         title = title or ("Photo attachment" if photo else "Conversation")
         row = ConversationSummary(id=conversation_id, title=title, created_at=now, updated_at=now)
-        self._repository.create(owner, row)
-        return row
+        if policy.messages is not None:
+            return row if policy.execute(owner, CreateConversation(conversation=row)) is not None else None
+        return row if policy.write_history(lambda: self._repository.create(owner, row)) else None
 
     def list(self, owner: UUID, before: UUID | None = None, limit: int = 20) -> ConversationList:
         rows = self._repository.list(owner, before, limit + 1)
@@ -67,7 +79,8 @@ class ConversationThreadService:
             next_before=entries[limit - 1].id if len(entries) > limit else None,
         )
 
-    def bind(self, owner: UUID, conversation_id: UUID, session_id: UUID, *, restore: bool):
+    def bind(self, owner: UUID, conversation_id: UUID, session_id: UUID, *, restore: bool,
+             policy: MessagePersistencePolicy = DEFAULT_PERSISTENCE):
         self.require(owner, conversation_id)
         session = self._sessions.get(owner, session_id)
         if session is None:
@@ -88,26 +101,51 @@ class ConversationThreadService:
             )
         )
         session = session.model_copy(update={"conversation_id": conversation_id, "context": context})
-        self._sessions.update(session)
+        if policy.messages is not None:
+            policy.execute(owner, BindConversationSession(session=session))
+        else:
+            policy.persist_session(self._sessions, session)
         return session
 
     def resume(self, owner: UUID, conversation_id: UUID, fresh_session_id: UUID) -> ConversationResume:
         session = self.bind(owner, conversation_id, fresh_session_id, restore=True)
         return ConversationResume(conversation=self.require(owner, conversation_id), session_id=session.id)
 
-    def claim(self, owner, conversation_id, turn_id, digest):
+    def claim(self, owner, conversation_id, turn_id, digest, *, policy=DEFAULT_PERSISTENCE):
+        if not policy.save_history:
+            return "revoked"
         self._consented(owner)
         self.require(owner, conversation_id)
-        return self._repository.claim(owner, conversation_id, turn_id, digest)
+        if policy.messages is not None:
+            result = policy.execute(owner, ClaimConversationTurn(
+                conversation_id=conversation_id, turn_id=turn_id, digest=digest
+            ))
+            return result.status if result is not None else "revoked"
+        results = []
+        saved = policy.write_history(
+            lambda: results.append(self._repository.claim(owner, conversation_id, turn_id, digest))
+        )
+        return results[0] if saved else "revoked"
 
     def message(self, owner, turn_id):
         return self._repository.message(owner, turn_id)
 
-    def append(self, owner, session_id, row):
-        self._consented(owner)
-        return self._repository.append(owner, session_id, row)
+    def append(self, owner, session_id, row, *, policy: MessagePersistencePolicy = DEFAULT_PERSISTENCE):
+        if policy.messages is not None:
+            if not policy.save_history:
+                return False
+            self._consented(owner)
+            return policy.execute(owner, AppendConversationTurn(session_id=session_id, message=row)) is not None
+        def write():
+            self._consented(owner)
+            self._repository.append(owner, session_id, row)
 
-    def fail(self, owner, turn_id):
+        return policy.write_history(write)
+
+    def fail(self, owner, turn_id, *, policy=DEFAULT_PERSISTENCE):
+        if policy.messages is not None:
+            policy.execute(owner, FailConversationTurn(turn_id=turn_id))
+            return
         self._repository.fail(owner, turn_id)
 
     def clear(self, owner):

@@ -1,5 +1,8 @@
 """Implementations of the reminder preference port."""
 
+from contextlib import contextmanager
+from copy import deepcopy
+from threading import RLock
 from uuid import UUID
 
 from ..contracts.reminders import ReminderDTO
@@ -10,13 +13,34 @@ from .supabase_data import SupabaseDataClient
 class MemoryReminderRepository:
     def __init__(self, store: InMemoryStore) -> None:
         self._store = store
+        self._lock, self._revisions = RLock(), {}
+
+    def revision(self, owner):
+        with self._lock:
+            return self._revisions.get(owner, 0)
+
+    @contextmanager
+    def local_transaction(self):
+        with self._lock:
+            rows, revisions = deepcopy(self._store.reminders), dict(self._revisions)
+            try:
+                yield
+            except BaseException:
+                self._store.reminders.clear()
+                self._store.reminders.update(rows)
+                self._revisions.clear()
+                self._revisions.update(revisions)
+                raise
 
     def save(self, reminder: ReminderDTO) -> ReminderDTO:
-        self._store.reminders[(reminder.patient_id, reminder.occurrence_id)] = reminder
-        return reminder
+        with self._lock:
+            self._store.reminders[(reminder.patient_id, reminder.occurrence_id)] = reminder
+            self._revisions[reminder.patient_id] = self._revisions.get(reminder.patient_id, 0) + 1
+            return reminder
 
     def list_for_patient(self, patient_id: UUID) -> list[ReminderDTO]:
-        return [row for (owner, _), row in self._store.reminders.items() if owner == patient_id]
+        with self._lock:
+            return [row for (owner, _), row in self._store.reminders.items() if owner == patient_id]
 
 
 class SupabaseReminderRepository:

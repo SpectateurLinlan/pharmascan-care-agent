@@ -1,5 +1,7 @@
 """Long-term persistence through same-user JWT or explicit local test adapter."""
 
+from contextlib import contextmanager
+from copy import deepcopy
 from datetime import datetime
 from threading import RLock
 from uuid import UUID
@@ -18,6 +20,27 @@ class MemoryCareRepository:
         self._tasks: dict[tuple[UUID, UUID], CareTask] = {}
         self._barriers: dict[tuple[UUID, UUID], Barrier] = {}
         self._lock = RLock()
+        self._revisions:dict[UUID,int]={}
+
+    def revision(self,owner):
+        with self._lock:
+            return self._revisions.get(owner,0)
+
+    def _changed(self,owner):
+        self._revisions[owner]=self._revisions.get(owner,0)+1
+
+    @contextmanager
+    def local_transaction(self):
+        with self._lock:
+            mappings=(self._stocks,self._tasks,self._barriers,self._revisions)
+            backups=[deepcopy(value) for value in mappings]
+            try:
+                yield
+            except BaseException:
+                for current,old in zip(mappings,backups,strict=True):
+                    current.clear()
+                    current.update(old)
+                raise
 
     def stock(self, patient_id: UUID, medication_id: UUID) -> list[StockTransaction]:
         with self._lock:
@@ -45,6 +68,7 @@ class MemoryCareRepository:
                 recorded_at=now,
             )
             rows.append(row)
+            self._changed(patient_id)
             return row
 
     def tasks(self, patient_id: UUID) -> list[CareTask]:
@@ -101,6 +125,7 @@ class MemoryCareRepository:
                 }
             )
             self._tasks[task.patient_id, task.id] = task
+            self._changed(task.patient_id)
             return task
 
     def update_task(self, patient_id: UUID, task_id: UUID, change: TaskUpdate, now: datetime) -> CareTask:
@@ -158,6 +183,7 @@ class MemoryCareRepository:
                 }
             )
             self._tasks[patient_id, task_id] = row
+            self._changed(patient_id)
             return row
 
     def barriers(self, patient_id: UUID) -> list[Barrier]:
@@ -175,6 +201,7 @@ class MemoryCareRepository:
                     raise ValidationError("Barrier key already used for different details")
                 return previous
             self._barriers[row.patient_id, row.id] = row
+            self._changed(row.patient_id)
             return row
 
 

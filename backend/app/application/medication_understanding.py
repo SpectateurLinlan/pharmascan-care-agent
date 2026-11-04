@@ -11,17 +11,34 @@ from ..contracts.medication_knowledge import (
     MedicationUnderstanding,
     ReviewedInstructions,
 )
+from ..contracts.medication_names import NameCandidate, NameQuery
 from ..contracts.ports import Clock
 from ..domain.errors import NotFoundError
+from .assistant_explanations import NOT_ATTEMPTED, explain_knowledge, knowledge_failure_text
 from .enrollment import MedicationEnrollmentService
+from .medication_names import MedicationNameResolver
 from .medication_presentation import general_use_text, knowledge_scope
 
 REVIEWED = {SourceReviewStatus.USER_REVIEWED, SourceReviewStatus.PROFESSIONAL_VERIFIED}
 
 
 class MedicationUnderstandingService:
-    def __init__(self, enrollment: MedicationEnrollmentService, provider: MedicationKnowledgeProvider, clock: Clock):
+    def __init__(
+        self, enrollment: MedicationEnrollmentService, provider: MedicationKnowledgeProvider, clock: Clock,
+        *, name_resolver: MedicationNameResolver | None = None,
+    ):
         self._enrollment, self._provider, self._clock = enrollment, provider, clock
+        self._name_resolver = name_resolver
+
+    def validate_name_candidate(self, candidate: NameCandidate, *, text: str | None = None) -> bool:
+        if self._name_resolver is None or candidate.medication_id is not None:
+            return False
+        if text is not None and not 1 <= len(text) <= 160:
+            return False
+        current = self._name_resolver.resolve(
+            NameQuery(text=text or candidate.canonical_name, purpose="general_use"), (),
+        )
+        return current.status == "resolved" and any(row == candidate for row in current.candidates)
 
     def explain(
         self,
@@ -38,10 +55,22 @@ class MedicationUnderstandingService:
         Personal-instructions questions never call the general knowledge provider.
         A reviewed label indication does not prove the prescriber's personal reason.
         """
+        resolution = None
+        general_name = self._name_resolver is not None and question == "general_use" and medication_id is None
+        if general_name and medication_name:
+            resolution = self._name_resolver.resolve(NameQuery(text=medication_name, purpose="general_use"), ())
+            if resolution.status in {"needs_confirmation", "ambiguous"}:
+                return MedicationUnderstanding(
+                    clarification_required=True, name_resolution=resolution, question=question,
+                    medication_name=medication_name,
+                    patient_safe_summary="您指的是以下哪一种药名？请先确认。" if language == "zh"
+                    else "Which of these medicine names did you mean? Please confirm first.",
+                )
+            medication_name = resolution.canonical_name or medication_name
         medication = self._enrollment.get_medication(patient_id, medication_id) if medication_id else None
         if medication_id and medication is None:
             raise NotFoundError("Medication not found for this patient")
-        if medication is None and medication_name:
+        if medication is None and medication_name and not general_name:
             needle = medication_name.strip().casefold()
             rows = self._enrollment.list_medications(patient_id)
             exact = [row for row in rows if row.display_name.casefold() == needle]
@@ -113,6 +142,7 @@ class MedicationUnderstandingService:
                 original_line=printed.line if printed else None,
             )
         result = MedicationUnderstanding(
+            name_resolution=resolution,
             medication_id=medication.id if current else None,
             regimen_id=regimen.id if current else None,
             question=question,
@@ -161,12 +191,7 @@ class MedicationUnderstandingService:
         if knowledge.status == "matched":
             explanation = general_use_text(knowledge, language)
         else:
-            explanation = (
-                "暂时无法从来源可靠确认一般用途，可能存在成分不匹配、来源冲突或服务不可用；请核对原标签或咨询药剂师。"
-                if language == "zh"
-                else "I could not reliably confirm a general use: the ingredient may not match, sources may conflict, "
-                "or the service may be unavailable. Check the original label with your pharmacist."
-            )
+            explanation = knowledge_failure_text(knowledge, language)
         summary = f"{name}{'：' if language == 'zh' else ': '}{explanation}"
         if knowledge.status == "matched":
             summary += "\n\n" + knowledge_scope(language)
@@ -176,7 +201,10 @@ class MedicationUnderstandingService:
                 if language == "zh"
                 else "Your record does not establish why your prescriber chose this medicine for you. "
             ) + summary
-        return result.model_copy(update={"general_knowledge": knowledge, "patient_safe_summary": summary})
+        return result.model_copy(update={
+            "general_knowledge": knowledge, "patient_safe_summary": summary,
+            "explanations": explain_knowledge(knowledge, attempted=knowledge.reason not in NOT_ATTEMPTED),
+        })
 
     @staticmethod
     def _instructions_summary(name: str | None, instructions: ReviewedInstructions | None, language: str) -> str:

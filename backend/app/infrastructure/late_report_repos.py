@@ -64,7 +64,7 @@ class MemoryLateReports:
         )
 
     def save(self, patient_id, occurrence_id, values, challenge_id, now):
-        with self.store.late_report_lock:
+        with self.store.clinical.lock, self.store.late_report_lock:
             existing = self.store.late_reports.get((patient_id, values.id))
             if existing:
                 if existing.idempotency_key != values.binding_key(occurrence_id):

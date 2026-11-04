@@ -5,6 +5,7 @@ from typing import Literal, Protocol
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..domain.errors import ProviderUnavailableError
+from .agent_execution import ProviderUsage
 
 
 class FunctionCall(BaseModel):
@@ -20,6 +21,8 @@ class ModelReply(BaseModel):
     calls: list[FunctionCall] = Field(default_factory=list, max_length=8)
     # Opaque stateless replay only inside one bounded turn; never persisted.
     replay: list[dict[str, object]] = Field(default_factory=list, repr=False, max_length=32)
+    usage: ProviderUsage | None = None
+    returned_model: str | None = Field(default=None, max_length=100)
 
 
 class ModelProviderError(ProviderUnavailableError):

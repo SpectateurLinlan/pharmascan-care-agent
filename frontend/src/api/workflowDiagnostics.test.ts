@@ -18,6 +18,16 @@ beforeEach(()=>{
  dispose=installWorkflowDiagnostics(window);
 });
 afterEach(()=>{dispose();vi.useRealTimers();vi.restoreAllMocks();vi.unstubAllGlobals();sessionStorage.clear();document.body.innerHTML='';});
+
+it('records shell visibility even while backend initialization remains pending',async()=>{
+ vi.useFakeTimers();
+ document.body.innerHTML='<header class="companion-header"></header><main id="main-content" data-load-state="loading"><h1>PRIVATE</h1></main><nav class="patient-nav"></nav>';
+ window.medithreadWorkflows!.start();await vi.advanceTimersByTimeAsync(50);
+ const report=JSON.stringify(window.medithreadWorkflows!.summary());
+ expect(report).toContain('app_shell_visible');
+ expect(report).not.toContain('today_essential_ready');
+ expect(report).not.toContain('PRIVATE');
+});
 const report=()=>window.medithreadWorkflows!.summary() as {captures:Array<{resources:Array<Record<string,unknown>>;api:Array<Record<string,unknown>>}>};
 
 it('retains only allowlisted numeric critical Data API operation timings',()=>{

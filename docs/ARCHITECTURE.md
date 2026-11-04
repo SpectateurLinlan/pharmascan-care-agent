@@ -279,3 +279,14 @@ backfill. Resumed thread text is context only; confirmation/date/ownership are
 revalidated and old calls are never replayed. Migration028 is a separate
 forward-compatible audit allowlist fix, locally tested only; production execution
 requires explicit approval before rollout. No RLS, overlap or byte-cap relaxation.
+
+
+## Persistent workflow and native file verification boundaries
+
+The persistent Assistant is a separately constructed, request-local candidate. Its typed tools use application DTOs and patient-authorized APIs; they do not receive repositories, SQL or verifier credentials. The ordinary Supabase Assistant remains disabled until isolated target acceptance is approved and completed.
+
+Sensitive native writes, workflow revisions and minimal result receipts share a native transaction. An independent restricted technical observer records only correlated byte/absence observations and content-free run events/usage; it cannot authorize clinical changes or patient confirmation. Original uploaded bytes, derived native files and application source identity remain separate concepts.
+
+Ordinary gallery, library PDF, source registration and draft cleanup can use task-independent native media intents through verified storage adapters. They retain the existing HTTP contracts and create no hidden chat task or additional raw-original retention. Composition explicitly injects the adapters; Assistant-bound execution continues through its own typed transaction and copy-proof path.
+
+Installing proof-requiring SQL hooks and activating the corresponding native bridge must be a coordinated, separately authorized target procedure. Source candidates alone are not rollout readiness.

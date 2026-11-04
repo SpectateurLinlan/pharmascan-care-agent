@@ -1,0 +1,3818 @@
+{
+  "baseline": "82c0c0087f7df25ac767871ec31c272f234c60a8",
+  "api_methods": {
+    "saveEvidenceOriginal": {
+      "capabilities": [
+        "medication.source.add"
+      ],
+      "internal": true,
+      "reason": "Independent patient confirmation saves only the current owned successful original; no provider or result override"
+    },
+    "reviewOriginalIdentity": {
+      "capabilities": [
+        "medication.enroll",
+        "medication.draft.resume",
+        "medication.source.add",
+        "medication.source.review"
+      ],
+      "internal": true,
+      "reason": "Independent patient-only original-name review within the current saved draft; never an LLM-executable action"
+    },
+    "medicationKnowledge": {
+      "capabilities": [
+        "medication.knowledge",
+        "medication.instructions"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "refreshFollowUps": {
+      "capabilities": [
+        "followup.list"
+      ],
+      "internal": true,
+      "reason": "Existing workflow substep; not an independently advertised user action"
+    },
+    "doseFollowUps": {
+      "capabilities": [
+        "medication.today"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "lateReportHistory": {
+      "capabilities": [
+        "dose.late.review",
+        "dose.correction.review"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "prepareLateReport": {
+      "capabilities": [
+        "dose.late.review",
+        "dose.correction.review"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "confirmLateReport": {
+      "capabilities": [
+        "dose.late.review",
+        "dose.correction.review"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "inventory": {
+      "capabilities": [
+        "inventory.view"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "recordStock": {
+      "capabilities": [
+        "inventory.count"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "careTasks": {
+      "capabilities": [
+        "followup.list"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "createCareTask": {
+      "capabilities": [
+        "followup.add"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "updateCareTask": {
+      "capabilities": [
+        "followup.complete",
+        "followup.defer",
+        "followup.cancel",
+        "followup.contacted",
+        "followup.edit"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "barriers": {
+      "capabilities": [
+        "barrier.list"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "recordBarrier": {
+      "capabilities": [
+        "barrier.add"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "medicationCareReview": {
+      "capabilities": [
+        "record.visit.prepare"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "evidenceTasks": {
+      "capabilities": [
+        "medication.setup.list"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "checkInput": {
+      "capabilities": [
+        "source.preview"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "evidenceTask": {
+      "capabilities": [
+        "medication.draft.resume"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "evidenceSources": {
+      "capabilities": [
+        "medication.source.view"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "attachEvidence": {
+      "capabilities": [
+        "medication.source.add"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "reviewEvidence": {
+      "capabilities": [
+        "medication.source.review"
+      ],
+      "internal": true,
+      "reason": "Existing workflow substep; not an independently advertised user action"
+    },
+    "personalGallery": {
+      "capabilities": [
+        "gallery.list"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "medicationFiles": {
+      "capabilities": [
+        "library.list"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "retireReference": {
+      "capabilities": [
+        "gallery.photo.retire"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "manageReference": {
+      "capabilities": [
+        "gallery.photo.edit",
+        "gallery.photo.remove",
+        "gallery.photo.delete"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "referencePhoto": {
+      "capabilities": [
+        "gallery.photo.view"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "uploadLibraryPdf": {
+      "capabilities": [
+        "library.pdf.add"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "libraryPdf": {
+      "capabilities": [
+        "library.pdf.view",
+        "library.pdf.download"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "updateLibraryPdf": {
+      "capabilities": [
+        "library.pdf.edit"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "deleteLibraryPdf": {
+      "capabilities": [
+        "library.pdf.delete"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "addReference": {
+      "capabilities": [
+        "gallery.photo.add"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "checkPersonalDose": {
+      "capabilities": [
+        "image.compare"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "conversationHistory": {
+      "capabilities": [
+        "conversation.view"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "conversations": {
+      "capabilities": [
+        "conversation.list"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "conversation": {
+      "capabilities": [
+        "conversation.view"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "resumeConversation": {
+      "capabilities": [
+        "conversation.resume"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "navigationContext": {
+      "capabilities": [
+        "navigation.open"
+      ],
+      "internal": true,
+      "reason": "Existing workflow substep; not an independently advertised user action"
+    },
+    "clearConversationHistory": {
+      "capabilities": [
+        "conversation.clear"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "doseDisplay": {
+      "capabilities": [
+        "medication.enroll"
+      ],
+      "internal": true,
+      "reason": "Existing workflow substep; not an independently advertised user action"
+    },
+    "recentTurns": {
+      "capabilities": [
+        "conversation.resume"
+      ],
+      "internal": true,
+      "reason": "Existing workflow substep; not an independently advertised user action"
+    },
+    "observations": {
+      "capabilities": [
+        "observation.list"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "saveObservation": {
+      "capabilities": [
+        "observation.add",
+        "observation.edit"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "deleteObservation": {
+      "capabilities": [
+        "observation.delete"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "reviewSummary": {
+      "capabilities": [
+        "record.summary"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "reminderPlan": {
+      "capabilities": [
+        "reminder.list"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "reminderCalendar": {
+      "capabilities": [
+        "reminder.calendar.export"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "pushConfig": {
+      "capabilities": [
+        "notification.status"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "currentPush": {
+      "capabilities": [
+        "notification.status"
+      ],
+      "internal": true,
+      "reason": "Existing workflow substep; not an independently advertised user action"
+    },
+    "testPush": {
+      "capabilities": [
+        "notification.test"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "pushSubscriptions": {
+      "capabilities": [
+        "notification.status"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "savePushSubscription": {
+      "capabilities": [
+        "notification.subscribe"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "revokePushSubscription": {
+      "capabilities": [
+        "notification.unsubscribe"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "revokeCurrentPush": {
+      "capabilities": [
+        "notification.unsubscribe"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "reminderAlerts": {
+      "capabilities": [
+        "reminder.list"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "feedback": {
+      "capabilities": [
+        "feedback.submit"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "visualCheck": {
+      "capabilities": [
+        "image.compare"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "resumeDraft": {
+      "capabilities": [
+        "medication.draft.resume"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "reminders": {
+      "capabilities": [
+        "reminder.list"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "snoozeReminder": {
+      "capabilities": [
+        "reminder.snooze"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "requestPrnReportChallenge": {
+      "capabilities": [
+        "dose.prn.report"
+      ],
+      "internal": true,
+      "reason": "Existing workflow substep; not an independently advertised user action"
+    },
+    "submitPrnReport": {
+      "capabilities": [
+        "dose.prn.report"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "regimenHistory": {
+      "capabilities": [
+        "medication.plan.view"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "historyCatalogue": {
+      "capabilities": [
+        "record.catalogue"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "medicationHistory": {
+      "capabilities": [
+        "record.history"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "sourcePreview": {
+      "capabilities": [
+        "source.preview"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "speechCapabilities": {
+      "capabilities": [
+        "speech.input",
+        "speech.playback"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "transcribe": {
+      "capabilities": [
+        "speech.input"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "synthesize": {
+      "capabilities": [
+        "speech.playback"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "agentUsage": {
+      "capabilities": [
+        "assistant.usage"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "preferences": {
+      "capabilities": [
+        "profile.view"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "caregivers": {
+      "capabilities": [
+        "caregiver.list"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "createCaregiver": {
+      "capabilities": [
+        "caregiver.add"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "updateCaregiver": {
+      "capabilities": [
+        "caregiver.edit"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "deleteCaregiver": {
+      "capabilities": [
+        "caregiver.delete"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "updatePreferences": {
+      "capabilities": [
+        "preference.language",
+        "preference.text",
+        "preference.voice",
+        "preference.reminder",
+        "preference.privacy",
+        "preference.timezone",
+        "profile.edit"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "health": {
+      "capabilities": [
+        "navigation.open"
+      ],
+      "internal": true,
+      "reason": "Existing workflow substep; not an independently advertised user action"
+    },
+    "startDemo": {
+      "capabilities": [
+        "conversation.resume"
+      ],
+      "internal": true,
+      "reason": "Existing workflow substep; not an independently advertised user action"
+    },
+    "newConversation": {
+      "capabilities": [
+        "conversation.new"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "listMedications": {
+      "capabilities": [
+        "medication.plan.view",
+        "medication.status"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "deleteDraft": {
+      "capabilities": [
+        "medication.draft.delete"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "endPlan": {
+      "capabilities": [
+        "medication.plan.end"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "createDraft": {
+      "capabilities": [
+        "medication.enroll",
+        "medication.plan.change"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "reviewDraft": {
+      "capabilities": [
+        "medication.source.review"
+      ],
+      "internal": true,
+      "reason": "Existing workflow substep; not an independently advertised user action"
+    },
+    "requestChallenge": {
+      "capabilities": [
+        "medication.enroll"
+      ],
+      "internal": true,
+      "reason": "Existing workflow substep; not an independently advertised user action"
+    },
+    "activate": {
+      "capabilities": [
+        "medication.enroll"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "todayAttention": {
+      "capabilities": [
+        "medication.today"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "dueDose": {
+      "capabilities": [
+        "medication.due"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "requestReportChallenge": {
+      "capabilities": [
+        "dose.report"
+      ],
+      "internal": true,
+      "reason": "Existing workflow substep; not an independently advertised user action"
+    },
+    "submitReport": {
+      "capabilities": [
+        "dose.report"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "doseHistory": {
+      "capabilities": [
+        "medication.history"
+      ],
+      "internal": false,
+      "reason": ""
+    },
+    "sendMessage": {
+      "capabilities": [
+        "conversation.new"
+      ],
+      "internal": false,
+      "reason": ""
+    }
+  },
+  "capabilities": [
+    {
+      "capability_id": "medication.enroll",
+      "adapter_key": "enrollment",
+      "mode": "workflow",
+      "case_id": "medication.enroll.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.doseDisplay",
+        "api.createDraft",
+        "api.requestChallenge",
+        "api.activate",
+        "navigation.manual"
+      ],
+      "implementation_task": "P05-T1",
+      "acceptance_cases": [
+        {
+          "case_id": "medication.enroll.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "medication.enroll.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_enrollment_operations.py::test_completion_observes_the_existing_independent_review_challenge_and_activation"
+          ]
+        },
+        {
+          "case_id": "medication.enroll.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_enrollment_operations.py::test_completion_observes_the_existing_independent_review_challenge_and_activation"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "medication.draft.resume",
+      "adapter_key": "medication_management",
+      "mode": "workflow",
+      "case_id": "medication.draft.resume.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.evidenceTask",
+        "api.resumeDraft"
+      ],
+      "implementation_task": "P06-T1",
+      "acceptance_cases": [
+        {
+          "case_id": "medication.draft.resume.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "medication.draft.resume.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_draft_recovery.py::test_legacy_draft_recovery_prepares_the_same_aggregate_then_uses_independent_activation"
+          ]
+        },
+        {
+          "case_id": "medication.draft.resume.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_draft_recovery.py::test_legacy_draft_recovery_prepares_the_same_aggregate_then_uses_independent_activation"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "medication.draft.delete",
+      "adapter_key": "medication_management",
+      "mode": "workflow",
+      "case_id": "medication.draft.delete.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.deleteDraft"
+      ],
+      "implementation_task": "P06-T1",
+      "acceptance_cases": [
+        {
+          "case_id": "medication.draft.delete.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "medication.draft.delete.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_draft_deletion.py::test_deletion_preparation_never_deletes_and_patient_replay_reads_the_same_real_receipt"
+          ]
+        },
+        {
+          "case_id": "medication.draft.delete.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_draft_deletion.py::test_deletion_preparation_never_deletes_and_patient_replay_reads_the_same_real_receipt"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "medication.source.add",
+      "adapter_key": "medication_management",
+      "mode": "workflow",
+      "case_id": "medication.source.add.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.attachEvidence",
+        "navigation.label"
+      ],
+      "implementation_task": "P06-T1",
+      "acceptance_cases": [
+        {
+          "case_id": "medication.source.add.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "medication.source.add.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_source_capabilities.py::test_photo_source_patient_save_then_review_produces_one_plan_without_second_recognition"
+          ]
+        },
+        {
+          "case_id": "medication.source.add.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_browser",
+          "test_refs": [
+            "frontend/e2e/assistant-sources.spec.ts::source original is saved first and shared review activates independently in"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "medication.source.review",
+      "adapter_key": "medication_management",
+      "mode": "workflow",
+      "case_id": "medication.source.review.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.reviewEvidence",
+        "api.reviewDraft"
+      ],
+      "implementation_task": "P06-T1",
+      "acceptance_cases": [
+        {
+          "case_id": "medication.source.review.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "medication.source.review.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_source_capabilities.py::test_source_review_captures_only_the_actual_patient_plan_and_waits_for_activation"
+          ]
+        },
+        {
+          "case_id": "medication.source.review.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_review.py::test_source_review_finishes_only_after_actual_independent_activation"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "medication.plan.change",
+      "adapter_key": "medication_management",
+      "mode": "workflow",
+      "case_id": "medication.plan.change.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.createDraft",
+        "navigation.edit-medication"
+      ],
+      "implementation_task": "P06-T1",
+      "acceptance_cases": [
+        {
+          "case_id": "medication.plan.change.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "medication.plan.change.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_plan_changes.py::test_chat_plan_change_uses_independent_activation_and_real_superseded_readback"
+          ]
+        },
+        {
+          "case_id": "medication.plan.change.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_plan_changes.py::test_chat_plan_change_uses_independent_activation_and_real_superseded_readback"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "medication.plan.end",
+      "adapter_key": "medication_management",
+      "mode": "workflow",
+      "case_id": "medication.plan.end.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.endPlan"
+      ],
+      "implementation_task": "P06-T1",
+      "acceptance_cases": [
+        {
+          "case_id": "medication.plan.end.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "medication.plan.end.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_medication_management.py::test_stopping_a_plan_requires_the_patient_api_and_preserves_source_and_history"
+          ]
+        },
+        {
+          "case_id": "medication.plan.end.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_medication_management.py::test_stopping_a_plan_requires_the_patient_api_and_preserves_source_and_history"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "medication.plan.view",
+      "adapter_key": "medication_management",
+      "mode": "read",
+      "case_id": "medication.plan.view.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.regimenHistory",
+        "api.listMedications",
+        "navigation.medicines",
+        "navigation.past-medicines",
+        "navigation.medicine-detail"
+      ],
+      "implementation_task": "P06-T1",
+      "acceptance_cases": [
+        {
+          "case_id": "medication.plan.view.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "medication.plan.view.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_medication_management.py::test_reads_actual_owned_plan_details_without_clinical_writes"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "medication.setup.list",
+      "adapter_key": "medication_management",
+      "mode": "read",
+      "case_id": "medication.setup.list.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.evidenceTasks",
+        "navigation.unfinished"
+      ],
+      "implementation_task": "P06-T1",
+      "acceptance_cases": [
+        {
+          "case_id": "medication.setup.list.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "medication.setup.list.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_medication_management.py::test_reads_actual_owned_plan_details_without_clinical_writes"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "medication.today",
+      "adapter_key": "records",
+      "mode": "read",
+      "case_id": "medication.today.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.doseFollowUps",
+        "api.todayAttention",
+        "navigation.today"
+      ],
+      "implementation_task": "P06-T2",
+      "acceptance_cases": [
+        {
+          "case_id": "medication.today.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "medication.today.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_records.py::test_each_record_read_returns_real_owned_data_without_clinical_side_effects"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "medication.due",
+      "adapter_key": "records",
+      "mode": "read",
+      "case_id": "medication.due.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.dueDose"
+      ],
+      "implementation_task": "P06-T2",
+      "acceptance_cases": [
+        {
+          "case_id": "medication.due.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "medication.due.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_records.py::test_each_record_read_returns_real_owned_data_without_clinical_side_effects"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "medication.status",
+      "adapter_key": "records",
+      "mode": "read",
+      "case_id": "medication.status.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.listMedications"
+      ],
+      "implementation_task": "P06-T2",
+      "acceptance_cases": [
+        {
+          "case_id": "medication.status.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "medication.status.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_records.py::test_each_record_read_returns_real_owned_data_without_clinical_side_effects"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "medication.history",
+      "adapter_key": "records",
+      "mode": "read",
+      "case_id": "medication.history.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.doseHistory",
+        "navigation.medicine-history"
+      ],
+      "implementation_task": "P06-T2",
+      "acceptance_cases": [
+        {
+          "case_id": "medication.history.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "medication.history.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_records.py::test_each_record_read_returns_real_owned_data_without_clinical_side_effects"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "medication.source.view",
+      "adapter_key": "records",
+      "mode": "read",
+      "case_id": "medication.source.view.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.evidenceSources"
+      ],
+      "implementation_task": "P06-T2",
+      "acceptance_cases": [
+        {
+          "case_id": "medication.source.view.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "medication.source.view.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_records.py::test_each_record_read_returns_real_owned_data_without_clinical_side_effects"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "record.catalogue",
+      "adapter_key": "records",
+      "mode": "read",
+      "case_id": "record.catalogue.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.historyCatalogue",
+        "navigation.records"
+      ],
+      "implementation_task": "P06-T2",
+      "acceptance_cases": [
+        {
+          "case_id": "record.catalogue.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "record.catalogue.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_records.py::test_each_record_read_returns_real_owned_data_without_clinical_side_effects"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "record.history",
+      "adapter_key": "records",
+      "mode": "read",
+      "case_id": "record.history.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.medicationHistory",
+        "navigation.medication-records"
+      ],
+      "implementation_task": "P06-T2",
+      "acceptance_cases": [
+        {
+          "case_id": "record.history.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "record.history.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_records.py::test_each_record_read_returns_real_owned_data_without_clinical_side_effects"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "record.summary",
+      "adapter_key": "records",
+      "mode": "read",
+      "case_id": "record.summary.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.reviewSummary",
+        "navigation.summary-week",
+        "navigation.summary-month",
+        "navigation.summary-course"
+      ],
+      "implementation_task": "P06-T2",
+      "acceptance_cases": [
+        {
+          "case_id": "record.summary.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "record.summary.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_records.py::test_each_record_read_returns_real_owned_data_without_clinical_side_effects"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "record.visit.prepare",
+      "adapter_key": "records",
+      "mode": "read",
+      "case_id": "record.visit.prepare.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.medicationCareReview",
+        "navigation.medication-review"
+      ],
+      "implementation_task": "P06-T2",
+      "acceptance_cases": [
+        {
+          "case_id": "record.visit.prepare.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "record.visit.prepare.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_records.py::test_each_record_read_returns_real_owned_data_without_clinical_side_effects"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "medication.knowledge",
+      "adapter_key": "knowledge",
+      "mode": "read",
+      "case_id": "medication.knowledge.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.medicationKnowledge"
+      ],
+      "implementation_task": "P01-T4",
+      "acceptance_cases": [
+        {
+          "case_id": "medication.knowledge.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "medication.knowledge.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_knowledge.py::test_only_explicit_knowledge_request_contacts_provider_and_preserves_clinical_records"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "medication.instructions",
+      "adapter_key": "knowledge",
+      "mode": "read",
+      "case_id": "medication.instructions.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.medicationKnowledge"
+      ],
+      "implementation_task": "P01-T4",
+      "acceptance_cases": [
+        {
+          "case_id": "medication.instructions.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "medication.instructions.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_records.py::test_each_record_read_returns_real_owned_data_without_clinical_side_effects"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "dose.report",
+      "adapter_key": "records",
+      "mode": "patient_ui",
+      "case_id": "dose.report.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.requestReportChallenge",
+        "api.submitReport"
+      ],
+      "implementation_task": "P06-T2",
+      "acceptance_cases": [
+        {
+          "case_id": "dose.report.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "dose.report.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_report_bindings.py::test_scheduled_report_uses_the_actual_owned_occurrence_without_reconstructing_history"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "dose.prn.report",
+      "adapter_key": "records",
+      "mode": "patient_ui",
+      "case_id": "dose.prn.report.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.requestPrnReportChallenge",
+        "api.submitPrnReport"
+      ],
+      "implementation_task": "P06-T2",
+      "acceptance_cases": [
+        {
+          "case_id": "dose.prn.report.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "dose.prn.report.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_report_bindings.py::test_prn_report_requires_independent_patient_confirmation_then_reads_actual_event"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "dose.late.review",
+      "adapter_key": "records",
+      "mode": "patient_ui",
+      "case_id": "dose.late.review.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.lateReportHistory",
+        "api.prepareLateReport",
+        "api.confirmLateReport"
+      ],
+      "implementation_task": "P06-T2",
+      "acceptance_cases": [
+        {
+          "case_id": "dose.late.review.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "dose.late.review.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_late_reports.py::test_late_and_correction_independent_confirm_preserves_original_and_reads_actual_result"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "dose.correction.review",
+      "adapter_key": "records",
+      "mode": "patient_ui",
+      "case_id": "dose.correction.review.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.lateReportHistory",
+        "api.prepareLateReport",
+        "api.confirmLateReport"
+      ],
+      "implementation_task": "P06-T2",
+      "acceptance_cases": [
+        {
+          "case_id": "dose.correction.review.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "dose.correction.review.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_late_reports.py::test_late_and_correction_independent_confirm_preserves_original_and_reads_actual_result"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "observation.list",
+      "adapter_key": "care",
+      "mode": "read",
+      "case_id": "observation.list.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.observations",
+        "navigation.health-notes"
+      ],
+      "implementation_task": "P06-T3",
+      "acceptance_cases": [
+        {
+          "case_id": "observation.list.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "observation.list.acceptance.read",
+          "phase": "read",
+          "environment": "local_browser",
+          "test_refs": [
+            "frontend/e2e/assistant-care.spec.ts::care records, independently confirmed writes and all follow-up actions in"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "observation.add",
+      "adapter_key": "care",
+      "mode": "workflow",
+      "case_id": "observation.add.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.saveObservation"
+      ],
+      "implementation_task": "P06-T3",
+      "acceptance_cases": [
+        {
+          "case_id": "observation.add.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "observation.add.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_patient_confirmation_writes_once_and_completion_reads_the_actual_owned_record"
+          ]
+        },
+        {
+          "case_id": "observation.add.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_patient_confirmation_writes_once_and_completion_reads_the_actual_owned_record"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "observation.delete",
+      "adapter_key": "care",
+      "mode": "workflow",
+      "case_id": "observation.delete.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.deleteObservation"
+      ],
+      "implementation_task": "P06-T3",
+      "acceptance_cases": [
+        {
+          "case_id": "observation.delete.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "observation.delete.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_observation_deletion_requires_an_actual_patient_success_receipt"
+          ]
+        },
+        {
+          "case_id": "observation.delete.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_observation_deletion_requires_an_actual_patient_success_receipt"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "inventory.view",
+      "adapter_key": "care",
+      "mode": "read",
+      "case_id": "inventory.view.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.inventory",
+        "navigation.medication-inventory"
+      ],
+      "implementation_task": "P06-T3",
+      "acceptance_cases": [
+        {
+          "case_id": "inventory.view.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "inventory.view.acceptance.read",
+          "phase": "read",
+          "environment": "local_browser",
+          "test_refs": [
+            "frontend/e2e/assistant-care.spec.ts::care records, independently confirmed writes and all follow-up actions in"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "barrier.list",
+      "adapter_key": "care",
+      "mode": "read",
+      "case_id": "barrier.list.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.barriers",
+        "navigation.adherence-barriers"
+      ],
+      "implementation_task": "P06-T3",
+      "acceptance_cases": [
+        {
+          "case_id": "barrier.list.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "barrier.list.acceptance.read",
+          "phase": "read",
+          "environment": "local_browser",
+          "test_refs": [
+            "frontend/e2e/assistant-care.spec.ts::care records, independently confirmed writes and all follow-up actions in"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "followup.list",
+      "adapter_key": "care",
+      "mode": "read",
+      "case_id": "followup.list.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.refreshFollowUps",
+        "api.careTasks",
+        "navigation.care-tasks"
+      ],
+      "implementation_task": "P06-T3",
+      "acceptance_cases": [
+        {
+          "case_id": "followup.list.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "followup.list.acceptance.read",
+          "phase": "read",
+          "environment": "local_browser",
+          "test_refs": [
+            "frontend/e2e/assistant-care.spec.ts::care records, independently confirmed writes and all follow-up actions in"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "inventory.count",
+      "adapter_key": "care",
+      "mode": "workflow",
+      "case_id": "inventory.count.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.recordStock"
+      ],
+      "implementation_task": "P06-T3",
+      "acceptance_cases": [
+        {
+          "case_id": "inventory.count.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "inventory.count.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_patient_confirmation_writes_once_and_completion_reads_the_actual_owned_record"
+          ]
+        },
+        {
+          "case_id": "inventory.count.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_patient_confirmation_writes_once_and_completion_reads_the_actual_owned_record"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "barrier.add",
+      "adapter_key": "care",
+      "mode": "workflow",
+      "case_id": "barrier.add.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.recordBarrier"
+      ],
+      "implementation_task": "P06-T3",
+      "acceptance_cases": [
+        {
+          "case_id": "barrier.add.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "barrier.add.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_patient_confirmation_writes_once_and_completion_reads_the_actual_owned_record"
+          ]
+        },
+        {
+          "case_id": "barrier.add.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_patient_confirmation_writes_once_and_completion_reads_the_actual_owned_record"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "followup.add",
+      "adapter_key": "care",
+      "mode": "workflow",
+      "case_id": "followup.add.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.createCareTask"
+      ],
+      "implementation_task": "P06-T3",
+      "acceptance_cases": [
+        {
+          "case_id": "followup.add.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "followup.add.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_patient_confirmation_writes_once_and_completion_reads_the_actual_owned_record"
+          ]
+        },
+        {
+          "case_id": "followup.add.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_patient_confirmation_writes_once_and_completion_reads_the_actual_owned_record"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "followup.contacted",
+      "adapter_key": "care",
+      "mode": "workflow",
+      "case_id": "followup.contacted.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.updateCareTask"
+      ],
+      "implementation_task": "P06-T3",
+      "acceptance_cases": [
+        {
+          "case_id": "followup.contacted.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "followup.contacted.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_each_followup_operation_has_one_actual_history_change"
+          ]
+        },
+        {
+          "case_id": "followup.contacted.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_each_followup_operation_has_one_actual_history_change"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "followup.complete",
+      "adapter_key": "care",
+      "mode": "workflow",
+      "case_id": "followup.complete.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.updateCareTask"
+      ],
+      "implementation_task": "P06-T3",
+      "acceptance_cases": [
+        {
+          "case_id": "followup.complete.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "followup.complete.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_each_followup_operation_has_one_actual_history_change"
+          ]
+        },
+        {
+          "case_id": "followup.complete.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_each_followup_operation_has_one_actual_history_change"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "followup.defer",
+      "adapter_key": "care",
+      "mode": "workflow",
+      "case_id": "followup.defer.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.updateCareTask"
+      ],
+      "implementation_task": "P06-T3",
+      "acceptance_cases": [
+        {
+          "case_id": "followup.defer.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "followup.defer.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_each_followup_operation_has_one_actual_history_change"
+          ]
+        },
+        {
+          "case_id": "followup.defer.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_each_followup_operation_has_one_actual_history_change"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "followup.cancel",
+      "adapter_key": "care",
+      "mode": "workflow",
+      "case_id": "followup.cancel.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.updateCareTask"
+      ],
+      "implementation_task": "P06-T3",
+      "acceptance_cases": [
+        {
+          "case_id": "followup.cancel.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "followup.cancel.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_each_followup_operation_has_one_actual_history_change"
+          ]
+        },
+        {
+          "case_id": "followup.cancel.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_each_followup_operation_has_one_actual_history_change"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "gallery.list",
+      "adapter_key": "media",
+      "mode": "read",
+      "case_id": "gallery.list.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.personalGallery",
+        "navigation.gallery"
+      ],
+      "implementation_task": "P06-T4",
+      "acceptance_cases": [
+        {
+          "case_id": "gallery.list.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "gallery.list.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_media.py::test_media_read_entry_uses_actual_owned_records_without_binary_or_provider_reads"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "gallery.photo.view",
+      "adapter_key": "media",
+      "mode": "read",
+      "case_id": "gallery.photo.view.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.referencePhoto"
+      ],
+      "implementation_task": "P06-T4",
+      "acceptance_cases": [
+        {
+          "case_id": "gallery.photo.view.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "gallery.photo.view.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_media.py::test_media_read_entry_uses_actual_owned_records_without_binary_or_provider_reads"
+          ]
+        },
+        {
+          "case_id": "gallery.photo.view.acceptance.native_read",
+          "phase": "native_read",
+          "environment": "recording_port",
+          "test_refs": [
+            "frontend/src/components/AssistantMediaActions.test.tsx::loads an owned photo only after a click and revokes its page URL on unmount"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "gallery.photo.add",
+      "adapter_key": "media",
+      "mode": "workflow",
+      "case_id": "gallery.photo.add.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.addReference"
+      ],
+      "implementation_task": "P06-T4",
+      "acceptance_cases": [
+        {
+          "case_id": "gallery.photo.add.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "gallery.photo.add.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_reference_upload.py::test_reference_original_is_store_only_and_independent_native_upload_reads_real_result"
+          ]
+        },
+        {
+          "case_id": "gallery.photo.add.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_reference_upload.py::test_reference_original_is_store_only_and_independent_native_upload_reads_real_result"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "gallery.photo.edit",
+      "adapter_key": "media",
+      "mode": "workflow",
+      "case_id": "gallery.photo.edit.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.manageReference"
+      ],
+      "implementation_task": "P06-T4",
+      "acceptance_cases": [
+        {
+          "case_id": "gallery.photo.edit.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "gallery.photo.edit.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_media_lifecycle.py::test_six_real_lifecycle_operations_need_review_then_independent_native_confirmation"
+          ]
+        },
+        {
+          "case_id": "gallery.photo.edit.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_media_lifecycle.py::test_six_real_lifecycle_operations_need_review_then_independent_native_confirmation"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "gallery.photo.remove",
+      "adapter_key": "media",
+      "mode": "workflow",
+      "case_id": "gallery.photo.remove.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.manageReference"
+      ],
+      "implementation_task": "P06-T4",
+      "acceptance_cases": [
+        {
+          "case_id": "gallery.photo.remove.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "gallery.photo.remove.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_media_lifecycle.py::test_six_real_lifecycle_operations_need_review_then_independent_native_confirmation"
+          ]
+        },
+        {
+          "case_id": "gallery.photo.remove.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_media_lifecycle.py::test_six_real_lifecycle_operations_need_review_then_independent_native_confirmation"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "gallery.photo.delete",
+      "adapter_key": "media",
+      "mode": "workflow",
+      "case_id": "gallery.photo.delete.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.manageReference"
+      ],
+      "implementation_task": "P06-T4",
+      "acceptance_cases": [
+        {
+          "case_id": "gallery.photo.delete.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "gallery.photo.delete.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_media_lifecycle.py::test_six_real_lifecycle_operations_need_review_then_independent_native_confirmation"
+          ]
+        },
+        {
+          "case_id": "gallery.photo.delete.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_media_lifecycle.py::test_six_real_lifecycle_operations_need_review_then_independent_native_confirmation"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "gallery.photo.retire",
+      "adapter_key": "media",
+      "mode": "workflow",
+      "case_id": "gallery.photo.retire.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.retireReference"
+      ],
+      "implementation_task": "P06-T4",
+      "acceptance_cases": [
+        {
+          "case_id": "gallery.photo.retire.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "gallery.photo.retire.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_media_lifecycle.py::test_six_real_lifecycle_operations_need_review_then_independent_native_confirmation"
+          ]
+        },
+        {
+          "case_id": "gallery.photo.retire.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_media_lifecycle.py::test_six_real_lifecycle_operations_need_review_then_independent_native_confirmation"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "image.compare",
+      "adapter_key": "media",
+      "mode": "device_ui",
+      "case_id": "image.compare.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.checkPersonalDose",
+        "api.visualCheck",
+        "navigation.check",
+        "navigation.check-result"
+      ],
+      "implementation_task": "P06-T4",
+      "acceptance_cases": [
+        {
+          "case_id": "image.compare.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "image.compare.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_image_compare.py::test_real_provider_outcome_remains_distinct_and_original_survives"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "source.preview",
+      "adapter_key": "media",
+      "mode": "device_ui",
+      "case_id": "source.preview.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.checkInput",
+        "api.sourcePreview"
+      ],
+      "implementation_task": "P06-T4",
+      "acceptance_cases": [
+        {
+          "case_id": "source.preview.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "source.preview.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_source_preview.py::test_source_preview_is_explicit_and_never_creates_reviewed_records_or_saved_extraction"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "library.list",
+      "adapter_key": "media",
+      "mode": "read",
+      "case_id": "library.list.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.medicationFiles"
+      ],
+      "implementation_task": "P06-T4",
+      "acceptance_cases": [
+        {
+          "case_id": "library.list.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "library.list.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_media.py::test_media_read_entry_uses_actual_owned_records_without_binary_or_provider_reads"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "library.pdf.view",
+      "adapter_key": "media",
+      "mode": "read",
+      "case_id": "library.pdf.view.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.libraryPdf"
+      ],
+      "implementation_task": "P06-T4",
+      "acceptance_cases": [
+        {
+          "case_id": "library.pdf.view.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "library.pdf.view.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_media.py::test_media_read_entry_uses_actual_owned_records_without_binary_or_provider_reads"
+          ]
+        },
+        {
+          "case_id": "library.pdf.view.acceptance.native_read",
+          "phase": "native_read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_media.py::test_media_no_save_keeps_no_body_and_actual_pdf_download_preserves_bytes"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "library.pdf.download",
+      "adapter_key": "media",
+      "mode": "read",
+      "case_id": "library.pdf.download.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.libraryPdf"
+      ],
+      "implementation_task": "P06-T4",
+      "acceptance_cases": [
+        {
+          "case_id": "library.pdf.download.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "library.pdf.download.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_media.py::test_media_read_entry_uses_actual_owned_records_without_binary_or_provider_reads"
+          ]
+        },
+        {
+          "case_id": "library.pdf.download.acceptance.native_read",
+          "phase": "native_read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_media.py::test_media_no_save_keeps_no_body_and_actual_pdf_download_preserves_bytes"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "library.pdf.add",
+      "adapter_key": "media",
+      "mode": "workflow",
+      "case_id": "library.pdf.add.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.uploadLibraryPdf"
+      ],
+      "implementation_task": "P06-T4",
+      "acceptance_cases": [
+        {
+          "case_id": "library.pdf.add.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "library.pdf.add.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_pdf_upload.py::test_saved_pdf_original_is_store_only_and_separate_native_confirmation_completes"
+          ]
+        },
+        {
+          "case_id": "library.pdf.add.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_pdf_upload.py::test_saved_pdf_original_is_store_only_and_separate_native_confirmation_completes"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "library.pdf.edit",
+      "adapter_key": "media",
+      "mode": "workflow",
+      "case_id": "library.pdf.edit.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.updateLibraryPdf"
+      ],
+      "implementation_task": "P06-T4",
+      "acceptance_cases": [
+        {
+          "case_id": "library.pdf.edit.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "library.pdf.edit.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_media_lifecycle.py::test_six_real_lifecycle_operations_need_review_then_independent_native_confirmation"
+          ]
+        },
+        {
+          "case_id": "library.pdf.edit.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_media_lifecycle.py::test_six_real_lifecycle_operations_need_review_then_independent_native_confirmation"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "library.pdf.delete",
+      "adapter_key": "media",
+      "mode": "workflow",
+      "case_id": "library.pdf.delete.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.deleteLibraryPdf"
+      ],
+      "implementation_task": "P06-T4",
+      "acceptance_cases": [
+        {
+          "case_id": "library.pdf.delete.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "library.pdf.delete.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_media_lifecycle.py::test_six_real_lifecycle_operations_need_review_then_independent_native_confirmation"
+          ]
+        },
+        {
+          "case_id": "library.pdf.delete.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_media_lifecycle.py::test_six_real_lifecycle_operations_need_review_then_independent_native_confirmation"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "reminder.list",
+      "adapter_key": "reminders",
+      "mode": "read",
+      "case_id": "reminder.list.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.reminderPlan",
+        "api.reminderAlerts",
+        "api.reminders"
+      ],
+      "implementation_task": "P06-T5",
+      "acceptance_cases": [
+        {
+          "case_id": "reminder.list.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "reminder.list.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_reminders.py::test_reminder_query_is_a_real_read_projection_without_materializing_doses"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "reminder.snooze",
+      "adapter_key": "reminders",
+      "mode": "workflow",
+      "case_id": "reminder.snooze.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.snoozeReminder"
+      ],
+      "implementation_task": "P06-T5",
+      "acceptance_cases": [
+        {
+          "case_id": "reminder.snooze.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "reminder.snooze.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_reminder_writes.py::test_patient_confirmation_saves_the_native_result_without_changing_clinical_records"
+          ]
+        },
+        {
+          "case_id": "reminder.snooze.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_reminder_writes.py::test_patient_confirmation_saves_the_native_result_without_changing_clinical_records"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "reminder.settings",
+      "adapter_key": "reminders",
+      "mode": "workflow",
+      "case_id": "reminder.settings.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "navigation.reminder-settings"
+      ],
+      "implementation_task": "P06-T5",
+      "acceptance_cases": [
+        {
+          "case_id": "reminder.settings.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "reminder.settings.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_reminder_writes.py::test_patient_confirmation_saves_the_native_result_without_changing_clinical_records"
+          ]
+        },
+        {
+          "case_id": "reminder.settings.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_reminder_writes.py::test_patient_confirmation_saves_the_native_result_without_changing_clinical_records"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "reminder.calendar.export",
+      "adapter_key": "reminders",
+      "mode": "device_ui",
+      "case_id": "reminder.calendar.export.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.reminderCalendar"
+      ],
+      "implementation_task": "P06-T5",
+      "acceptance_cases": [
+        {
+          "case_id": "reminder.calendar.export.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "reminder.calendar.export.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_reminders.py::test_explicit_task_bound_calendar_exports_native_ics_without_occurrence_or_dose_writes"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "notification.status",
+      "adapter_key": "reminders",
+      "mode": "read",
+      "case_id": "notification.status.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.pushConfig",
+        "api.currentPush",
+        "api.pushSubscriptions"
+      ],
+      "implementation_task": "P06-T5",
+      "acceptance_cases": [
+        {
+          "case_id": "notification.status.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "notification.status.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_reminders.py::test_notification_status_read_has_no_subscription_or_sender_authority"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "notification.subscribe",
+      "adapter_key": "reminders",
+      "mode": "device_ui",
+      "case_id": "notification.subscribe.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.savePushSubscription"
+      ],
+      "implementation_task": "P06-T5",
+      "acceptance_cases": [
+        {
+          "case_id": "notification.subscribe.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "notification.subscribe.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "recording_port",
+          "test_refs": [
+            "tests/backend/test_workflow_notification_devices.py::test_saved_device_tasks_use_actual_owned_native_subscription_operations"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "notification.unsubscribe",
+      "adapter_key": "reminders",
+      "mode": "device_ui",
+      "case_id": "notification.unsubscribe.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.revokePushSubscription",
+        "api.revokeCurrentPush"
+      ],
+      "implementation_task": "P06-T5",
+      "acceptance_cases": [
+        {
+          "case_id": "notification.unsubscribe.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "notification.unsubscribe.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "recording_port",
+          "test_refs": [
+            "tests/backend/test_workflow_notification_devices.py::test_saved_device_tasks_use_actual_owned_native_subscription_operations"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "notification.test",
+      "adapter_key": "reminders",
+      "mode": "device_ui",
+      "case_id": "notification.test.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.testPush"
+      ],
+      "implementation_task": "P06-T5",
+      "acceptance_cases": [
+        {
+          "case_id": "notification.test.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "notification.test.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "recording_port",
+          "test_refs": [
+            "tests/backend/test_workflow_notification_devices.py::test_synthetic_approved_test_is_one_shot_even_after_native_cooldown_expires"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "caregiver.list",
+      "adapter_key": "contacts",
+      "mode": "read",
+      "case_id": "caregiver.list.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.caregivers",
+        "navigation.caregivers"
+      ],
+      "implementation_task": "P06-T6",
+      "acceptance_cases": [
+        {
+          "case_id": "caregiver.list.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "caregiver.list.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_contacts.py::test_contact_crud_only_saves_after_independent_confirmation_and_retains_native_limits"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "caregiver.add",
+      "adapter_key": "contacts",
+      "mode": "workflow",
+      "case_id": "caregiver.add.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.createCaregiver"
+      ],
+      "implementation_task": "P06-T6",
+      "acceptance_cases": [
+        {
+          "case_id": "caregiver.add.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "caregiver.add.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_contacts.py::test_contact_crud_only_saves_after_independent_confirmation_and_retains_native_limits"
+          ]
+        },
+        {
+          "case_id": "caregiver.add.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_contacts.py::test_contact_crud_only_saves_after_independent_confirmation_and_retains_native_limits"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "caregiver.edit",
+      "adapter_key": "contacts",
+      "mode": "workflow",
+      "case_id": "caregiver.edit.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.updateCaregiver"
+      ],
+      "implementation_task": "P06-T6",
+      "acceptance_cases": [
+        {
+          "case_id": "caregiver.edit.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "caregiver.edit.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_contacts.py::test_contact_crud_only_saves_after_independent_confirmation_and_retains_native_limits"
+          ]
+        },
+        {
+          "case_id": "caregiver.edit.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_contacts.py::test_contact_crud_only_saves_after_independent_confirmation_and_retains_native_limits"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "caregiver.delete",
+      "adapter_key": "contacts",
+      "mode": "workflow",
+      "case_id": "caregiver.delete.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.deleteCaregiver"
+      ],
+      "implementation_task": "P06-T6",
+      "acceptance_cases": [
+        {
+          "case_id": "caregiver.delete.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "caregiver.delete.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_contacts.py::test_contact_crud_only_saves_after_independent_confirmation_and_retains_native_limits"
+          ]
+        },
+        {
+          "case_id": "caregiver.delete.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_contacts.py::test_contact_crud_only_saves_after_independent_confirmation_and_retains_native_limits"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "preference.language",
+      "adapter_key": "preferences",
+      "mode": "workflow",
+      "case_id": "preference.language.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.updatePreferences",
+        "navigation.language-settings"
+      ],
+      "implementation_task": "P06-T6",
+      "acceptance_cases": [
+        {
+          "case_id": "preference.language.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "preference.language.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_preferences.py::test_each_preference_uses_its_native_scope_and_actual_readback"
+          ]
+        },
+        {
+          "case_id": "preference.language.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_preferences.py::test_each_preference_uses_its_native_scope_and_actual_readback"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "preference.text",
+      "adapter_key": "preferences",
+      "mode": "workflow",
+      "case_id": "preference.text.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.updatePreferences",
+        "navigation.accessibility"
+      ],
+      "implementation_task": "P06-T6",
+      "acceptance_cases": [
+        {
+          "case_id": "preference.text.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "preference.text.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_preferences.py::test_each_preference_uses_its_native_scope_and_actual_readback"
+          ]
+        },
+        {
+          "case_id": "preference.text.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_preferences.py::test_each_preference_uses_its_native_scope_and_actual_readback"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "preference.voice",
+      "adapter_key": "preferences",
+      "mode": "workflow",
+      "case_id": "preference.voice.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.updatePreferences"
+      ],
+      "implementation_task": "P06-T6",
+      "acceptance_cases": [
+        {
+          "case_id": "preference.voice.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "preference.voice.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_preferences.py::test_each_preference_uses_its_native_scope_and_actual_readback"
+          ]
+        },
+        {
+          "case_id": "preference.voice.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_preferences.py::test_each_preference_uses_its_native_scope_and_actual_readback"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "preference.reminder",
+      "adapter_key": "preferences",
+      "mode": "workflow",
+      "case_id": "preference.reminder.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.updatePreferences"
+      ],
+      "implementation_task": "P06-T6",
+      "acceptance_cases": [
+        {
+          "case_id": "preference.reminder.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "preference.reminder.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_preferences.py::test_each_preference_uses_its_native_scope_and_actual_readback"
+          ]
+        },
+        {
+          "case_id": "preference.reminder.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_preferences.py::test_each_preference_uses_its_native_scope_and_actual_readback"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "preference.privacy",
+      "adapter_key": "preferences",
+      "mode": "workflow",
+      "case_id": "preference.privacy.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.updatePreferences",
+        "navigation.privacy"
+      ],
+      "implementation_task": "P06-T6",
+      "acceptance_cases": [
+        {
+          "case_id": "preference.privacy.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "preference.privacy.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_preferences.py::test_each_preference_uses_its_native_scope_and_actual_readback"
+          ]
+        },
+        {
+          "case_id": "preference.privacy.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_preferences.py::test_each_preference_uses_its_native_scope_and_actual_readback"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "preference.timezone",
+      "adapter_key": "preferences",
+      "mode": "workflow",
+      "case_id": "preference.timezone.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.updatePreferences"
+      ],
+      "implementation_task": "P06-T6",
+      "acceptance_cases": [
+        {
+          "case_id": "preference.timezone.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "preference.timezone.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_preferences.py::test_each_preference_uses_its_native_scope_and_actual_readback"
+          ]
+        },
+        {
+          "case_id": "preference.timezone.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_preferences.py::test_each_preference_uses_its_native_scope_and_actual_readback"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "profile.edit",
+      "adapter_key": "preferences",
+      "mode": "workflow",
+      "case_id": "profile.edit.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.updatePreferences",
+        "navigation.profile"
+      ],
+      "implementation_task": "P06-T6",
+      "acceptance_cases": [
+        {
+          "case_id": "profile.edit.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "profile.edit.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_preferences.py::test_each_preference_uses_its_native_scope_and_actual_readback"
+          ]
+        },
+        {
+          "case_id": "profile.edit.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_preferences.py::test_each_preference_uses_its_native_scope_and_actual_readback"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "profile.view",
+      "adapter_key": "preferences",
+      "mode": "read",
+      "case_id": "profile.view.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.preferences",
+        "navigation.me",
+        "navigation.settings"
+      ],
+      "implementation_task": "P06-T6",
+      "acceptance_cases": [
+        {
+          "case_id": "profile.view.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "profile.view.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_preferences.py::test_profile_query_is_owned_metadata_without_a_patient_write"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "account.status",
+      "adapter_key": "account_ui",
+      "mode": "patient_ui",
+      "case_id": "account.status.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "account.account",
+        "navigation.account"
+      ],
+      "implementation_task": "P06-T6",
+      "acceptance_cases": [
+        {
+          "case_id": "account.status.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "account.status.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "recording_port",
+          "test_refs": [
+            "frontend/src/components/AssistantAccountActions.test.tsx::reads account status only after opening the secure form"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "account.login",
+      "adapter_key": "account_ui",
+      "mode": "patient_ui",
+      "case_id": "account.login.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "account.requestEmail",
+        "account.verifyEmail",
+        "account.passwordLogin"
+      ],
+      "implementation_task": "P06-T6",
+      "acceptance_cases": [
+        {
+          "case_id": "account.login.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "account.login.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "recording_port",
+          "test_refs": [
+            "frontend/src/components/AssistantAccountActions.test.tsx::sends login secrets only to the original AccountPort and clears them after submission"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "account.link",
+      "adapter_key": "account_ui",
+      "mode": "patient_ui",
+      "case_id": "account.link.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "account.requestEmail",
+        "account.verifyEmail"
+      ],
+      "implementation_task": "P06-T6",
+      "acceptance_cases": [
+        {
+          "case_id": "account.link.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "account.link.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "recording_port",
+          "test_refs": [
+            "frontend/src/components/AssistantAccountActions.test.tsx::uses native email link and OTP flows without an Agent input field"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "account.password",
+      "adapter_key": "account_ui",
+      "mode": "patient_ui",
+      "case_id": "account.password.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "account.setPassword"
+      ],
+      "implementation_task": "P06-T6",
+      "acceptance_cases": [
+        {
+          "case_id": "account.password.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "account.password.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "recording_port",
+          "test_refs": [
+            "frontend/src/components/AssistantAccountActions.test.tsx::opens the native verified-member password form without automatically changing it"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "account.signout",
+      "adapter_key": "account_ui",
+      "mode": "patient_ui",
+      "case_id": "account.signout.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "account.signOut"
+      ],
+      "implementation_task": "P06-T6",
+      "acceptance_cases": [
+        {
+          "case_id": "account.signout.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "account.signout.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "recording_port",
+          "test_refs": [
+            "frontend/src/components/AssistantAccountActions.test.tsx::requires native signout confirmation and owner reset"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "conversation.list",
+      "adapter_key": "conversations",
+      "mode": "read",
+      "case_id": "conversation.list.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.conversations",
+        "navigation.conversations"
+      ],
+      "implementation_task": "P06-T7",
+      "acceptance_cases": [
+        {
+          "case_id": "conversation.list.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "conversation.list.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_conversations.py::test_conversation_list_and_view_are_owned_read_only_text_projections"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "conversation.view",
+      "adapter_key": "conversations",
+      "mode": "read",
+      "case_id": "conversation.view.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.conversationHistory",
+        "api.conversation"
+      ],
+      "implementation_task": "P06-T7",
+      "acceptance_cases": [
+        {
+          "case_id": "conversation.view.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "conversation.view.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_conversations.py::test_conversation_list_and_view_are_owned_read_only_text_projections"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "conversation.resume",
+      "adapter_key": "conversations",
+      "mode": "workflow",
+      "case_id": "conversation.resume.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.resumeConversation",
+        "api.recentTurns",
+        "api.startDemo"
+      ],
+      "implementation_task": "P06-T7",
+      "acceptance_cases": [
+        {
+          "case_id": "conversation.resume.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "conversation.resume.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_conversations.py::test_new_and_resume_use_real_native_sessions_and_replay_without_second_creation"
+          ]
+        },
+        {
+          "case_id": "conversation.resume.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_conversations.py::test_new_and_resume_use_real_native_sessions_and_replay_without_second_creation"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "conversation.new",
+      "adapter_key": "conversations",
+      "mode": "workflow",
+      "case_id": "conversation.new.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.newConversation",
+        "api.sendMessage",
+        "navigation.assistant"
+      ],
+      "implementation_task": "P06-T7",
+      "acceptance_cases": [
+        {
+          "case_id": "conversation.new.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "conversation.new.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_conversations.py::test_new_and_resume_use_real_native_sessions_and_replay_without_second_creation"
+          ]
+        },
+        {
+          "case_id": "conversation.new.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_conversations.py::test_new_and_resume_use_real_native_sessions_and_replay_without_second_creation"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "conversation.clear",
+      "adapter_key": "conversations",
+      "mode": "workflow",
+      "case_id": "conversation.clear.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.clearConversationHistory"
+      ],
+      "implementation_task": "P06-T7",
+      "acceptance_cases": [
+        {
+          "case_id": "conversation.clear.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "conversation.clear.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_conversations.py::test_clear_chat_preserves_saved_workflow_draft_and_never_clears_later_chat_on_replay"
+          ]
+        },
+        {
+          "case_id": "conversation.clear.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_conversations.py::test_clear_chat_preserves_saved_workflow_draft_and_never_clears_later_chat_on_replay"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "assistant.usage",
+      "adapter_key": "conversations",
+      "mode": "read",
+      "case_id": "assistant.usage.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.agentUsage"
+      ],
+      "implementation_task": "P06-T7",
+      "acceptance_cases": [
+        {
+          "case_id": "assistant.usage.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "assistant.usage.acceptance.read",
+          "phase": "read",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_conversations.py::test_actual_usage_has_remaining_reset_and_no_owner_identity"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "speech.input",
+      "adapter_key": "device_ui",
+      "mode": "device_ui",
+      "case_id": "speech.input.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.speechCapabilities",
+        "api.transcribe"
+      ],
+      "implementation_task": "P06-T7",
+      "acceptance_cases": [
+        {
+          "case_id": "speech.input.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "speech.input.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "local_browser",
+          "test_refs": [
+            "frontend/e2e/assistant-conversation-support.spec.ts::accepts native conversation support in"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "speech.playback",
+      "adapter_key": "device_ui",
+      "mode": "device_ui",
+      "case_id": "speech.playback.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.speechCapabilities",
+        "api.synthesize"
+      ],
+      "implementation_task": "P06-T7",
+      "acceptance_cases": [
+        {
+          "case_id": "speech.playback.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "speech.playback.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "local_browser",
+          "test_refs": [
+            "frontend/e2e/assistant-conversation-support.spec.ts::accepts native conversation support in"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "feedback.submit",
+      "adapter_key": "feedback",
+      "mode": "workflow",
+      "case_id": "feedback.submit.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.feedback",
+        "navigation.feedback"
+      ],
+      "implementation_task": "P06-T7",
+      "acceptance_cases": [
+        {
+          "case_id": "feedback.submit.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "feedback.submit.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_feedback.py::test_feedback_is_pure_until_confirmation_and_returns_actual_owned_readback"
+          ]
+        },
+        {
+          "case_id": "feedback.submit.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_feedback.py::test_feedback_is_pure_until_confirmation_and_returns_actual_owned_readback"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "help.open",
+      "adapter_key": "navigation",
+      "mode": "navigation",
+      "case_id": "help.open.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "navigation.help"
+      ],
+      "implementation_task": "P06-T7",
+      "acceptance_cases": [
+        {
+          "case_id": "help.open.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "help.open.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "local_browser",
+          "test_refs": [
+            "frontend/e2e/assistant-conversation-support.spec.ts::accepts native conversation support in"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "guide.start",
+      "adapter_key": "navigation",
+      "mode": "navigation",
+      "case_id": "guide.start.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "ui.onboarding.replay"
+      ],
+      "implementation_task": "P06-T7",
+      "acceptance_cases": [
+        {
+          "case_id": "guide.start.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "guide.start.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "local_browser",
+          "test_refs": [
+            "frontend/e2e/assistant-conversation-support.spec.ts::accepts native conversation support in"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "navigation.open",
+      "adapter_key": "navigation",
+      "mode": "navigation",
+      "case_id": "navigation.open.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.navigationContext",
+        "api.health"
+      ],
+      "implementation_task": "P06-T7",
+      "acceptance_cases": [
+        {
+          "case_id": "navigation.open.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "navigation.open.acceptance.patient_action",
+          "phase": "patient_action",
+          "environment": "local_browser",
+          "test_refs": [
+            "frontend/e2e/assistant-conversation-support.spec.ts::accepts native conversation support in"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "observation.edit",
+      "adapter_key": "care",
+      "mode": "workflow",
+      "case_id": "observation.edit.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.saveObservation"
+      ],
+      "implementation_task": "P06-T3",
+      "acceptance_cases": [
+        {
+          "case_id": "observation.edit.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "observation.edit.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_existing_observation_edit_reuses_patient_api_and_retains_original_creation_time"
+          ]
+        },
+        {
+          "case_id": "observation.edit.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_existing_observation_edit_reuses_patient_api_and_retains_original_creation_time"
+          ]
+        }
+      ]
+    },
+    {
+      "capability_id": "followup.edit",
+      "adapter_key": "care",
+      "mode": "workflow",
+      "case_id": "followup.edit.acceptance",
+      "implementation": "implemented",
+      "entry_points": [
+        "api.updateCareTask"
+      ],
+      "implementation_task": "P06-T3",
+      "acceptance_cases": [
+        {
+          "case_id": "followup.edit.acceptance.prepare",
+          "phase": "prepare",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_capability_acceptance.py::test_every_available_capability_prepares_through_actual_http_composition"
+          ]
+        },
+        {
+          "case_id": "followup.edit.acceptance.patient_confirmation",
+          "phase": "patient_confirmation",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_each_followup_operation_has_one_actual_history_change"
+          ]
+        },
+        {
+          "case_id": "followup.edit.acceptance.readback",
+          "phase": "readback",
+          "environment": "local_memory",
+          "test_refs": [
+            "tests/backend/test_workflow_care.py::test_each_followup_operation_has_one_actual_history_change"
+          ]
+        }
+      ]
+    }
+  ],
+  "account_operations": {
+    "account": [
+      "account.status"
+    ],
+    "requestEmail": [
+      "account.login",
+      "account.link"
+    ],
+    "verifyEmail": [
+      "account.login",
+      "account.link"
+    ],
+    "passwordLogin": [
+      "account.login"
+    ],
+    "setPassword": [
+      "account.password"
+    ],
+    "signOut": [
+      "account.signout"
+    ]
+  },
+  "internal_account_operations": {
+    "watchIdentity": {
+      "capabilities": [
+        "account.status"
+      ],
+      "reason": "Identity change observer clears old-owner UI state; not a user action"
+    },
+    "available": {
+      "capabilities": [
+        "account.status"
+      ],
+      "reason": "Account provider capability metadata"
+    }
+  },
+  "navigation_routes": {
+    "today": "medication.today",
+    "medicines": "medication.plan.view",
+    "records": "record.catalogue",
+    "me": "profile.view",
+    "care-tasks": "followup.list",
+    "adherence-barriers": "barrier.list",
+    "medication-review": "record.visit.prepare",
+    "assistant": "conversation.new",
+    "check": "image.compare",
+    "check-result": "image.compare",
+    "label": "medication.source.add",
+    "manual": "medication.enroll",
+    "edit-medication": "medication.plan.change",
+    "medicine-history": "medication.history",
+    "medication-inventory": "inventory.view",
+    "unfinished": "medication.setup.list",
+    "past-medicines": "medication.plan.view",
+    "gallery": "gallery.list",
+    "medicine-detail": "medication.plan.view",
+    "health-notes": "observation.list",
+    "medication-records": "record.history",
+    "summary-week": "record.summary",
+    "summary-month": "record.summary",
+    "summary-course": "record.summary",
+    "profile": "profile.edit",
+    "account": "account.status",
+    "caregivers": "caregiver.list",
+    "settings": "profile.view",
+    "reminder-settings": "reminder.settings",
+    "language-settings": "preference.language",
+    "accessibility": "preference.text",
+    "privacy": "preference.privacy",
+    "conversations": "conversation.list",
+    "about": "navigation.open",
+    "feedback": "feedback.submit",
+    "help": "help.open"
+  },
+  "coverage_contract_version": 1,
+  "ui_operations": {
+    "onboarding.replay": [
+      "guide.start"
+    ]
+  }
+}

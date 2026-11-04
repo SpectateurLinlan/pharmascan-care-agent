@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from copy import deepcopy
 from datetime import datetime
-from threading import Lock
+from functools import wraps
+from threading import RLock
 from uuid import UUID
 
 import httpx
@@ -21,6 +24,7 @@ from ..contracts.medication_evidence import (
 )
 from ..domain.errors import ProviderUnavailableError, ValidationError
 from ..timing import current_timing, timed_stage
+from .clinical_memory import ClinicalMemory
 from .supabase_data import SupabaseDataClient
 
 MODELS = {
@@ -41,13 +45,49 @@ TABLES = {
 }
 
 
-class MemoryEvidenceRepository:
-    def __init__(self, medications):
-        self._medications = medications
-        self._records: dict[tuple[str, UUID], EvidenceRecord] = {}
-        self._image_insert_lock = Lock()
-        self.audit_records: list[dict[str, object]] = []
+def _locked(method):
+    @wraps(method)
+    def call(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
 
+    return call
+
+
+class MemoryEvidenceRepository:
+    @contextmanager
+    def local_transaction(self):
+        """Public local rollback scope; it provides no remote persistence authority."""
+        with self._lock:
+            snapshot = deepcopy(self._records)
+            audit_snapshot = deepcopy(self.audit_records)
+            revisions = dict(self._media_revisions)
+            try:
+                yield
+            except BaseException:
+                self._records.clear()
+                self._records.update(snapshot)
+                self.audit_records[:] = audit_snapshot
+                self._media_revisions.clear()
+                self._media_revisions.update(revisions)
+                raise
+
+    def __init__(self, medications, *, coordination: ClinicalMemory | None = None):
+        self._medications = medications
+        self._lock = coordination.lock if coordination else RLock()
+        self._records: dict[tuple[str, UUID], EvidenceRecord] = {}
+        self._image_insert_lock = self._lock
+        self.audit_records: list[dict[str, object]] = []
+        self._media_revisions: dict[UUID,int] = {}
+
+    def media_revision(self, owner: UUID) -> int:
+        with self._lock:
+            return self._media_revisions.get(owner,0)
+
+    def _media_changed(self, owner):
+        self._media_revisions[owner] = self._media_revisions.get(owner,0)+1
+
+    @_locked
     def remove_draft_artifacts(self, owner, medication, whole, tasks, sources):
         images = [
             r
@@ -80,17 +120,26 @@ class MemoryEvidenceRepository:
             )
             if remove:
                 del self._records[key]
+                if kind == 'images':
+                    self._media_changed(owner)
         return paths
 
+    @_locked
     def list(self, patient_id: UUID, kind: RecordKind) -> list[EvidenceRecord]:
         return [row for (key, _), row in self._records.items() if key == kind and row.patient_id == patient_id]
 
+    @_locked
     def get(self, patient_id: UUID, kind: RecordKind, record_id: UUID) -> EvidenceRecord | None:
         row = self._records.get((kind, record_id))
         return row if row and row.patient_id == patient_id else None
 
+    @_locked
     def add(self, kind: RecordKind, record: EvidenceRecord) -> None:
-        self._records.setdefault((kind, record.id), record)
+        key = (kind,record.id)
+        if key not in self._records:
+            self._records[key] = record
+            if kind == 'images':
+                self._media_changed(record.patient_id)
 
     def add_image_if_absent(self, image: MedicationImage) -> bool:
         with self._image_insert_lock:
@@ -98,13 +147,16 @@ class MemoryEvidenceRepository:
             if key in self._records:
                 return False
             self._records[key] = image
+            self._media_changed(image.patient_id)
             return True
 
+    @_locked
     def add_reference(self, image: MedicationImage, reference: VisualReferenceSet, embedding: ImageEmbedding) -> None:
         self.add("sets", reference)
         self.add("images", image)
         self.add("embeddings", embedding)
 
+    @_locked
     def retire_image(self, patient_id: UUID, image_id: UUID) -> MedicationImage:
         old = self.get(patient_id, "images", image_id)
         if not isinstance(old, MedicationImage):
@@ -119,6 +171,7 @@ class MemoryEvidenceRepository:
             }
         )
         self._records[("images", image_id)] = retired
+        self._media_changed(patient_id)
         self.audit_records.append(
             {
                 "patient_id": patient_id,
@@ -130,6 +183,7 @@ class MemoryEvidenceRepository:
         )
         return retired
 
+    @_locked
     def manage_image(
         self,
         patient_id: UUID,
@@ -184,6 +238,7 @@ class MemoryEvidenceRepository:
             )
         changed = old.model_copy(update=update)
         self._records[("images", image_id)] = changed
+        self._media_changed(patient_id)
         if action in {"remove", "delete"} or image_kind != old.image_kind:
             self._records = {
                 key: row
@@ -201,11 +256,14 @@ class MemoryEvidenceRepository:
         )
         return changed, old.storage_path
 
+    @_locked
     def acknowledge_image_cleanup(self, patient_id: UUID, image_id: UUID) -> None:
         row = self.get(patient_id, "images", image_id)
         if isinstance(row, MedicationImage) and row.deleted_at is not None and row.cleanup_pending:
             self._records[("images", image_id)] = row.model_copy(update={"cleanup_pending": False})
+            self._media_changed(patient_id)
 
+    @_locked
     def update_task(self, task: EnrollmentTask, expected_version: int) -> None:
         old = self.get(task.patient_id, "tasks", task.id)
         if not isinstance(old, EnrollmentTask) or old.version != expected_version:
@@ -331,17 +389,52 @@ class SupabaseEvidenceRepository:
 
 
 class MemoryImageStore:
-    def __init__(self):
+    @contextmanager
+    def local_transaction(self):
+        with self._lock:
+            snapshot = self._data.copy()
+            try:
+                yield
+            except BaseException:
+                self._data.clear()
+                self._data.update(snapshot)
+                raise
+
+    def __init__(self, *, coordination: ClinicalMemory | None = None,bucket_id: str='visual-references'):
+        if bucket_id not in {'visual-references','medication-sources'}:
+            raise ValidationError('Unsupported private storage bucket')
+        self._bucket_id=bucket_id
+        self._lock = coordination.lock if coordination else RLock()
         self._data: dict[str, bytes] = {}
 
+    @property
+    def bucket_id(self):
+        return self._bucket_id
+
+    @_locked
     def put(self, path: str, data: bytes) -> None:
         self._data.setdefault(path, data)
 
+    @_locked
     def get(self, path: str) -> bytes:
         return self._data[path]
 
+    @_locked
+    def observe(self, path: str) -> bytes | None:
+        return self._data.get(path)
+
+    @_locked
     def delete(self, path: str) -> None:
         self._data.pop(path, None)
+
+    @_locked
+    def stage_put(self, path: str, data: bytes) -> dict[str, bytes]:
+        """Allocate an unpublished memory object snapshot; never writes storage."""
+        staged = self._data.copy()
+        if path in staged and staged[path] != data:
+            raise ValidationError("Private image key is already bound to different content")
+        staged[path] = data
+        return staged
 
 
 class SupabaseImageStore:
@@ -363,7 +456,12 @@ class SupabaseImageStore:
             raise ValidationError("Unsupported private storage bucket")
         self._bucket_id, self._content_type = bucket_id, content_type
 
-    def _request(self, method: str, path: str, data: bytes | None = None) -> bytes:
+    @property
+    def bucket_id(self):
+        return self._bucket_id
+
+    def _request(self, method: str, path: str, data: bytes | None = None,
+                 *, observe_absence: bool = False) -> bytes | None:
         if not path.startswith(f"{self._patient}/") or ".." in path:
             raise ValidationError("Invalid private object path")
         timing = current_timing.get()
@@ -390,6 +488,8 @@ class SupabaseImageStore:
                 return b""
         if method == "DELETE" and response.status_code == 404:
             return b""
+        if observe_absence and method == 'GET' and response.status_code == 404:
+            return None
         if response.status_code >= 400:
             raise ProviderUnavailableError("Private image operation rejected")
         return response.content
@@ -399,6 +499,9 @@ class SupabaseImageStore:
 
     def get(self, path: str) -> bytes:
         return self._request("GET", path)
+
+    def observe(self, path: str) -> bytes | None:
+        return self._request('GET',path,observe_absence=True)
 
     def delete(self, path: str) -> None:
         self._request("DELETE", path)

@@ -1,0 +1,16 @@
+.assistant-media {
+  display: grid;
+  gap: var(--s-3);
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.assistant-media__preview {
+  display: block;
+  inline-size: 100%;
+  min-inline-size: 0;
+  block-size: min(24rem, 50vh);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}

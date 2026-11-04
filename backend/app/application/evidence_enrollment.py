@@ -4,15 +4,25 @@ from __future__ import annotations
 
 import hashlib
 import re
+import unicodedata
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import date, timedelta
+from decimal import Decimal
 from uuid import UUID, uuid5
 
+from ..contracts.assistant_workflows import WorkflowContext
+from ..contracts.dose_display import DoseBasis
 from ..contracts.dto import FrequencyRuleDTO, PatientMedicationDTO, RegimenDraftInput, SourceDocumentDTO, SourceFieldDTO
+from ..contracts.enrollment_operations import PreparedEnrollment
+from ..contracts.enrollment_workflow import EnrollmentFields
 from ..contracts.enums import FieldName, SourceKind, SourceReviewStatus
 from ..contracts.medication_evidence import (
     EnrollmentTask,
+    EvidenceEnrollmentWritePort,
     EvidenceRepository,
+    EvidenceSourcePublication,
+    EvidenceSourceSnapshot,
     MedicationImage,
     PrivateImageStore,
     ProductEvidence,
@@ -26,8 +36,15 @@ from ..contracts.ports import (
     SourceDocumentRepository,
     SourceFieldRepository,
 )
-from ..contracts.source_extraction import ListedMedication
-from ..domain.errors import NotFoundError, ProviderUnavailableError, RegimenOverlapError, ValidationError
+from ..contracts.source_extraction import ListedMedication, MedicationSourceExtractionDTO
+from ..contracts.workflow_attachments import WorkflowEnrollmentSource
+from ..domain.errors import (
+    NotFoundError,
+    ProviderUnavailableError,
+    RegimenOverlapError,
+    StaleVersionError,
+    ValidationError,
+)
 from .enrollment import MedicationEnrollmentService
 from .printed_instructions import apply_printed_parts, validate_printed_review
 from .source_preview import SourcePreviewService
@@ -39,6 +56,34 @@ def evidence_name(name: str, strength: str | None) -> str:
         suffix = r"\s*".join(re.escape(char) for char in re.sub(r"\s+", "", strength))
         name = re.sub(r"\s*" + suffix + r"\s*$", "", name, flags=re.I)
     return " ".join(name.casefold().split())
+
+
+def strength_key(value: str) -> str:
+    """Compare cosmetic spelling only. Never convert units or infer ingredients."""
+    key = re.sub(r"\s+", "", unicodedata.normalize("NFKC", value).casefold())
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)([a-zμ/]+)", key)
+    if match:
+        number = format(Decimal(match[1]), "f")
+        return (number.rstrip("0").rstrip(".") if "." in number else number) + match[2]
+    return key
+
+
+def distinct_strength(left: str | None, right: str | None) -> bool:
+    """Positive values in the same supported recorded unit; no unit conversion."""
+    unit = r"mg|g|mcg|ug|μg|iu|mg/ml|mcg/ml|units/ml"
+    first = re.fullmatch(
+        rf"(\d+(?:\.\d+)?)({unit})",
+        strength_key(left or ""),
+    )
+    second = re.fullmatch(rf"(\d+(?:\.\d+)?)({unit})", strength_key(right or ""))
+    return bool(
+        first
+        and second
+        and first[2] == second[2]
+        and Decimal(first[1]) > 0
+        and Decimal(second[1]) > 0
+        and Decimal(first[1]) != Decimal(second[1])
+    )
 
 
 def product_name(product: ProductEvidence) -> str:
@@ -80,6 +125,82 @@ def printed_regimen(name: str, directions: str | None) -> RegimenDraftInput:
 
 
 class EvidenceEnrollmentService:
+    @staticmethod
+    def workflow_fields(
+        extraction: MedicationSourceExtractionDTO, candidate_index: int | None = None
+    ) -> EnrollmentFields:
+        """Pure, unreviewed proposals using the existing printed-instruction rules."""
+        index = 0 if len(extraction.candidates) == 1 and candidate_index is None else candidate_index
+        if extraction.label_kind == "none" or index is None or not 0 <= index < len(extraction.candidates):
+            raise ValidationError("Choose one clearly named product from the original photo")
+        candidate = extraction.candidates[index]
+        patient_instructions = extraction.source_kind in {
+            "pharmacy_label",
+            "prescription",
+        } and extraction.label_kind not in {"package", "none"}
+        parts = candidate.regimen_evidence.instructions if patient_instructions else None
+        directions = candidate.regimen_evidence.directions if patient_instructions else None
+        draft = printed_regimen(candidate.product.name[:160], directions.value if directions else None)
+        if parts:
+            draft = apply_printed_parts(draft, parts)
+        count = parts.times_per_day if parts and not parts.as_needed and parts.every_hours is None else None
+        if count and draft.frequency_rule is None:
+            draft = draft.model_copy(update={"frequency_rule": FrequencyRuleDTO(kind="daily", local_times=[])})
+        text = " ".join(
+            [
+                directions.value if directions else "",
+                parts.text if parts else "",
+                f"for {parts.duration}" if parts and parts.duration else "",
+            ]
+        )
+        days = re.search(r"\bfor\s+(\d{1,3})\s+days?\b", text, re.I)
+        day_count = int(days[1]) if days and 1 <= int(days[1]) <= 365 else None
+        form = candidate.product.dose_form.value.strip().casefold() if candidate.product.dose_form else "unknown"
+        return EnrollmentFields(
+            **draft.model_dump(exclude={"patient_edited", "supersedes_regimen_id"}),
+            method="photo",
+            source_candidate_index=index,
+            times_per_day=count,
+            printed_course_days=day_count,
+            dose_basis=DoseBasis(
+                strength_text=(candidate.product.strength or "")[:100],
+                form=form if form in {"tablet", "capsule", "liquid", "other"} else "unknown",
+                formulation={"ER": "modified_release", "DR": "enteric"}.get(candidate.product.release, "unknown"),
+                single_ingredient=len(candidate.product.ingredients) == 1 if candidate.product.ingredients else None,
+                instructions_text=(parts.text if parts else directions.value if directions else "")[:1000],
+            ),
+        )
+
+    @staticmethod
+    def validate_workflow_fields(extraction: MedicationSourceExtractionDTO, fields: EnrollmentFields) -> None:
+        proposal = EvidenceEnrollmentService.workflow_fields(extraction, fields.source_candidate_index)
+        if evidence_name(fields.medication_name or "", None) != evidence_name(proposal.medication_name, None):
+            raise ValidationError("The product name differs from the selected photo; reconcile the original source")
+        if proposal.dose_basis.strength_text and (
+            not fields.dose_basis
+            or re.sub(r"\s+", "", fields.dose_basis.strength_text.casefold())
+            != re.sub(r"\s+", "", proposal.dose_basis.strength_text.casefold())
+        ):
+            raise ValidationError("The product strength differs from the selected original")
+        candidate = extraction.candidates[proposal.source_candidate_index]
+        if extraction.source_kind in {"pharmacy_label", "prescription"} and extraction.label_kind not in {
+            "package",
+            "none",
+        }:
+            parts = candidate.regimen_evidence.instructions
+            if parts:
+                validate_printed_review(fields.draft, parts)
+            elif proposal.dose_amount is not None and (
+                fields.dose_amount != proposal.dose_amount or fields.dose_unit != proposal.dose_unit
+            ):
+                raise ValidationError("The dose differs from the printed instructions")
+            if proposal.printed_course_days and (
+                not fields.course_start_date
+                or not fields.course_end_date
+                or (fields.course_end_date - fields.course_start_date).days + 1 != proposal.printed_course_days
+            ):
+                raise ValidationError("Review the explicitly printed course length and start/end dates")
+
     def __init__(
         self,
         *,
@@ -93,10 +214,12 @@ class EvidenceEnrollmentService:
         normalize: Callable[[bytes], bytes],
         clock: Clock,
         ids: IdGenerator,
+        source_writer: EvidenceEnrollmentWritePort | None = None,
     ):
         self._repo, self._medications, self._sources, self._fields = repository, medications, sources, fields
         self._enrollment, self._preview, self._storage = enrollment, preview, storage
         self._normalize, self._clock, self._ids = normalize, clock, ids
+        self._source_writer = source_writer
 
     def list(self, patient_id: UUID) -> list[EnrollmentTask]:
         return [row for row in self._repo.list(patient_id, "tasks") if isinstance(row, EnrollmentTask)]
@@ -128,12 +251,197 @@ class EvidenceEnrollmentService:
         demo_only: bool,
         automatically_routed: bool = False,
     ) -> EnrollmentTask:
+        prepared = self.prepare_attachment(
+            patient_id=patient_id,
+            task_id=task_id,
+            image=image,
+            source_kind=source_kind,
+            medication_id=medication_id,
+            consent=consent,
+            demo_only=demo_only,
+            automatically_routed=automatically_routed,
+        )
+        if isinstance(prepared, EnrollmentTask):
+            return prepared
+        return self.publish_attachment(patient_id, prepared)
+
+    def prepare_attachment(
+        self,
+        *,
+        patient_id: UUID,
+        task_id: UUID,
+        image: bytes,
+        source_kind: str,
+        medication_id: UUID | None,
+        consent: bool,
+        demo_only: bool,
+        automatically_routed: bool = False,
+    ) -> EvidenceSourcePublication | EnrollmentTask:
+        if self._source_writer and self._source_writer.workflow_owner(patient_id, task_id) is not None:
+            raise StaleVersionError("Continue the original saved source task to add another image")
+        return self._prepare_attachment(
+            patient_id=patient_id,
+            task_id=task_id,
+            image=image,
+            source_kind=source_kind,
+            medication_id=medication_id,
+            consent=consent,
+            demo_only=demo_only,
+            automatically_routed=automatically_routed,
+        )
+
+    def prepare_verified_attachment(
+        self,
+        *,
+        context: WorkflowContext,
+        source: WorkflowEnrollmentSource,
+        original: bytes,
+        task_id: UUID,
+        medication_id: UUID | None = None,
+    ) -> EvidenceSourcePublication | EnrollmentTask:
+        if self._source_writer is None:
+            raise ProviderUnavailableError("Atomic source publication is unavailable")
+        return self.prepare_source_proposal(context=context,source=source,original=original,
+            task_id=task_id,medication_id=medication_id)
+
+    def prepare_source_proposal(
+        self, *, context: WorkflowContext, source: WorkflowEnrollmentSource, original: bytes,
+        task_id: UUID, medication_id: UUID | None = None, allocation_key: UUID | None = None,
+    ) -> EvidenceSourcePublication | EnrollmentTask:
+        """Pure native validation/projection; publication still requires its own owned transaction."""
+        if (
+            context.capability_id != "medication.source.add"
+            or context.save_mode != "allowed"
+            or source.owner != context.owner
+            or source.task_id != context.task_id
+            or hashlib.sha256(original).hexdigest() != source.original_checksum
+            or source.extraction.source_kind != source.source_kind
+        ):
+            raise ValidationError("The original source does not belong to this saved task")
+        prepared = self._prepare_attachment(
+            patient_id=context.owner,
+            task_id=task_id,
+            image=original,
+            source_kind=source.source_kind,
+            medication_id=medication_id,
+            consent=True,
+            demo_only=True,
+            extracted=source.extraction,
+            workflow_task_id=context.task_id,
+            allocation_key=allocation_key,
+        )
+        return (
+            replace(
+                prepared,
+                workflow_task_id=context.task_id,
+                attachment_id=source.attachment_id,
+                original_checksum=source.original_checksum,
+            )
+            if isinstance(prepared, EvidenceSourcePublication)
+            else prepared
+        )
+
+    def duplicate_source_snapshot(
+        self,patient_id: UUID,task_id: UUID,original: bytes,source_kind: str
+    ) -> EvidenceSourceSnapshot:
+        """Read actual owned duplicate facts; do not reinterpret the new extraction as an update."""
+        task=self.get(patient_id,task_id)
+        clean=self._normalize(original)
+        digest=hashlib.sha256(clean).hexdigest()
+        image=next((row for row in self._repo.list(patient_id,'images') if isinstance(row,MedicationImage)
+            and row.medication_id==task.medication_id and row.checksum==digest
+            and row.source_id in task.source_ids),None)
+        if image is None or image.deleted_at is not None:
+            raise StaleVersionError('The existing source image is unavailable')
+        source=self._sources.get(patient_id,image.source_id)
+        medication=self._medications.get(patient_id,task.medication_id)
+        link=next((row for row in self._repo.list(patient_id,'sources') if isinstance(row,SourceLink)
+            and row.source_id==image.source_id and row.medication_id==task.medication_id),None)
+        if source is None or source.source_kind.value!=source_kind or medication is None or link is None:
+            raise StaleVersionError('The owned duplicate source registration changed')
+        return EvidenceSourceSnapshot(source=source,fields=tuple(self._fields.list_for_source(patient_id,source.id)),
+            medication=medication,task=task,image=image,link=link,derived_byte_size=len(clean))
+
+    def publish_verified_attachment(
+        self,
+        owner: UUID,
+        prepared: EvidenceSourcePublication,
+        source: WorkflowEnrollmentSource,
+        original: bytes,
+        action_key: UUID,
+    ) -> EnrollmentTask:
+        if self._source_writer is None:
+            raise ProviderUnavailableError("Atomic source publication is unavailable")
+        if (
+            source.owner != owner
+            or hashlib.sha256(original).hexdigest() != source.original_checksum
+            or prepared.source.extraction_evidence != source.extraction
+            or prepared.source.source_kind.value != source.source_kind
+            or prepared.derived_image != self._normalize(original)
+            or prepared.workflow_task_id != source.task_id
+            or prepared.attachment_id != source.attachment_id
+            or prepared.original_checksum != source.original_checksum
+        ):
+            raise ValidationError("The prepared evidence differs from its current saved original")
+        return self.publish_attachment(owner, prepared, action_key=action_key)
+
+    def bind_duplicate_original(
+        self,
+        owner: UUID,
+        task: EnrollmentTask,
+        source: WorkflowEnrollmentSource,
+        original: bytes,
+        action_key: UUID,
+    ) -> EnrollmentTask:
+        if self._source_writer is None:
+            raise ProviderUnavailableError("Atomic source publication is unavailable")
+        if source.owner != owner or hashlib.sha256(original).hexdigest() != source.original_checksum:
+            raise ValidationError("The duplicate source differs from its saved original")
+        return self._source_writer.bind_existing_original(
+            owner,
+            action_key,
+            task,
+            source,
+            hashlib.sha256(self._normalize(original)).hexdigest(),
+        )
+
+    def saved_original_receipt(self, owner: UUID, action_key: UUID, workflow_task_id: UUID, attachment_id: UUID):
+        if self._source_writer is None:
+            raise ProviderUnavailableError("Atomic source publication is unavailable")
+        return self._source_writer.lookup_original(owner, action_key, workflow_task_id, attachment_id)
+
+    def workflow_owner(self, owner: UUID, task_id: UUID) -> UUID | None:
+        return self._source_writer.workflow_owner(owner, task_id) if self._source_writer else None
+
+    def _prepare_attachment(
+        self,
+        *,
+        patient_id: UUID,
+        task_id: UUID,
+        image: bytes,
+        source_kind: str,
+        medication_id: UUID | None,
+        consent: bool,
+        demo_only: bool,
+        automatically_routed: bool = False,
+        extracted: MedicationSourceExtractionDTO | None = None,
+        workflow_task_id: UUID | None = None,
+        allocation_key: UUID | None = None,
+    ) -> EvidenceSourcePublication | EnrollmentTask:
         if not consent:
             raise ValidationError("Agree to private storage and image processing before saving")
         if source_kind not in {"package", "pharmacy_label", "prescription"}:
             raise ValidationError("PDF extraction is not available; upload a label image or enter instructions")
+        clinical_revision = self._source_writer.revision(patient_id) if self._source_writer else None
         existing = self._repo.get(patient_id, "tasks", task_id)
         task = existing if isinstance(existing, EnrollmentTask) else None
+        prior_task = task
+        if task and medication_id and medication_id != task.medication_id:
+            raise ValidationError("Supplement must belong to the same selected medication")
+        selected = task.medication_id if task else medication_id
+        medication = self._medications.get(patient_id, selected) if selected else None
+        if selected and medication is None:
+            raise NotFoundError("Owned medication not found")
         if task and (task.status == "draft_created" or len(task.source_ids) >= 10):
             raise ValidationError("Start a new evidence task for a new course")
         clean = self._normalize(image)
@@ -147,8 +455,16 @@ class EvidenceEnrollmentService:
                     and row.medication_id == task.medication_id
                     and row.checksum == digest
                 ):
+                    original = self._sources.get(patient_id, row.source_id) if row.source_id else None
+                    if original is None or (not automatically_routed and original.source_kind.value != source_kind):
+                        raise ValidationError(
+                            "This saved photo has a different source type; check the original registration"
+                        )
                     return task
-        if self._preview is None:
+        authority = self.workflow_owner(patient_id, task_id)
+        if authority is not None and authority != workflow_task_id:
+            raise StaleVersionError("Continue the original saved source task to add new evidence")
+        if self._preview is None and extracted is None:
             raise ProviderUnavailableError("Source extraction unavailable")
         own_tasks = self.list(patient_id)
         listed = tuple(
@@ -159,7 +475,7 @@ class EvidenceEnrollmentService:
             )
             for medication in self._repo.medications(patient_id)[:20]
         )
-        extraction = self._preview.preview(
+        extraction = extracted or self._preview.preview(
             content=clean, source_kind=source_kind, consent=True, demo_only=demo_only, medications=listed
         )
         if extraction.label_kind == "none" or len(extraction.candidates) != 1:
@@ -171,6 +487,7 @@ class EvidenceEnrollmentService:
             if extraction.label_kind not in {"package", "dispensing"}:
                 raise ValidationError("Please choose the source type after checking the original document")
             source_kind = "pharmacy_label" if extraction.label_kind == "dispensing" else "package"
+        extraction = extraction.model_copy(update={"source_kind": source_kind})
         product = ProductEvidence(
             name=candidate.product.name[:160],
             strength=candidate.product.strength,
@@ -186,25 +503,24 @@ class EvidenceEnrollmentService:
             external_identifiers={"rxcui": candidate.product.rxcui} if candidate.product.rxcui else {},
         )
         source_id = extraction.source_document_id
-        self._sources.add(
-            SourceDocumentDTO(
-                id=source_id,
-                patient_id=patient_id,
-                source_kind=SourceKind(source_kind),
-                review_status=SourceReviewStatus.EXTRACTED,
-                reviewed_at=None,
-                extraction_evidence=extraction,
-            )
+        source = SourceDocumentDTO(
+            id=source_id,
+            patient_id=patient_id,
+            source_kind=SourceKind(source_kind),
+            review_status=SourceReviewStatus.EXTRACTED,
+            reviewed_at=None,
+            extraction_evidence=extraction,
         )
+        field_rows = []
         for field, value in [
             (FieldName.MEDICATION_NAME, product.name),
             (FieldName.STRENGTH, product.strength),
             (FieldName.FORM, product.dose_form),
         ]:
             if value is not None:
-                self._fields.add(
+                field_rows.append(
                     SourceFieldDTO(
-                        id=self._ids.new_id(),
+                        id=uuid5(allocation_key,'field:'+field.value) if allocation_key else self._ids.new_id(),
                         patient_id=patient_id,
                         source_id=source_id,
                         field_name=field,
@@ -214,9 +530,6 @@ class EvidenceEnrollmentService:
                     )
                 )
         if task is None:
-            medication = self._medications.get(patient_id, medication_id) if medication_id else None
-            if medication_id and medication is None:
-                raise NotFoundError("Owned medication not found")
             existing_tasks = self.list(patient_id)
             if medication is None:
                 duplicates = [
@@ -232,13 +545,25 @@ class EvidenceEnrollmentService:
                     == evidence_name(product.name, product.strength)
                 ][:10]
                 medication = PatientMedicationDTO(
-                    id=self._ids.new_id(), patient_id=patient_id, display_name=product.name, source_id=source_id
+                    id=uuid5(allocation_key,'medication') if allocation_key else self._ids.new_id(),
+                    patient_id=patient_id, display_name=product.name, source_id=source_id
                 )
-                self._medications.add(medication)
             else:
                 duplicates = []
             prior = next((row for row in existing_tasks if row.medication_id == medication.id), None)
-            base_product = prior.product if prior else ProductEvidence(name=medication.display_name)
+            identity_source = (
+                self._enrollment.get_source(patient_id, medication.source_id) if medication.source_id else None
+            )
+            basis = identity_source.dose_basis if identity_source else None
+            base_product = (
+                prior.product
+                if prior
+                else ProductEvidence(
+                    name=medication.display_name,
+                    strength=basis.strength_text or None if basis else None,
+                    dose_form=basis.form if basis and basis.form != "unknown" else None,
+                )
+            )
             task = EnrollmentTask(
                 id=task_id,
                 patient_id=patient_id,
@@ -247,7 +572,6 @@ class EvidenceEnrollmentService:
                 possible_duplicate_ids=duplicates,
                 updated_at=self._clock.now(),
             )
-            self._repo.add("tasks", task)
         conflicts = list(task.conflicts)
         values = task.product.model_dump()
         for field in ("name", "strength", "dose_form", "formulation", "brand"):
@@ -255,6 +579,8 @@ class EvidenceEnrollmentService:
             differs = (
                 product_name(task.product) != product_name(product)
                 if field == "name" and old and new
+                else strength_key(old) != strength_key(new)
+                if field == "strength" and old and new
                 else bool(old and new and old.casefold().strip() != new.casefold().strip())
             )
             if old and new and differs:
@@ -288,7 +614,7 @@ class EvidenceEnrollmentService:
         parts = candidate.regimen_evidence.instructions if patient_instructions else None
         if parts:
             proposal = apply_printed_parts(proposal, parts)
-            for prior in self.sources(patient_id, task.id):
+            for prior in self.sources(patient_id, task.id) if prior_task else ():
                 evidence = prior.extraction_evidence
                 if not evidence or evidence.label_kind != "dispensing" or prior.source_kind == SourceKind.PACKAGE:
                     continue
@@ -365,7 +691,6 @@ class EvidenceEnrollmentService:
                 "updated_at": self._clock.now(),
             }
         )
-        self._storage.put(f"{patient_id}/{task.medication_id}/{digest}.png", clean)
         image_row = MedicationImage(
             id=uuid5(task.medication_id, digest + source_kind),
             patient_id=patient_id,
@@ -378,19 +703,55 @@ class EvidenceEnrollmentService:
             eligibility_reason="source_photo_not_loose_pill",
             created_at=self._clock.now(),
         )
-        self._repo.add("images", image_row)
-        self._repo.add(
-            "sources",
-            SourceLink(
-                id=uuid5(task.medication_id, str(source_id)),
-                patient_id=patient_id,
-                medication_id=task.medication_id,
-                source_id=source_id,
-                recorded_at=self._clock.now(),
-            ),
+        link = SourceLink(
+            id=uuid5(task.medication_id, str(source_id)),
+            patient_id=patient_id,
+            medication_id=task.medication_id,
+            source_id=source_id,
+            recorded_at=self._clock.now(),
         )
-        self._repo.update_task(updated, task.version)
-        return updated
+        return EvidenceSourcePublication(
+            source=source,
+            fields=tuple(field_rows),
+            medication=medication,
+            create_medication=selected is None,
+            prior_task=prior_task,
+            task=EnrollmentTask.model_validate(updated.model_dump()),
+            image=image_row,
+            link=link,
+            derived_image=clean,
+            expected_clinical_revision=clinical_revision,
+        )
+
+    def publish_attachment(
+        self,
+        patient_id: UUID,
+        prepared: EvidenceSourcePublication,
+        *,
+        action_key: UUID | None = None,
+    ) -> EnrollmentTask:
+        if prepared.task.patient_id != patient_id:
+            raise ValidationError("Prepared source belongs to another patient")
+        if self._source_writer:
+            return self._source_writer.publish_once(
+                patient_id,
+                action_key or uuid5(prepared.task.id, f"source:{prepared.image.checksum}"),
+                prepared,
+            )
+        # Original persistence adapter compatibility. Assistant does not compose
+        # this path without an independently verified atomic write port.
+        self._sources.add(prepared.source)
+        for row in prepared.fields:
+            self._fields.add(row)
+        if prepared.create_medication:
+            self._medications.add(prepared.medication)
+        if prepared.prior_task is None:
+            self._repo.add("tasks", prepared.task.model_copy(update={"version": prepared.task.version - 1}))
+        self._storage.put(prepared.image.storage_path, prepared.derived_image)
+        self._repo.add("images", prepared.image)
+        self._repo.add("sources", prepared.link)
+        self._repo.update_task(prepared.task, prepared.task.version - 1)
+        return prepared.task
 
     def prepare_review(
         self,
@@ -402,7 +763,50 @@ class EvidenceEnrollmentService:
         patient_reviewed: bool,
         product_category: str = "unknown",
         replace_active_plan: bool = False,
+        on_prepared: Callable[[EnrollmentTask], None] | None = None,
+        workflow_task_id: UUID | None = None,
+        expected_version: int | None = None,
     ) -> EnrollmentTask:
+        if on_prepared is not None and self._source_writer is None:
+            raise ProviderUnavailableError("Atomic Assistant source review is unavailable")
+        revision = self._source_writer.revision(patient_id) if self._source_writer else None
+        task = self.get(patient_id, task_id)
+        if expected_version is not None and task.version != expected_version:
+            raise StaleVersionError("The source registration changed; reopen its current review")
+
+        def review():
+            authority = self._source_writer.workflow_owner(patient_id, task_id) if self._source_writer else None
+            if authority is not None and (authority != workflow_task_id or on_prepared is None):
+                raise StaleVersionError("Continue the original saved source review")
+            result = self._review_confirmed(
+                patient_id=patient_id,
+                task_id=task_id,
+                draft=draft,
+                distinct_product_confirmed=distinct_product_confirmed,
+                patient_reviewed=patient_reviewed,
+                product_category=product_category,
+                replace_active_plan=replace_active_plan,
+            )
+            if on_prepared is not None:
+                on_prepared(result)
+            return result
+
+        if self._source_writer is None or task.draft_regimen_id is not None:
+            return review()
+        return self._source_writer.review_unactivated(patient_id, task_id, task.version, revision, review)
+
+    def prepare_review_proposal(
+        self,
+        *,
+        patient_id: UUID,
+        task_id: UUID,
+        draft: RegimenDraftInput,
+        distinct_product_confirmed: bool,
+        patient_reviewed: bool,
+        product_category: str = "unknown",
+        replace_active_plan: bool = False,
+    ) -> PreparedEnrollment | EnrollmentTask:
+        """Run existing native review policy and allocate DTOs without publishing rows."""
         task = self.get(patient_id, task_id)
         if product_category not in {"unknown", "POM", "P", "GSL", "supplement"}:
             raise ValidationError("Unsupported product category")
@@ -426,12 +830,14 @@ class EvidenceEnrollmentService:
             known = {row.medication_id: row.product for row in self.list(patient_id)}
             for medication_id in task.possible_duplicate_ids:
                 other = known.get(medication_id)
-                if other is None or not any(
-                    left and right and str(left).strip().casefold() != str(right).strip().casefold()
-                    for left, right in (
-                        (task.product.strength, other.strength),
-                        (task.product.dose_form, other.dose_form),
-                        (task.product.formulation, other.formulation),
+                if other is None or not (
+                    distinct_strength(task.product.strength, other.strength)
+                    or any(
+                        left and right and str(left).strip().casefold() != str(right).strip().casefold()
+                        for left, right in (
+                            (task.product.dose_form, other.dose_form),
+                            (task.product.formulation, other.formulation),
+                        )
                     )
                 ):
                     raise ValidationError(
@@ -441,10 +847,68 @@ class EvidenceEnrollmentService:
         if draft.medication_name.casefold() != task.product.name.casefold():
             raise ValidationError("Product name conflict")
         if task.draft_regimen_id:
+            current = self._enrollment.get_regimen(patient_id, task.draft_regimen_id)
+            normalized = self._enrollment.preview_draft(patient_id, draft)
+            comparable = (
+                "dose_amount",
+                "dose_unit",
+                "is_prn",
+                "route",
+                "food_instruction",
+                "course_start_date",
+                "course_end_date",
+            )
+            expected_rule = normalized.frequency_rule.model_dump(mode="json") if normalized.frequency_rule else None
+            actual_rule = (
+                FrequencyRuleDTO.model_validate(current.frequency_rule).model_dump(mode="json")
+                if current and current.frequency_rule
+                else None
+            )
+            if (
+                current is None
+                or current.patient_medication_id != task.medication_id
+                or any(getattr(current, field) != getattr(normalized, field) for field in comparable)
+                or actual_rule != expected_rule
+                or current.supersedes_id != normalized.supersedes_regimen_id
+                or (normalized.patient_edited and not current.patient_edited)
+                or task.product.category != product_category
+            ):
+                raise ValidationError(
+                    "This source review is already saved with different details; review a new plan version"
+                )
             return task
         active = self._enrollment.find_active_regimen(patient_id, task.medication_id)
         if active is not None:
             raise RegimenOverlapError()
+        proposed = self._enrollment.prepare_draft(
+            patient_id=patient_id,
+            draft=draft,
+            existing_medication_id=task.medication_id,
+            evidence_task_id=task.id,
+        )
+        if proposed.result.missing_instructions:
+            raise ValidationError("Complete the missing dose and schedule instructions")
+        return proposed
+
+    def _review_confirmed(
+        self,
+        *,
+        patient_id: UUID,
+        task_id: UUID,
+        draft: RegimenDraftInput,
+        distinct_product_confirmed: bool,
+        patient_reviewed: bool,
+        product_category: str = "unknown",
+        replace_active_plan: bool = False,
+    ) -> EnrollmentTask:
+        proposed = self.prepare_review_proposal(
+            patient_id=patient_id, task_id=task_id, draft=draft,
+            distinct_product_confirmed=distinct_product_confirmed, patient_reviewed=patient_reviewed,
+            product_category=product_category, replace_active_plan=replace_active_plan,
+        )
+        if isinstance(proposed, EnrollmentTask):
+            return proposed
+        task = self.get(patient_id, task_id)
         for source_id in task.source_ids:
             source = self._sources.get(patient_id, source_id)
             if source and source.review_status == SourceReviewStatus.EXTRACTED:

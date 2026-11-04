@@ -9,13 +9,17 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from time import monotonic
+from uuid import UUID, uuid5
 from zoneinfo import ZoneInfo
 
 from ..application.dosing import DoseScheduleService, SelfReportService
 from ..application.enrollment import MedicationEnrollmentService
 from ..application.reminders import ReminderService
 from ..application.temporal_doses import TemporalDoseReader
+from ..application.workflow_message_policy import MessagePersistencePolicy
+from ..contracts.agent_execution import ExecutionStopped, tracked_step
+from ..contracts.assistant_workflows import WorkflowRepository
 from ..contracts.dto import (
     ConfirmationChallengeDTO,
     DoseEventInput,
@@ -31,6 +35,8 @@ from ..contracts.enums import (
 )
 from ..contracts.ports import Clock, IdGenerator, ToolTraceRepository
 from ..contracts.temporal import CalendarSelection, calendar_selection, local_day_window
+from ..contracts.workflow_persistence import WorkflowWriteBinding
+from ..contracts.workflow_record_writes import PrepareDoseReport, RecordWorkflowWritePort
 from ..domain.errors import DomainError, NotFoundError, ProviderUnavailableError, ValidationError
 from ..domain.policy import intake_status_from_patient_choice
 from .tools import (
@@ -65,7 +71,12 @@ class ToolRegistry:
         ids: IdGenerator,
         max_trace_summary_bytes: int = 1024,
         reminders: ReminderService | None = None,
+        records: RecordWorkflowWritePort | None = None,
+        workflow_tasks: WorkflowRepository | None = None,
     ) -> None:
+        if (records is None)!=(workflow_tasks is None):
+            raise ValueError("Native report preparation requires explicit record and task ports")
+        self._records,self._workflow_tasks=records,workflow_tasks
         self._temporal = TemporalDoseReader(enrollment=enrollment, schedule=schedule, reports=self_report, clock=clock)
         self._reminders = reminders
         self._enrollment = enrollment
@@ -86,11 +97,11 @@ class ToolRegistry:
             ToolName.RECORD_SELF_REPORT: self._record_self_report,
         }
 
-    def record_care_result(self, request: ToolRequest, result: ToolResult) -> None:
+    def record_care_result(self, request: ToolRequest, result: ToolResult, *, started_monotonic: float) -> None:
         """Audit application-only long-term tools without logging patient content."""
         if result.tool_name not in (ToolName.GET_LONG_TERM_CARE, ToolName.PREPARE_CARE_ACTION):
             raise UnknownToolError("Unsupported extension trace")
-        self._record_trace(result.tool_name, request, result, 0)
+        self._record_trace(result.tool_name, request, result, max(0, int((monotonic() - started_monotonic) * 1000)))
 
     def _create_reminder(self, request: ToolRequest) -> ToolResult:
         assert isinstance(request, CreateReminderRequest)
@@ -107,6 +118,7 @@ class ToolRegistry:
     def allowlist(self) -> frozenset[ToolName]:
         return frozenset(self._handlers)
 
+    @tracked_step("tool")
     def execute(self, tool_name: ToolName | str, request: ToolRequest) -> ToolResult:
         """Execute one allowlisted tool and always record a redacted trace."""
         try:
@@ -116,9 +128,23 @@ class ToolRegistry:
         if name not in self._handlers:
             raise UnknownToolError(f"{name} is not registered")
 
-        started = self._clock.now()
+        started = monotonic()
         try:
-            result = self._handlers[name](request)
+            if request.content_guard is not None and name in {
+                ToolName.CHECK_DUE_DOSE,  # The existing "due now" branch materializes occurrences.
+                ToolName.CREATE_REMINDER,
+                ToolName.ENROLL_MEDICATION_DRAFT,
+                ToolName.CONFIRM_REGIMEN_DRAFT,
+                ToolName.RECORD_SELF_REPORT,
+            }:
+                results = []
+                if not request.content_guard(lambda: results.append(self._handlers[name](request))):
+                    raise ValidationError("Workflow saving permission changed; review the current step")
+                result = results[0]
+            else:
+                result = self._handlers[name](request)
+        except ExecutionStopped:
+            raise
         except DomainError as exc:
             result = ToolResult(
                 tool_name=name,
@@ -128,7 +154,7 @@ class ToolRegistry:
                 rule_id=exc.rule_id.value if exc.rule_id else None,
                 requires_confirmation=exc.code.value == "CONFIRMATION_REQUIRED",
             )
-        elapsed_ms = int((self._clock.now() - started).total_seconds() * 1000)
+        elapsed_ms = max(0, int((monotonic() - started) * 1000))
         self._record_trace(name, request, result, elapsed_ms)
         return result
 
@@ -623,8 +649,11 @@ class ToolRegistry:
         request: RecordSelfReportRequest,
         *,
         session_state_version: int,
-    ) -> SelfReportChallengeResultDTO:
+        persistence: MessagePersistencePolicy | None = None,
+    ) -> SelfReportChallengeResultDTO | None:
         """Typed application operation; issuing consent never records a dose."""
+        if persistence is not None and not persistence.save_context:
+            return None
         if request.occurrence_id is not None:
             occurrence = self._schedule.get_occurrence(request.patient_id, request.occurrence_id)
             zone = ZoneInfo(self.local_timezone(request.patient_id))
@@ -632,15 +661,40 @@ class ToolRegistry:
                 raise NotFoundError("Dose occurrence does not belong to this regimen")
             if occurrence.due_at.astimezone(zone).date() != self._clock.now().astimezone(zone).date():
                 raise ValidationError("Historical dose backfill is not supported by the Agent")
-        return self._self_report.request_confirmation(
-            patient_id=request.patient_id,
-            regimen_id=request.regimen_id,
-            occurrence_id=request.occurrence_id,
-            intake_status=intake_status_from_patient_choice(request.intake_status),
-            idempotency_key=request.idempotency_key,
-            session_id=request.session_id,
-            session_state_version=session_state_version,
-        )
+        if persistence is not None and persistence.messages is not None:
+            if self._records is None or self._workflow_tasks is None or persistence.scope.task_id is None:
+                raise ProviderUnavailableError("Open the current patient report workflow before requesting its summary")
+            task=self._workflow_tasks.get(request.patient_id,persistence.scope.task_id)
+            capability="dose.prn.report" if request.occurrence_id is None else "dose.report"
+            ref=next((row for row in task.business_refs if row.kind=="regimen" and row.id==request.regimen_id),None)
+            if ref is None or task.capability_id!=capability or task.revision!=persistence.scope.revision:
+                raise ValidationError("Use the current owned patient report review")
+            try:
+                operation=UUID(request.idempotency_key.removeprefix("report-"))
+                if request.idempotency_key!="report-"+str(operation):
+                    raise ValueError
+            except ValueError:
+                operation=uuid5(request.session_id,request.idempotency_key)
+            action=uuid5(task.id,f"prepare-report:{task.revision}:{operation}")
+            command=PrepareDoseReport(binding=WorkflowWriteBinding(task_id=task.id,task_revision=task.revision,
+                capability_id=capability,action_key=action,prepared_ref=ref,
+                expected_domain_revision=self._records.revision(request.patient_id)),
+                session_id=request.session_id,session_state_version=session_state_version,operation_key=operation,
+                occurrence_id=request.occurrence_id,intake_status=intake_status_from_patient_choice(request.intake_status).value)
+            result=persistence.prepare_record(request.patient_id,command,self._records)
+            return result.result if result is not None else None
+
+        def legacy_prepare():
+            return self._self_report.request_confirmation(
+                patient_id=request.patient_id,regimen_id=request.regimen_id,occurrence_id=request.occurrence_id,
+                intake_status=intake_status_from_patient_choice(request.intake_status),idempotency_key=request.idempotency_key,
+                session_id=request.session_id,session_state_version=session_state_version)
+        if persistence is None:
+            return legacy_prepare()
+        output=[]
+        if not persistence.write_context(lambda:output.append(legacy_prepare())):
+            return None
+        return output[0]
 
     # -- tracing -------------------------------------------------------------
 
@@ -673,20 +727,28 @@ class ToolRegistry:
         }
         from ..contracts.dto import ToolTraceDTO
 
-        self._traces.add(
-            ToolTraceDTO(
-                id=self._ids.new_id(),
-                patient_id=request.patient_id,
-                session_id=request.session_id,
-                correlation_id=request.correlation_id,
-                tool_name=name.value,
-                tool_status=result.status.value,
-                request_summary=_sanitize(raw_request, allowed_keys, self._max_summary),
-                response_summary=_sanitize(raw_response, allowed_keys, self._max_summary),
-                called_at=self._clock.now(),
-                duration_ms=elapsed_ms,
-            )
+        trace = ToolTraceDTO(
+            id=self._ids.new_id(),
+            patient_id=request.patient_id,
+            session_id=request.session_id,
+            correlation_id=request.correlation_id,
+            tool_name=name.value,
+            tool_status=result.status.value,
+            request_summary=(_sanitize(raw_request, allowed_keys, self._max_summary) if request.retain_content else {}),
+            response_summary=(
+                _sanitize(raw_response, allowed_keys, self._max_summary) if request.retain_content else {}
+            ),
+            called_at=self._clock.now(),
+            duration_ms=elapsed_ms,
         )
+        if request.trace_writer is not None:
+            request.trace_writer(trace)
+            return
+        if request.content_guard is not None and request.retain_content:
+            if request.content_guard(lambda: self._traces.add(trace)):
+                return
+            trace = trace.model_copy(update={"request_summary": {}, "response_summary": {}})
+        self._traces.add(trace)
 
 
 def _sanitize(summary: dict[str, object], allowed: set[str], max_bytes: int) -> dict[str, object]:

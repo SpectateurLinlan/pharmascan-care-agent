@@ -1,17 +1,35 @@
 """Recognise explicit education questions; never infer an indication or dose."""
 
 import re
+import unicodedata
 
 
 def medication_question(text: str) -> dict[str, str] | None:
     if "@" in text or "://" in text or "\n" in text:
         return None  # Do not turn contact details or URLs into public label queries.
-    value = text.strip().rstrip("?？。.")
+    value = unicodedata.normalize("NFKC", text).strip().rstrip("?？。.")
     value = re.sub(r"^(?:please\s+|can you\s+|could you\s+|tell me\s+)+", "", value, flags=re.I)
     value = re.sub(r"\bgenerally\s+", "", value, flags=re.I)
     lower = value.lower()
     if re.search(r"\b(?:double|increase|reduce|change|stop)\b.*\bdose\b|加量|减量|停药|改剂量", value, re.I):
         return None
+    definition = re.fullmatch(r"what is (.+)", value, re.I) or re.fullmatch(r"(.+?)\s*是什么(?:药)?", value)
+    if definition is None:
+        definition = re.fullmatch(r"什么是\s*(.+)", value)
+    if definition:
+        name = definition.group(1).strip()
+        if not re.search(r"\b(?:used for|for)$", name, re.I):
+            if (
+                len(name) > 160
+                or not re.fullmatch(r"[\w\s()/-]+", name)
+                or re.search(
+                    r"\b(?:and|or|should|stop|take|dose|my|password|account|source|evidence|this|it|you|your)\b",
+                    name, re.I,
+                )
+                or re.search(r"我|你|这|那|來源|来源|依据|密码|密碼|账户|帳戶|用量|停|加量|减量", name)
+            ):
+                return None
+            return {"question": "general_use", "medication_name": name}
     question = None
     if re.search(r"\bwhat (?:is|are) .+ (?:used for|for)$|\bwhat does .+ do$", lower) or any(
         token in value

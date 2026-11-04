@@ -36,6 +36,7 @@ import {
   type MedicationListResponse,
   type SourcePreview,
   type RegimenHistoryItem,
+  type WorkflowPatientBinding,
 } from '../api/client';
 import { BottomSheet } from './BottomSheet';
 import { Card, ErrorNotice, Tag, AutoDismissNotice } from './primitives';
@@ -46,8 +47,10 @@ export function EnrollScreen({
   sessionId,
   medications,
   onChanged, onDirtyChange, sourceSelection, resumeRegimenId, resumeRow, editFrom, onActivated,
+  preparedReview,onReviewBack,
 }: {
   editFrom?: RegimenHistoryItem | null; onActivated?:(id:string)=>void;
+  preparedReview?:{regimenId:string;version:number;workflow?:WorkflowPatientBinding};onReviewBack?:()=>void;
   sessionId: string | null;
   medications: MedicationListResponse | null;
   onDirtyChange?:(dirty:boolean)=>void;
@@ -82,10 +85,29 @@ export function EnrollScreen({
   //: The patient's own statement that the details match their instructions.
   //: This is the source-review gate and is never set on the patient's behalf.
   const [reviewed,setReviewed]=useState(false);
+  const [identityChecked,setIdentityChecked]=useState(false);
   const [activated,setActivated]=useState(false);
   const [total,setTotal]=useState<DoseDisplay|null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const reviewLive=useRef(true);
+  useEffect(()=>{reviewLive.current=true;return()=>{reviewLive.current=false;};},[]);
+  useEffect(()=>{
+    if(!preparedReview)return;let active=true;setBusy(true);setError(null);setReviewed(false);setIdentityChecked(false);setChallenge(null);setDraft(null);
+    void api.resumeDraft(preparedReview.regimenId).then(saved=>{
+      if(!active)return;
+      const fields=saved.review_inputs;
+      if(saved.regimen_id!==preparedReview.regimenId||saved.version_no!==preparedReview.version||!fields)throw new Error('The prepared plan changed. Check task status before continuing.');
+      setName(fields.medication_name);setDoseAmount(fields.dose_amount==null?'':String(fields.dose_amount));setDoseUnit(fields.dose_unit??'');
+      setDoseBasis(fields.dose_basis??emptyDoseBasis);setIsPrn(fields.is_prn===true);setFoodInstruction(fields.food_instruction??'');
+      setCourseStart(fields.course_start_date??'');setCourseEnd(fields.course_end_date??'');
+      const rule=fields.frequency_rule;setFrequency(rule?.kind==='weekly'?'weekly':rule?.kind==='interval'?'interval':'daily');
+      setTimes(rule?.local_times??[]);setWeekdays(rule?.days_of_week??[]);setEveryHours(rule?.every_hours==null?'':String(rule.every_hours));
+      setFirstTime(rule?.interval_anchor?.time_source==='default_0800'?'':rule?.local_times[0]??'');
+      setDraft(saved);setMedicationId(saved.medication_id);setStep('review');
+    }).catch(caught=>{if(active)setError(caught);}).finally(()=>{if(active)setBusy(false);});
+    return()=>{active=false;};
+  },[preparedReview?.regimenId,preparedReview?.version]);
 
   // A checked source and a course belong to one enrollment, never the next drug.
   function clearEntryFields() {
@@ -189,6 +211,23 @@ export function EnrollScreen({
    */
   const commit = () =>
     run(async () => {
+      if(preparedReview){
+        if(!reviewed||!sessionId||!draft)throw new Error('Review the prepared details and wait for a session before continuing.');
+        const current=await api.resumeDraft(preparedReview.regimenId);
+        if(!reviewLive.current)return;
+        if(current.regimen_id!==preparedReview.regimenId||current.version_no!==preparedReview.version||current.source_id!==draft.source_id)throw new Error('The prepared plan changed. Check task status before continuing.');
+        if(current.identity_review){
+          if(!identityChecked||!preparedReview.workflow||current.identity_review.source_id!==draft.identity_review?.source_id||current.identity_review.medication_name!==draft.identity_review.medication_name)throw new Error('Check the original medication name before continuing.');
+          await api.reviewOriginalIdentity(current.regimen_id,preparedReview.workflow);
+          if(!reviewLive.current)return;
+        }
+        if(!current.source_reviewed)await api.reviewDraft(current.source_id);
+        if(!reviewLive.current)return;
+        const confirmation=await api.requestChallenge(current.regimen_id,sessionId);
+        if(!reviewLive.current)return;
+        if(confirmation.regimen_id!==preparedReview.regimenId||confirmation.summary.version_no!==preparedReview.version)throw new Error('The confirmation belongs to a different plan version.');
+        setChallenge(confirmation);return;
+      }
       const selectedTimes = normalisedTimes();
       if (!isPrn && frequency!=='interval' && selectedTimes.length === 0) {
         throw new Error('Add at least one time of day, or tick "only when needed".');
@@ -371,21 +410,25 @@ export function EnrollScreen({
           {t('Still needed')}: <strong>{missing.map(value=>t(value)).join(', ')}</strong>. {t('Activating will be refused until these are provided.')}
         </div> : null}
 
-        <details className="review-edit">
+        {!preparedReview?<details className="review-edit">
           <summary>{t('Edit details')}</summary>
           {fields()}
-        </details>
+        </details>:null}
 
+        {preparedReview?.workflow&&draft?.identity_review?<div>
+          <p>{t('Original medication name')}: {draft.identity_review.medication_name}</p>
+          <label className="consent"><input type="checkbox" checked={identityChecked} onChange={event=>setIdentityChecked(event.target.checked)}/>{t('I checked the original medication name against its source.')}</label>
+        </div>:null}
         <label className="consent">
           <input type="checkbox" checked={reviewed} onChange={event=>setReviewed(event.target.checked)}/>
           {t('I have checked these details against my original instructions.')}
         </label>
 
         <div className="actions">
-          <button className="primary" onClick={()=>void commit()} disabled={busy||formBlocked()||missing.length>0||!reviewed}>
+          <button className="primary" onClick={()=>void commit()} disabled={busy||formBlocked()||missing.length>0||!reviewed||Boolean(preparedReview?.workflow&&draft?.identity_review&&!identityChecked)}>
             {t(busy?'Saving...':'Add this medication')}
           </button>
-          <button onClick={()=>setStep('form')} disabled={busy}>{t('Back to details')}</button>
+          <button onClick={()=>{setChallenge(null);setReviewed(false);if(preparedReview)onReviewBack?.();else setStep('form');}} disabled={busy||Boolean(preparedReview&&!onReviewBack)}>{t('Back to details')}</button>
         </div>
       </Card>
 
@@ -405,6 +448,7 @@ export function EnrollScreen({
   }
 
   // --- step 1: add a medication --------------------------------------------
+  if(preparedReview)return <>{busy?<p role="status">{t('Loading...')}</p>:null}{error?<ErrorNotice error={error}/>:null}</>;
   return (
     <Card
       title={editFrom?'Review a new plan version':'Add a medication'}

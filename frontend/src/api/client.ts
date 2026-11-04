@@ -1,4 +1,7 @@
 import type {DoseBasis,DoseDisplay} from './dose';
+export interface WorkflowPatientBinding {task_id:string;expected_revision:number}
+function patientBinding(binding?:WorkflowPatientBinding){return binding?{headers:{'X-Assistant-Task':binding.task_id,'X-Assistant-Revision':String(binding.expected_revision)}}:{};}
+function deviceBinding(binding?:WorkflowPatientBinding){return binding?{headers:{...patientBinding(binding).headers,'X-Patient-Confirmed':'true'}}:{};}
 /**
  * Typed client for the PharmaScan Care backend.
  *
@@ -60,7 +63,7 @@ async function fetchResponse(path: string, init?: RequestInit,tokenProvider=acce
   const controller=new AbortController();
   const abort=()=>controller.abort();
   if(init?.signal?.aborted)controller.abort();else init?.signal?.addEventListener('abort',abort,{once:true});
-  const timer=setTimeout(abort,/agent\/messages|sources\/|evidence\/.*sources|visual|check-dose/.test(path)?120000:45000);
+  const timer=setTimeout(abort,/agent\/(?:workflows\/)?messages|sources\/|evidence\/.*sources|visual|check-dose/.test(path)?120000:45000);
   let response:Response;
   try{response = await fetch(path, {
     cache:'no-store',
@@ -152,6 +155,16 @@ function withClient(path: string, extra?: Record<string, string>): string {
   return `${path}?${params.toString()}`;
 }
 
+/** Public modules share identity, timeouts and the existing error envelope. */
+export function authenticatedRequest<T>(path:string,init?:RequestInit):Promise<T>{
+  const [base,query]=path.split('?',2);
+  return request<T>(withClient(base!,Object.fromEntries(new URLSearchParams(query))),init);
+}
+export function authenticatedResponse(path:string,init?:RequestInit):Promise<Response>{
+  const [base,query]=path.split('?',2);
+  return fetchResponse(withClient(base!,Object.fromEntries(new URLSearchParams(query))),init);
+}
+
 // --- response types (mirror backend schemas.py) -----------------------------
 
 export interface ConversationEntry {id:string;user_text:string;assistant_text:string;created_at:string}
@@ -221,6 +234,10 @@ export interface MedicationListResponse {
 }
 
 export interface DraftCreateResponse {
+  identity_review?:{source_id:string;medication_name:string}|null;
+  review_inputs?: {medication_name:string;dose_amount?:number|null;dose_unit?:string|null;dose_basis?:DoseBasis|null;frequency_rule?:RegimenHistoryItem['frequency_rule']|null;is_prn?:boolean|null;food_instruction?:string|null;course_start_date?:string|null;course_end_date?:string|null}|null;
+  version_no?:number|null;
+  source_reviewed?:boolean;
   medication_id: string;
   regimen_id: string;
   state: string;
@@ -340,8 +357,11 @@ export interface ToolTrace {
 export interface AgentUsage {llm_user_turns:number;model_requests:number;limit:number;usage_date:string;next_reset_at:string;}
 
 export interface MedicationSelection {choice_id:string;medication_id:string}
+export interface NameSelection {choice_id:string;candidate_id:string;expected_version:number}
+export interface NameChoice {id:string;version:number;original:string;expires_at:string;options:Array<{id:string;canonical_name:string;display_name:string;medication_id:string|null;source_refs:string[]}>}
 export interface MedicationChoice {id:string;question:'general_use'|'personal_instructions'|'personal_reason';prompt?:string;expires_at:string;options:Array<{medication_id:string;regimen_id:string;display_name:string;label:string}>}
 export interface AgentMessageResponse {
+  name_choice?:NameChoice|null;
   medication_choice?:MedicationChoice|null;
   conversation_id?:string|null;
   history_saved?:boolean|null;
@@ -424,47 +444,48 @@ export const api = {
   refreshFollowUps:()=>request<import('./care').CareTask[]>(withClient('/api/me/care-tasks/refresh'),{method:'POST'}),
   doseFollowUps:(includeReported=false)=>request<import('./doseFollowUps').DoseFollowUps>(withClient('/api/me/dose-follow-ups',{include_reported:String(includeReported)})),
   lateReportHistory:(id:string)=>request<import('./doseFollowUps').DoseReportAudit>(withClient(`/api/me/doses/${encodeURIComponent(id)}/late-reports`)),
-  prepareLateReport:(id:string,values:import('./doseFollowUps').LateReportInput)=>request<import('./doseFollowUps').LateReportChallenge>(withClient(`/api/me/doses/${encodeURIComponent(id)}/late-report/challenge`),{method:'POST',body:JSON.stringify(values)}),
-  confirmLateReport:(id:string,challenge:import('./doseFollowUps').LateReportChallenge)=>request<import('./doseFollowUps').LateReportRecord>(withClient(`/api/me/doses/${encodeURIComponent(id)}/late-report`),{method:'POST',body:JSON.stringify({challenge_id:challenge.challenge_id,report:challenge.proposed})}),
+  prepareLateReport:(id:string,values:import('./doseFollowUps').LateReportInput,binding?:WorkflowPatientBinding)=>request<import('./doseFollowUps').LateReportChallenge>(withClient(`/api/me/doses/${encodeURIComponent(id)}/late-report/challenge`),{method:'POST',...patientBinding(binding),body:JSON.stringify(values)}),
+  confirmLateReport:(id:string,challenge:import('./doseFollowUps').LateReportChallenge,binding?:WorkflowPatientBinding)=>request<import('./doseFollowUps').LateReportRecord>(withClient(`/api/me/doses/${encodeURIComponent(id)}/late-report`),{method:'POST',...patientBinding(binding),body:JSON.stringify({challenge_id:challenge.challenge_id,report:challenge.proposed})}),
   inventory:(id:string)=>request<import('./care').StockStatus>(withClient(`/api/me/inventory/${encodeURIComponent(id)}`)),
-  recordStock:(id:string,values:import('./care').StockInput)=>request<import('./care').StockStatus>(withClient(`/api/me/inventory/${encodeURIComponent(id)}`),{method:'POST',body:JSON.stringify(values)}),
+  recordStock:(id:string,values:import('./care').StockInput,binding?:WorkflowPatientBinding)=>request<import('./care').StockStatus>(withClient(`/api/me/inventory/${encodeURIComponent(id)}`),{method:'POST',...patientBinding(binding),body:JSON.stringify(values)}),
   careTasks:(actionable=false)=>request<import('./care').CareTask[]>(withClient('/api/me/care-tasks',{actionable:String(actionable)})),
-  createCareTask:(values:import('./care').CareTaskInput)=>request<import('./care').CareTask>(withClient('/api/me/care-tasks'),{method:'POST',body:JSON.stringify(values)}),
-  updateCareTask:(id:string,values:import('./care').TaskUpdate)=>request<import('./care').CareTask>(withClient(`/api/me/care-tasks/${encodeURIComponent(id)}`),{method:'POST',body:JSON.stringify(values)}),
+  createCareTask:(values:import('./care').CareTaskInput,binding?:WorkflowPatientBinding)=>request<import('./care').CareTask>(withClient('/api/me/care-tasks'),{method:'POST',...patientBinding(binding),body:JSON.stringify(values)}),
+  updateCareTask:(id:string,values:import('./care').TaskUpdate,binding?:WorkflowPatientBinding)=>request<import('./care').CareTask>(withClient(`/api/me/care-tasks/${encodeURIComponent(id)}`),{method:'POST',...patientBinding(binding),body:JSON.stringify(values)}),
   barriers:()=>request<import('./care').Barrier[]>(withClient('/api/me/adherence-barriers')),
-  recordBarrier:(values:import('./care').BarrierInput)=>request<import('./care').Barrier>(withClient('/api/me/adherence-barriers'),{method:'POST',body:JSON.stringify(values)}),
+  recordBarrier:(values:import('./care').BarrierInput,binding?:WorkflowPatientBinding)=>request<import('./care').Barrier>(withClient('/api/me/adherence-barriers'),{method:'POST',...patientBinding(binding),body:JSON.stringify(values)}),
   medicationCareReview:(days:7|30)=>request<import('./care').MedicationCareReview>(withClient('/api/me/medication-review',{days:String(days)})),
   evidenceTasks:()=>request<EvidenceTask[]>(withClient('/api/evidence/tasks')),
   checkInput:(file:File)=>request<ImageRoute>(withClient('/api/sources/check-input'),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'false'},body:file}),
   evidenceTask:(id:string)=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${id}`)),
   evidenceSources:(id:string)=>request<Array<{id:string;source_kind:string;review_status:string;reviewed_at?:string|null;recorded_at?:string|null;provided_by?:'patient';extraction_evidence:SourcePreview|null}>>(withClient(`/api/evidence/tasks/${id}/sources`)),
   attachEvidence:(id:string,file:File,kind:'package'|'pharmacy_label'|'prescription',medicationId?:string,automaticallyRouted=false)=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${id}/sources`,{source_kind:kind,automatically_routed:String(automaticallyRouted),...(medicationId?{medication_id:medicationId}:{})}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'false'},body:file}),
-  reviewEvidence:(id:string,draft:EvidenceDraft,distinct_product_confirmed:boolean,options:{product_category?:EvidenceProduct['category'];replace_active_plan?:boolean}={})=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${id}/review`),{method:'POST',body:JSON.stringify({...options,draft,patient_reviewed:true,distinct_product_confirmed})}),
+  saveEvidenceOriginal:(id:string,attachmentId:string,binding:WorkflowPatientBinding)=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${encodeURIComponent(id)}/saved-original`),{method:'POST',headers:{'X-Assistant-Task':binding.task_id,'X-Assistant-Revision':String(binding.expected_revision)},body:JSON.stringify({attachment_id:attachmentId,confirmed:true})}),
+  reviewEvidence:(id:string,draft:EvidenceDraft,distinct_product_confirmed:boolean,options:{product_category?:EvidenceProduct['category'];replace_active_plan?:boolean}={},binding?:WorkflowPatientBinding)=>request<EvidenceTask>(withClient(`/api/evidence/tasks/${encodeURIComponent(id)}/review`),{method:'POST',...(binding?{headers:{'X-Assistant-Task':binding.task_id,'X-Assistant-Revision':String(binding.expected_revision)}}:{}),body:JSON.stringify({...options,draft,patient_reviewed:true,distinct_product_confirmed})}),
   personalGallery:()=>request<GalleryEntry[]>(withClient('/api/evidence/gallery')),
   medicationFiles:(id:string)=>request<MedicationFiles>(withClient(`/api/evidence/gallery/${encodeURIComponent(id)}/files`)),
-  retireReference:(id:string)=>request<GalleryImage>(withClient(`/api/evidence/images/${id}/retire`),{method:'POST',body:JSON.stringify({})}),
-  manageReference:(id:string,values:{action:'edit'|'remove'|'delete';expected_version:number;image_kind?:GalleryImage['image_kind'];source_description?:string;confirmed?:boolean})=>request<GalleryImage>(withClient(`/api/evidence/images/${id}`),{method:'PATCH',body:JSON.stringify(values)}),
+  retireReference:(id:string,binding?:WorkflowPatientBinding)=>request<GalleryImage>(withClient(`/api/evidence/images/${id}/retire`,binding?{confirmed:'true'}:{}),{method:'POST',...patientBinding(binding),body:JSON.stringify({})}),
+  manageReference:(id:string,values:{action:'edit'|'remove'|'delete';expected_version:number;image_kind?:GalleryImage['image_kind']|null;source_description?:string|null;confirmed?:boolean},binding?:WorkflowPatientBinding)=>request<GalleryImage>(withClient(`/api/evidence/images/${id}`),{method:'PATCH',...patientBinding(binding),body:JSON.stringify(values)}),
   referencePhoto:async(id:string)=>(await fetchResponse(withClient(`/api/evidence/images/${id}`))).blob(),
-  uploadLibraryPdf:(medicationId:string,file:File,category:MedicationLibraryPdf['category'],description:string)=>request<MedicationLibraryPdfUploadResult>(withClient(`/api/evidence/gallery/${encodeURIComponent(medicationId)}/pdfs`,{filename:file.name,category,description}),{method:'POST',headers:{'Content-Type':'application/pdf'},body:file}),
+  uploadLibraryPdf:(medicationId:string,file:File,category:MedicationLibraryPdf['category'],description:string,binding?:WorkflowPatientBinding)=>request<MedicationLibraryPdfUploadResult>(withClient(`/api/evidence/gallery/${encodeURIComponent(medicationId)}/pdfs`,{filename:file.name,category,description,...(binding?{confirmed:'true'}:{})}),{method:'POST',headers:{'Content-Type':'application/pdf',...patientBinding(binding).headers},body:file}),
   libraryPdf:async(id:string,disposition:'inline'|'attachment'='inline')=>(await fetchResponse(withClient(`/api/evidence/library-files/${encodeURIComponent(id)}`,{disposition}))).blob(),
-  updateLibraryPdf:(id:string,values:{expected_version:number;title:string;category:MedicationLibraryPdf['category'];description:string})=>request<MedicationLibraryPdf>(withClient(`/api/evidence/library-files/${encodeURIComponent(id)}`),{method:'PATCH',body:JSON.stringify(values)}),
-  deleteLibraryPdf:(id:string)=>request<{deleted:true}>(withClient(`/api/evidence/library-files/${encodeURIComponent(id)}`,{confirmed:'true'}),{method:'DELETE'}),
-  addReference:(medicationId:string,file:File,kind:GalleryImage['image_kind'],source:string,reviewed:boolean,compare:boolean)=>request<GalleryUploadResult>(withClient(`/api/evidence/gallery/${medicationId}/images`,{image_kind:kind,source_description:source,reviewed:String(reviewed),for_comparison:String(compare)}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'false'},body:file}),
+  updateLibraryPdf:(id:string,values:{expected_version:number;title:string;category:MedicationLibraryPdf['category'];description:string},binding?:WorkflowPatientBinding)=>request<MedicationLibraryPdf>(withClient(`/api/evidence/library-files/${encodeURIComponent(id)}`,binding?{confirmed:'true'}:{}),{method:'PATCH',...patientBinding(binding),body:JSON.stringify(values)}),
+  deleteLibraryPdf:(id:string,binding?:WorkflowPatientBinding)=>request<{deleted:true}>(withClient(`/api/evidence/library-files/${encodeURIComponent(id)}`,{confirmed:'true'}),{method:'DELETE',...patientBinding(binding)}),
+  addReference:(medicationId:string,file:File,kind:GalleryImage['image_kind'],source:string,reviewed:boolean,compare:boolean,binding?:WorkflowPatientBinding)=>request<GalleryUploadResult>(withClient(`/api/evidence/gallery/${medicationId}/images`,{image_kind:kind,source_description:source,reviewed:String(reviewed),for_comparison:String(compare)}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'false',...patientBinding(binding).headers},body:file}),
   checkPersonalDose:(file:File,regimenId:string|null)=>request<RecognitionEvidence>(withClient('/api/evidence/check-dose',regimenId?{regimen_id:regimenId}:{}),{method:'POST',headers:{'Content-Type':file.type,'X-Stage2-Consent':'true','X-Demo-Only':'false'},body:file}),
   conversationHistory:(before?:string)=>request<ConversationPage>(withClient('/api/agent/history',before?{before}:{})),
   conversations:(before?:string)=>request<{entries:ConversationSummary[];next_before:string|null}>(withClient('/api/agent/conversations',before?{before}:{})),
   conversation:(id:string,before?:string)=>request<ThreadPage>(withClient(`/api/agent/conversations/${encodeURIComponent(id)}`,before?{before}:{})),
-  resumeConversation:(id:string)=>request<{conversation:ConversationSummary;session_id:string}>(withClient(`/api/agent/conversations/${encodeURIComponent(id)}/resume`),{method:'POST',body:'{}'}),
+  resumeConversation:(id:string,binding?:{task_id:string;expected_revision:number})=>request<{conversation:ConversationSummary;session_id:string}>(withClient(`/api/agent/conversations/${encodeURIComponent(id)}/resume`),{method:'POST',body:'{}',...deviceBinding(binding)}),
   navigationContext:(source:NavigationContext)=>request<NavigationContext>(withClient('/api/agent/navigation-context'),{method:'POST',body:JSON.stringify(source)}),
-  clearConversationHistory:()=>request<{cleared:true}>(withClient('/api/agent/history'),{method:'DELETE',body:JSON.stringify({confirmed:true})}),
+  clearConversationHistory:(binding?:{task_id:string;expected_revision:number})=>request<{cleared:true}>(withClient('/api/agent/history'),{method:'DELETE',body:JSON.stringify({confirmed:true}),...deviceBinding(binding)}),
   doseDisplay:(basis:DoseBasis,units_per_dose:number,dose_unit:string)=>request<DoseDisplay>(withClient('/api/medications/dose-display'),{method:'POST',body:JSON.stringify({basis,units_per_dose,dose_unit})}),
   recentTurns:(sessionId:string)=>request<Array<{user:string;assistant:string}>>(withClient(`/api/agent/sessions/${sessionId}/recent-turns`)),
   observations:()=>request<HealthObservation[]>(withClient('/api/me/health-observations')),
-  saveObservation:(record:ObservationInput)=>request<HealthObservation>(withClient('/api/me/health-observations'),{method:'PUT',body:JSON.stringify(record)}),
-  deleteObservation:(id:string)=>request<{deleted:true}>(withClient(`/api/me/health-observations/${id}`),{method:'DELETE'}),
+  saveObservation:(record:ObservationInput,binding?:WorkflowPatientBinding)=>request<HealthObservation>(withClient('/api/me/health-observations'),{method:'PUT',...patientBinding(binding),body:JSON.stringify(record)}),
+  deleteObservation:(id:string,binding?:WorkflowPatientBinding)=>request<{deleted:true}>(withClient(`/api/me/health-observations/${id}`),{method:'DELETE',...patientBinding(binding)}),
   reviewSummary:(period:'week'|'month'|'course',regimenId?:string)=>request<ReviewSummary>(withClient('/api/me/review-summary',{period,...(regimenId?{regimen_id:regimenId}:{})})),
   reminderPlan:()=>request<PlannedReminder[]>(withClient('/api/reminders/plan')),
-  reminderCalendar:async(options?:CalendarExportOptions)=>{
+  reminderCalendar:async(options?:CalendarExportOptions,binding?:WorkflowPatientBinding)=>{
     const query=options?{
       range:options.range,
       ...(options.start_date?{start_date:options.start_date}:{}),
@@ -472,25 +493,25 @@ export const api = {
       include_medications:String(options.include_medications),
       include_tasks:String(options.include_tasks),
     }:undefined;
-    return (await fetchResponse(withClient('/api/reminders/calendar',query))).blob();
+    return (await fetchResponse(withClient('/api/reminders/calendar',query),patientBinding(binding))).blob();
   },
-  pushConfig:()=>request<{available:boolean;public_key:string|null;test_available?:boolean}>(withClient('/api/reminders/push/config')),
+  pushConfig:(binding?:WorkflowPatientBinding)=>request<{available:boolean;public_key:string|null;test_available?:boolean}>(withClient('/api/reminders/push/config'),patientBinding(binding)),
   currentPush:(value:PushSubscriptionInput)=>request<PushSubscriptionRecord|null>(withClient('/api/reminders/push/current'),{method:'POST',body:JSON.stringify(value)}),
-  testPush:(id:string,requestId:string)=>request<{status:'sent'|'temporary'|'expired_subscription'|'provider_rejected'|'invalid_subscription'|'uncertain_delivery'}>(withClient('/api/reminders/push/test'),{method:'POST',body:JSON.stringify({subscription_id:id,request_id:requestId})}),
+  testPush:(id:string,requestId:string,binding?:WorkflowPatientBinding)=>request<{status:'sent'|'temporary'|'expired_subscription'|'provider_rejected'|'invalid_subscription'|'uncertain_delivery'}>(withClient('/api/reminders/push/test'),{method:'POST',...deviceBinding(binding),body:JSON.stringify({subscription_id:id,request_id:requestId})}),
   pushSubscriptions:()=>request<PushSubscriptionRecord[]>(withClient('/api/reminders/push/subscriptions')),
-  savePushSubscription:(value:PushSubscriptionInput)=>request<PushSubscriptionRecord>(withClient('/api/reminders/push/subscriptions'),{method:'POST',body:JSON.stringify(value)}),
-  revokePushSubscription:async(id:string)=>{await fetchResponse(withClient(`/api/reminders/push/subscriptions/${encodeURIComponent(id)}`),{method:'DELETE'});},
-  revokeCurrentPush:async(value:PushSubscriptionInput)=>{await fetchResponse(withClient('/api/reminders/push/unsubscribe'),{method:'POST',body:JSON.stringify(value)});},
+  savePushSubscription:(value:PushSubscriptionInput,binding?:WorkflowPatientBinding)=>request<PushSubscriptionRecord>(withClient('/api/reminders/push/subscriptions'),{method:'POST',...deviceBinding(binding),body:JSON.stringify(value)}),
+  revokePushSubscription:async(id:string,binding?:WorkflowPatientBinding)=>{await fetchResponse(withClient(`/api/reminders/push/subscriptions/${encodeURIComponent(id)}`),{method:'DELETE',...deviceBinding(binding)});},
+  revokeCurrentPush:async(value:PushSubscriptionInput,binding?:WorkflowPatientBinding)=>{await fetchResponse(withClient('/api/reminders/push/unsubscribe'),{method:'POST',...deviceBinding(binding),body:JSON.stringify(value)});},
   reminderAlerts:()=>request<DoseReminderAlert[]>(withClient('/api/reminders/alerts')),
-  feedback:(payload:{id:string;category:'issue'|'suggestion';message:string})=>request<{id:string;status:'received';created_at:string}>(withClient('/api/feedback'),{method:'POST',body:JSON.stringify(payload)}),
+  feedback:(payload:{id:string;category:'issue'|'suggestion';message:string},binding?:{task_id:string;expected_revision:number})=>request<{id:string;status:'received';created_at:string}>(withClient('/api/feedback'),{method:'POST',body:JSON.stringify(payload),...deviceBinding(binding)}),
   visualCheck: (image:File, regimenId:string|null) => request<VisualCheckResult>(withClient('/api/visual-check',regimenId ? {regimen_id:regimenId} : {}), {method:'POST',headers:{'Content-Type':image.type,'X-Stage2-Consent':'true','X-Demo-Only':'false'},body:image}),
   resumeDraft: (regimenId: string) => request<DraftCreateResponse>(withClient(`/api/medications/drafts/${regimenId}`)),
   reminders: () => request<ReminderRecord[]>(withClient('/api/reminders')),
-  snoozeReminder: (occurrence_id: string, minutes: number) => request<ReminderRecord>(withClient('/api/reminders'), {method:'POST',body:JSON.stringify({occurrence_id,minutes})}),
-  requestPrnReportChallenge: (payload: { regimen_id: string; intake_status: string; idempotency_key: string }) =>
-    request<ReportChallengeResponse>(withClient('/api/prn/report/challenge'), { method: 'POST', body: JSON.stringify(payload) }),
-  submitPrnReport: (payload: { regimen_id: string; intake_status: string; idempotency_key: string; challenge_id: string }) =>
-    request<SelfReportResponse>(withClient('/api/prn/report'), { method: 'POST', body: JSON.stringify(payload) }),
+  snoozeReminder: (occurrence_id: string, minutes: number,binding?:WorkflowPatientBinding) => request<ReminderRecord>(withClient('/api/reminders'), {method:'POST',...patientBinding(binding),...(binding?{headers:{...patientBinding(binding).headers,'X-Patient-Confirmed':'true'}}:{}),body:JSON.stringify({occurrence_id,minutes})}),
+  requestPrnReportChallenge: (payload: { regimen_id: string; intake_status: string; idempotency_key: string },binding?:WorkflowPatientBinding) =>
+    request<ReportChallengeResponse>(withClient('/api/prn/report/challenge'), { method: 'POST',...patientBinding(binding), body: JSON.stringify(payload) }),
+  submitPrnReport: (payload: { regimen_id: string; intake_status: string; idempotency_key: string; challenge_id: string },binding?:WorkflowPatientBinding) =>
+    request<SelfReportResponse>(withClient('/api/prn/report'), { method: 'POST',...patientBinding(binding), body: JSON.stringify(payload) }),
   regimenHistory: () => request<RegimenHistoryItem[]>(withClient('/api/me/regimens')),
   historyCatalogue:()=>request<HistoryCatalogue>(withClient('/api/me/medication-history/catalogue')),
   medicationHistory:(filters:MedicationHistoryFilters,cursor?:string)=>request<MedicationHistoryPage>(withClient('/api/me/medication-history',{...filters,...(cursor?{cursor}:{})})),
@@ -508,10 +529,10 @@ export const api = {
   agentUsage:()=>request<AgentUsage>(withClient("/api/agent/usage")),
   preferences:()=>request<PatientPreferences>(withClient('/api/me/preferences')),
   caregivers:()=>request<CaregiverContact[]>(withClient('/api/me/caregivers')),
-  createCaregiver:(details:CaregiverDetails&{id:string})=>request<CaregiverContact>(withClient('/api/me/caregivers'),{method:'POST',body:JSON.stringify(details)}),
-  updateCaregiver:(id:string,details:CaregiverDetails)=>request<CaregiverContact>(withClient(`/api/me/caregivers/${encodeURIComponent(id)}`),{method:'PUT',body:JSON.stringify(details)}),
-  deleteCaregiver:(id:string)=>request<{deleted:true}>(withClient(`/api/me/caregivers/${encodeURIComponent(id)}`),{method:'DELETE'}),
-  updatePreferences:(changes:PreferenceUpdate)=>request<PatientPreferences>(withClient('/api/me/preferences'),{method:'PUT',body:JSON.stringify(changes)}),
+  createCaregiver:(details:CaregiverDetails&{id:string},binding?:WorkflowPatientBinding)=>request<CaregiverContact>(withClient('/api/me/caregivers'),{method:'POST',...deviceBinding(binding),body:JSON.stringify(details)}),
+  updateCaregiver:(id:string,details:CaregiverDetails,binding?:WorkflowPatientBinding)=>request<CaregiverContact>(withClient(`/api/me/caregivers/${encodeURIComponent(id)}`),{method:'PUT',...deviceBinding(binding),body:JSON.stringify(details)}),
+  deleteCaregiver:(id:string,binding?:WorkflowPatientBinding)=>request<{deleted:true}>(withClient(`/api/me/caregivers/${encodeURIComponent(id)}`),{method:'DELETE',...deviceBinding(binding)}),
+  updatePreferences:(changes:PreferenceUpdate,binding?:WorkflowPatientBinding)=>request<PatientPreferences>(withClient('/api/me/preferences'),{method:'PUT',...patientBinding(binding),...(binding?{headers:{...patientBinding(binding).headers,'X-Patient-Confirmed':'true'}}:{}),body:JSON.stringify(changes)}),
   health: () => request<HealthResponse>('/api/health'),
 
   startDemo: () =>
@@ -520,18 +541,19 @@ export const api = {
       body: JSON.stringify({ client_id: clientId(),session_id:window.localStorage.getItem("pharmascan.agent-session") }),
     }),
 
-  newConversation:()=>request<DemoStartResponse>('/api/demo/start',{method:'POST',body:JSON.stringify({client_id:clientId(),session_id:null})}),
+  newConversation:(binding?:{task_id:string;expected_revision:number})=>request<DemoStartResponse>('/api/demo/start',{method:'POST',body:JSON.stringify({client_id:clientId(),session_id:null}),...deviceBinding(binding)}),
 
   listMedications: () => request<MedicationListResponse>(withClient('/api/me/medications')),
 
-  deleteDraft:(kind:'draft'|'source',id:string)=>request<{deleted:true;medication_deleted:boolean;cleanup_pending:boolean}>(withClient(`/api/medications/unfinished/${kind}/${encodeURIComponent(id)}`),{method:'DELETE',body:JSON.stringify({confirmed:true})}),
-  endPlan:(regimenId:string)=>request<{regimen_id:string;state:string}>(withClient(`/api/medications/${encodeURIComponent(regimenId)}/end`),{method:'POST',body:JSON.stringify({confirmed:true})}),
+  deleteDraft:(kind:'draft'|'source',id:string,binding?:WorkflowPatientBinding)=>request<{deleted:true;medication_deleted:boolean;cleanup_pending:boolean}>(withClient(`/api/medications/unfinished/${kind}/${encodeURIComponent(id)}`),{method:'DELETE',...(binding?{headers:{'X-Assistant-Task':binding.task_id,'X-Assistant-Revision':String(binding.expected_revision)}}:{}),body:JSON.stringify({confirmed:true})}),
+  endPlan:(regimenId:string,binding?:WorkflowPatientBinding)=>request<{regimen_id:string;state:string}>(withClient(`/api/medications/${encodeURIComponent(regimenId)}/end`),{method:'POST',...(binding?{headers:{'X-Assistant-Task':binding.task_id,'X-Assistant-Revision':String(binding.expected_revision)}}:{}),body:JSON.stringify({confirmed:true})}),
   createDraft: (input: DraftInput, medicationId?:string) =>
     request<DraftCreateResponse>(withClient('/api/medications/drafts',medicationId?{medication_id:medicationId}:{}), {
       method: 'POST',
       body: JSON.stringify(input),
     }),
 
+  reviewOriginalIdentity:(regimenId:string,binding:WorkflowPatientBinding)=>request<{reviewed_name_count:number}>(withClient(`/api/medications/drafts/${encodeURIComponent(regimenId)}/identity-review`),{method:'POST',headers:{'X-Assistant-Task':binding.task_id,'X-Assistant-Revision':String(binding.expected_revision)},body:JSON.stringify({confirmed:true})}),
   reviewDraft: (sourceId: string) =>
     request<{ reviewed_field_count: number; source_id: string; note: string }>(
       withClient(`/api/medications/drafts/${sourceId}/review`),
@@ -566,10 +588,10 @@ export const api = {
     regimen_id: string;
     intake_status: string;
     idempotency_key: string;
-  }) =>
+  },binding?:WorkflowPatientBinding) =>
     request<ReportChallengeResponse>(
       withClient(`/api/doses/${occurrenceId}/report/challenge`),
-      { method: 'POST', body: JSON.stringify(payload) },
+      { method: 'POST',...patientBinding(binding), body: JSON.stringify(payload) },
     ),
 
   submitReport: (occurrenceId: string, payload: {
@@ -577,9 +599,10 @@ export const api = {
     intake_status: string;
     idempotency_key: string;
     challenge_id: string;
-  }) =>
+  },binding?:WorkflowPatientBinding) =>
     request<SelfReportResponse>(withClient(`/api/doses/${occurrenceId}/report`), {
       method: 'POST',
+      ...patientBinding(binding),
       body: JSON.stringify(payload),
     }),
 
@@ -589,6 +612,7 @@ export const api = {
     ),
 
   sendMessage: (payload: {
+    name_selection?:NameSelection;
     medication_selection?:MedicationSelection;
       conversation_id?:string|null;
       navigation_context?:NavigationContext;

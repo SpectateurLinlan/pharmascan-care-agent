@@ -10,6 +10,9 @@ from uuid import UUID
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from ..application.medication_facts import extract_use_facts, reconcile_use_facts
+from ..contracts.agent_execution import bounded_timeout, checkpoint
+from ..contracts.medication_facts import UseLabelEvidence
 from ..contracts.medication_knowledge import KnowledgeProduct, KnowledgeResult, LabelSection, LabelSource
 from ..contracts.ports import Clock
 
@@ -180,8 +183,10 @@ def ingredient_use_key(text: str, label: Label) -> str:
     return statement_key(text, label)
 
 
-def chinese_use(text: str) -> str | None:
+def chinese_use(text: str, *, strict: bool = False) -> str | None:
     """Small controlled translation surface; unsupported sentences stay in English."""
+    if re.fullmatch(r"purposes?\s+pain reliever/fever reducer", text, re.I):
+        return "该来源标签的用途分类为止痛、退热；具体适用人群和使用限制请查看原标签。"
     if re.fullmatch(
         r".+ (?:is|are) indicated for the treatment of hypertension, to lower blood pressure\.", text, re.I
     ):
@@ -193,6 +198,8 @@ def chinese_use(text: str) -> str | None:
         re.I,
     ):
         return "该美国标签列出的用途是配合饮食和运动，帮助成人2型糖尿病患者控制血糖。"
+    if strict:
+        return None
     if re.search(
         r"indicated as an adjunct to diet and exercise to improve glycemic control .+type 2 diabetes mellitus",
         text,
@@ -207,8 +214,16 @@ def chinese_use(text: str) -> str | None:
 
 
 class OpenFDAKnowledge:
-    def __init__(self, client: httpx.Client, clock: Clock, *, monotonic: Callable[[], float]):
+    def __init__(
+        self,
+        client: httpx.Client,
+        clock: Clock,
+        *,
+        monotonic: Callable[[], float],
+        scoped_facts: bool = False,
+    ):
         self._client, self._clock, self._monotonic = client, clock, monotonic
+        self._scoped_facts = scoped_facts
 
     def lookup(self, product: KnowledgeProduct) -> KnowledgeResult:
         if product.scope == "product" and (not product.form or not product.route or product.release == "unknown"):
@@ -223,7 +238,7 @@ class OpenFDAKnowledge:
                 "GET",
                 LABEL_URL,
                 params={"search": search, "limit": 8},
-                timeout=httpx.Timeout(6.0),
+                timeout=httpx.Timeout(bounded_timeout(6.0)),
                 follow_redirects=False,
                 headers={"Accept": "application/json"},
             ) as response:
@@ -237,6 +252,7 @@ class OpenFDAKnowledge:
                     return KnowledgeResult(status="unavailable", reason="non_json")
                 body = bytearray()
                 for part in response.iter_bytes():
+                    checkpoint()
                     if self._monotonic() >= deadline:
                         return KnowledgeResult(status="unavailable", reason="request_budget_exceeded")
                     body.extend(part)
@@ -261,6 +277,8 @@ class OpenFDAKnowledge:
                 if row.set_id not in latest or version > int(latest[row.set_id].version):
                     latest[row.set_id] = row
             selected = list(latest.values())
+            if self._scoped_facts and product.scope == "ingredient":
+                return self._ingredient_facts(selected, len(rows))
             statements = [(row, use_statement(row)) for row in selected]
             if not statements or any(statement is None for _, statement in statements):
                 return KnowledgeResult(
@@ -342,3 +360,78 @@ class OpenFDAKnowledge:
             return KnowledgeResult(status="unavailable", reason="network_error")
         except (ValueError, TypeError, ValidationError):
             return KnowledgeResult(status="unavailable", reason="invalid_response")
+
+    def _ingredient_facts(self, selected: list[Label], candidate_count: int) -> KnowledgeResult:
+        facts = []
+        for row in selected:
+            form_text = plain(" ".join(row.dosage_forms_and_strengths)).casefold()
+            forms = [
+                form
+                for form in ("tablet", "capsule", "solution", "suspension")
+                if re.search(rf"\b{form}s?\b", form_text)
+            ]
+            release = "modified_release" if re.search(r"extended[- ]release|modified[- ]release", form_text) else None
+            facts.extend(
+                extract_use_facts(
+                    UseLabelEvidence(
+                        source_id=row.id,
+                        names=tuple(row.openfda.generic_name + row.openfda.brand_name),
+                        ingredient_set=tuple(sorted(normalized(name) for name in row.openfda.substance_name)),
+                        route_scope=normalized(row.openfda.route[0]) if len(row.openfda.route) == 1 else None,
+                        formulation_scope=forms[0] if len(forms) == 1 else None,
+                        release_scope=release,
+                        sections={
+                            field: plain(" ".join(getattr(row, field)))
+                            for field in ("indications_and_usage", "purpose")
+                        },
+                    )
+                )
+            )
+        coverage = reconcile_use_facts(tuple(facts))
+        if not coverage.supported:
+            return KnowledgeResult(
+                status="no_reliable_match",
+                reason=coverage.reason,
+                match_scope="US_label_ingredient",
+                candidate_count=candidate_count,
+                coverage="unknown",
+                withheld_reasons=(coverage.reason,),
+            )
+        sources = []
+        cited = []
+        for row in sorted(selected, key=lambda item: (item.effective_time, item.set_id), reverse=True):
+            supported = tuple(fact for fact in coverage.supported if fact.source_id == row.id)
+            if not supported:
+                continue
+            cited.extend(supported)
+            sources.append(
+                LabelSource(
+                    label_name=" / ".join(dict.fromkeys(row.openfda.brand_name + row.openfda.generic_name))[:240]
+                    or None,
+                    set_id=UUID(row.set_id),
+                    label_id=UUID(row.id),
+                    version=row.version,
+                    effective_time=row.effective_time,
+                    retrieved_at=self._clock.now().isoformat(),
+                    url=f"https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid={row.set_id}",
+                    api_url=f"https://api.fda.gov/drug/label.json?search=id:%22{row.id}%22",
+                    sections=[LabelSection(field=fact.field, text=fact.quote) for fact in supported],
+                )
+            )
+            if len(sources) == 2:
+                break
+        statement = cited[0].quote
+        translated = chinese_use(statement, strict=True)
+        return KnowledgeResult(
+            status="matched",
+            reason="scoped_partial_evidence",
+            match_scope="US_label_ingredient",
+            candidate_count=candidate_count,
+            sources=sources,
+            coverage="partial",
+            use_facts=tuple(cited),
+            withheld_reasons=(coverage.reason,) if coverage.withheld else (),
+            use_statement=statement,
+            use_statement_zh=translated,
+            translation_status="controlled_translation" if translated else "original_english_only",
+        )

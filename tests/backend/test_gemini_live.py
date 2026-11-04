@@ -1,4 +1,11 @@
-"""REAL model + Auth/application/RLS, explicit opt-in and synthetic records."""
+"""LEGACY REAL model + Auth/application/RLS integration, separate opt-in.
+
+This older suite loads project Settings and creates Auth/SQL records. It does
+not inherit the P07 runner's target isolation or request/time budget controls.
+RUN_GEMINI_LIVE is not permission to invoke it during P07 work. Use the bounded
+scripts/qa/run_assistant_acceptance.py entry point for P07; memory evidence does
+not establish this legacy suite's Auth/RLS coverage. No execution changes here.
+"""
 
 import os
 from dataclasses import replace

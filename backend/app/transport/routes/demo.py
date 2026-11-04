@@ -12,9 +12,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
 
+from ...domain.errors import ValidationError
 from ..container import demo_patient_id
 from ..deps import ApplicationContainer, get_container, get_principal
 from ..schemas import DemoStartRequest, DemoStartResponse
+from ..workflow_binding import native_binding
 
 router = APIRouter(prefix="/api/demo", tags=["demo"])
 
@@ -24,12 +26,21 @@ def start(
     payload: DemoStartRequest,
     request: Request,
     container: ApplicationContainer = Depends(get_container),
+    binding=Depends(native_binding),
 ) -> DemoStartResponse:
     patient_id = (
         get_principal(request, None).patient_id
         if container.auth.mode == "supabase"
         else demo_patient_id(payload.client_id)
     )
+    if binding:
+        if payload.session_id is not None or container.assistant_conversations is None:
+            raise ValidationError("Use a fresh current conversation action")
+        def response(session):
+            return DemoStartResponse(patient_id=patient_id, session_id=session.id,
+                seeded_medication_count=len(container.enrollment.list_medications(patient_id)))
+        return container.assistant_conversations.run(patient_id, *binding[:2], "conversation.new", None,
+            binding[2], lambda: response(container.orchestrator.start_session(patient_id=patient_id)), response)
     # Admin setup only: ensure the synthetic identity exists. Idempotent, and it
     # touches no patient data. ``admin`` is None for the in-memory wiring, where
     # no owner rows are required.

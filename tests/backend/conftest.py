@@ -82,6 +82,14 @@ def clock() -> FixedClock:
 
 
 @pytest.fixture()
+def workflow():
+    from .workflow_support import WorkflowHarness
+
+    with WorkflowHarness() as harness:
+        yield harness
+
+
+@pytest.fixture()
 def wired(store: InMemoryStore, clock: FixedClock):
     """Fully wired application services over in-memory fakes (SIMULATED)."""
     ids = CountingIdGenerator()

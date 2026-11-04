@@ -197,3 +197,14 @@ evidence; legacy confirmation flags cannot override ambiguous identity. Patients
 still review their instructions and separately confirm activation/intake. The
 existing same-name overlap restriction remains a conservative MVP constraint,
 not a medical determination that two prescriptions are incompatible.
+
+
+## Persistent workflow acceptance evidence
+
+Offline profile admission and recording tests establish local refusal, correlation, recovery and composition behavior. Default live SQL/Auth/Storage tests skip. Provider, deployed and device evidence are distinct and must not be inferred from local tests or a successful preflight.
+
+An explicit isolated profile pins the exact source hash set, two synthetic owners, approved operations and separate patient/technical identities. Normal projects, unapproved targets, mismatched verifier databases and inherited environment-file configuration are refused. No test provisions roles, schema, buckets or policies implicitly. Cross-owner mutation probes need a separate approval flag and touch only fresh synthetic objects from that run.
+
+The bounded ACL inspector inventories fixed technical functions and clinical access in the named public/auth/storage and evidence schemas. Its PASS is not a full database privilege audit: PUBLIC/default grants, schema CREATE, other schemas, indirect definer paths, role switching and session-GUC influence require separate operator review. Source hashes and observed function-definition hashes are different evidence.
+
+Real acceptance must cover native/task/receipt atomicity, body/idempotency conflicts, cross-owner isolation, concurrent instances, stale workers, exact raw bytes, unknown writers, protected/shared sources, verified deletion and preservation on recovery. Caller-transaction rollback is not internal CAS fault injection; down-guard refusal is not a full down migration test.

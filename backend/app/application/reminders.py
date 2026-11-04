@@ -92,3 +92,8 @@ class ReminderService:
                         continue
                     current.append(ReminderStatusDTO(**row.model_dump(), is_due=row.remind_at <= self._clock.now()))
         return current
+
+    def get_saved(self, patient_id: UUID, occurrence_id: UUID) -> ReminderDTO | None:
+        """Owned saved preference, including expired snoozes; never creates a dose."""
+        return next((row for row in self._repository.list_for_patient(patient_id)
+                     if row.occurrence_id == occurrence_id), None)

@@ -7,8 +7,14 @@ import logging
 import re
 from uuid import UUID, uuid5
 
-from ..contracts.library_files import LibraryFileDTO, MedicationLibraryFileRepository, PrivateFileStore
+from ..contracts.library_files import (
+    LibraryFileDTO,
+    LibraryFileUploadResult,
+    MedicationLibraryFileRepository,
+    PrivateFileStore,
+)
 from ..contracts.ports import Clock
+from ..contracts.workflow_media_storage import MediaCopyTarget
 from ..domain.errors import NotFoundError, ValidationError
 from .enrollment import MedicationEnrollmentService
 
@@ -99,6 +105,33 @@ class MedicationLibraryFileService:
             raise NotFoundError("File not found")
         return file, self._storage.get(file.storage_path)
 
+    def register_verified_copy(self, patient_id: UUID, target: MediaCopyTarget, *, filename: str, category: str,
+                               description: str) -> LibraryFileUploadResult:
+        """Native metadata only; the coupled boundary verifies source/native bytes."""
+        target=MediaCopyTarget.model_validate(target.model_dump())
+        if target.owner!=patient_id or target.media_kind!='pdf':
+            raise ValidationError('Owned PDF copy required')
+        if self._enrollment.get_medication(patient_id,target.medication_id) is None:
+            raise NotFoundError('Medication not found')
+        if category not in PDF_CATEGORIES or len(description)>500:
+            raise ValidationError('Invalid file information')
+        name=clean_filename(filename)
+        row=LibraryFileDTO(id=target.native_id,patient_id=patient_id,medication_id=target.medication_id,
+            storage_path=target.object_ref,checksum=target.checksum,original_filename=name,
+            display_title=name[:-4][:160] or 'Medication document',category=category,description=description.strip(),
+            byte_size=target.byte_size,uploaded_at=self._clock.now(),demo_only=self._demo_only)
+        actual,duplicate=self._repo.add_if_absent(row)
+        if actual.deleted_at is not None or actual.storage_path!=target.object_ref:
+            raise ValidationError('This PDF was removed or its verified path differs')
+        return LibraryFileUploadResult(file=actual,duplicate=duplicate)
+
+    def metadata(self, patient_id: UUID, file_id: UUID, *, include_deleted: bool = False) -> LibraryFileDTO:
+        """Owned server-side metadata, including tombstones only for reconciliation."""
+        row = self._repo.get(patient_id, file_id)
+        if row is None or (row.deleted_at is not None and not include_deleted):
+            raise NotFoundError("File not found")
+        return row
+
     def update(
         self, patient_id: UUID, file_id: UUID, *, expected_version: int, title: str, category: str, description: str
     ) -> LibraryFileDTO:
@@ -118,6 +151,14 @@ class MedicationLibraryFileService:
         if pending:
             self._storage.delete(path)
             self._repo.acknowledge_cleanup(patient_id, file_id)
+
+    def tombstone(self, patient_id: UUID, file_id: UUID, *, confirmed: bool, expected_version: int) -> LibraryFileDTO:
+        """Mark an owned current PDF for cleanup; never perform Storage I/O."""
+        old = self.metadata(patient_id, file_id)
+        if old.version != expected_version:
+            raise ValidationError('File changed. Reload before confirming deletion.')
+        self._repo.tombstone(patient_id, file_id, confirmed, self._clock.now())
+        return self.metadata(patient_id, file_id, include_deleted=True)
 
 
 def is_basic_pdf(data: bytes) -> bool:

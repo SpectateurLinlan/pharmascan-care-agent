@@ -19,6 +19,7 @@ from ..contracts.medication_evidence import (
 )
 from ..contracts.ports import Clock, IdGenerator
 from ..contracts.vision import MatchOutcome
+from ..contracts.workflow_media_storage import MediaCopyTarget
 from ..domain.errors import NotFoundError, ProviderUnavailableError, ValidationError
 from .enrollment import MedicationEnrollmentService
 from .timezone import FixedTzProvider, LocalTzProvider
@@ -314,6 +315,13 @@ class PersonalGalleryService:
             raise NotFoundError("Reference photo not found")
         return self._storage.get(record.storage_path)
 
+    def metadata(self, patient_id: UUID, image_id: UUID, *, include_deleted: bool = False) -> MedicationImage:
+        """Owned server-side lifecycle metadata; never fetches original bytes."""
+        row = self._repo.get(patient_id, "images", image_id)
+        if not isinstance(row, MedicationImage) or (row.deleted_at is not None and not include_deleted):
+            raise NotFoundError("Photo not found")
+        return row
+
     def retire(self, patient_id: UUID, image_id: UUID) -> MedicationImage:
         owned = self._repo.get(patient_id, "images", image_id)
         if not isinstance(owned, MedicationImage):
@@ -332,6 +340,19 @@ class PersonalGalleryService:
         confirmed: bool = False,
     ) -> MedicationImage:
         """Apply an owner-scoped image lifecycle change and retryable cleanup."""
+        changed = self.apply_metadata(patient_id, image_id, action=action, expected_version=expected_version,
+            image_kind=image_kind, source_description=source_description, confirmed=confirmed)
+        if action == "delete" and changed.cleanup_pending:
+            self._storage.delete(changed.storage_path)
+            self._repo.acknowledge_image_cleanup(patient_id, image_id)
+            changed = changed.model_copy(update={"cleanup_pending": False})
+        return changed
+
+    def apply_metadata(
+        self, patient_id: UUID, image_id: UUID, *, action: str, expected_version: int,
+        image_kind: ImageKind | None = None, source_description: str | None = None, confirmed: bool = False,
+    ) -> MedicationImage:
+        """Native lifecycle metadata only; external deletion needs separate evidence."""
         owned = self._repo.get(patient_id, "images", image_id)
         if not isinstance(owned, MedicationImage):
             raise NotFoundError("Photo not found")
@@ -340,9 +361,9 @@ class PersonalGalleryService:
                 raise NotFoundError("Photo not found")
             if not owned.cleanup_pending:
                 return owned
-            changed, path = owned, owned.storage_path
+            changed = owned
         else:
-            changed, path = self._repo.manage_image(
+            changed, _path = self._repo.manage_image(
                 patient_id,
                 image_id,
                 action=action,
@@ -352,10 +373,6 @@ class PersonalGalleryService:
                 source_description=source_description,
                 confirmed=confirmed,
             )
-        if action == "delete" and changed.cleanup_pending:
-            self._storage.delete(path)
-            self._repo.acknowledge_image_cleanup(patient_id, image_id)
-            changed = changed.model_copy(update={"cleanup_pending": False})
         return changed
 
     def upload(
@@ -382,6 +399,32 @@ class PersonalGalleryService:
             consent=consent,
             demo_only=demo_only,
         ).photo
+
+    def register_verified_copy(self, patient_id: UUID, target: MediaCopyTarget, *, image_kind: ImageKind,
+                               source_description: str) -> GalleryUploadResult:
+        """Metadata-only native writer; caller must adopt the trusted copy proof atomically."""
+        target=MediaCopyTarget.model_validate(target.model_dump())
+        if target.owner!=patient_id or target.media_kind!='photo':
+            raise ValidationError('Owned photo copy required')
+        if self._enrollment.get_medication(patient_id,target.medication_id) is None:
+            raise NotFoundError('Owned medication not found')
+        if (image_kind not in {'loose_pill','package','blister','source'}
+            or not source_description.strip() or len(source_description)>200):
+            raise ValidationError('Review the exact photo type and description')
+        old=next((row for row in self._repo.list(patient_id,'images') if isinstance(row,MedicationImage)
+            and row.medication_id==target.medication_id and row.checksum==target.checksum),None)
+        if old is not None:
+            if old.deleted_at is not None or old.gallery_removed or old.storage_path!=target.object_ref:
+                raise ValidationError('This photo was removed or its verified path differs; inspect its record')
+            return GalleryUploadResult(photo=old,duplicate=True)
+        row=MedicationImage(id=target.native_id,patient_id=patient_id,medication_id=target.medication_id,
+            image_kind=image_kind,storage_path=target.object_ref,checksum=target.checksum,
+            source_description=source_description.strip(),reviewed=True,eligibility='associated',
+            eligibility_reason=UNVERIFIED_CONTENT_REASON if image_kind=='loose_pill'
+             else 'automatic_loose_pill_matching_not_available_for_this_image_type',created_at=self._clock.now())
+        inserted=self._repo.add_image_if_absent(row)
+        actual=self.metadata(patient_id,row.id)
+        return GalleryUploadResult(photo=actual,duplicate=not inserted)
 
     def upload_with_status(
         self,
@@ -460,6 +503,15 @@ class PersonalGalleryService:
     def check(
         self, *, patient_id: UUID, regimen_id: UUID | None, image: bytes, consent: bool, demo_only: bool
     ) -> RecognitionRun:
+        run = self.preview_check(patient_id=patient_id, regimen_id=regimen_id, image=image,
+                                 consent=consent, demo_only=demo_only)
+        self._repo.add("runs", run)
+        return run
+
+    def preview_check(
+        self, *, patient_id: UUID, regimen_id: UUID | None, image: bytes, consent: bool, demo_only: bool
+    ) -> RecognitionRun:
+        """Same native evidence calculation without saving recognition history."""
         if not consent:
             raise ValidationError("Agree to photo processing before continuing")
         selected = self._enrollment.get_regimen(patient_id, regimen_id) if regimen_id else None
@@ -565,5 +617,4 @@ class PersonalGalleryService:
             reason=reason,
             created_at=self._clock.now(),
         )
-        self._repo.add("runs", run)
         return run
