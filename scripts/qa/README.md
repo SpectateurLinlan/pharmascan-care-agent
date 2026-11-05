@@ -12,6 +12,7 @@
 | [execute_release_migrations.py](execute_release_migrations.py) | 受授权的发布迁移执行器；不要在常规验证中运行 |
 | [inspect_assistant_evidence_scope.py](inspect_assistant_evidence_scope.py) | 只读核对 Assistant 核验证据的范围 |
 | [inspect_library_release.py](inspect_library_release.py) | 药物库发布验收的只读检查 |
+| [local_supabase_acceptance.py](local_supabase_acceptance.py) | 本地 Supabase 隔离验收；默认只检查，启动、DEMO 初始化、验收和停止需显式阶段及目标授权 |
 | [medication_counts_in_browser.js](medication_counts_in_browser.js) | 浏览器控制台的只读药物/计划数量核对 |
 | [pre_migration_backup.py](pre_migration_backup.py) | 迁移前备份到本地忽略目录；需授权目标及私有数据处理 |
 | [render_release_evidence.py](render_release_evidence.py) | 将实际发布结果整理为证据，不生成虚假成功 |

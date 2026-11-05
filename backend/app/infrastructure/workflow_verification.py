@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import re
 from collections.abc import Callable
@@ -17,6 +18,7 @@ from ..contracts.agent_execution import BudgetExceeded, DeadlineExceeded, TaskCa
 from ..contracts.workflow_media_cleanup import MediaDeleteObservation, VerifiedMediaDeleteRef
 from ..contracts.workflow_media_storage import MediaStorageObservation, VerifiedMediaOperationRef
 from ..contracts.workflow_run_control import RUN_WORKER_COMMAND, RunControlState
+from ..contracts.workflow_runtime import RuntimeReleaseSnapshot
 from ..contracts.workflow_verification import StorageObservation, VerifiedOperationRef
 from ..domain.errors import DuplicateEventError, NotFoundError, ProviderUnavailableError, StaleVersionError
 
@@ -134,6 +136,9 @@ class RestrictedEvidenceConnection:
         observation = NativeMediaObservation.model_validate(observation)
         return self._execute("native_object", observation, timeout_seconds=timeout_seconds)
 
+    def read_release(self, *, timeout_seconds: float) -> RuntimeReleaseSnapshot:
+        return self._execute("readiness", None, timeout_seconds=timeout_seconds)
+
     def _execute(self, operation, payload, *, timeout_seconds):
         # libpq cannot honor a sub-two-second connect timeout. Refuse instead of
         # silently giving a near-expired request a larger connection budget.
@@ -150,6 +155,8 @@ class RestrictedEvidenceConnection:
                 row_factory=dict_row,
             )
             with connection.transaction():
+                if operation == "readiness":
+                    connection.execute("SET TRANSACTION READ ONLY")
                 self._set_remaining(connection, deadline)
                 identity = connection.execute(_IDENTITY).fetchone()
                 if (
@@ -161,9 +168,13 @@ class RestrictedEvidenceConnection:
                     raise ValueError("Restricted verification identity required")
                 self._set_remaining(connection, deadline)
                 sql = {'storage':_STORAGE_COMMAND, 'media':_MEDIA_COMMAND, 'run':_RUN_COMMAND,
-                       'media_delete':_MEDIA_DELETE_COMMAND, 'native_object':_NATIVE_MEDIA_COMMAND}[operation]
-                row = connection.execute(sql, (Jsonb(payload.model_dump(mode="json")),)).fetchone()
-                if operation in {'storage','media','media_delete','native_object'}:
+                       'media_delete':_MEDIA_DELETE_COMMAND, 'native_object':_NATIVE_MEDIA_COMMAND,
+                       'readiness': 'SELECT assistant_evidence.runtime_readiness() AS result'}[operation]
+                row = (connection.execute(sql).fetchone() if operation == "readiness" else
+                       connection.execute(sql, (Jsonb(payload.model_dump(mode="json")),)).fetchone())
+                if operation == "readiness":
+                    result = RuntimeReleaseSnapshot.model_validate_json(json.dumps(row["result"]))
+                elif operation in {'storage','media','media_delete','native_object'}:
                     from ..contracts.native_media_verification import VerifiedNativeMediaRef
                     model = {'media':VerifiedMediaOperationRef,'storage':VerifiedOperationRef,
                              'media_delete':VerifiedMediaDeleteRef, 'native_object':VerifiedNativeMediaRef}[operation]
@@ -212,6 +223,9 @@ class RestrictedEvidenceConnection:
 class PostgresEvidenceVerifier:
     def __init__(self, connection: RestrictedEvidenceConnection):
         self._connection = connection
+
+    def read_release(self, *, timeout_seconds: float) -> RuntimeReleaseSnapshot:
+        return self._connection.read_release(timeout_seconds=timeout_seconds)
 
     def record_storage(self, observation: StorageObservation, *, timeout_seconds: float) -> VerifiedOperationRef:
         return self._connection.record_storage_observation(observation, timeout_seconds=timeout_seconds)

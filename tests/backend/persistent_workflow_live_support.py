@@ -45,6 +45,8 @@ class PersistentWorkflowTestProfile:
     storage_values: Mapping[str, str] = field(default_factory=dict, repr=False)
     approved_candidate_hashes: Mapping[str, str] = field(default_factory=dict, repr=False)
     invalid: bool = False
+    target_mode: str = field(default="legacy", kw_only=True)
+    local_receipt_path: str = field(default="", repr=False, kw_only=True)
 
     @classmethod
     def from_values(cls, values: Mapping[str, str]) -> PersistentWorkflowTestProfile:
@@ -66,6 +68,8 @@ class PersistentWorkflowTestProfile:
             "ASSISTANT_TEST_JWT_B",
         )
         return cls(
+            target_mode=values.get("ASSISTANT_TEST_TARGET_MODE", "legacy"),
+            local_receipt_path=values.get("ASSISTANT_TEST_LOCAL_RECEIPT_PATH", ""),
             enabled=values.get("RUN_ASSISTANT_PERSISTENCE_TESTS") == "1",
             approved=values.get("ASSISTANT_PERSISTENCE_APPROVED") == "1",
             sql_enabled=values.get("RUN_ASSISTANT_SQL_TESTS") == "1",
@@ -109,8 +113,8 @@ def candidate_hashes() -> dict[str, str]:
     return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
 
 
-def _storage_claims(profile: PersistentWorkflowTestProfile, owners: tuple[UUID, UUID]) -> None:
-    storage_target(dict(profile.storage_values))  # Retain the existing normal-project/isolated-project guard.
+def validate_patient_claims(profile: PersistentWorkflowTestProfile, owners: tuple[UUID, UUID]) -> None:
+    """Offline consistency only; every local live entry additionally verifies real Auth."""
     expected = profile.storage_values["ASSISTANT_TEST_SUPABASE_URL"].rstrip("/") + "/auth/v1"
     for key, owner in zip(("ASSISTANT_TEST_JWT_A", "ASSISTANT_TEST_JWT_B"), owners, strict=True):
         token = profile.storage_values[key]
@@ -138,6 +142,7 @@ def validate_persistent_test_profile(
     try:
         if (
             profile.invalid
+            or profile.target_mode not in {"legacy", "local_supabase"}
             or not profile.enabled
             or not profile.approved
             or not re.fullmatch(r"[a-zA-Z0-9_-]{1,100}", profile.approval_id)
@@ -152,6 +157,10 @@ def validate_persistent_test_profile(
             and not profile.storage_enabled
         ):
             raise ValueError
+        if profile.target_mode == "local_supabase":
+            from .local_supabase_live_support import validate_local_profile
+
+            return validate_local_profile(profile)
         name = sql_target(profile.database_url)
         db, evidence = urlparse(profile.database_url), urlparse(profile.evidence_dsn)
         EvidenceConnectionSettings(profile.evidence_dsn)
@@ -171,7 +180,8 @@ def validate_persistent_test_profile(
         if owners[0] == owners[1] or any(owner.int == 0 for owner in owners):
             raise ValueError
         if purpose.startswith("storage_"):
-            _storage_claims(profile, owners)
+            storage_target(dict(profile.storage_values))
+            validate_patient_claims(profile, owners)
         hashes = candidate_hashes()
         if (require_hashes or profile.approved_candidate_hashes) and dict(profile.approved_candidate_hashes) != hashes:
             raise ValueError
@@ -192,6 +202,10 @@ def admitted_live_profile(purpose: str):
     profile = PersistentWorkflowTestProfile.from_values(dict(os.environ))
     try:
         target = validate_persistent_test_profile(profile, purpose=purpose, require_hashes=True)
+        if profile.target_mode == "local_supabase":
+            from .local_supabase_live_support import verify_local_live_target
+
+            verify_local_live_target(profile, target)
     except PersistentProfileRefusal:
         pytest.fail("target_not_authorized; no connection attempted", pytrace=False)
     return profile, target

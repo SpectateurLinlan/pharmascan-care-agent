@@ -35,6 +35,17 @@ services:
         value: low
       - key: DEMO_AGENT_DAILY_TURN_LIMIT
         value: "20"
+      # Template defaults only; changing these is a separate, verified rollout.
+      - key: ASSISTANT_KNOWLEDGE_V2_ENABLED
+        value: "false"
+      - key: ASSISTANT_WORKFLOWS_ENABLED
+        value: "false"
+      - key: ASSISTANT_NATIVE_MEDIA_ENABLED
+        value: "false"
+      - key: ASSISTANT_PROGRESS_ENABLED
+        value: "false"
+      # Optional ASSISTANT_EVIDENCE_DSN is set privately in the server process
+      # after approval. Never reuse DATABASE_URL or expose it to frontend builds.
       - key: VISION_API_BASE_URL
         value: https://davidpansx-pharmascan-api.hf.space
       - key: ENABLE_WEB_PUSH

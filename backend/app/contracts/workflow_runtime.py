@@ -3,6 +3,9 @@
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .assistant_capabilities import CapabilityMode
 from .assistant_workflows import ActionRepository, ControlRepository, WorkflowRepository
@@ -21,9 +24,72 @@ from .workflow_run_control import DurableRunControlPort, RunControlState, RunWor
 from .workflow_settings_writes import SettingsWorkflowWritePort
 from .workflow_verification import EvidenceVerificationPort, VerifiedOriginalPort
 
+RUNTIME_RELEASE_CONTRACT = "assistant-persistence-v1"
+
+
+class RuntimeReleaseSnapshot(BaseModel):
+    """Technical release metadata, never patient identity or clinical authority."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+
+    contract_version: str = Field(min_length=1, max_length=80)
+    accepted: bool = False
+    release_id: UUID | None = None
+    application_hash: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    catalog_digest: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
+    native_media_ready: bool = False
+
+    @model_validator(mode="after")
+    def accepted_release_is_complete(self):
+        if self.accepted and any(
+            value is None
+            for value in (
+                self.release_id,
+                self.application_hash,
+                self.catalog_digest,
+            )
+        ):
+            raise ValueError("Accepted release metadata is incomplete")
+        return self
+
+
+class RuntimeReadinessPort(Protocol):
+    def read_release(self, *, timeout_seconds: float) -> RuntimeReleaseSnapshot: ...
+
+
+class WorkflowAdmission(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+
+    available: bool = False
+    reason: Literal[
+        "not_checked",
+        "feature_disabled",
+        "ready",
+        "release_not_accepted",
+        "release_contract_mismatch",
+        "release_target_mismatch",
+        "application_mismatch",
+        "application_unidentified",
+        "native_media_not_ready",
+        "verification_unavailable",
+        "readiness_unavailable",
+        "incomplete_capabilities",
+    ] = "not_checked"
+
+
+def unavailable_admission(reason: str) -> WorkflowAdmission:
+    """Unknown exception/provider text cannot become a public reason."""
+    known = WorkflowAdmission.model_fields["reason"].annotation.__args__
+    return WorkflowAdmission(reason=reason if reason in known and reason != "ready" else "readiness_unavailable")
+
 
 class WorkflowTechnicalVerifier(
-    EvidenceVerificationPort, MediaCopyVerificationPort, MediaDeleteVerificationPort, NativeMediaObserver, Protocol
+    EvidenceVerificationPort,
+    MediaCopyVerificationPort,
+    MediaDeleteVerificationPort,
+    NativeMediaObserver,
+    RuntimeReadinessPort,
+    Protocol,
 ):
     def record_run(self, command: RunWorkerCommand, *, timeout_seconds: float) -> RunControlState: ...
 

@@ -28,8 +28,9 @@ TECHNICAL_COMMANDS = tuple(
         "record_media_delete_observation",
         "record_native_media_observation",
     )
-)
+) + ("assistant_evidence.runtime_readiness()",)
 PATIENT_COMMANDS = (
+    "public.assistant_runtime_readiness()",
     "public.assistant_workflow_mutate(jsonb)",
     "public.assistant_message_command(jsonb)",
     "public.assistant_conversation_transition(jsonb)",
@@ -125,6 +126,10 @@ def inspect_read_only(profile, target, *, connect=None):
     admitted = validate_persistent_test_profile(profile, purpose="sql_read", require_hashes=True)
     if admitted != target:
         raise PersistentProfileRefusal()
+    if profile.target_mode == "local_supabase":
+        from tests.backend.local_supabase_live_support import verify_local_live_target
+
+        verify_local_live_target(profile, target)
     if connect is None:
         import psycopg
 

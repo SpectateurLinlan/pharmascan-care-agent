@@ -17,6 +17,9 @@ router = APIRouter(tags=["health"])
 def health(request: Request) -> HealthResponse:
     container = request.app.state.container
     return HealthResponse(
+        **request.app.state.assistant_configuration,
+        application_hash=request.app.state.application_hash,
+        source_revision=request.app.state.source_revision,
         database=container.persistence,
         multiple_care_reminders_enabled=request.app.state.multiple_care_reminders_enabled,
         stage2_vision="live" if container.visual_check else "simulated",

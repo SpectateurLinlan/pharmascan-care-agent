@@ -127,6 +127,8 @@ The request-local candidate graph now composes all native business consumers,
 message/session persistence, durable control, original storage, copy verification
 and cleanup. It remains a separate, disabled candidate; ordinary patient requests
 do not mount it because configuration or a verifier DSN happens to be present.
+Explicit workflow requests mount it only after the separate release admission
+described below; ordinary homepage reads never make a verifier connection.
 
 The messages candidate also contains fixed independently confirmed conversation
 transitions and browser subscription metadata transitions. Subscription keys stay
@@ -137,3 +139,44 @@ owned claims and persistent deleting exclusions. The medication candidate has a
 read-only draft deletion result projection. Draft metadata deletion with unknown
 physical cleanup remains pending; it cannot call the legacy Storage-ACK path or
 claim file absence. Existing reference and writer exclusions remain authoritative.
+
+## Source-bound release admission (review only)
+
+`runtime-readiness.up.sql` follows the complete candidate set, including native
+media compatibility. It adds an operator-owned, RLS-protected release ledger and
+two fixed read-only readers. Installation publishes no accepted record. Patient
+and verifier roles receive no ledger write permission. The five technical
+observation commands remain unchanged; the verifier gains only one metadata read.
+
+After separately authorized target acceptance, an operator publishes the actual
+running application hash, observed catalog digest, unique release UUID, retained
+acceptance evidence digest and native compatibility outcome. Both patient RPC and
+restricted connection must report this same release. The catalog fingerprint
+covers function definitions/ACLs, tables/RLS, columns, constraint validation,
+index validity, trigger definitions/enabled state, rewrite rules, policies,
+schemas/default ACLs and role flags/memberships; covered DDL/ACL drift
+invalidates admission. It reads no patient records or uploaded bytes. This marker
+records prior operator acceptance; it does not replace JWT, RLS, independent
+confirmation or transaction guards, and is not a complete runtime security audit.
+
+The ordinary evidence upload/update/delete and unfinished-draft deletion entry
+points require the same admission when native verification is configured. The
+native bridge can operate independently with Assistant workflows disabled; it
+retains its existing verified native services and does not expose workflow tools. Bound
+Assistant writes always fail closed when admission is unavailable. Progress is
+mounted only when its separate flag is enabled. No readiness environment bypass
+is supported. A constructed `rollout_ready=False` candidate remains distinct from
+an admitted request container.
+
+Active-incident recovery revokes the release under an authorized operator change
+and disables workflow/progress entry, preserving all clinical records, original
+bytes, receipts and release history. Retain native verification so ordinary native
+writes refuse the revoked release, or explicitly pause those writers. The paired down
+refuses **any** release history, including revoked rows; never delete history to
+force rollback. Setting the native flag false selects legacy media writers;
+that requires separate compatibility review after new receipts exist. Disabling
+a flag alone is not that review.
+
+SQL syntax/privileges/target pairing, private Storage, races, native compatibility,
+provider/deployed/device verification remain **NOT RUN**. Offline source tests and
+the inspector inventory are preparation evidence only, not rollout permission.

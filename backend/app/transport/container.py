@@ -32,11 +32,13 @@ only this file changes.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 from uuid import UUID
 
 if TYPE_CHECKING:
+    from httpx import Client as HttpClient
+
     from .persistent_workflow_graph import PersistentWorkflowGraph
 
 from ..agent.capabilities import build_capability_registry
@@ -45,6 +47,7 @@ from ..agent.model_tools import ModelTools
 from ..agent.orchestrator import AgentOrchestrator, DeterministicIntentRouter
 from ..agent.registry import ToolRegistry
 from ..application.agent_execution import AgentExecutionService
+from ..application.agent_runtime_metadata import runtime_hash
 from ..application.ai_quota import QuotaAgent
 from ..application.assistant_capabilities.draft_recovery import DraftRecoveryAdapter
 from ..application.assistant_capabilities.enrollment import EnrollmentAdapter
@@ -92,6 +95,7 @@ from ..application.workflow_medication_transactions import MedicationWorkflowTra
 from ..application.workflow_notifications import WorkflowNotificationService
 from ..application.workflow_pdf_upload import WorkflowPdfUploadService
 from ..application.workflow_photo_upload import WorkflowPhotoUploadService
+from ..application.workflow_readiness import WorkflowRuntime
 from ..application.workflow_reminder_writes import WorkflowReminderWriteService
 from ..application.workflow_reminders import WorkflowReminderReadService
 from ..application.workflow_reports import WorkflowDoseReportService
@@ -104,7 +108,7 @@ from ..contracts.ports import Clock, IdGenerator, PatientProvisioner
 from ..contracts.push import PushSubscriptions
 from ..contracts.reminders import ReminderRepository
 from ..contracts.workflow_attachments import WorkflowAttachmentStore
-from ..contracts.workflow_runtime import PersistentWorkflowPorts
+from ..contracts.workflow_runtime import PersistentWorkflowPorts, WorkflowAdmission
 from ..infrastructure.care_repos import MemoryCareRepository, SupabaseCareRepository
 from ..infrastructure.caregiver_repos import MemoryCaregivers, SupabaseCaregivers
 from ..infrastructure.conversation_history import MemoryConversationHistory, SupabaseConversationHistory
@@ -205,6 +209,8 @@ class ApplicationContainer:
     assistant_workflows: WorkflowService | None = None
     assistant_transactions: PersistentWorkflowPorts | None = None
     assistant_candidate: PersistentWorkflowGraph | None = None
+    assistant_runtime: WorkflowRuntime | None = None
+    assistant_admission: WorkflowAdmission = field(default_factory=WorkflowAdmission)
     assistant_medications: MedicationWorkflowTransactions | None = None
     assistant_attachments: WorkflowAttachmentService | None = None
     assistant_cleanup: WorkflowCleanupService | None = None
@@ -1080,6 +1086,7 @@ def build_supabase_container(
     settings: Settings,
     clock: Clock | None = None,
     ids: IdGenerator | None = None,
+    knowledge_http_client_factory: Callable[[], HttpClient] | None = None,
 ) -> ApplicationContainer:
     """A persistent root has only a per-request user-token repository factory.
 
@@ -1103,6 +1110,7 @@ def build_supabase_container(
     root.store = None
     root.persistence = "supabase"
     root.patient_data_path = "supabase_user_jwt_rls"
+    application_hash = runtime_hash()
     push_key = None
     if settings.enable_push_subscriptions:
         from ..infrastructure.web_push import validate_vapid_public
@@ -1127,7 +1135,11 @@ def build_supabase_container(
         if not principal.authenticated or not principal.access_token:
             raise ConfigError("Verified user context required")
         http = httpx.Client(verify=tls_context)
-        knowledge_http = httpx.Client(verify=tls_context)
+        # Each factory invocation owns a fresh knowledge-only transport. Acceptance
+        # can inject public replay while patient Auth/Data API remain real and separate.
+        knowledge_http = (
+            knowledge_http_client_factory() if knowledge_http_client_factory else httpx.Client(verify=tls_context)
+        )
 
         def close_request() -> None:
             http.close()
@@ -1405,6 +1417,16 @@ def build_supabase_container(
                 visual_check=root.visual_check,
                 conversational_model=root.conversational_model,
             )
+            if transactions is not None:
+                from ..infrastructure.workflow_readiness import SupabaseRuntimeReadiness
+
+                scoped.assistant_runtime = WorkflowRuntime(
+                    patient=SupabaseRuntimeReadiness(client),
+                    technical=transactions.verifier,
+                    application_hash=application_hash,
+                    native_media_enabled=settings.assistant_native_media_enabled,
+                    progress_enabled=settings.assistant_progress_enabled,
+                )
             if settings.assistant_workflows_enabled and transactions is not None:
                 from ..infrastructure.workflow_objects import (
                     LazyWorkflowObjects,

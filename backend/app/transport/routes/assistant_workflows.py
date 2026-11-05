@@ -120,6 +120,7 @@ def capabilities(
         implemented_capabilities=container.assistant_workflows.implemented_capabilities() if enabled else frozenset(),
     )
     return WorkflowCapabilitiesResponse(
+        admission=container.assistant_admission,
         enabled=enabled,
         progress_enabled=container.assistant_execution is not None,
         capabilities=build_capability_registry().list(availability),

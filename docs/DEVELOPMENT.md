@@ -147,3 +147,30 @@ avoid comments that restate each statement. Python scripts use the existing Ruff
 `python -m ruff format --check scripts`. Format checks do not execute operational scripts.
 
 The existing frontend typecheck also compiles shared e2e/support TypeScript fixtures, so required API DTO fields cannot silently disappear from the common mock.
+
+## Assistant 配置与实际可用状态
+
+以下配置都在后端设置，不使用 `VITE_` 前缀。模板默认关闭；不要用开关替代数据库验收。
+
+| 配置 | 作用与前提 |
+| --- | --- |
+| `ASSISTANT_KNOWLEDGE_V2_ENABLED` | 使用有来源和覆盖范围的药物标签证据，可独立于工作流启用。模型推理仍取决于原有 Gemini 配置，开关不能证明调用成功。 |
+| `ASSISTANT_WORKFLOWS_ENABLED` | 请求使用持久化多步骤办理。需要完整候选 SQL、受限核验连接、原生照片/PDF 兼容验收及正式发布记录。 |
+| `ASSISTANT_NATIVE_MEDIA_ENABLED` | 配套原图/PDF 保存、引用和清理核验。原生文件桥接可独立于 Assistant 开启，但仍须通过同一发布核验；不能只开启开关就保存文件。 |
+| `ASSISTANT_PROGRESS_ENABLED` | 工作流执行进度。仅在工作流真正可用后生效，不会创建 worker 或发送通知。 |
+| `ASSISTANT_EVIDENCE_DSN` | 专用 `assistant_evidence_login` 受限连接，仅从进程环境读取，不读 dotenv，不回退到管理员连接。连接/TLS/权限需独立准备。 |
+
+`GET /api/health` 返回配置开关、实际应用源码哈希及 `assistant_runtime_status=not_checked`。
+这是无外部探测的启动诊断，不能证明 Gemini 推理、数据库验收或办理成功。
+`GET /api/agent/workflows/capabilities` 需要认证，返回本次请求的 `admission.available/reason`。
+患者连接与受限连接必须读到同一发布记录，且记录必须匹配实际运行源码和数据库元数据。
+主页普通读取不等待这项核验；办理请求检查失败时拒绝保存，普通问答保留现有降级行为。
+
+常见原因：`feature_disabled` 为开关或候选未装配；`verification_unavailable` 为受限连接未就绪；
+`release_not_accepted` 为未发布或数据库结构/权限发生变化；`application_mismatch` 为应用版本不符；
+`release_target_mismatch` 为两条连接的发布目标不一致；`native_media_not_ready` 为原生文件配套尚未准备；
+`readiness_unavailable` 为核验读取失败。对外响应不包含连接串或原始数据库错误。
+
+每次后端源码变更后都要重新确认发布记录。Windows 与部署平台的文件字节可能不同，
+不得把本地哈希直接当作线上哈希；发布记录应绑定实际运行构建。
+数据库候选及恢复限制见 [Assistant persistence candidates](../supabase/review/assistant_workflows/README.md)。

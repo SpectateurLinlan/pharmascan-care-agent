@@ -10,7 +10,7 @@ from .test_workflow_contacts import details
 from .test_workflow_preferences import CASES, previous
 
 
-def persistent_root(monkeypatch, *, evidence_dsn=None):
+def persistent_root(monkeypatch, *, evidence_dsn=None, knowledge_http_client_factory=None, knowledge_v2=False):
     import httpx
     import psycopg
     from app.config import Settings
@@ -79,8 +79,10 @@ def persistent_root(monkeypatch, *, evidence_dsn=None):
         source="DEMO_ONLY_EXPLICIT_TEST",
         assistant_workflows_enabled=True,
         assistant_evidence_dsn=evidence_dsn,
+        assistant_knowledge_v2_enabled=knowledge_v2,
     )
-    root = build_supabase_container(settings=settings)
+    options = {"knowledge_http_client_factory": knowledge_http_client_factory} if knowledge_http_client_factory else {}
+    root = build_supabase_container(settings=settings, **options)
 
     def scoped(token):
         owner = owners[token]
@@ -96,6 +98,43 @@ def persistent_root(monkeypatch, *, evidence_dsn=None):
         )
 
     return root, scoped, calls, connections, owners
+
+
+def test_request_scoped_knowledge_transport_is_explicit_and_closes_without_patient_http_replay(monkeypatch):
+    import json
+    from pathlib import Path
+
+    import httpx
+
+    client_type = httpx.Client
+    clients, requests = [], []
+    fixture = json.loads((Path(__file__).parent / "fixtures/ibuprofen_labels_public.json").read_text(encoding="utf-8"))
+
+    def reply(request):
+        assert request.url.host == "api.fda.gov"
+        requests.append(request)
+        return httpx.Response(200, content=fixture["raw_response_utf8"], headers={"Content-Type": "application/json"})
+
+    def factory():
+        client = client_type(transport=httpx.MockTransport(reply), trust_env=False)
+        clients.append(client)
+        return client
+
+    root, scoped, patient_calls, connections, owners = persistent_root(
+        monkeypatch, knowledge_http_client_factory=factory, knowledge_v2=True
+    )
+    assert not clients  # No knowledge transport or provider activity at root startup.
+    for token in ("DEMO-A", "DEMO-B"):
+        request_container = scoped(token)
+        result = request_container.medication_understanding.explain(
+            patient_id=owners[token], medication_name="IBUPROFEN", language="en"
+        )
+        assert result.general_knowledge.status == "matched" and result.general_knowledge.use_facts
+        request_container.close_request()
+    assert len(clients) == 2 and all(client.is_closed for client in clients)
+    assert len(requests) == 2
+    assert [call[2] for call in patient_calls] == ["/rest/v1/patient_profiles"] * 2
+    assert not connections
 
 
 def test_home_without_evidence_dsn_never_connects(monkeypatch):

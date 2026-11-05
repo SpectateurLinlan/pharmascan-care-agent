@@ -151,3 +151,12 @@ Real browser E/F journey: `RUN_LONG_TERM_DEMO=1`; opt-in `RUN_GEMINI_CARE_DEMO=1
 
 `npm run check:architecture` 检查跨层、跨 feature 私有访问、缺失模块和循环依赖，
 包含动态与 type-only 导入。`npm run test` 是 Vitest；`npm run test:browser -- --list` 只列浏览器用例。
+
+## Backend Assistant configuration
+
+Assistant switches and the restricted evidence connection belong to the backend;
+do not add `VITE_` versions of those secrets or flags. See
+[configuration and availability diagnostics](../docs/DEVELOPMENT.md#assistant-配置与实际可用状态)
+for actual prerequisites and the difference between health configuration and
+authenticated workflow admission. Enabling a frontend entry does not enable the
+server's persistent workflow graph.

@@ -36,6 +36,13 @@ class Request(BaseModel):
 
 
 class HealthResponse(BaseModel):
+    assistant_knowledge_v2_configured: bool = False
+    assistant_workflows_configured: bool = False
+    assistant_native_media_configured: bool = False
+    assistant_progress_configured: bool = False
+    assistant_runtime_status: Literal["not_checked"] = "not_checked"
+    application_hash: str | None = None
+    source_revision: str | None = None
     multiple_care_reminders_enabled: bool = False
     runtime_contract: Literal["patient-ux-reminders-v1"] = "patient-ux-reminders-v1"
     model_config = ConfigDict(extra="forbid")

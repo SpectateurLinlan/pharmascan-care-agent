@@ -14,6 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.concurrency import run_in_threadpool
 
+from ..application.agent_runtime_metadata import runtime_hash, source_revision
 from ..config import Settings
 from ..domain.errors import DomainError
 from ..timing import RequestTiming, current_timing, timed_stage
@@ -65,6 +66,15 @@ def create_app(container: ApplicationContainer | None = None, settings: Settings
         lifespan=lifespan,
     )
     app.state.container = wired
+    # Local metadata only. Health never connects to an external readiness target.
+    app.state.application_hash = runtime_hash()
+    app.state.source_revision = source_revision()
+    app.state.assistant_configuration = {
+        f"assistant_{name}_configured": bool(
+            effective_settings and getattr(effective_settings, f"assistant_{name}_enabled")
+        )
+        for name in ("knowledge_v2", "workflows", "native_media", "progress")
+    }
     # Public, non-sensitive release capabilities; read the same injected
     # configuration used by the patient factory, not a second dotenv load.
     app.state.medication_library_files_enabled = (

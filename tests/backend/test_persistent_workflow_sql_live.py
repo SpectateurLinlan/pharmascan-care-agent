@@ -267,18 +267,65 @@ def test_live_cancel_is_shared_and_old_worker_epoch_is_rejected(live_persistence
         )
 
 
-def test_live_nonempty_down_guard_refuses_without_executing_drop(live_persistence_sql):
+def test_live_nonempty_down_guard_refuses_without_executing_drop(request):
+    import os
     import re
 
     import psycopg
 
     from tests.backend.persistent_workflow_live_support import ROOT, admitted_live_profile
 
+    if os.environ.get("ASSISTANT_PERSISTENCE_DOWN_APPROVED") != "1":
+        pytest.skip("Separate down-probe approval absent; no connecting fixture requested")
     admitted_live_profile("down_probe")  # Separate explicit scope, even on an approved SQL target.
-    _, target, c = live_persistence_sql
+    _, target, c = request.getfixturevalue("live_persistence_sql")
     setting(c, target.owner_a)
     source = (ROOT / "supabase/review/assistant_workflows/metadata.down.sql").read_text(encoding="utf-8")
     guard = re.search(r"DO \$\$.*?END \$\$;", source, re.S).group()
     with pytest.raises(psycopg.Error):
         with c.transaction():
             c.execute(guard)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "ALTER TABLE public.assistant_workflow_tasks DISABLE TRIGGER assistant_original_reference_task",
+        "ALTER POLICY assistant_workflow_tasks_owner ON public.assistant_workflow_tasks USING(false)",
+        "REVOKE SELECT ON public.assistant_workflow_tasks FROM authenticated",
+        "ALTER TABLE public.assistant_workflow_tasks ADD CONSTRAINT local_demo_drift CHECK(owner IS NOT NULL)",
+        "CREATE VIEW public.medithread_local_drift_probe AS SELECT 1 AS demo_value",
+    ],
+    ids=("trigger", "policy", "acl", "constraint", "rewrite"),
+)
+def test_live_local_catalog_drift_revokes_admission_and_rollback_restores_it(request, change):
+    """Uncommitted local operator marker; never publishes acceptance to other sessions."""
+    import psycopg
+
+    profile, _ = admitted_live_profile("sql_write")
+    if profile.target_mode != "local_supabase":
+        pytest.skip("Catalog mutation probes are approved only for the dedicated local DEMO instance")
+    _, _, connection = request.getfixturevalue("live_persistence_sql")
+    read = "SELECT assistant_evidence.runtime_readiness()"
+    baseline = connection.execute(read).fetchone()[0]
+    assert baseline["accepted"] is False, (
+        "Run catalog acceptance before operator publication; preserve existing release"
+    )
+    with connection.transaction():
+        connection.execute(
+            "INSERT INTO assistant_evidence.runtime_releases "
+            "(release_id,contract_version,application_hash,catalog_digest,evidence_digest,"
+            "native_media_ready,accepted_at) "
+            "VALUES(%s,'assistant-persistence-v1',%s,%s,%s,false,clock_timestamp())",
+            (uuid4(), "a" * 64, baseline["catalog_digest"], "b" * 64),
+        )
+        assert connection.execute(read).fetchone()[0]["accepted"] is True
+        with connection.transaction():
+            connection.execute(change)
+            changed = connection.execute(read).fetchone()[0]
+            assert changed["accepted"] is False and changed["catalog_digest"] != baseline["catalog_digest"]
+            raise psycopg.Rollback()
+        restored = connection.execute(read).fetchone()[0]
+        assert restored["accepted"] is True and restored["catalog_digest"] == baseline["catalog_digest"]
+        raise psycopg.Rollback()
+    assert connection.execute(read).fetchone()[0]["accepted"] is False

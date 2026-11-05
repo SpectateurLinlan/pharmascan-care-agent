@@ -9,10 +9,12 @@ from ..contracts.assistant_capabilities import CapabilityView
 from ..contracts.assistant_explanations import ExplanationStep
 from ..contracts.assistant_workflows import EphemeralPayload, SaveMode, WorkflowDTO, WorkflowEvent, WorkflowView
 from ..contracts.workflow_attachments import AttachmentView
+from ..contracts.workflow_runtime import WorkflowAdmission
 from .schemas import AgentMessageRequest, AgentMessageResponse, Request
 
 
 class WorkflowCapabilitiesResponse(WorkflowDTO):
+    admission: WorkflowAdmission = Field(default_factory=WorkflowAdmission)
     contract_version: Literal[1] = 1
     enabled: bool
     progress_enabled: bool = False
