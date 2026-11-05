@@ -133,6 +133,11 @@ pharmascan-care-agent/
 └── pyproject.toml
 ```
 
+Each maintained directory has a responsibility guide: [frontend](frontend/README.md),
+[backend](backend/README.md), [scripts](scripts/README.md), [tests](tests/README.md),
+[database](supabase/README.md), [deployment](deploy/README.md) and [docs](docs/README.md).
+The [source map](frontend/src/README.md) explains where screens, models and shared components belong.
+
 ## Project & license
 
 - **Team:** PharmaScan

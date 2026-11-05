@@ -21,7 +21,7 @@ from app.infrastructure.stage2_schema import Stage2Contract  # noqa: E402
 from app.transport.container import build_visual_check  # noqa: E402
 from PIL import Image, ImageDraw  # noqa: E402
 
-from scripts.stage2_v010_smoke import demo_image  # noqa: E402
+from scripts.qa.stage2_v010_smoke import demo_image  # noqa: E402
 
 from .correctness02_support import TOKEN, build_harness  # noqa: E402
 

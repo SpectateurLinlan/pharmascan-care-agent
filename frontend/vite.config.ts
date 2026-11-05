@@ -16,8 +16,17 @@ export default defineConfig({
           // empty 500, which hides connection-refused failures from patients.
           proxy.on('error', (_error, _request, response) => {
             if ('writeHead' in response && !response.headersSent) {
-              response.writeHead(503, {'Content-Type':'application/json','Cache-Control':'no-store'});
-              response.end(JSON.stringify({code:'PROVIDER_UNAVAILABLE',message:'This service is temporarily unavailable. Please try again.',rule_id:null}));
+              response.writeHead(503, {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-store',
+              });
+              response.end(
+                JSON.stringify({
+                  code: 'PROVIDER_UNAVAILABLE',
+                  message: 'This service is temporarily unavailable. Please try again.',
+                  rule_id: null,
+                }),
+              );
             }
           });
         },
@@ -25,10 +34,10 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["src/**/*.test.{ts,tsx}"],
+    include: ['src/**/*.test.{ts,tsx}'],
     globals: true,
     environment: 'node',
-    setupFiles: ['./src/test-setup.ts'],
+    setupFiles: ['./src/test/setupTests.ts'],
     // Allow extension-less imports of .tsx components from tests; Vite's
     // default list does not include .tsx for the SSR/node resolver.
     resolve: {

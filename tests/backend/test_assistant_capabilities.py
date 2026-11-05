@@ -114,10 +114,17 @@ def test_account_and_navigation_entries_are_accounted_for():
     fixture = json.loads((root / "tests/fixtures/assistant/capability_coverage.json").read_text(encoding="utf-8"))
     auth = (root / "frontend/src/api/auth.ts").read_text(encoding="utf-8")
     interface = auth.split("export interface AccountPort {", 1)[1].split("\n}", 1)[0]
-    methods = set(re.findall(r"\b([a-zA-Z][A-Za-z0-9]*)\([^)]*\):Promise", interface))
+    # Whitespace and line wrapping do not change the public TypeScript contract.
+    methods = set(re.findall(r"\b([a-zA-Z][A-Za-z0-9]*)\([^)]*\)\s*:\s*Promise", interface))
     assert methods == fixture.get("account_operations", {}).keys()
-    navigation = (root / "frontend/src/navigation.ts").read_text(encoding="utf-8")
-    section = navigation.split("const parents: Record<string,string> = {", 1)[1].split("};", 1)[0]
+    navigation = (root / "frontend/src/shared/contracts/routes.ts").read_text(encoding="utf-8")
+    declaration = re.search(
+        r"const\s+parents\s*:\s*Record\s*<\s*string\s*,\s*string\s*>\s*=\s*\{(.*?)\n\};",
+        navigation,
+        re.DOTALL,
+    )
+    assert declaration is not None, "Missing public parent-route declaration"
+    section = declaration.group(1)
     routes = set(re.findall(r"(?:'([^']+)'|\b([a-z][a-z-]*))\s*:", section))
     actual_routes = {first or second for first, second in routes} | {"today", "medicines", "records", "me"}
     assert actual_routes == fixture.get("navigation_routes", {}).keys()

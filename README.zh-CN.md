@@ -131,6 +131,11 @@ pharmascan-care-agent/
 └── pyproject.toml
 ```
 
+各大目录均有职责与脚本说明：[前端](frontend/README.md)、[后端](backend/README.md)、
+[脚本](scripts/README.md)、[测试](tests/README.md)、[数据库](supabase/README.md)、
+[部署](deploy/README.md)和[文档](docs/README.md)。
+页面、业务模型及共享控件的具体归属见[前端源码地图](frontend/src/README.md)。
+
 ## 项目与许可证
 
 **团队：** PharmaScan

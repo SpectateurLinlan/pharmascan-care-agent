@@ -9,8 +9,11 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
+    "check:architecture": "node --test tooling/architecture.test.mjs && node tooling/architecture.mjs",
     "test": "vitest run --maxWorkers=1",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "format": "prettier --config .prettierrc.json --write \"src/**/*.{ts,tsx,css}\" \"e2e/**/*.{ts,tsx,html}\" \"tooling/*.mjs\" \"*.{js,ts,mjs}\" \"../scripts/**/*.js\"",
+    "format:check": "prettier --config .prettierrc.json --check \"src/**/*.{ts,tsx,css}\" \"e2e/**/*.{ts,tsx,html}\" \"tooling/*.mjs\" \"*.{js,ts,mjs}\" \"../scripts/**/*.js\""
   },
   "dependencies": {
     "@supabase/auth-js": "^2.109.0",
@@ -28,6 +31,7 @@
     "eslint": "^9.39.5",
     "globals": "^17.13.0",
     "jsdom": "^29.1.1",
+    "prettier": "3.9.10",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.71.2",
     "vite": "^7.3.7",

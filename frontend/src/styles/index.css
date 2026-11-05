@@ -1,0 +1,11 @@
+/*
+ * MediThread stylesheet entry. Preserve this order when moving files:
+ * tokens -> element defaults -> shared controls -> patient surfaces -> records.
+ * Follow-up and Assistant media styles stay owned by their importing views.
+ */
+
+@import './tokens.css';
+@import './base.css';
+@import './components.css';
+@import './app.css';
+@import './records.css';

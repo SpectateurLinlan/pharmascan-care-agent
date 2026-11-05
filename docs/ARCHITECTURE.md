@@ -219,7 +219,7 @@ This supersedes earlier v0.8/v0.9 runtime notes. All three production gateways i
 
 ## Four-tab navigation and proactive reminders (2026-10-15)
 
-Presentation ownership: `navigation.ts` manages bounded task history/hash deep links. Root Today/Medicines/Records/Me selections replace the current entry; child navigation pushes and retains origin. Assistant is a single mounted view/composer, not a root tab. Both manual/new-version enrollment drafts remain mounted during tab changes. Deep links without a selected medication show a selection fallback; no foreign record is inferred.
+Presentation ownership: `useCareNavigation.ts` manages bounded task history/hash deep links. Root Today/Medicines/Records/Me selections replace the current entry; child navigation pushes and retains origin. Assistant is a single mounted view/composer, not a root tab. Both manual/new-version enrollment drafts remain mounted during tab changes. Deep links without a selected medication show a selection fallback; no foreign record is inferred.
 
 Guide state v2 is browser-local, scoped to the verified session patient, with bounded step/status. Legacy global v1 dismissal does not mark another user complete. In-progress steps survive reload; explicit Skip/Finish have distinct results. Manual replay preserves the original result. A non-dismissible modal, inert background and focus containment block unintended actions; storage restrictions can still prevent browser persistence.
 

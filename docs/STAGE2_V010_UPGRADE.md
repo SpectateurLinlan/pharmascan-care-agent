@@ -6,7 +6,7 @@ Date: 2026-10-15, Asia/Singapore. This document records this upgrade, separately
 
 The supplied [0.10.0 snapshot](external/pharmascan-api-openapi-0.10.0.json) is the current injected runtime contract. Retained 0.8.0/0.4.0 snapshots are unchanged. There is no retained official 0.9.0 snapshot in this checkout; the former 0.9 compatibility gate is not a substitute for a schema diff.
 
-`python scripts/stage2_contract_diff.py` creates the complete [JSON-pointer diff](external/pharmascan-api-0.8.0-to-0.10.0.diff.json): 40 changed nodes. New paths are only `/v1/check-input` and `/v1/search-by-embedding`. Safety and feedback paths already existed in 0.8.0. Existing multipart `medications` remains an optional JSON **string**, not a JSON request body. Existing embed `read_imprint` and match `query_reads` are reused, not invented as new request fields.
+`python scripts/qa/stage2_contract_diff.py` creates the complete [JSON-pointer diff](external/pharmascan-api-0.8.0-to-0.10.0.diff.json): 40 changed nodes. New paths are only `/v1/check-input` and `/v1/search-by-embedding`. Safety and feedback paths already existed in 0.8.0. Existing multipart `medications` remains an optional JSON **string**, not a JSON request body. Existing embed `read_imprint` and match `query_reads` are reused, not invented as new request fields.
 
 Changed response evidence includes `Instructions`, `Dose`, `Quantity`, `Caution`, `DocumentFields.instructions/indication/cautions`, candidate `release/release_printed`, response `label_kind/dispensed_by`, model-info required `similarity/error_rates`, look-alike strength caveats, optional reference-set identifiers and text-reader metadata. `Instructions.text/line` and `Dose.amount` are required; other dose/frequency/food/duration/max components may be absent/null. `as_needed` defaults false and is not evidence of a fixed schedule. The diff contains no newly deprecated field. Extra provider properties are projected away at the adapter.
 
@@ -50,9 +50,9 @@ Use a new synthetic anonymous account; start the current backend/frontend togeth
 2. Demo B: select the registered product -> Personal gallery -> upload/review one synthetic loose-pill reference. Verify eligible state and thumbnail after reload. Check this dose with a synthetic query. Inspect actual reference ids and `/match` evidence, independently reconcile current regimen; unknown/ambiguous are acceptable honest outcomes. Never expect a safety or ingestion guarantee.
 3. Demo C: select that identity for a new source task and upload a different-strength sticker. Expect persisted conflict, disabled activation, retained old plan and an Agent request for clarification. Ask a follow-up, reload and reopen the same unfinished task. Do not overwrite either source.
 
-Generate the exact synthetic fixture set first: `python scripts/generate_gallery_demo.py --stage2-v010` (or set an explicit `--start-date YYYY-MM-DD`). This performs no network call.
+Generate the exact synthetic fixture set first: `python scripts/fixtures/generate_gallery_demo.py --stage2-v010` (or set an explicit `--start-date YYYY-MM-DD`). This performs no network call.
 
-Run `RUN_STAGE2_V010_DEMOS=1`, `QA_BASE_URL=<local frontend>`, then `npx playwright test e2e/stage2-v010.spec.ts` from frontend. This performs real provider calls with synthetic files; it is distinct from Vitest/provider fixtures. Record only actual run evidence, version and environment; unrelated log updates are not required. Physical camera/label readability remains manual acceptance.
+Run `RUN_STAGE2_V010_DEMOS=1`, `QA_BASE_URL=<local frontend>`, then `npx playwright test e2e/platform/stage2Compatibility.spec.ts` from frontend. This performs real provider calls with synthetic files; it is distinct from Vitest/provider fixtures. Record only actual run evidence, version and environment; unrelated log updates are not required. Physical camera/label readability remains manual acceptance.
 
 
 ## Verification boundary

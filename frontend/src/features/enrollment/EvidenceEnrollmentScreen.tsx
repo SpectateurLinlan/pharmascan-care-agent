@@ -1,0 +1,811 @@
+import { needsSourceReview } from './medicationSetup';
+import { useImageConsent } from '../../shared/privacy/imageConsent';
+import { EvidencePlanFields } from './EvidencePlanFields';
+import { PrivateEvidencePhoto } from '../media/PrivateEvidencePhoto';
+import { useEffect, useRef, useState } from 'react';
+import {
+  api,
+  type EvidenceTask,
+  type ConfirmChallengeResponse,
+  type SourcePreview,
+  type GalleryEntry,
+  type EvidenceProduct,
+} from '../../api/client';
+import { useLanguage } from '../../i18n/language';
+import { BottomSheet } from '../../components/BottomSheet';
+import { sourceRoute } from '../media/imageRouting';
+import { PrintedLabelEvidence } from '../media/PrintedLabelEvidence';
+import { SourceReviewHints } from '../media/SourceReviewHints';
+import { Icon } from '../../components/Icon';
+import { Card, ErrorNotice } from '../../components/primitives';
+
+export function EvidenceEnrollmentScreen({
+  sessionId,
+  onChanged,
+  initialTaskId = null,
+  ownerId = '',
+  active = true,
+  onPill,
+  onNewRegistration,
+  onCancel,
+}: {
+  sessionId: string | null;
+  onChanged: () => void;
+  initialTaskId?: string | null;
+  ownerId?: string;
+  active?: boolean;
+  onPill?: (file: File) => void;
+  onNewRegistration?: () => void;
+  onCancel?: () => void;
+}) {
+  const { language, t, preferences } = useLanguage();
+  const [tasks, setTasks] = useState<EvidenceTask[]>([]);
+  const [task, setTask] = useState<EvidenceTask | null>(null);
+  const [sources, setSources] = useState<
+    Array<{
+      id: string;
+      source_kind: string;
+      review_status?: string;
+      recorded_at?: string | null;
+      reviewed_at?: string | null;
+      extraction_evidence: SourcePreview | null;
+    }>
+  >([]);
+  const [agent, setAgent] = useState('');
+  const [loadingTask, setLoadingTask] = useState(false);
+  const [consent, setConsent] = useImageConsent(ownerId);
+  const [extracted, setExtracted] = useState<SourcePreview | null>(null);
+  const photosVisible = true;
+  const [automatic, setAutomatic] = useState(true);
+  const [detected, setDetected] = useState('');
+  const [needsType, setNeedsType] = useState(false);
+  const [products, setProducts] = useState<GalleryEntry[]>([]);
+  const [existingProduct, setExistingProduct] = useState('');
+  useEffect(() => {
+    if (!active || !sessionId) return;
+    let live = true;
+    if (api.personalGallery)
+      void api
+        .personalGallery()
+        .then((rows) => {
+          if (live) setProducts(rows);
+        })
+        .catch(() => {
+          if (live) setProducts([]);
+        });
+    return () => {
+      live = false;
+    };
+  }, [active, sessionId]);
+  const [patientEdited, setPatientEdited] = useState(false);
+  const [category, setCategory] = useState<EvidenceProduct['category']>('unknown');
+  const taskLoad = useRef(0);
+  const taskId = useRef<string>(crypto.randomUUID());
+  const [kind, setKind] = useState<'package' | 'pharmacy_label' | 'prescription' | 'loose_pills'>(
+    'pharmacy_label',
+  );
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const [review, setReview] = useState(false);
+  const [reviewed, setReviewed] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [unit, setUnit] = useState('tablet');
+  const [times, setTimes] = useState('');
+  const [food, setFood] = useState('');
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const [prn, setPrn] = useState(false);
+  const [challenge, setChallenge] = useState<ConfirmChallengeResponse | null>(null);
+  useEffect(() => {
+    if (!active || !sessionId) return;
+    let live = true;
+    if (api.evidenceTasks)
+      void api
+        .evidenceTasks()
+        .then((rows) => {
+          if (live) setTasks(rows);
+        })
+        .catch((caught) => {
+          if (live) setError(caught);
+        });
+    return () => {
+      live = false;
+    };
+  }, [active, sessionId]);
+  useEffect(() => {
+    if (!file) {
+      setPreview('');
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  // A request may finish after navigation. It still belongs to its original
+  // task; it must not attach a photo to, or reopen, a newer registration.
+  useEffect(() => {
+    setBusy(false);
+    setChallenge(null);
+    return () => {
+      taskLoad.current += 1;
+    };
+  }, [active, ownerId, sessionId, initialTaskId]);
+
+  async function show(saved: EvidenceTask, version = ++taskLoad.current) {
+    if (version !== taskLoad.current) return;
+    if (ownerId) localStorage.setItem(`pharmascan.enrollment.${ownerId}`, saved.id);
+    setPatientEdited(false);
+    setTask(saved);
+    taskId.current = saved.id;
+    setSources([]);
+    setReview(true);
+    setReviewed(false);
+    setChallenge(null);
+    setAmount('');
+    setUnit('tablet');
+    setTimes('');
+    setFood('');
+    setStart('');
+    setEnd('');
+    setPrn(false);
+    setCategory(saved.product.category);
+    const [linked, gallery] = await Promise.all([
+      api.evidenceSources(saved.id),
+      api.personalGallery(),
+    ]);
+    if (version !== taskLoad.current) return;
+    setSources(linked);
+    setProducts(gallery);
+    const suggestion = saved.suggested_regimen;
+    setAmount(suggestion?.dose_amount?.toString() ?? '');
+    setUnit(suggestion?.dose_unit ?? 'tablet');
+    setTimes(suggestion?.frequency_rule?.local_times.join(', ') ?? '');
+    setFood(suggestion?.food_instruction ?? '');
+    setStart(suggestion?.course_start_date ?? '');
+    setEnd(suggestion?.course_end_date ?? '');
+    setPrn(suggestion?.is_prn ?? false);
+    setCategory(saved.product.category);
+    setAgent('');
+  }
+
+  useEffect(() => {
+    if (!active) {
+      setLoadingTask(false);
+      setFile(null);
+      setExtracted(null);
+      setTask(null);
+      setSources([]);
+      setDetected('');
+      setNeedsType(false);
+      setError(null);
+      return;
+    }
+    if (!sessionId) return;
+    const id = initialTaskId;
+    if (!id) return;
+    const version = ++taskLoad.current;
+    setLoadingTask(true);
+    setTask(null);
+    setError(null);
+    void api
+      .evidenceTask(id)
+      .then((saved) => show(saved, version))
+      .catch((caught) => {
+        if (version === taskLoad.current) setError(caught);
+      })
+      .finally(() => {
+        if (version === taskLoad.current) setLoadingTask(false);
+      });
+  }, [initialTaskId, active, ownerId, sessionId]);
+
+  async function readPhoto() {
+    if (!file || !consent || busy) return;
+    const version = ++taskLoad.current;
+    setBusy(true);
+    setError(null);
+    setExtracted(null);
+    try {
+      if (kind === 'loose_pills') {
+        onPill?.(file);
+        return;
+      }
+      let selected = kind;
+      if (automatic) {
+        const route = await api.checkInput(file);
+        if (version !== taskLoad.current) return;
+        const chosen = sourceRoute(route);
+        setDetected(route.checked ? route.image_type : 'unchecked');
+        if (chosen === 'pill') {
+          onPill?.(file);
+          return;
+        }
+        if (chosen === 'clarify') {
+          setNeedsType(true);
+          return;
+        }
+        selected = chosen;
+        setKind(chosen);
+      }
+      const result = await api.sourcePreview(file, selected);
+      if (version !== taskLoad.current) return;
+      setExtracted(result);
+      setNeedsType(false);
+    } catch (caught) {
+      if (version === taskLoad.current) setError(caught);
+    } finally {
+      if (version === taskLoad.current) setBusy(false);
+    }
+  }
+
+  async function upload() {
+    if (!file || !consent || busy) return;
+    const version = ++taskLoad.current;
+    const uploadTaskId = taskId.current;
+    setBusy(true);
+    setError(null);
+    try {
+      if (kind === 'loose_pills') return;
+      const selected = kind;
+      const saved = await api.attachEvidence(
+        uploadTaskId,
+        file,
+        selected,
+        task ? undefined : existingProduct || undefined,
+        automatic,
+      );
+      if (version !== taskLoad.current) return;
+      onChanged();
+      await show(saved, version);
+      if (version !== taskLoad.current) return;
+      const rows = await api.evidenceTasks();
+      if (version !== taskLoad.current) return;
+      setTasks(rows);
+      setExtracted(null);
+    } catch (caught) {
+      if (version === taskLoad.current) {
+        setNeedsType(true);
+        setError(caught);
+      }
+    } finally {
+      if (version === taskLoad.current) setBusy(false);
+    }
+  }
+
+  const interval =
+    task?.suggested_regimen?.frequency_rule?.kind === 'interval'
+      ? task.suggested_regimen.frequency_rule
+      : null;
+
+  async function prepare() {
+    if (!task || !sessionId || !reviewed) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const saved = await api.reviewEvidence(
+        task.id,
+        {
+          patient_edited: patientEdited,
+          medication_name: task.product.name,
+          dose_amount: Number(amount),
+          dose_unit: unit,
+          is_prn: prn,
+          frequency_rule: prn
+            ? null
+            : {
+                kind: interval ? 'interval' : 'daily',
+                local_times: times
+                  .split(',')
+                  .map((value) => value.trim())
+                  .filter(Boolean),
+                days_of_week: [],
+                every_hours: interval?.every_hours ?? null,
+              },
+          food_instruction: food || null,
+          course_start_date: start || null,
+          course_end_date: end || null,
+        },
+        false,
+        { product_category: category, replace_active_plan: false },
+      );
+      setTask(saved);
+      onChanged();
+      setSources(await api.evidenceSources(saved.id));
+      if (saved.draft_regimen_id)
+        setChallenge(await api.requestChallenge(saved.draft_regimen_id, sessionId));
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function activate() {
+    if (!challenge) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.activate({
+        regimen_id: challenge.regimen_id,
+        challenge_id: challenge.challenge_id,
+        session_id: challenge.session_id,
+        session_state: challenge.session_state,
+        session_state_version: challenge.session_state_version,
+      });
+      setChallenge(null);
+      onChanged();
+      setAgent(t('Your medication plan is active.'));
+      window.dispatchEvent(new Event('pharmascan:plan-activated'));
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const missingLabel = (field: string) =>
+    t(
+      field === 'dose_amount'
+        ? 'Dose amount'
+        : field === 'dose_unit'
+          ? 'Unit'
+          : field === 'schedule'
+            ? 'Scheduled times'
+            : field === 'course_start_date'
+              ? 'Course start date'
+              : field === 'course_end_date'
+                ? 'Course end date'
+                : 'Choose an existing or distinct product',
+    );
+  return (
+    <section>
+      <h1>
+        {t(
+          task || initialTaskId
+            ? 'Supplement medication information'
+            : 'Read medication information',
+        )}
+      </h1>
+      {loadingTask ? <p role="status">{t('Loading saved registrations…')}</p> : null}
+      {error ? <ErrorNotice error={error} /> : null}
+      {(() => {
+        const saved = tasks.filter((row) => needsSourceReview(row) && row.id !== task?.id);
+        return saved.length ? (
+          <section className="saved-registrations">
+            <h2 className="saved-registrations__title">
+              {t('Continue a saved registration')} · {saved.length}
+            </h2>
+            <div className="ui-rows">
+              {saved.map((row) => (
+                <button
+                  key={row.id}
+                  className="ui-row"
+                  onClick={() => {
+                    setBusy(false);
+                    void show(row).catch((caught) => {
+                      if (taskId.current === row.id) setError(caught);
+                    });
+                  }}
+                >
+                  <span className="ui-row__text">
+                    <span className="ui-row__title">
+                      {row.product.name} {row.product.strength ?? ''}
+                    </span>
+                    <span className="ui-row__hint">
+                      {t('Saved source, not yet an active plan')}
+                    </span>
+                  </span>
+                  <Icon name="chevron-right" />
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null;
+      })()}
+      {agent ? (
+        <div className="patient-toast" role="status">
+          <p>{agent}</p>
+          <button onClick={() => setAgent('')}>{t('Close')}</button>
+        </div>
+      ) : null}
+      {task ? (
+        <Card title={task.product.name}>
+          <p>
+            {[
+              task.product.strength,
+              task.product.dose_form ? t(task.product.dose_form) : null,
+              task.product.formulation ? t(task.product.formulation) : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+          {task.conflicts.length ? (
+            <div role="alert">
+              <h3>{t('Sources need clarification')}</h3>
+              {task.conflicts.map((value, index) => (
+                <p key={index}>
+                  {value
+                    .replace(/\s*\(source[^)]*\)/g, '')
+                    .replace(/^name:/, t('Medication name') + ':')
+                    .replace(/^regimen\.dose_amount:/, t('Dose amount') + ':')
+                    .replace(/^regimen\.dose_unit:/, t('Unit') + ':')
+                    .replace(/^regimen\.frequency_rule:/, t('Scheduled times') + ':')
+                    .replace(/^regimen\.course_dates:/, t('Course') + ':')
+                    .replace(/^regimen\.food_instruction:/, t('Food instructions') + ':')
+                    .replace(/^strength:/, t('Strength') + ':')
+                    .replace(/^product_code:/, t('Product identifiers') + ':')
+                    .replace(/^ingredients:/, t('Ingredients') + ':')
+                    .replace(
+                      /conflicting source product identifiers/,
+                      t('The product codes differ. Please check the original sources.'),
+                    )
+                    .replace(
+                      /conflicting printed instructions/,
+                      t('The printed instructions differ. Please clarify.'),
+                    )
+                    .replace(/^dose_form:/, t('Dosage form') + ':')
+                    .replace(/^formulation:/, t('Formulation') + ':')}
+                </p>
+              ))}
+              <p>
+                {t(
+                  'The original evidence is retained. Add another source or ask a pharmacist to clarify the product.',
+                )}
+              </p>
+            </div>
+          ) : null}
+          {task.product_missing?.length ? (
+            <p>
+              {t('Product details not documented yet')}:{' '}
+              {task.product_missing
+                .map((field) =>
+                  t(
+                    field === 'strength'
+                      ? 'Strength'
+                      : field === 'dose_form'
+                        ? 'Dosage form'
+                        : 'Ingredients',
+                  ),
+                )
+                .join(', ')}
+            </p>
+          ) : null}
+          {task.missing.length ? (
+            <>
+              <h3>{t('Information still needed')}</h3>
+              <ul>
+                {task.missing.map((field) => (
+                  <li key={field}>{missingLabel(field)}</li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          <h3>{t('Source photos')}</h3>
+          {photosVisible ? (
+            <div className="gallery-thumbnails">
+              {products
+                .find((row) => row.medication.id === task.medication_id)
+                ?.images.filter(
+                  (image) => image.image_kind === 'source' || image.image_kind === 'package',
+                )
+                .map((photo) => (
+                  <PrivateEvidencePhoto key={photo.id} photo={photo} />
+                ))}
+            </div>
+          ) : null}
+          <details>
+            <summary>
+              {t('Linked source information')} · {sources.length}
+            </summary>
+            {sources.map((source) => (
+              <article key={source.id}>
+                <h4>
+                  {t(
+                    source.source_kind === 'package'
+                      ? 'Packaging'
+                      : source.source_kind === 'prescription'
+                        ? 'Prescription image'
+                        : 'Pharmacy label',
+                  )}
+                </h4>
+                <p>
+                  {t('Patient supplied source')} ?{' '}
+                  {t(
+                    source.review_status === 'user_reviewed'
+                      ? 'Reviewed against source by you'
+                      : 'Awaiting source review',
+                  )}
+                </p>
+                {source.recorded_at ? (
+                  <p>
+                    {t('Recorded')}:{' '}
+                    {new Date(source.recorded_at).toLocaleDateString(
+                      language === 'zh' ? 'zh-SG' : 'en-SG',
+                      { timeZone: preferences.timezone },
+                    )}
+                  </p>
+                ) : null}
+                {source.reviewed_at ? (
+                  <p>
+                    {t('Reviewed')}:{' '}
+                    {new Date(source.reviewed_at).toLocaleDateString(
+                      language === 'zh' ? 'zh-SG' : 'en-SG',
+                      { timeZone: preferences.timezone },
+                    )}
+                  </p>
+                ) : null}
+                {source.extraction_evidence?.candidates.map((candidate, index) => (
+                  <div key={index}>
+                    {candidate.product.source_lines.map((line, at) => (
+                      <p key={at}>{line}</p>
+                    ))}
+                    <PrintedLabelEvidence candidate={candidate} />
+                  </div>
+                ))}
+              </article>
+            ))}
+          </details>
+          <SourceReviewHints
+            candidates={sources.flatMap((source) => source.extraction_evidence?.candidates ?? [])}
+          />
+          {task.status === 'draft_created' ? (
+            <p>{t('Source registration saved. Continue your medication plan in My Medicines.')}</p>
+          ) : (
+            <h3>{t('Review product and medication plan')}</h3>
+          )}
+          {review && task.status !== 'draft_created' ? (
+            <EvidencePlanFields
+              task={task}
+              value={{
+                amount,
+                unit,
+                times,
+                food,
+                start,
+                end,
+                prn,
+                category,
+                patientEdited,
+                reviewed,
+              }}
+              busy={busy}
+              products={products}
+              onPrepare={() => void prepare()}
+              onChange={(patch) => {
+                if (patch.amount !== undefined) setAmount(patch.amount);
+                if (patch.unit !== undefined) setUnit(patch.unit);
+                if (patch.times !== undefined) setTimes(patch.times);
+                if (patch.food !== undefined) setFood(patch.food);
+                if (patch.start !== undefined) setStart(patch.start);
+                if (patch.end !== undefined) setEnd(patch.end);
+                if (patch.prn !== undefined) setPrn(patch.prn);
+                if (patch.category !== undefined) setCategory(patch.category);
+                if (patch.patientEdited !== undefined) setPatientEdited(patch.patientEdited);
+                if (patch.reviewed !== undefined) setReviewed(patch.reviewed);
+              }}
+              onLink={(medicationId) => {
+                setExistingProduct(medicationId);
+                setTask(null);
+                taskId.current = crypto.randomUUID();
+                setExtracted(sources[0]?.extraction_evidence ?? null);
+                setReview(false);
+              }}
+            />
+          ) : null}
+        </Card>
+      ) : null}
+      {!loadingTask &&
+      (!initialTaskId || task) &&
+      (!task ||
+        (task.status !== 'draft_created' &&
+          (task.missing.length > 0 || task.conflicts.length > 0))) ? (
+        <Card title={task ? 'Add another source' : 'Choose your medication source'}>
+          {!task ? (
+            <section>
+              <h3>{t('Link this source to an existing medicine (optional)')}</h3>
+              <label className="field">
+                {t('Link to a registered product')}
+                <select
+                  value={existingProduct}
+                  onChange={(event) => setExistingProduct(event.target.value)}
+                >
+                  <option value="">{t('New product registration')}</option>
+                  {products.map((row) => (
+                    <option key={row.medication.id} value={row.medication.id}>
+                      {row.medication.display_name} {row.product?.strength ?? ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </section>
+          ) : null}
+          <section>
+            <label>
+              <input
+                type="checkbox"
+                checked={automatic}
+                onChange={(event) => setAutomatic(event.target.checked)}
+              />
+              {t('Detect the photo type automatically')}
+            </label>
+            <label className="field">
+              {t('Source type')}
+              <select
+                value={kind}
+                onChange={(event) => {
+                  setKind(
+                    event.target.value as
+                      'package' | 'pharmacy_label' | 'prescription' | 'loose_pills',
+                  );
+                  setAutomatic(false);
+                  setExtracted(null);
+                }}
+              >
+                <option value="package">{t('Medicine box or packaging')}</option>
+                <option value="pharmacy_label">{t('Pharmacy label')}</option>
+                <option value="prescription">{t('Prescription image')}</option>
+                <option value="loose_pills">{t('Loose pill photo')}</option>
+              </select>
+            </label>
+          </section>
+          {detected ? (
+            <p role="status">
+              {t('Photo type')}: {t(detected)}
+            </p>
+          ) : null}
+          {needsType ? (
+            <p>
+              {t('The photo type is uncertain. Choose its source type below, then read again.')}
+            </p>
+          ) : null}
+          {needsType && detected === 'loose_pills' && file && onPill ? (
+            <button onClick={() => onPill(file)}>{t('Identify this pill instead')}</button>
+          ) : null}
+          <p className="notice">
+            {t(
+              'Choose a clear label, packaging or prescription photo. Use manual entry for a PDF.',
+            )}
+          </p>
+          <label className="field">
+            {t('Take or choose a photo')}
+            <input
+              key={`${active}-${task?.id ?? 'new'}`}
+              type="file"
+              disabled={busy}
+              accept="image/png,image/jpeg"
+              capture="environment"
+              onChange={(event) => {
+                setFile(event.target.files?.[0] ?? null);
+                setDetected('');
+                setNeedsType(false);
+                setError(null);
+              }}
+            />
+          </label>
+          {preview ? (
+            <img className="photo-preview" src={preview} alt={t('Selected image preview')} />
+          ) : null}
+          <label className="consent image-consent">
+            <input
+              type="checkbox"
+              checked={consent}
+              onChange={(event) => setConsent(event.target.checked)}
+            />
+            {t(
+              'I allow this photo to be sent to the recognition service to read medication information. I can change this in Privacy and data.',
+            )}
+          </label>
+          <button
+            className="primary"
+            disabled={!file || !consent || busy}
+            onClick={() => void readPhoto()}
+          >
+            {t(
+              busy
+                ? 'Reading photo...'
+                : kind === 'loose_pills'
+                  ? 'Identify this pill instead'
+                  : 'Read photo',
+            )}
+          </button>
+          {extracted ? (
+            <section className="extracted-preview">
+              <h2>{t('Read from your photo')}</h2>
+              <p>{t('Not saved yet. Check these details, then choose whether to save them.')}</p>
+              {extracted.candidates.map((candidate, index) => (
+                <article key={index}>
+                  <h3>{candidate.product.name}</h3>
+                  <p>{candidate.product.strength}</p>
+                  <PrintedLabelEvidence candidate={candidate} />
+                </article>
+              ))}
+              <p>
+                {t(
+                  'Saving keeps the source photo and extracted medication details in your private account. The recognition service rechecks the photo when it is saved.',
+                )}
+              </p>
+              <div className="actions">
+                <button
+                  className="primary"
+                  disabled={busy || !extracted.candidates.length}
+                  onClick={() => void upload()}
+                >
+                  {t('Save source and set up plan')}
+                </button>
+                <button
+                  onClick={() => {
+                    setExtracted(null);
+                    setFile(null);
+                  }}
+                >
+                  {t('Cancel')}
+                </button>
+              </div>
+            </section>
+          ) : null}
+        </Card>
+      ) : null}
+      {task || initialTaskId ? (
+        <button
+          onClick={() => {
+            taskLoad.current += 1;
+            if (ownerId) localStorage.removeItem(`pharmascan.enrollment.${ownerId}`);
+            setTask(null);
+            setExtracted(null);
+            taskId.current = crypto.randomUUID();
+            setBusy(false);
+            setChallenge(null);
+            setAgent('');
+            setSources([]);
+            setReview(false);
+            setReviewed(false);
+            setCategory('unknown');
+            setAmount('');
+            setUnit('tablet');
+            setTimes('');
+            setFood('');
+            setPrn(false);
+            setStart('');
+            setEnd('');
+            setFile(null);
+            setExistingProduct('');
+            setDetected('');
+            setNeedsType(false);
+            setError(null);
+            setLoadingTask(false);
+            onNewRegistration?.();
+            onCancel?.();
+          }}
+        >
+          {t('Cancel supplement')}
+        </button>
+      ) : null}
+      {challenge ? (
+        <BottomSheet
+          title={t('Confirm medication plan')}
+          busy={busy}
+          onCancel={() => setChallenge(null)}
+        >
+          <p>
+            {challenge.summary.medication_name}: {challenge.summary.dose_amount}{' '}
+            {t(challenge.summary.dose_unit ?? '')}
+          </p>
+          <p>
+            {challenge.summary.frequency?.kind === 'interval'
+              ? `${t('Every N hours')}: ${challenge.summary.frequency.every_hours}; ${t('First dose time')}: ${challenge.summary.frequency.interval_anchor?.time_source === 'default_0800' ? t('Default 08:00') : challenge.summary.frequency.interval_anchor?.local_time}`
+              : challenge.summary.frequency?.local_times.join(', ')}
+          </p>
+          <div className="actions">
+            <button className="primary" disabled={busy} onClick={() => void activate()}>
+              {t('Yes, save this medication')}
+            </button>
+            <button disabled={busy} onClick={() => setChallenge(null)}>
+              {t('Cancel')}
+            </button>
+          </div>
+        </BottomSheet>
+      ) : null}
+    </section>
+  );
+}

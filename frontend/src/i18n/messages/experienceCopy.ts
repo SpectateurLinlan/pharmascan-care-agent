@@ -1,0 +1,132 @@
+/** Patient-facing language for the integrated account, photo and chat flows. */
+export const experienceCopy: Record<string, string> = {
+  'Care and reminders': '用药照护与提醒',
+  'Make it comfortable': '使用偏好',
+  'About the app': '应用信息',
+  'Choose the name you would like us to use.': '您希望我们如何称呼您？',
+  'Keep my records with email': '绑定邮箱，保留我的记录',
+  'Check your email for a code or sign-in link.':
+    '邮件已发送，请前往邮箱查看验证码或确认链接。未找到时请检查垃圾邮件。',
+  'Your account': '我的账户',
+  'Guest records stay with your guest account. Link an email to access them on other devices.':
+    '资料保存在当前访客账户中。绑定邮箱后，即可在其他设备登录查看。',
+  'Check your email to confirm your address and keep your records.':
+    '邮件已发送，请到邮箱打开确认链接，完成邮箱绑定并保留当前记录。',
+  'Choose date': '选择日期',
+  'Choose time': '选择时间',
+  Guest: '访客',
+  Dismiss: '关闭提示',
+  Close: '关闭',
+  'Please review this': '请核对后继续',
+  'There is already a plan for this medicine during these dates. Open your existing medicine to review it before adding another plan.':
+    '这段日期已有该药物的用药计划。请先打开已有记录核对；如确需更换计划，请先结束旧计划。',
+  'A similar medicine is already saved. Choose the existing product or add clearer product evidence.':
+    '已有相似药物记录。请选择关联已有药物，或补充能区分产品的清晰资料。',
+  'Save new conversations': '保存新对话',
+  'View up to 200 conversations from the last 30 days. Saving starts when enabled.':
+    '开启后保存新消息，可查看近 30 天内最多 200 段对话。',
+  'About saved conversations': '对话保存说明',
+  'View saved conversations': '查看已保存对话',
+  'Hide saved conversations': '收起已保存对话',
+  'This answer uses the available records and rules; AI is temporarily unavailable.':
+    '此回复依据可用记录和规则生成，AI 当前暂时不可用。',
+  'I allow this photo to be sent to the recognition service to read medication information. I can change this in Privacy and data.':
+    '我同意将照片发送给识别服务以读取药物信息。此设备会记住该选择，可在“隐私与数据”中关闭。',
+  'I allow this photo to be sent to the recognition service to compare medication images. I can change this in Privacy and data.':
+    '我同意将照片发送给识别服务以核对药物图片。可在“隐私与数据”中关闭。',
+  'Allow medication photo processing on this device': '允许在此设备处理药物照片',
+  'Photos are sent to the recognition service. Reading does not save a source to your account; choosing Save keeps the photo and extracted medication information privately.':
+    '照片会发送至识别服务。“读取”不会保存到您的账户；选择“保存”后，照片与提取的药物信息将保存在您的私密记录中。',
+  'I allow private storage and image processing for this medication reference photo.':
+    '我同意将此药物参考照片私密保存，并进行图像处理。',
+  'Reading photo...': '正在读取照片…',
+  'Read photo': '读取照片',
+  'Read from your photo': '照片中读取到的信息',
+  'Not saved yet. Check these details, then choose whether to save them.':
+    '尚未保存。请先查看读取结果，再决定是否保存。',
+  'Save source and set up plan': '保存资料并登记用药',
+  'Saving keeps the source photo and extracted medication details in your private account. The recognition service rechecks the photo when it is saved.':
+    '保存会将原图和药物信息加入您的私密账户，识别服务将在保存时重新核实照片。',
+  'Source photos': '来源照片',
+  'Save draft and close': '暂存草稿并关闭',
+  'Choose a clear label, packaging or prescription photo. Use manual entry for a PDF.':
+    '请选择清晰的标签、包装或处方照片。PDF 可通过手动输入登记。',
+  'The photo type is uncertain. Choose its source type below, then read again.':
+    '暂时无法确定照片类型。请在下方选择来源类型，再次读取。',
+  'Photo type': '识别到的照片类型',
+  unchecked: '尚未确定',
+  'A similar medicine is already saved. Link the photo to that medicine or add evidence that identifies a different product.':
+    '程序发现已有相似药物。您可关联已有记录，或补充规格、剂型等可区分产品的资料。',
+  'Link to existing medicine': '关联已有药物',
+  'Use a photo to find possible medication matches, then check the packaging or label to identify it.':
+    '通过照片查找可能匹配的药物，再对照包装或标签核对。',
+  'Possible medication matches': '可能匹配的药物',
+  'These catalogue suggestions help you check the label. They do not confirm the medicine or its dose.':
+    '以下目录候选帮助您核对标签，尚不能确认药物身份或服用剂量。',
+  'Compare the suggestions below with the name, strength and markings on your packaging. Add a personal reference to compare with your own medicine next time.':
+    '请将以下候选与包装上的名称、规格和药片标记对照。保存个人参考照片后，下次可与您自己的药物比较。',
+  'Check the possible matches': '核对可能的匹配',
+  'Compare with': '正在与以下药物比较',
+  'If the label does not match a suggestion, ask your pharmacist to identify it.':
+    '如标签与候选不一致，请请药剂师协助辨认。',
+  'Back to photo': '返回照片',
+  'Your daily AI allowance': '每日 AI 助手额度',
+  'Please reopen the assistant before continuing.': '请重新打开助手后继续。',
+  'Do not wait for the app.': '请不要等待应用回复。',
+  'Supplement medication information': '补充药物资料',
+  'Loading saved registrations…': '正在加载已保存的登记…',
+  'Review the saved plan': '核对已保存的计划',
+  'View saved source registrations': '查看已保存的药物登记',
+  'Cancel supplement': '取消本次补充',
+  'Understand your medicines, review your records or prepare for a visit.':
+    '了解药物、回顾记录，或准备就诊要讨论的问题。',
+  'Assistant tasks': '助手快捷任务',
+  'Understand medicines': '了解药物',
+  'Review my records': '查看我的记录',
+  'Prepare for a visit': '准备就诊',
+  'What are my current medications used for? Explain general uses separately from my reviewed instructions.':
+    '我目前的药物通常有什么用途？请区分一般用途和我已核对的服药说明。',
+  'Summarise my recorded doses and health observations from the past 7 days. Distinguish unrecorded doses from reported not taken.':
+    '请回顾我过去七天的服药自述和健康观察，区分尚未记录与自述未服用的情况。',
+  'Help me prepare questions for a pharmacist or doctor using my saved medication and health records.':
+    '请根据我已保存的用药和健康记录，帮我准备向医生或药剂师提出的问题。',
+  'Open MediThread Assistant': '打开 MediThread 助手',
+  'Conversation history': '聊天历史',
+  'New conversation': '新建会话',
+  'Saved messages': '已保存的问答',
+  'Back to current conversation': '返回当前会话',
+  'Back to history list': '返回历史列表',
+  'Saved questions and answers can be viewed here. Return to your current conversation to continue chatting.':
+    '在这里查看已保存的问答。返回当前会话可继续聊天。',
+  'Saving is off. No saved messages are available.': '保存已关闭，目前没有已保存的问答。',
+  'Date unavailable': '日期暂不可用',
+  Yesterday: '昨天',
+  'Only new messages are saved when this is enabled.': '开启后仅保存新发送的消息。',
+  'Manage chat history and context settings.': '管理聊天记录和上下文设置。',
+  'AI assistant use information': 'AI 助手使用说明',
+  'About recent context, saved history and voice processing.':
+    '了解近期上下文、历史保存和语音处理。',
+  'Raw audio is not saved. Browser speech may use an online service.':
+    '不会保存原始音频；浏览器语音服务可能在线处理。',
+  'Allow medication photo processing': '允许使用药物照片进行识别',
+  'This setting is saved in this browser for this account. When you choose pill-photo comparison, the selected image is sent to the recognition service. It does not automatically save the image. Other reading flows ask for consent separately.':
+    '此设置按账户保存在此浏览器中。进行药片照片核对时，您选择的图片会发送至识别服务，但不会自动保存。其他识别流程会另行征求同意。',
+  'Saving medication photos': '保存药物照片',
+  'Photos and extracted details are saved only when you choose Save in the relevant medication flow. Saving is separate from photo processing and never happens automatically.':
+    '只有在相应用药流程中主动选择“保存”，照片和提取资料才会存入账户。保存与照片识别分开，不会自动进行。',
+  'View and manage saved medication photos': '查看与管理已保存的药物照片',
+  'Review photos you chose to save to your account.': '查看您主动保存到账户的照片。',
+  'History displays saved exchanges from the last 30 days, with up to 200 stored exchanges. Older text is not deleted on a timer. Clear saved conversations removes saved and recent chat text; medication and health records remain separate.':
+    '历史可查看近 30 天的已保存问答，最多储存 200 条问答。较早文字不会按时间自动删除。清除已保存对话会移除已保存及近期聊天文字；用药和健康记录单独保留。',
+  'Assistant and saved conversations': '助手与聊天保存',
+  'Ask a question about your medicines or records.': '您可以询问药物或已记录的情况。',
+  'Starting a new conversation…': '正在新建会话…',
+  'Open conversation': '继续对话',
+  'Could not confirm clearing. Retry or cancel.': '未能确认是否清除成功。可重试或返回。',
+  'The assistant keeps up to six recent exchanges for current context, separately from optional saved history.':
+    '助手使用最近六轮问答作为当前上下文，与可选的聊天历史分开管理。',
+  'Saved history is on. New messages will be added to it.':
+    '聊天保存已开启，新消息会加入已保存历史。',
+  'Saved history is off. New messages will not be added to it.':
+    '聊天保存已关闭，新消息不会加入已保存历史。',
+};

@@ -53,7 +53,7 @@ Use [.env.example](../.env.example) and [frontend/.env.example](../frontend/.env
 | Web Push | `ENABLE_WEB_PUSH`, VAPID public/private keys and subject; install the `push` extra. Worker-only `PUSH_DISPATCH_TOKEN` signs bounded HTTPS dispatches. Keep worker credentials separate from patient HTTP; hosted scheduling and real-device delivery require separate verification. |
 | Conversation history | Opt-in, disabled by default; displays up to 200 text exchanges from the last 30 days. This is a visibility window, not timed physical deletion: Supabase removes older/excess archive rows on a later append; inactive accounts can retain older text. Explicit Clear removes saved chat and recent context text, preserving clinical records. Six recent exchanges are separate model context; clinical facts come from authorized records. |
 
-For Supabase setup, apply additive migrations in order with `python scripts/db.py status`, review the target and pending SQL, then `python scripts/db.py migrate` and `python scripts/db.py verify`. Do not reset an existing database. Rollback scripts intentionally refuse destructive loss of feature data. See the [deployment layout](../deploy/README.md) and [Render configuration](RENDER_DEPLOYMENT.md).
+For Supabase setup, apply additive migrations in order with `python scripts/operations/db.py status`, review the target and pending SQL, then `python scripts/operations/db.py migrate` and `python scripts/operations/db.py verify`. Do not reset an existing database. Rollback scripts intentionally refuse destructive loss of feature data. See the [deployment layout](../deploy/README.md) and [Render configuration](RENDER_DEPLOYMENT.md).
 
 ## Running and testing
 
@@ -80,11 +80,13 @@ See [deployment layout](../deploy/README.md) and [patient API on Render](RENDER_
 
 ## Isolated release browser checks
 
-The native enrollment/history journey in `frontend/e2e/medithread-rc.spec.ts`
-requires an isolated demo-mode API and Vite instance. Set `RUN_MEDITHREAD_RC=1`
-and `QA_BASE_URL` to that frontend. Its second test expects a separate local
-Scenario D server/frontend at `http://127.0.0.1:5178`. Build the synthetic timeline
-through the public test factory (never use this factory as a deployment entrypoint):
+Current local navigation/calendar checks are in `frontend/e2e/experience/localNavigation.spec.ts`
+with `RUN_LOCAL_UX=1`. Assistant enrollment and saved-conversation cases live under `frontend/e2e/assistant/`.
+The old RC suite has been retired because its tour/form assumptions are superseded.
+The independently gated five-day review journey is `frontend/e2e/records/releaseReview.spec.ts`;
+it requires the synthetic Scenario D runtime below. This is a manual acceptance profile,
+not evidence that the real database/provider or every selector has been revalidated in this refactor.
+Build the timeline through the public test factory (never use it as a deployment entrypoint):
 
 ```powershell
 $env:PYTHONPATH='backend'
@@ -95,7 +97,7 @@ python -m uvicorn tests.backend.test_release_scenarios:create_review_test_app --
 For that second frontend, set `VITE_API_TARGET=http://127.0.0.1:8027`, keep
 both Supabase browser Auth variables explicitly empty, and start Vite on 5178.
 Do not let a developer `.env.local` silently connect the isolated demo to real
-Auth. The existing `release-review.spec.ts` also runs against this frontend with
+Auth. The existing `releaseReview.spec.ts` also runs against this frontend with
 `RUN_RELEASE_BROWSER=1` and `QA_BASE_URL=http://127.0.0.1:5178`.
 
 
@@ -120,3 +122,28 @@ Auth. The existing `release-review.spec.ts` also runs against this frontend with
 Run `python scripts/qa/inspect_assistant_evidence_scope.py` for an offline source/role inventory. It performs no network calls and reports execution readiness as false. `run_assistant_acceptance.py --persistence-preflight --persistence-profile <private-json> --persistence-purpose sql_read` validates explicit admission only, preserves zero provider budget and exits 2 with `NOT_RUN`; it does not execute acceptance or load `.env`.
 
 The live definitions in `test_persistent_workflow_sql_live.py` and `test_persistent_workflow_storage_live.py` remain skipped without explicit opt-in, exact target/hash approval and operation scope. Use the existing private execution runbook for the target-specific checklist; never place profiles, tokens, uploads or acceptance evidence in public source artifacts. Do not install proof hooks alone on an active legacy native application.
+
+## Source ownership and dependency checks
+
+Use the [source directory map](../frontend/src/README.md) and the nearest directory README before adding files.
+Screens and form models belong to their business feature; components is for shared UI.
+The application composition root injects preference persistence and retains lazy page loading.
+Run `npm --prefix frontend run check:architecture` for static/lazy/type-only import resolution,
+explicit public feature boundaries and module cycles. It uses the existing TypeScript dependency.
+
+## Naming and readable source
+
+Use PascalCase for React components, camelCase for TypeScript utilities/hooks/test basenames,
+and snake_case for Python. Hooks that own behavior use a descriptive useName name.
+Keep framework entry/config filenames and .spec.ts/.test.ts suffixes.
+Group tests by responsibility and execution contract; use describe blocks for related cases,
+and share fixture setup without making mock/provider or patient ownership boundaries implicit.
+
+Frontend source, tests, configuration and styles use pinned Prettier with 2 spaces and a 100-column target:
+`npm --prefix frontend run format` writes formatting; `npm --prefix frontend run format:check` checks it.
+Source ESLint requires separate variable declarations and blank lines around functions/import groups.
+Use short responsibility comments and explain non-obvious confirmation, ownership and failure handling;
+avoid comments that restate each statement. Python scripts use the existing Ruff 120-column convention:
+`python -m ruff format --check scripts`. Format checks do not execute operational scripts.
+
+The existing frontend typecheck also compiles shared e2e/support TypeScript fixtures, so required API DTO fields cannot silently disappear from the common mock.

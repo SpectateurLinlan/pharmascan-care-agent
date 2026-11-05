@@ -58,7 +58,7 @@ Optional Cloud TTS requires explicit session-only selection in Settings plus bac
 Browser TTS adapter check:
 
 ```powershell
-npm run test:browser -- e2e/browser-tts.spec.ts
+npm run test:browser -- e2e/platform/browserTts.spec.ts
 ```
 
 Start the frontend/backend, set `QA_BASE_URL` to the frontend origin and `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to an installed Chrome/Edge executable. QA defaults to port 5174. Application journeys use `RUN_LIVE_BROWSER=1` and synthetic records; speech-event automation covers the browser wiring.
@@ -73,7 +73,7 @@ See [testing](../docs/DEVELOPMENT.md#running-and-testing) and [current limitatio
 
 Four tabs: Today / Medicines / Records / Me. Assistant is a persistent Today-origin task view with light Medicines/Records entries. Guide progress is user-scoped browser storage, with explicit Skip/Finish and Me Help replay. Hash child routes preserve parent/origin behavior; missing medication context falls back to selection.
 
-`RUN_LOCAL_UX=1 QA_BASE_URL=<isolated local URL> npx playwright test e2e/ux-navigation.spec.ts` exercises the actual UI + local in-memory FastAPI (not mocked HTTP and not live Supabase). Cloud-provider tests stay separately opt-in. `public/sw.js` handles private Web Push only and caches no patient data. The API exposes public VAPID configuration; private keys never enter Vite variables. See the [architecture and trust boundaries](../docs/ARCHITECTURE.md#worker-dispatch-transport-boundary).
+`RUN_LOCAL_UX=1 QA_BASE_URL=<isolated local URL> npx playwright test e2e/experience/localNavigation.spec.ts` exercises the actual UI + local in-memory FastAPI (not mocked HTTP and not live Supabase). Cloud-provider tests stay separately opt-in. `public/sw.js` handles private Web Push only and caches no patient data. The API exposes public VAPID configuration; private keys never enter Vite variables. See the [architecture and trust boundaries](../docs/ARCHITECTURE.md#worker-dispatch-transport-boundary).
 
 The local five-day review browser fixture is reproducible from public test files;
 it requires no private screenshots, patient records or QA scripts. From the
@@ -96,11 +96,11 @@ npm --prefix frontend run dev -- --host 127.0.0.1 --port 5195 --strictPort
 
 In a third terminal under `frontend`, set `RUN_RELEASE_BROWSER=1`,
 `QA_BASE_URL=http://127.0.0.1:5195` and an installed Chrome/Edge executable, then
-run `npx playwright test e2e/release-review.spec.ts`. On Linux/macOS use `export`
+run `npx playwright test e2e/records/releaseReview.spec.ts`. On Linux/macOS use `export`
 for environment variables. This factory uses in-memory persistence and a virtual
 clock; never expose it publicly or select it as the production application.
 Stop the test servers after use. Image-provider demos instead generate their
-synthetic inputs with `python scripts/generate_gallery_demo.py` (add
+synthetic inputs with `python scripts/fixtures/generate_gallery_demo.py` (add
 `--stage2-v010` for the upgraded sticker set), then explicitly opt in to live
 calls. Generated `outputs/` are not source files to publish.
 
@@ -110,10 +110,10 @@ Photo result navigation has its own child route and retains the selected file on
 
 All routed patient pages use the App shell's centered content column, including
 the Assistant workspace and child settings pages. New pages should reuse
-`Screen` from `src/ui/primitives.tsx` and let their full-width cards stretch
+`Screen` from `src/components/layout.tsx` and let their full-width cards stretch
 inside it. Content width is not selected by route.
 
-Change these values in `src/ui/tokens.css` to update the layout everywhere:
+Change these values in `src/styles/tokens.css` to update the layout everywhere:
 
 | Token | Purpose |
 |---|---|
@@ -130,3 +130,24 @@ peer card columns and dialog sizing belong to their own components.
 Four tabs remain Today / Medicines / Records / Me. InventoryPanel belongs to medication detail; CareTasksScreen, AdherenceBarriersScreen and MedicationReviewScreen consume typed FastAPI endpoints. CareReviewSheet is shared by forms and Agent proposals and requires an explicit human Confirm before writes. HealthTrackingScreen reuses the observation API for validated numeric values. No stock/clinical calculation or database/Stage2 request was added to React.
 
 Real browser E/F journey: `RUN_LONG_TERM_DEMO=1`; opt-in `RUN_GEMINI_CARE_DEMO=1` adds three bounded live turns. See [long-term care interfaces and acceptance](../docs/LONG_TERM_CARE.md). Default voice stays Browser SpeechRecognition/SpeechSynthesis, with no silent cloud call.
+
+## 目录与工程边界
+
+| 目录/配置 | 用途 |
+|---|---|
+| [src/](src/README.md) | 按应用装配、业务功能和共享能力划分的生产源码及就近 Vitest 测试 |
+| [e2e/](e2e/README.md) | Playwright 浏览器端到端验收；按业务分组，support 为测试辅助页面/脚本 |
+| [public/](public/README.md) | 静态图标、manifest 和通知服务工作线程 |
+| [tooling/](tooling/README.md) | TypeScript AST 依赖检查及其 Node 测试 |
+| `architecture.config.mjs` | 允许依赖与跨 feature 公开模块清单；不参与运行时打包 |
+| `vite.config.ts` | 开发 API 代理、构建与 Vitest setup |
+| `playwright.config.ts` | 浏览器测试发现、目标 URL 和产物目录 |
+| `dist/` | 构建生成；不在其中编辑源码 |
+| `node_modules/` | 安装的依赖；不放项目组件 |
+| `test-results/` | 本地测试产物；不提交 |
+
+一键启动前后端：从仓库根运行 `python scripts/start_dev.py`，无需分别开两个终端。
+独立验收运行时使用测试专属端口和 synthetic profile，详情见 e2e 说明。
+
+`npm run check:architecture` 检查跨层、跨 feature 私有访问、缺失模块和循环依赖，
+包含动态与 type-only 导入。`npm run test` 是 Vitest；`npm run test:browser -- --list` 只列浏览器用例。

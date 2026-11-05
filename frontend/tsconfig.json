@@ -19,5 +19,5 @@
     "noUncheckedIndexedAccess": true,
     "types": ["vitest/globals", "node"]
   },
-  "include": ["src"]
+  "include": ["src", "e2e/support/*.ts"]
 }

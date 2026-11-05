@@ -181,7 +181,7 @@ flowchart TD
 
 ## Current progressive evidence and gallery workflows
 
-Implementation date:2026-10-15. Browser journeys use real Gemini/Supabase/Stage2 and synthetic package/label/pill fixtures. `frontend/e2e/gallery-evidence.spec.ts` has no provider-response interception. Generated fixtures and screenshots are local-only under outputs/gallery-demo; do not force-add them.
+Implementation date:2026-10-15. Browser journeys use real Gemini/Supabase/Stage2 and synthetic package/label/pill fixtures. `frontend/e2e/medications/galleryProvider.spec.ts` has no provider-response interception. Generated fixtures and screenshots are local-only under outputs/gallery-demo; do not force-add them.
 
 | Demo | Actual path and current evidence |
 |---|---|
@@ -192,11 +192,11 @@ Implementation date:2026-10-15. Browser journeys use real Gemini/Supabase/Stage2
 Reproduce with owned local API8001/Vite5173, existing configurations and generated synthetic fixtures:
 
 ```powershell
-python scripts/generate_gallery_demo.py
+python scripts/fixtures/generate_gallery_demo.py
 $env:RUN_GALLERY_DEMOS='1'
 $env:QA_BASE_URL='http://127.0.0.1:5173'
 cd frontend
-npx playwright test e2e/gallery-evidence.spec.ts
+npx playwright test e2e/medications/galleryProvider.spec.ts
 ```
 
 This consumes a bounded number of Gemini turns and Stage2 calls. Chrome response-body inspector eviction is handled by observing actual browser fetch JSON; no fake tool results. The fixture generator uses the current Singapore date and explicit seven-day source instructions; the review step uses the corresponding fixture dates. It generates inputs only, not recognition results. The test captures390px package/Today/reference/match/conflict and430px/desktop restored conflict screens. Original API/task evidence stays in owned Supabase; only synthetic screenshot artifacts are local. Physical camera, image usability and actual speech/audio remain MANUAL PENDING.
@@ -239,7 +239,7 @@ Me -> Caregiver contacts -> Add caregiver contact -> enter name, optional relati
 
 ## Stage2 0.10.0 Singapore sticker acceptance
 
-Use the [upgrade-specific Demo A/B/C steps](STAGE2_V010_UPGRADE.md#reproducible-acceptance). New evidence components render parsed fields beside original lines and missing-value guidance, in both languages. Save identity -> supplement same owned task -> compare independent strength/release/ingredients/product codes and instructions -> clarify conflict/missing time/course -> patient review -> separate activation. Fixed daily frequency requires explicit clock slots; no label date/quantity inferred course. Gallery embed requests imprint reading and retains unavailable/skipped distinctions without claiming text verification. Current source tasks/references remain private and durable across reload. The new browser regression is e2e/stage2-v010.spec.ts; live provider results are recorded separately from Vitest fixtures in current QA records.
+Use the [upgrade-specific Demo A/B/C steps](STAGE2_V010_UPGRADE.md#reproducible-acceptance). New evidence components render parsed fields beside original lines and missing-value guidance, in both languages. Save identity -> supplement same owned task -> compare independent strength/release/ingredients/product codes and instructions -> clarify conflict/missing time/course -> patient review -> separate activation. Fixed daily frequency requires explicit clock slots; no label date/quantity inferred course. Gallery embed requests imprint reading and retains unavailable/skipped distinctions without claiming text verification. Current source tasks/references remain private and durable across reload. The new browser regression is e2e/platform/stage2Compatibility.spec.ts; live provider results are recorded separately from Vitest fixtures in current QA records.
 
 ## Current patient navigation and reminders (2026-10-15 implementation)
 

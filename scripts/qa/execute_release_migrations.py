@@ -122,7 +122,7 @@ def run():
             assert not log.exists(), "Prior execution log exists: inspect partial state before retrying"
             with log.open("wb") as handle:
                 attempt = subprocess.run(
-                    [sys.executable, str(ROOT / "scripts/db.py"), "migrate", "--only", version],
+                    [sys.executable, str(ROOT / "scripts/operations/db.py"), "migrate", "--only", version],
                     cwd=ROOT,
                     stdout=handle,
                     stderr=subprocess.STDOUT,

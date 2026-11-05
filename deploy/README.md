@@ -109,3 +109,13 @@ Use project name `medithread` for the frontend and a distinct worker project
 name, such as `medithread-push-dispatcher`. These display names do not rename
 the repository, Python packages or existing database. Web Push requires separate
 Dispatcher hosting, Cron and real-device receipt before release acceptance.
+
+## 子目录与脚本职责
+
+| 子目录 | 文件与用途 |
+|---|---|
+| [frontend/](frontend/README.md) | vercel.json.example：前端路由配置示例 |
+| [render/](render/README.md) | render.yaml：患者 API 构建与稳定启动入口 |
+| [dispatcher/](dispatcher/README.md) | index.py：独立特权通知 worker 的 ASGI 入口 |
+
+这些服务的凭据和权限不能合并到患者前端；日常本地一键启动仍是 scripts/start_dev.py。

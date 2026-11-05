@@ -68,13 +68,21 @@ def summarize_startup(samples: list[StartupSample]) -> StartupReport:
     conditions = sorted({(row.cache, row.viewport, row.backend, row.cpu) for row in samples})
     groups = []
     for cache, viewport, backend, cpu in conditions:
-        rows = [row for row in samples if (row.cache, row.viewport, row.backend, row.cpu)
-                == (cache, viewport, backend, cpu)]
-        groups.append(StartupGroup(
-            cache, viewport, backend, cpu, len(rows), sum(row.onboarding_blocked for row in rows),
-            _timing([row.shell_ms for row in rows], 2000),
-            _timing([None if row.onboarding_blocked else row.essential_ms for row in rows], 5000),
-        ))
+        rows = [
+            row for row in samples if (row.cache, row.viewport, row.backend, row.cpu) == (cache, viewport, backend, cpu)
+        ]
+        groups.append(
+            StartupGroup(
+                cache,
+                viewport,
+                backend,
+                cpu,
+                len(rows),
+                sum(row.onboarding_blocked for row in rows),
+                _timing([row.shell_ms for row in rows], 2000),
+                _timing([None if row.onboarding_blocked else row.essential_ms for row in rows], 5000),
+            )
+        )
     return StartupReport(tuple(groups))
 
 

@@ -1,0 +1,132 @@
+/** Real App/local FastAPI; DEMO_ONLY patient data. Vision HTTP is explicitly unavailable. */
+import { test, expect } from '@playwright/test';
+import { mockPatientApp } from '../support/patientAppFixture';
+test('inline methods, discard on exit, real draft deletion and loose-pill routing', async ({
+  page,
+  baseURL,
+}) => {
+  test.setTimeout(90000);
+  page.setDefaultTimeout(10000);
+  expect(new URL(baseURL!).origin).toBe('http://127.0.0.1:5182');
+  const { errors } = await mockPatientApp(page);
+  await page.route(
+    (url) => new URL(url).pathname.startsWith('/api/'),
+    (route) => route.continue(),
+  );
+  const headers = { Authorization: 'Bearer DEMO.synthetic-session-token' };
+  await page.request.put('/api/me/preferences', {
+    headers,
+    data: { preferred_language: 'en', text_scale_percent: 100, reminders_enabled: false },
+  });
+  await page.goto('/');
+  await page.locator('[data-guide="medicines"]').click();
+  await expect(page.getByRole('heading', { name: 'Currently taking', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Add medication', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Scan medication document/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Add manually/ })).toBeVisible();
+  // The grouped-records fixture starts with confirmed plans only. Pending setup
+  // appears after this journey creates a real unconfirmed draft below.
+  await expect(page.locator('.pending-medication-review')).toHaveCount(0);
+  for (const width of [390, 768, 1280, 1920]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const card = await page.locator('.current-medications-card').boundingBox(),
+      add = await page.locator('.medication-add-section').boundingBox(),
+      nav = await page.locator('.medicine-shortcuts').boundingBox();
+    expect(add!.y).toBeLessThan(card!.y);
+    expect(card!.y).toBeLessThan(nav!.y);
+    expect(Math.abs(add!.width - nav!.width)).toBeLessThan(2);
+    const title = await page.getByRole('heading', { name: 'Currently taking' }).boundingBox();
+    const badge = await page.locator('.medication-count-badge').boundingBox();
+    expect(title!.x).toBeLessThan(badge!.x);
+    const icon = await page.locator('.medicines-header-icon').boundingBox();
+    expect(icon).not.toBeNull();
+    const scan = await page.getByRole('button', { name: /Scan medication document/ }).boundingBox(),
+      manual = await page.getByRole('button', { name: /^Add manually/ }).boundingBox();
+    expect(Math.abs(scan!.width - manual!.width)).toBeLessThan(2);
+    expect(scan!.height).toBeGreaterThanOrEqual(120);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    if (width === 390 || width === 1920)
+      await page.screenshot({ path: `../outputs/medication-entry-${width}.png`, fullPage: true });
+  }
+  await page.getByRole('button', { name: /^Add manually/ }).click();
+  await page.getByLabel('Medication name', { exact: true }).fill('DEMO unsaved');
+  await page.locator('[data-guide="medicines"]').click();
+  await expect(page.getByRole('dialog', { name: 'Leave without saving?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Keep editing', exact: true }).click();
+  await expect(page.getByLabel('Medication name', { exact: true })).toHaveValue('DEMO unsaved');
+  await page.locator('[data-guide="medicines"]').click();
+  await page.getByRole('button', { name: 'Leave and clear', exact: true }).click();
+  await page.getByRole('button', { name: /^Add manually/ }).click();
+  await expect(page.getByLabel('Medication name', { exact: true })).toHaveValue('');
+  await page.getByLabel('Medication name', { exact: true }).fill('DEMO removable registration');
+  await page.getByLabel('Dose amount', { exact: true }).fill('1');
+  await page.getByRole('button', { name: 'Review and add', exact: true }).click();
+  await page.getByLabel('I have checked these details against my original instructions.').check();
+  const created = page.waitForResponse(
+    (r) =>
+      new URL(r.url()).pathname === '/api/medications/drafts' && r.request().method() === 'POST',
+  );
+  await page.getByRole('button', { name: 'Add this medication', exact: true }).click();
+  const draft = (await (await created).json()) as { regimen_id: string };
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.locator('[data-guide="medicines"]').click();
+  await page.getByRole('button', { name: 'Leave and clear', exact: true }).click();
+  const pending = page.getByRole('button', { name: /Finish medication setup/ });
+  await expect(pending).toBeVisible();
+  const pendingBox = await pending.boundingBox(),
+    addBox = await page.locator('.medication-add-section').boundingBox(),
+    navBox = await page.locator('.medicine-shortcuts').boundingBox();
+  expect(addBox!.y).toBeLessThan(pendingBox!.y);
+  expect(pendingBox!.y).toBeLessThan(navBox!.y);
+  await pending.click();
+  await page.getByRole('button', { name: 'Delete draft', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+  expect(
+    (await page.request.get(`/api/medications/drafts/${draft.regimen_id}`, { headers })).status(),
+  ).toBe(200);
+  await page.getByRole('button', { name: 'Delete draft', exact: true }).click();
+  await page.getByRole('button', { name: 'Confirm delete', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Delete draft', exact: true })).toHaveCount(0);
+  expect(
+    (await page.request.get(`/api/medications/drafts/${draft.regimen_id}`, { headers })).status(),
+  ).toBe(404);
+  await page.locator('[data-guide="medicines"]').click();
+  await page.getByRole('button', { name: /Scan medication document/ }).click();
+  const link = page.getByLabel('Link to a registered product'),
+    auto = page.getByLabel('Detect the photo type automatically');
+  await expect(link).toBeVisible();
+  await expect(auto).toBeVisible();
+  expect(await link.evaluate((el) => el.closest('details'))).toBeNull();
+  await auto.uncheck();
+  await page
+    .getByRole('combobox', { name: 'Source type', exact: true })
+    .selectOption('loose_pills');
+  const photo = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aFh0AAAAASUVORK5CYII=',
+    'base64',
+  );
+  await page
+    .getByLabel('Take or choose a photo')
+    .setInputFiles({ name: 'DEMO-only.png', mimeType: 'image/png', buffer: photo });
+  await page
+    .getByLabel(
+      'I allow this photo to be sent to the recognition service to read medication information. I can change this in Privacy and data.',
+    )
+    .check();
+  await page.getByRole('button', { name: 'Identify this pill instead', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Identify a pill', exact: true })).toBeVisible();
+  let vision = 0;
+  await page.route('**/api/visual-check*', (route) => {
+    vision++;
+    return route.fulfill({
+      status: 503,
+      json: { code: 'PROVIDER_UNAVAILABLE', message: 'DEMO provider unavailable' },
+    });
+  });
+  await page.getByRole('button', { name: 'Check photo', exact: true }).click();
+  await expect.poll(() => vision).toBe(1);
+  await expect(page.getByRole('alert')).toBeVisible();
+  expect(errors).toEqual([]);
+});

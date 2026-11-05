@@ -1,0 +1,268 @@
+import { useEffect, useState } from 'react';
+import { api, type CaregiverContact, type CaregiverDetails } from '../../api/client';
+import { useLanguage } from '../../i18n/language';
+import { BottomSheet } from '../../components/BottomSheet';
+import { AutoDismissNotice, ErrorNotice } from '../../components/primitives';
+import { Screen } from '../../components/layout';
+import { Icon } from '../../components/Icon';
+import { CaregiverDetailsFields } from './CaregiverDetailsFields';
+
+type Draft = {
+  id: string;
+  name: string;
+  relationship: string;
+  contact_type: 'email' | 'phone';
+  contact_value: string;
+  consent: boolean;
+  editing: boolean;
+};
+export function CaregiversScreen({ newId = () => crypto.randomUUID() }: { newId?: () => string }) {
+  const { t } = useLanguage();
+  const [rows, setRows] = useState<CaregiverContact[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [remove, setRemove] = useState<CaregiverContact | null>(null);
+  const [success, setSuccess] = useState('');
+
+  async function reload() {
+    setLoading(true);
+    try {
+      setRows(await api.caregivers());
+      setError(null);
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    let active = true;
+    void api
+      .caregivers()
+      .then((value) => {
+        if (active) {
+          setRows(value);
+          setLoading(false);
+        }
+      })
+      .catch((caught) => {
+        if (active) {
+          setError(caught);
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function save() {
+    if (!draft?.consent || busy) return;
+    setBusy(true);
+    setError(null);
+    const details: CaregiverDetails = {
+      name: draft.name.trim(),
+      relationship: draft.relationship.trim() || null,
+      contact_type: draft.contact_type,
+      contact_value: draft.contact_value.trim(),
+      storage_consent: true,
+    };
+    try {
+      const saved = draft.editing
+        ? await api.updateCaregiver(draft.id, details)
+        : await api.createCaregiver({ ...details, id: draft.id });
+      setRows((previous) => [...previous.filter((row) => row.id !== saved.id), saved]);
+      setDraft(null);
+      setSuccess(draft.editing ? 'Contact updated.' : 'Contact saved.');
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteContact() {
+    if (!remove || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteCaregiver(remove.id);
+      setRows((previous) => previous.filter((row) => row.id !== remove.id));
+      setRemove(null);
+      setSuccess('Contact removed.');
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Screen title="Care contacts" className="care-contacts-screen">
+      {success ? <AutoDismissNotice>{t(success)}</AutoDismissNotice> : null}
+      <section className="card care-contacts-card">
+        <p className="care-contacts-intro">
+          {t(
+            'Contacts are for your reference. Saving one does not invite the person, send notifications or grant access to your records.',
+          )}
+        </p>
+        <button
+          className="primary care-contacts-add"
+          disabled={loading || Boolean(error) || busy}
+          onClick={() =>
+            setDraft({
+              id: newId(),
+              name: '',
+              relationship: '',
+              contact_type: 'email',
+              contact_value: '',
+              consent: false,
+              editing: false,
+            })
+          }
+        >
+          <Icon name="plus" />
+          {t('Add care contact')}
+        </button>
+        {loading ? <p role="status">{t('Loading contacts…')}</p> : null}
+        {!loading && !error && !rows.length ? <p>{t('No care contacts saved yet.')}</p> : null}
+        {error && !draft && !remove ? (
+          <>
+            <ErrorNotice error={error} />
+            <button onClick={() => void reload()}>{t('Retry loading contacts')}</button>
+          </>
+        ) : null}
+        <ul className="caregiver-list">
+          {rows.map((row) => (
+            <li key={row.id}>
+              <span className="caregiver-avatar">
+                <Icon name="user" />
+              </span>
+              <div className="caregiver-details">
+                <h3>{row.name}</h3>
+                {row.relationship ? <p>{row.relationship}</p> : null}
+                <p>{row.contact_value}</p>
+                <p className="sr-only">
+                  {t(row.verification_status === 'pending' ? 'Not verified' : 'Verified')} ·{' '}
+                  {t(row.notifications_enabled ? 'Notifications on' : 'Notifications off')} ·{' '}
+                  {t(row.sharing_enabled ? 'Record access enabled' : 'No record access')}
+                </p>
+              </div>
+              <div className="caregiver-actions">
+                <button
+                  type="button"
+                  aria-label={t('Edit contact')}
+                  title={t('Edit contact')}
+                  onClick={() => {
+                    setError(null);
+                    setDraft({
+                      id: row.id,
+                      name: row.name,
+                      relationship: row.relationship ?? '',
+                      contact_type: row.contact_type,
+                      contact_value: row.contact_value,
+                      consent: false,
+                      editing: true,
+                    });
+                  }}
+                >
+                  <Icon name="edit" />
+                  <span className="sr-only">{t('Edit contact')}</span>
+                </button>
+                <button
+                  type="button"
+                  className="caregiver-delete"
+                  aria-label={t('Delete contact')}
+                  title={t('Delete contact')}
+                  onClick={() => {
+                    setError(null);
+                    setRemove(row);
+                  }}
+                >
+                  <Icon name="trash" />
+                  <span className="sr-only">{t('Delete contact')}</span>
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+      {draft ? (
+        <BottomSheet
+          title={t(draft.editing ? 'Edit contact' : 'Add care contact')}
+          busy={busy}
+          onCancel={() => {
+            setDraft(null);
+            setError(null);
+          }}
+        >
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void save();
+            }}
+          >
+            <CaregiverDetailsFields
+              draft={draft}
+              busy={busy}
+              onChange={(next) => setDraft({ ...draft, ...next })}
+            />
+            {error ? <ErrorNotice error={error} /> : null}
+            <div className="actions">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setDraft(null);
+                  setError(null);
+                }}
+              >
+                {t('Cancel')}
+              </button>
+              <button
+                className="primary"
+                type="submit"
+                disabled={
+                  busy || !draft.consent || !draft.name.trim() || !draft.contact_value.trim()
+                }
+              >
+                {t('Save contact')}
+              </button>
+            </div>
+          </form>
+        </BottomSheet>
+      ) : null}
+      {remove ? (
+        <BottomSheet
+          title={t('Delete care contact?')}
+          busy={busy}
+          onCancel={() => {
+            setRemove(null);
+            setError(null);
+          }}
+        >
+          <p>{remove.name}</p>
+          <p>{t('This removes the saved contact. Your medication records will not change.')}</p>
+          {error ? <ErrorNotice error={error} /> : null}
+          <div className="actions">
+            <button
+              disabled={busy}
+              onClick={() => {
+                setRemove(null);
+                setError(null);
+              }}
+            >
+              {t('Cancel')}
+            </button>
+            <button className="primary" disabled={busy} onClick={() => void deleteContact()}>
+              {t('Confirm deletion')}
+            </button>
+          </div>
+        </BottomSheet>
+      ) : null}
+    </Screen>
+  );
+}

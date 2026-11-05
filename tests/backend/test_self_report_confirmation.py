@@ -11,7 +11,7 @@ an expired one, an already-consumed one, another patient's challenge, and a
 duplicate confirmation must all be refused rather than accommodated.
 
 The equivalent assertions against the real database live in
-``scripts/db_integration.py``; these run without a database so the contract
+``scripts/qa/db_integration.py``; these run without a database so the contract
 cannot regress silently.
 """
 

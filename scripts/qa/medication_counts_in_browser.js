@@ -5,15 +5,24 @@ void (async () => {
     return;
   }
   if (typeof window.medithreadMedicationCounts !== 'function') {
-    console.info('Diagnostic not loaded. Save ongoing work, reload this local Vite page, then retry. This does not mean you are signed out.');
+    console.info(
+      'Diagnostic not loaded. Save ongoing work, reload this local Vite page, then retry. This does not mean you are signed out.',
+    );
     return;
   }
   try {
     const result = await window.medithreadMedicationCounts();
     console.info('MediThread read-only diagnostic:', result.result);
-    console.table(result.endpoints.map(row => ({ ...row, states: row.states ? JSON.stringify(row.states) : null })));
+    console.table(
+      result.endpoints.map((row) => ({
+        ...row,
+        states: row.states ? JSON.stringify(row.states) : null,
+      })),
+    );
     console.table(result.observed_requests);
   } catch {
-    console.info('Diagnostic unavailable; no conclusion about sign-in. No credentials or records were printed.');
+    console.info(
+      'Diagnostic unavailable; no conclusion about sign-in. No credentials or records were printed.',
+    );
   }
 })();

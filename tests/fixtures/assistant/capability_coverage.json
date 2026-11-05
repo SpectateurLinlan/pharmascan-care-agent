@@ -820,7 +820,7 @@
           "phase": "readback",
           "environment": "local_browser",
           "test_refs": [
-            "frontend/e2e/assistant-sources.spec.ts::source original is saved first and shared review activates independently in"
+            "frontend/e2e/assistant/sources.spec.ts::source original is saved first and shared review activates independently in"
           ]
         }
       ]
@@ -1476,7 +1476,7 @@
           "phase": "read",
           "environment": "local_browser",
           "test_refs": [
-            "frontend/e2e/assistant-care.spec.ts::care records, independently confirmed writes and all follow-up actions in"
+            "frontend/e2e/assistant/care.spec.ts::care records, independently confirmed writes and all follow-up actions in"
           ]
         }
       ]
@@ -1580,7 +1580,7 @@
           "phase": "read",
           "environment": "local_browser",
           "test_refs": [
-            "frontend/e2e/assistant-care.spec.ts::care records, independently confirmed writes and all follow-up actions in"
+            "frontend/e2e/assistant/care.spec.ts::care records, independently confirmed writes and all follow-up actions in"
           ]
         }
       ]
@@ -1610,7 +1610,7 @@
           "phase": "read",
           "environment": "local_browser",
           "test_refs": [
-            "frontend/e2e/assistant-care.spec.ts::care records, independently confirmed writes and all follow-up actions in"
+            "frontend/e2e/assistant/care.spec.ts::care records, independently confirmed writes and all follow-up actions in"
           ]
         }
       ]
@@ -1641,7 +1641,7 @@
           "phase": "read",
           "environment": "local_browser",
           "test_refs": [
-            "frontend/e2e/assistant-care.spec.ts::care records, independently confirmed writes and all follow-up actions in"
+            "frontend/e2e/assistant/care.spec.ts::care records, independently confirmed writes and all follow-up actions in"
           ]
         }
       ]
@@ -1967,7 +1967,7 @@
           "phase": "native_read",
           "environment": "recording_port",
           "test_refs": [
-            "frontend/src/components/AssistantMediaActions.test.tsx::loads an owned photo only after a click and revokes its page URL on unmount"
+            "frontend/src/features/assistant/workflow/AssistantMediaActions.test.tsx::loads an owned photo only after a click and revokes its page URL on unmount"
           ]
         }
       ]
@@ -3146,7 +3146,7 @@
           "phase": "patient_action",
           "environment": "recording_port",
           "test_refs": [
-            "frontend/src/components/AssistantAccountActions.test.tsx::reads account status only after opening the secure form"
+            "frontend/src/features/assistant/workflow/AssistantAccountActions.test.tsx::reads account status only after opening the secure form"
           ]
         }
       ]
@@ -3177,7 +3177,7 @@
           "phase": "patient_action",
           "environment": "recording_port",
           "test_refs": [
-            "frontend/src/components/AssistantAccountActions.test.tsx::sends login secrets only to the original AccountPort and clears them after submission"
+            "frontend/src/features/assistant/workflow/AssistantAccountActions.test.tsx::sends login secrets only to the original AccountPort and clears them after submission"
           ]
         }
       ]
@@ -3207,7 +3207,7 @@
           "phase": "patient_action",
           "environment": "recording_port",
           "test_refs": [
-            "frontend/src/components/AssistantAccountActions.test.tsx::uses native email link and OTP flows without an Agent input field"
+            "frontend/src/features/assistant/workflow/AssistantAccountActions.test.tsx::uses native email link and OTP flows without an Agent input field"
           ]
         }
       ]
@@ -3236,7 +3236,7 @@
           "phase": "patient_action",
           "environment": "recording_port",
           "test_refs": [
-            "frontend/src/components/AssistantAccountActions.test.tsx::opens the native verified-member password form without automatically changing it"
+            "frontend/src/features/assistant/workflow/AssistantAccountActions.test.tsx::opens the native verified-member password form without automatically changing it"
           ]
         }
       ]
@@ -3265,7 +3265,7 @@
           "phase": "patient_action",
           "environment": "recording_port",
           "test_refs": [
-            "frontend/src/components/AssistantAccountActions.test.tsx::requires native signout confirmation and owner reset"
+            "frontend/src/features/assistant/workflow/AssistantAccountActions.test.tsx::requires native signout confirmation and owner reset"
           ]
         }
       ]
@@ -3499,7 +3499,7 @@
           "phase": "patient_action",
           "environment": "local_browser",
           "test_refs": [
-            "frontend/e2e/assistant-conversation-support.spec.ts::accepts native conversation support in"
+            "frontend/e2e/assistant/conversationSupport.spec.ts::accepts native conversation support in"
           ]
         }
       ]
@@ -3529,7 +3529,7 @@
           "phase": "patient_action",
           "environment": "local_browser",
           "test_refs": [
-            "frontend/e2e/assistant-conversation-support.spec.ts::accepts native conversation support in"
+            "frontend/e2e/assistant/conversationSupport.spec.ts::accepts native conversation support in"
           ]
         }
       ]
@@ -3596,7 +3596,7 @@
           "phase": "patient_action",
           "environment": "local_browser",
           "test_refs": [
-            "frontend/e2e/assistant-conversation-support.spec.ts::accepts native conversation support in"
+            "frontend/e2e/assistant/conversationSupport.spec.ts::accepts native conversation support in"
           ]
         }
       ]
@@ -3625,7 +3625,7 @@
           "phase": "patient_action",
           "environment": "local_browser",
           "test_refs": [
-            "frontend/e2e/assistant-conversation-support.spec.ts::accepts native conversation support in"
+            "frontend/e2e/assistant/conversationSupport.spec.ts::accepts native conversation support in"
           ]
         }
       ]
@@ -3655,7 +3655,7 @@
           "phase": "patient_action",
           "environment": "local_browser",
           "test_refs": [
-            "frontend/e2e/assistant-conversation-support.spec.ts::accepts native conversation support in"
+            "frontend/e2e/assistant/conversationSupport.spec.ts::accepts native conversation support in"
           ]
         }
       ]
