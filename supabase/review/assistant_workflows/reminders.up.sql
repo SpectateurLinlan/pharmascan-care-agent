@@ -17,22 +17,22 @@ DO $$ DECLARE relation_name text; BEGIN
   EXECUTE format('ALTER TABLE public.%I OWNER TO assistant_workflow_owner',relation_name);
   EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY',relation_name);
   EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY',relation_name);
-  EXECUTE format('CREATE POLICY assistant_reminder_owner ON public.%I TO assistant_workflow_owner USING(owner=auth.uid()) WITH CHECK(owner=auth.uid())',relation_name);
+  EXECUTE format('CREATE POLICY assistant_reminder_owner ON public.%I TO assistant_workflow_owner USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid())',relation_name);
   EXECUTE format('REVOKE ALL ON public.%I FROM PUBLIC,anon,authenticated,service_role,assistant_evidence_login,assistant_evidence_owner',relation_name);
  END LOOP;
 END $$;
 GRANT SELECT,INSERT,UPDATE ON public.dose_reminders TO assistant_workflow_owner;
 GRANT SELECT ON public.dose_occurrences,public.dose_rules,public.regimen_versions TO assistant_workflow_owner;
-CREATE POLICY assistant_reminder_native ON public.dose_reminders TO assistant_workflow_owner USING(patient_id=auth.uid()) WITH CHECK(patient_id=auth.uid());
-CREATE POLICY assistant_reminder_occurrence ON public.dose_occurrences FOR SELECT TO assistant_workflow_owner USING(patient_id=auth.uid());
-CREATE POLICY assistant_reminder_rule ON public.dose_rules FOR SELECT TO assistant_workflow_owner USING(patient_id=auth.uid());
+CREATE POLICY assistant_reminder_native ON public.dose_reminders TO assistant_workflow_owner USING(patient_id=public.assistant_patient_uid()) WITH CHECK(patient_id=public.assistant_patient_uid());
+CREATE POLICY assistant_reminder_occurrence ON public.dose_occurrences FOR SELECT TO assistant_workflow_owner USING(patient_id=public.assistant_patient_uid());
+CREATE POLICY assistant_reminder_rule ON public.dose_rules FOR SELECT TO assistant_workflow_owner USING(patient_id=public.assistant_patient_uid());
 
 CREATE FUNCTION public.assistant_reminder_epoch_changed() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE o uuid;row_json jsonb;
 BEGIN
  row_json:=CASE WHEN TG_OP='DELETE' THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END;o:=coalesce((row_json->>'patient_id')::uuid,(row_json->>'user_id')::uuid);
- IF o IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'Owned reminder epoch required' USING ERRCODE='42501'; END IF;
+ IF o IS DISTINCT FROM public.assistant_patient_uid() THEN RAISE EXCEPTION 'Owned reminder epoch required' USING ERRCODE='42501'; END IF;
  INSERT INTO public.assistant_reminder_generations(owner,revision) VALUES(o,1) ON CONFLICT(owner) DO UPDATE SET revision=public.assistant_reminder_generations.revision+1;
  RETURN NULL;
 END $$;
@@ -44,9 +44,9 @@ DO $$ DECLARE relation_name text; BEGIN
 END $$;
 CREATE FUNCTION public.assistant_reminder_revision() RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();n bigint;
+DECLARE o uuid:=public.assistant_patient_uid();n bigint;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(o::text,35035));
  SELECT coalesce((SELECT g.revision FROM public.assistant_reminder_generations g WHERE g.owner=o),0)
  +coalesce((SELECT g.revision FROM public.assistant_enrollment_generations g WHERE g.owner=o),0) INTO n;
@@ -72,7 +72,7 @@ DECLARE occurrence public.dose_occurrences%ROWTYPE;plan public.regimen_versions%
  zone text;day_end timestamptz;next_due timestamptz;candidate timestamptz;first timestamptz;step interval;day date;last_day date;
  wall timestamp;frequency jsonb;hours int;count_candidates int;n bigint;
 BEGIN
- IF p_owner IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'Owned dose required' USING ERRCODE='42501'; END IF;
+ IF p_owner IS DISTINCT FROM public.assistant_patient_uid() THEN RAISE EXCEPTION 'Owned dose required' USING ERRCODE='42501'; END IF;
  SELECT * INTO occurrence FROM public.dose_occurrences WHERE patient_id=p_owner AND id=p_occurrence;
  IF NOT FOUND THEN RAISE EXCEPTION 'Existing owned occurrence required' USING ERRCODE='P0002'; END IF;
  SELECT * INTO STRICT plan FROM public.regimen_versions WHERE patient_id=p_owner AND id=occurrence.regimen_id;
@@ -128,7 +128,7 @@ END $$;
 CREATE FUNCTION public.assistant_reminder_native_guard() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 BEGIN
- IF NEW.patient_id IS DISTINCT FROM auth.uid() OR NEW.remind_at>=public.assistant_reminder_deadline(NEW.patient_id,NEW.occurrence_id) THEN
+ IF NEW.patient_id IS DISTINCT FROM public.assistant_patient_uid() OR NEW.remind_at>=public.assistant_reminder_deadline(NEW.patient_id,NEW.occurrence_id) THEN
   RAISE EXCEPTION 'Reminder cannot cross its original attention deadline' USING ERRCODE='40001'; END IF;
  RETURN NEW;
 END $$;
@@ -138,7 +138,7 @@ CREATE FUNCTION public.assistant_reminder_snapshot(p_owner uuid,p_task jsonb) RE
 LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
 DECLARE f jsonb:=p_task->'fields';prefs jsonb:=public.assistant_settings_preferences(p_owner);current jsonb;occurrence jsonb;deadline timestamptz;
 BEGIN
- IF p_owner IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'Owned reminder scope required' USING ERRCODE='42501'; END IF;
+ IF p_owner IS DISTINCT FROM public.assistant_patient_uid() THEN RAISE EXCEPTION 'Owned reminder scope required' USING ERRCODE='42501'; END IF;
  IF f->>'previous_timezone' IS DISTINCT FROM prefs->>'timezone' THEN RAISE EXCEPTION 'Reminder timezone changed' USING ERRCODE='40001'; END IF;
  IF p_task->>'capability_id'='reminder.settings' THEN
   IF NOT coalesce(public.assistant_wf_keys(f,ARRAY['reminders_enabled','reminder_lead_minutes','previous_enabled','previous_lead_minutes','previous_timezone']),false)
@@ -175,12 +175,12 @@ BEGIN
 END $$;
 CREATE FUNCTION public.assistant_reminder_apply(p_command jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();kind text:=p_command->>'kind';b jsonb:=p_command->'binding';ref jsonb:=b->'prepared_ref';cap text:=b->>'capability_id';
+DECLARE o uuid:=public.assistant_patient_uid();kind text:=p_command->>'kind';b jsonb:=p_command->'binding';ref jsonb:=b->'prepared_ref';cap text:=b->>'capability_id';
  tid uuid:=(b->>'task_id')::uuid;aid uuid:=(b->>'action_key')::uuid;rev int:=(b->>'task_revision')::int;preparing boolean:=kind='prepare_reminder';
  t jsonb;ctl jsonb;f jsonb;v jsonb:=p_command->'values';snapshot text;digest text;generation bigint;native jsonb:='null';outref jsonb;child jsonb;allowed text[];
  prior public.assistant_reminder_commands%ROWTYPE;prep public.assistant_reminder_commands%ROWTYPE;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
  allowed:=CASE kind WHEN 'prepare_reminder' THEN ARRAY['kind','binding'] WHEN 'snooze' THEN ARRAY['kind','binding','values','confirmed']
  WHEN 'settings' THEN ARRAY['kind','binding','values','previous_enabled','previous_lead_minutes','previous_timezone','confirmed'] END;
  IF allowed IS NULL OR NOT coalesce(public.assistant_wf_keys(p_command,allowed) AND p_command ?& allowed,false) OR octet_length(p_command::text)>4096
@@ -205,7 +205,7 @@ BEGIN
  IF nullif(b->'run_binding','null'::jsonb) IS NOT NULL THEN PERFORM public.assistant_run_assert_current(o,b->'run_binding'); END IF;
  f:=t->'fields';snapshot:=encode(sha256(convert_to(public.assistant_reminder_snapshot(o,t)::text,'UTF8')),'hex');
  IF preparing THEN
-  SELECT * INTO prep FROM public.assistant_reminder_commands WHERE owner=o AND task_id=tid AND kind='prepare_reminder' AND prepared_ref=t->'business_refs'->0;
+  SELECT * INTO prep FROM public.assistant_reminder_commands cmd WHERE owner=o AND task_id=tid AND cmd.kind='prepare_reminder' AND prepared_ref=t->'business_refs'->0;
   IF ref->>'id' IS DISTINCT FROM aid::text OR EXISTS(SELECT 1 FROM public.assistant_workflow_operations WHERE owner=o AND record_type='action' AND id=aid)
   OR NOT(t->>'state'='ready_for_review' OR (t->>'state'='awaiting_confirmation' AND prep.owner IS NOT NULL
    AND (prep.binding_revision<rev OR prep.domain_revision<>generation OR prep.snapshot_hash IS DISTINCT FROM snapshot))) THEN
@@ -214,10 +214,10 @@ BEGIN
    'capability_id',cap,'binding_revision',rev,'state','succeeded','business_ref',ref,'safe_reason','reminder_prepared',
    'clinical_revision',coalesce((SELECT g.revision FROM public.assistant_enrollment_generations g WHERE g.owner=o),0),'updated_at',clock_timestamp()));outref:=ref;
  ELSE
-  SELECT * INTO prep FROM public.assistant_reminder_commands WHERE owner=o AND task_id=tid AND action_key=(ref->>'id')::uuid AND kind='prepare_reminder';
+  SELECT * INTO prep FROM public.assistant_reminder_commands cmd WHERE owner=o AND task_id=tid AND action_key=(ref->>'id')::uuid AND cmd.kind='prepare_reminder';
   IF t->>'state' IS DISTINCT FROM 'awaiting_confirmation' OR t->'business_refs' IS DISTINCT FROM jsonb_build_array(ref) OR prep.owner IS NULL
   OR prep.binding_revision<>rev OR prep.domain_revision<>generation OR prep.snapshot_hash IS DISTINCT FROM snapshot
-  OR kind IS DISTINCT FROM CASE cap WHEN 'reminder.snooze' THEN 'snooze' ELSE 'settings' END THEN RAISE EXCEPTION 'Actual reminder preparation changed' USING ERRCODE='40001'; END IF;
+  OR kind IS DISTINCT FROM (CASE cap WHEN 'reminder.snooze' THEN 'snooze' ELSE 'settings' END) THEN RAISE EXCEPTION 'Actual reminder preparation changed' USING ERRCODE='40001'; END IF;
   IF kind='snooze' THEN
    IF NOT coalesce(public.assistant_wf_keys(v,ARRAY['occurrence_id','minutes','previous_remind_at','previous_timezone']),false)
    OR v->'occurrence_id' IS DISTINCT FROM f->'occurrence_id' OR v->'minutes' IS DISTINCT FROM f->'minutes' OR v->'previous_timezone' IS DISTINCT FROM f->'previous_timezone'
@@ -260,9 +260,9 @@ EXCEPTION WHEN SQLSTATE '40001' THEN RETURN jsonb_build_object('error','stale');
  WHEN unique_violation THEN RETURN jsonb_build_object('error','duplicate'); WHEN invalid_parameter_value OR invalid_text_representation OR check_violation OR not_null_violation OR datetime_field_overflow OR invalid_datetime_format THEN RETURN jsonb_build_object('error','invalid'); END $$;
 CREATE FUNCTION public.assistant_reminder_read(p_command jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();c public.assistant_reminder_commands%ROWTYPE;
+DECLARE o uuid:=public.assistant_patient_uid();c public.assistant_reminder_commands%ROWTYPE;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(o::text,35035));
  SELECT * INTO c FROM public.assistant_reminder_commands WHERE owner=o AND action_key=(p_command->'binding'->>'action_key')::uuid;
  IF NOT FOUND THEN RETURN jsonb_build_object('error','not_found'); END IF;

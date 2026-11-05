@@ -80,7 +80,7 @@ DO $$ DECLARE relation_name text; BEGIN
   EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY',relation_name);
   EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY',relation_name);
   EXECUTE format('CREATE POLICY assistant_media_technical_owner ON public.%I TO assistant_evidence_owner USING(true) WITH CHECK(true)',relation_name);
-  EXECUTE format('CREATE POLICY assistant_media_patient_command ON public.%I TO assistant_workflow_owner USING(owner=auth.uid()) WITH CHECK(owner=auth.uid())',relation_name);
+  EXECUTE format('CREATE POLICY assistant_media_patient_command ON public.%I TO assistant_workflow_owner USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid())',relation_name);
   EXECUTE format('REVOKE ALL ON public.%I FROM PUBLIC,anon,authenticated,service_role,assistant_evidence_login,assistant_workflow_owner',relation_name);
  END LOOP;
 END $$;

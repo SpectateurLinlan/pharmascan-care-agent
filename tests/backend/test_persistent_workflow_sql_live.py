@@ -4,9 +4,10 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from uuid import uuid4
+from typing import get_args
 
 import pytest
-from app.contracts.assistant_workflows import WorkflowTask
+from app.contracts.assistant_workflows import BusinessRef, WorkflowTask
 
 from tests.backend.persistent_workflow_live_support import admitted_live_profile, sql_connection_parameters
 
@@ -47,7 +48,9 @@ def live_persistence_sql():
     except psycopg.Error:
         pytest.fail("Approved isolated SQL connection unavailable", pytrace=False)
     with connection:
-        assert connection.execute("SELECT current_database()").fetchone()[0] == profile.database_url.rsplit("/", 1)[1]
+        from urllib.parse import urlparse
+
+        assert connection.execute("SELECT current_database()").fetchone()[0] == urlparse(profile.database_url).path[1:]
         count = connection.execute(
             "SELECT count(*) FROM public.patient_profiles WHERE user_id=ANY(%s) AND demo_only",
             ([target.owner_a, target.owner_b],),
@@ -128,6 +131,47 @@ def test_live_restricted_acl_cannot_reach_patient_or_clinical_authority(live_per
     validate_persistent_test_profile(profile, purpose="sql_read", require_hashes=True)
     result = inspect_read_only(profile, target)
     assert result["acl_observation"] == "PASS", "Restricted role/owner/PUBLIC closure is not accepted"
+
+
+def test_live_invoker_identity_readers_match_native_claim_precedence(live_persistence_sql):
+    """Managed Auth schema privileges are not required by the pure claim readers."""
+    _, target, c = live_persistence_sql
+    with c.transaction():
+        c.execute("SET LOCAL ROLE authenticated")
+        for top_level, claims in (
+            ("", {"sub": str(target.owner_a), "role": "authenticated"}),
+            (str(target.owner_b), {"sub": str(target.owner_a), "role": "authenticated"}),
+            ("", {}),
+        ):
+            c.execute("SELECT set_config('request.jwt.claim.sub',%s,true)", (top_level,))
+            c.execute("SELECT set_config('request.jwt.claims',%s,true)", (json.dumps(claims),))
+            assert c.execute(
+                "SELECT public.assistant_patient_uid() IS NOT DISTINCT FROM auth.uid(),"
+                "public.assistant_patient_role() IS NOT DISTINCT FROM auth.role()"
+            ).fetchone() == (True, True)
+    assert c.execute(
+        "SELECT bool_and(NOT prosecdef) FROM pg_proc "
+        "WHERE oid=ANY(ARRAY['public.assistant_patient_uid()'::regprocedure,"
+        "'public.assistant_patient_role()'::regprocedure])"
+    ).fetchone()[0] is True
+    assert c.execute(
+        "SELECT has_function_privilege('assistant_evidence_login',"
+        "'public.assistant_patient_uid()','EXECUTE')"
+    ).fetchone()[0] is False
+
+
+def test_live_preparation_reference_contract_matches_typed_application(live_persistence_sql):
+    """Every typed preparation/result kind crosses the actual CHECK helper."""
+    from psycopg.types.json import Jsonb
+
+    _, _, c = live_persistence_sql
+    for kind in get_args(BusinessRef.model_fields["kind"].annotation):
+        assert c.execute(
+            "SELECT public.assistant_wf_ref(%s)", (Jsonb({"kind": kind, "id": str(uuid4())}),)
+        ).fetchone()[0] is True
+    for invalid in ({"kind": "unregistered", "id": str(uuid4())},
+                    {"kind": "regimen", "id": str(uuid4()), "version": 0}):
+        assert c.execute("SELECT public.assistant_wf_ref(%s)", (Jsonb(invalid),)).fetchone()[0] is False
 
 
 def test_live_cross_owner_task_and_forged_result_are_rejected(live_persistence_sql):

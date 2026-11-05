@@ -8,13 +8,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 from urllib.parse import urlparse
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 
 from ..config import validate_publishable_key
 from ..contracts.workflow_attachments import DeleteReceipt, OriginalMime, StoredObject
 from ..domain.errors import AuthenticationRequiredError, NotFoundError, ProviderUnavailableError, ValidationError
+from .storage_responses import object_is_absent
 
 ObjectOperation = Literal["read", "put", "delete"]
 
@@ -124,6 +125,7 @@ class SupabaseWorkflowObjects:
             return self._client.request(
                 method,
                 self._base + key,
+                params={"cacheNonce": uuid4().hex} if method == "GET" else None,
                 content=content,
                 headers={**self._headers, "Content-Type": mime, "x-upsert": "false", "Cache-Control": "no-store"},
                 timeout=15,
@@ -171,7 +173,7 @@ class SupabaseWorkflowObjects:
     def read(self, owner: UUID, key: str) -> bytes:
         self._key(owner, key, "read")
         response = self._request("GET", key)
-        if response.status_code == 404:
+        if object_is_absent(response):
             raise NotFoundError("Original object not found")
         if response.status_code >= 400 or len(response.content) > 10 * 1024 * 1024:
             raise ProviderUnavailableError("Original object could not be read")
@@ -180,6 +182,6 @@ class SupabaseWorkflowObjects:
     def delete(self, owner: UUID, key: str) -> DeleteReceipt:
         self._key(owner, key, "delete")
         response = self._request("DELETE", key)
-        if response.status_code >= 400 and response.status_code != 404:
+        if response.status_code >= 400 and not object_is_absent(response):
             raise ProviderUnavailableError("Original cleanup outcome could not be confirmed")
         return DeleteReceipt(state="deleted")

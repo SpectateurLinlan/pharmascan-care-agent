@@ -19,7 +19,7 @@ ALTER TABLE public.assistant_medication_commands OWNER TO assistant_workflow_own
 ALTER TABLE public.assistant_medication_commands ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assistant_medication_commands FORCE ROW LEVEL SECURITY;
 CREATE POLICY assistant_medication_command_owner ON public.assistant_medication_commands TO assistant_workflow_owner
- USING(owner=auth.uid()) WITH CHECK(owner=auth.uid());
+ USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid());
 REVOKE ALL ON public.assistant_medication_commands FROM PUBLIC,anon,authenticated,service_role,
  assistant_evidence_login,assistant_evidence_owner;
 
@@ -35,18 +35,18 @@ ALTER TABLE public.assistant_enrollment_originals OWNER TO assistant_workflow_ow
 ALTER TABLE public.assistant_enrollment_originals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assistant_enrollment_originals FORCE ROW LEVEL SECURITY;
 CREATE POLICY assistant_enrollment_original_internal ON public.assistant_enrollment_originals TO assistant_workflow_owner
- USING(owner=auth.uid()) WITH CHECK(owner=auth.uid());
+ USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid());
 CREATE POLICY assistant_enrollment_original_patient ON public.assistant_enrollment_originals FOR SELECT TO authenticated
- USING(owner=(SELECT auth.uid()));
+ USING(owner=(SELECT public.assistant_patient_uid()));
 REVOKE ALL ON public.assistant_enrollment_originals FROM PUBLIC,anon,authenticated,service_role,
  assistant_evidence_login,assistant_evidence_owner;
 GRANT SELECT ON public.assistant_enrollment_originals TO authenticated;
 GRANT SELECT,INSERT,UPDATE ON public.assistant_enrollment_operations,public.assistant_enrollment_generations
  TO assistant_workflow_owner;
 CREATE POLICY assistant_enrollment_operation_command ON public.assistant_enrollment_operations TO assistant_workflow_owner
- USING(owner=auth.uid()) WITH CHECK(owner=auth.uid());
+ USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid());
 CREATE POLICY assistant_enrollment_generation_command ON public.assistant_enrollment_generations TO assistant_workflow_owner
- USING(owner=auth.uid()) WITH CHECK(owner=auth.uid());
+ USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid());
 
 -- Explicit normal-command owner only. The verifier receives no clinical grants.
 GRANT SELECT,INSERT,UPDATE ON public.source_documents,public.source_fields,public.patient_medications,
@@ -59,19 +59,19 @@ DO $$ DECLARE relation_name text; BEGIN
  FOREACH relation_name IN ARRAY ARRAY['source_documents','source_fields','patient_medications','regimen_versions',
  'confirmation_challenges','agent_sessions','medication_evidence_tasks','medication_images','medication_source_links',
  'draft_deletion_receipts'] LOOP
-  EXECUTE format('CREATE POLICY assistant_medication_owned_command ON public.%I TO assistant_workflow_owner USING(patient_id=auth.uid()) WITH CHECK(patient_id=auth.uid())',relation_name);
+  EXECUTE format('CREATE POLICY assistant_medication_owned_command ON public.%I TO assistant_workflow_owner USING(patient_id=public.assistant_patient_uid()) WITH CHECK(patient_id=public.assistant_patient_uid())',relation_name);
  END LOOP;
 END $$;
 CREATE POLICY assistant_medication_profile_read ON public.patient_profiles FOR SELECT TO assistant_workflow_owner
- USING(user_id=auth.uid());
+ USING(user_id=public.assistant_patient_uid());
 
 -- BEFORE STATEMENT is deliberate:036 BEFORE ROW hooks are too late to acquire
 -- the owner fence before a legacy UPDATE has acquired its clinical row lock.
 CREATE FUNCTION public.assistant_medication_owner_fence() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 BEGIN
- IF auth.uid() IS NOT NULL THEN
-  PERFORM pg_advisory_xact_lock(hashtextextended(auth.uid()::text,35035));
+ IF public.assistant_patient_uid() IS NOT NULL THEN
+  PERFORM pg_advisory_xact_lock(hashtextextended(public.assistant_patient_uid()::text,35035));
  END IF;
  RETURN NULL;
 END $$;
@@ -93,9 +93,9 @@ REVOKE ALL ON FUNCTION public.assistant_medication_activate_legacy_030(uuid,uuid
 GRANT EXECUTE ON FUNCTION public.assistant_medication_activate_legacy_030(uuid,uuid,text) TO assistant_workflow_owner;
 CREATE FUNCTION public.activate_medication_regimen_version(p_regimen_id uuid,p_challenge_id uuid,p_timezone text) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid(); binding public.assistant_enrollment_operations%ROWTYPE; task jsonb;
+DECLARE o uuid:=public.assistant_patient_uid(); binding public.assistant_enrollment_operations%ROWTYPE; task jsonb;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(o::text,35035));
  SELECT * INTO binding FROM public.assistant_enrollment_operations WHERE owner=o AND regimen_id=p_regimen_id;
  IF FOUND THEN
@@ -119,9 +119,9 @@ GRANT EXECUTE ON FUNCTION public.assistant_medication_delete_legacy_027(text,uui
 CREATE FUNCTION public.delete_unconfirmed_medication(p_kind text,p_id uuid,p_confirmed boolean) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 BEGIN
- IF auth.uid() IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' OR p_confirmed IS DISTINCT FROM true THEN
+ IF public.assistant_patient_uid() IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' OR p_confirmed IS DISTINCT FROM true THEN
   RAISE EXCEPTION 'Verified explicit patient confirmation required' USING ERRCODE='42501'; END IF;
- PERFORM pg_advisory_xact_lock(hashtextextended(auth.uid()::text,35035));
+ PERFORM pg_advisory_xact_lock(hashtextextended(public.assistant_patient_uid()::text,35035));
  -- Existing native history, FK and reviewed-source protections still apply.
  RETURN public.assistant_medication_delete_legacy_027(p_kind,p_id,p_confirmed);
 END $$;
@@ -282,7 +282,7 @@ DECLARE s jsonb:=p_prepared->'source'; m jsonb:=p_prepared->'result'->'medicatio
  r jsonb:=p_prepared->'result'->'regimen'; f jsonb; sid uuid; mid uuid; rid uuid; attachment uuid;
  already boolean; current_row public.regimen_versions%ROWTYPE; new_version integer; clinical_revision bigint;
 BEGIN
- IF auth.uid() IS DISTINCT FROM p_owner OR p_digest IS NULL OR p_digest !~ '^[a-f0-9]{64}$'
+ IF public.assistant_patient_uid() IS DISTINCT FROM p_owner OR p_digest IS NULL OR p_digest !~ '^[a-f0-9]{64}$'
  OR p_prepared->>'workflow_task_id' IS DISTINCT FROM p_binding->>'task_id'
  OR p_prepared->>'workflow_revision' IS DISTINCT FROM p_binding->>'task_revision'
  OR s->>'patient_id' IS DISTINCT FROM p_owner::text OR m->>'patient_id' IS DISTINCT FROM p_owner::text
@@ -408,7 +408,7 @@ DECLARE a jsonb;
 BEGIN
  SELECT data INTO a FROM public.assistant_workflow_attachments
  WHERE owner=p_owner AND task_id=p_task AND id=p_attachment;
- IF auth.uid() IS DISTINCT FROM p_owner OR a IS NULL OR a->>'state' IS DISTINCT FROM 'saved'
+ IF public.assistant_patient_uid() IS DISTINCT FROM p_owner OR a IS NULL OR a->>'state' IS DISTINCT FROM 'saved'
  OR a->'object_written' IS DISTINCT FROM 'true'::jsonb OR a->>'extraction_status' IS DISTINCT FROM 'succeeded'
  OR a->>'source_kind' NOT IN ('package','pharmacy_label','prescription')
  OR EXISTS(SELECT 1 FROM public.assistant_original_deletions WHERE owner=p_owner AND attachment_id=p_attachment)
@@ -648,7 +648,7 @@ REVOKE ALL ON FUNCTION public.assistant_medication_registration(uuid,jsonb,jsonb
 
 CREATE FUNCTION public.assistant_medication_write(p_request jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid(); cmd jsonb:=p_request->'command'; b jsonb:=cmd->'binding'; kind text:=cmd->>'kind';
+DECLARE o uuid:=public.assistant_patient_uid(); cmd jsonb:=p_request->'command'; b jsonb:=cmd->'binding'; kind text:=cmd->>'kind';
  tid uuid; action_id uuid; revision integer; digest text; prior public.assistant_medication_commands%ROWTYPE;
  t jsonb; ctl jsonb; ref jsonb:=b->'prepared_ref'; result_ref jsonb; prepared jsonb; expected jsonb; a jsonb;
  candidate jsonb; evidence jsonb; source_row public.source_documents%ROWTYPE; regimen public.regimen_versions%ROWTYPE;
@@ -657,7 +657,7 @@ DECLARE o uuid:=auth.uid(); cmd jsonb:=p_request->'command'; b jsonb:=cmd->'bind
  next_state text:='awaiting_confirmation'; outcome text:='prepared'; advance boolean:=true; child jsonb;
  allowed text[]; attachment uuid; key text; timezone_name text; stamped timestamptz; native_task jsonb;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN
   RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  IF NOT public.assistant_wf_keys(p_request,ARRAY['command','prepared','existing_review','materialized_source','prepared_digest'])
  OR octet_length(p_request::text)>262144 OR NOT public.assistant_wf_keys(b,ARRAY['task_id','task_revision',
@@ -754,7 +754,7 @@ BEGIN
     RAISE EXCEPTION 'Choose current active plan' USING ERRCODE='40001'; END IF;
   ELSE
    IF expected->>'target_id' IS DISTINCT FROM ref->>'id' OR expected->'expected_version' IS DISTINCT FROM ref->'version'
-   OR ref->>'kind' IS DISTINCT FROM CASE WHEN expected->>'kind'='draft' THEN 'regimen' ELSE 'enrollment_task' END THEN
+   OR ref->>'kind' IS DISTINCT FROM (CASE WHEN expected->>'kind'='draft' THEN 'regimen' ELSE 'enrollment_task' END) THEN
     RAISE EXCEPTION 'Saved unfinished target changed' USING ERRCODE='40001'; END IF;
    IF expected->>'kind'='draft' THEN
     IF NOT EXISTS(SELECT 1 FROM public.regimen_versions WHERE patient_id=o AND id=(ref->>'id')::uuid
@@ -837,7 +837,7 @@ BEGIN
   OR prepared->'create_medication' IS DISTINCT FROM 'false'::jsonb
   OR prepared->'result'->'regimen'->>'patient_medication_id' IS DISTINCT FROM regimen.patient_medication_id::text
   OR prepared->'result'->'regimen'->'patient_edited' IS DISTINCT FROM 'true'::jsonb
-  OR (prepared->'result'->'regimen'->>'supersedes_id')::uuid IS DISTINCT FROM CASE WHEN regimen.state='active' THEN regimen.id ELSE NULL END
+  OR (prepared->'result'->'regimen'->>'supersedes_id')::uuid IS DISTINCT FROM (CASE WHEN regimen.state='active' THEN regimen.id ELSE NULL END)
   OR prepared->'source'->>'source_kind' IS DISTINCT FROM 'user_manual'
   OR prepared->'source'->>'extraction_evidence' IS NOT NULL OR prepared->'attachment_ids' IS DISTINCT FROM '[]'::jsonb THEN
    RAISE EXCEPTION 'Inactive successor proposal required' USING ERRCODE='22023'; END IF;
@@ -911,7 +911,7 @@ BEGIN
   outcome:='applied'; next_state:='completed';
  ELSIF kind='delete_draft' THEN
   IF cmd->>'draft_kind' NOT IN ('draft','source') OR ref->>'kind' IS DISTINCT FROM
-   CASE WHEN cmd->>'draft_kind'='draft' THEN 'regimen' ELSE 'enrollment_task' END THEN
+   (CASE WHEN cmd->>'draft_kind'='draft' THEN 'regimen' ELSE 'enrollment_task' END) THEN
    RAISE EXCEPTION 'Choose an owned unfinished registration' USING ERRCODE='22023'; END IF;
   IF cmd->>'draft_kind'='draft' THEN
    IF NOT EXISTS(SELECT 1 FROM public.regimen_versions WHERE patient_id=o AND id=(ref->>'id')::uuid
@@ -990,9 +990,9 @@ GRANT EXECUTE ON FUNCTION public.assistant_medication_write(jsonb) TO authentica
 -- IDs, copy an image, advance a task, or reinterpret absence as no business effect.
 CREATE FUNCTION public.assistant_medication_read(p_command jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid(); c public.assistant_medication_commands%ROWTYPE;
+DECLARE o uuid:=public.assistant_patient_uid(); c public.assistant_medication_commands%ROWTYPE;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN
   RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  IF jsonb_typeof(p_command) IS DISTINCT FROM 'object' OR octet_length(p_command::text)>262144 THEN
   RAISE EXCEPTION 'Invalid command fingerprint input' USING ERRCODE='22023'; END IF;
@@ -1015,9 +1015,9 @@ GRANT EXECUTE ON FUNCTION public.assistant_medication_read(jsonb) TO authenticat
 -- Closed owned result projection; cannot delete a draft or acknowledge a file.
 CREATE FUNCTION public.assistant_draft_deletion_result(p_kind text,p_target uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid(); result jsonb;
+DECLARE o uuid:=public.assistant_patient_uid(); result jsonb;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN
   RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  IF p_kind IS NULL OR p_kind NOT IN ('draft','source') OR p_target IS NULL THEN
   RAISE EXCEPTION 'Invalid deletion selector' USING ERRCODE='22023'; END IF;

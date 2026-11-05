@@ -7,7 +7,7 @@ from copy import deepcopy
 from datetime import datetime
 from functools import wraps
 from threading import RLock
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 
@@ -23,6 +23,7 @@ from ..contracts.medication_evidence import (
     VisualReferenceSet,
 )
 from ..domain.errors import ProviderUnavailableError, ValidationError
+from .storage_responses import object_is_absent
 from ..timing import current_timing, timed_stage
 from .clinical_memory import ClinicalMemory
 from .supabase_data import SupabaseDataClient
@@ -472,6 +473,7 @@ class SupabaseImageStore:
                 response = client.request(
                     method,
                     self._url + f"/storage/v1/object/{self._bucket_id}/" + path,
+                    params={"cacheNonce": uuid4().hex} if observe_absence else None,
                     headers={**self._headers, "Content-Type": self._content_type, "x-upsert": "false"},
                     content=data,
                     timeout=15,
@@ -486,9 +488,9 @@ class SupabaseImageStore:
                 duplicate = False
             if duplicate:
                 return b""
-        if method == "DELETE" and response.status_code == 404:
+        if method == "DELETE" and object_is_absent(response):
             return b""
-        if observe_absence and method == 'GET' and response.status_code == 404:
+        if observe_absence and method == 'GET' and object_is_absent(response):
             return None
         if response.status_code >= 400:
             raise ProviderUnavailableError("Private image operation rejected")

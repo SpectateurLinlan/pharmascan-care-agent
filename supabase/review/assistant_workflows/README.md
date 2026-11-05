@@ -1,10 +1,31 @@
 # Assistant persistence review candidates
 
-**NOT APPLIED / NOT READY TO ENABLE.** Files here are unnumbered review candidates,
-outside the automatic migrations directory. Reading or testing their source does
-not authorize role creation, SQL application, Storage policies or cloud changes.
+Files here are unnumbered, operator-reviewed persistence definitions, outside the
+automatic migrations directory. They are not automatically installed by deploying
+code. Application to another target still requires target-specific authorization,
+backup, privilege checks and acceptance; reading a file grants no authority.
 
-Prerequisites (review baselines, actual target application not verified):
+Validation update (2026-11-06): the complete ordered foundation/candidate set was
+created in a real Supabase PostgreSQL17.11 transaction and rolled back. The fixed
+technical/patient-role readiness readers agreed on an unpublished release; direct
+application-table and ordinary clinical definer access was absent for the evidence
+login. Changes to the new installation membership's INHERIT/SET options changed
+the catalog fingerprint. The checked catalog returned to its original state.
+This supersedes earlier NOT_RUN statements only for definition creation and these
+specific metadata/permission checks. It does not validate business-function paths,
+real patient JWT HTTP admission, clinical writes, Storage, races or recovery.
+That initial preflight rolled back all definitions. A separately authorized hosted
+installation followed; private target receipts track its amendments and acceptance.
+An installation alone does not publish runtime readiness. Hosted acceptance also
+exercised bounded SQL transactions, real patient JWTs, private original retention,
+cross-owner denials, cancellation cleanup, and native photo/PDF compatibility.
+These receipts are target-specific, not a blanket validation of every clinical
+path or another installation. Supabase's non-superuser installer
+needs temporary owner-role/schema privileges during ownership transfer; remove
+these installation privileges before accepting any release. Source checks alone
+do not establish those target-specific prerequisites.
+
+Prerequisites (source baselines; inspect each target's actual migration ledger):
 
 - `202610250035_assistant_workflows.sql`: SHA256 `4da7dde8d29aa9efe0604178570be6e7c24749c5191a34186bccafb08476366a`.
 - `202610250036_enrollment_workflow_idempotency.sql`: SHA256 `cbdb6a03c8d3f2059907b140bc2b85bc4c8cae0e690947f2b88d32bdbd8cadc2`.

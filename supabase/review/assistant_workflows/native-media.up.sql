@@ -26,7 +26,7 @@ DO $$ DECLARE relation_name text; BEGIN
   EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY',relation_name);
   EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY',relation_name);
   EXECUTE format('CREATE POLICY assistant_native_file_technical ON public.%I TO assistant_evidence_owner USING(true) WITH CHECK(true)',relation_name);
-  EXECUTE format('CREATE POLICY assistant_native_file_patient_command ON public.%I TO assistant_workflow_owner USING(owner=auth.uid()) WITH CHECK(owner=auth.uid())',relation_name);
+  EXECUTE format('CREATE POLICY assistant_native_file_patient_command ON public.%I TO assistant_workflow_owner USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid())',relation_name);
   EXECUTE format('REVOKE ALL ON public.%I FROM PUBLIC,anon,authenticated,service_role,assistant_evidence_login',relation_name);
  END LOOP;
 END $$;
@@ -68,17 +68,17 @@ BEGIN
  OR p_target->>'owner' IS DISTINCT FROM p_owner::text OR p_target->>'bucket_id' NOT IN ('visual-references','medication-sources') THEN
   RAISE EXCEPTION 'Owned bounded native file target required' USING ERRCODE='22023'; END IF;
  pdf:=p_target->>'bucket_id'='medication-sources';parts:=string_to_array(p_target->>'object_ref','/');
- IF cardinality(parts)<>CASE WHEN pdf THEN 4 ELSE 3 END OR parts[1]<>p_owner::text OR (pdf AND parts[2]<>'library') THEN
+ IF cardinality(parts)<>(CASE WHEN pdf THEN 4 ELSE 3 END) OR parts[1]<>p_owner::text OR (pdf AND parts[2]<>'library') THEN
   RAISE EXCEPTION 'Canonical owned native path required' USING ERRCODE='22023'; END IF;
  med:=parts[cardinality(parts)-1]::uuid;checksum:=p_target->>'checksum';
  path:=p_owner::text||CASE WHEN pdf THEN '/library/' ELSE '/' END||med::text||'/'||checksum||CASE WHEN pdf THEN '.pdf' ELSE '.png' END;
  IF checksum IS NULL OR checksum!~'^[a-f0-9]{64}$' OR p_target->>'object_ref' IS DISTINCT FROM path
- OR p_target->>'content_type' IS DISTINCT FROM CASE WHEN pdf THEN 'application/pdf' ELSE 'image/png' END
+ OR p_target->>'content_type' IS DISTINCT FROM (CASE WHEN pdf THEN 'application/pdf' ELSE 'image/png' END)
  OR (p_upload AND (jsonb_typeof(p_target->'byte_size') IS DISTINCT FROM 'number' OR p_target->>'byte_size' !~ '^[1-9][0-9]*$')) THEN
   RAISE EXCEPTION 'Canonical native checksum/MIME/size required' USING ERRCODE='22023'; END IF;
  IF p_target->>'byte_size' IS NOT NULL THEN
   size:=(p_target->>'byte_size')::int;
-  IF size<1 OR size>CASE WHEN pdf THEN 10485760 ELSE 8000000 END THEN RAISE EXCEPTION 'Native file exceeds purpose limit' USING ERRCODE='22023'; END IF;
+  IF size<1 OR size>(CASE WHEN pdf THEN 10485760 ELSE 8000000 END) THEN RAISE EXCEPTION 'Native file exceeds purpose limit' USING ERRCODE='22023'; END IF;
  END IF;
  RETURN p_target;
 END $$;
@@ -87,7 +87,7 @@ CREATE FUNCTION public.assistant_native_file_delete_current(p_owner uuid,p_bucke
 LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
 DECLARE n jsonb;ref jsonb;kind text;receipt public.draft_deletion_receipts%ROWTYPE;count_rows integer;
 BEGIN
- IF p_owner IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'Owned native deletion required' USING ERRCODE='42501'; END IF;
+ IF p_owner IS DISTINCT FROM public.assistant_patient_uid() THEN RAISE EXCEPTION 'Owned native deletion required' USING ERRCODE='42501'; END IF;
  IF p_bucket='visual-references' THEN
   SELECT count(*) INTO count_rows FROM public.medication_images WHERE patient_id=p_owner AND data->>'storage_path'=p_path;
   IF count_rows>1 THEN RAISE EXCEPTION 'Shared native image protected' USING ERRCODE='40001'; END IF;
@@ -120,22 +120,22 @@ END $$;
 CREATE FUNCTION public.assistant_native_file_projection(p_id uuid) RETURNS jsonb
 LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
  SELECT jsonb_build_object('ticket_id',id,'nonce',nonce,'generation',generation,'operation',operation,'target',target,
- 'expires_at',expires_at,'native_ref',native_ref) FROM public.assistant_native_file_intents WHERE owner=auth.uid() AND id=p_id
+ 'expires_at',expires_at,'native_ref',native_ref) FROM public.assistant_native_file_intents WHERE owner=public.assistant_patient_uid() AND id=p_id
 $$;
 CREATE FUNCTION public.assistant_native_file_proof(p_id uuid) RETURNS jsonb
 LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
  SELECT jsonb_build_object('family','native_object','ticket_id',ticket_id,'verification_id',id,'generation',generation,'result',result)
- FROM public.assistant_native_file_observations WHERE owner=auth.uid() AND ticket_id=p_id AND result<>'outcome_unknown'
+ FROM public.assistant_native_file_observations WHERE owner=public.assistant_patient_uid() AND ticket_id=p_id AND result<>'outcome_unknown'
  ORDER BY generation DESC LIMIT 1
 $$;
 
 CREATE FUNCTION public.assistant_native_media_command(p_command jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();kind text:=p_command->>'kind';intent jsonb:=p_command->'intent';target jsonb;
+DECLARE o uuid:=public.assistant_patient_uid();kind text:=p_command->>'kind';intent jsonb:=p_command->'intent';target jsonb;
  t public.assistant_native_file_intents%ROWTYPE;v public.assistant_native_file_observations%ROWTYPE;
  intent_id uuid;bucket text;path text;parts text[];pdf boolean;digest text;current_native jsonb;reference jsonb;allowed text[];
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  allowed:=CASE kind WHEN 'prepare_upload' THEN ARRAY['kind','intent'] WHEN 'prepare_delete' THEN ARRAY['kind','intent']
  WHEN 'claim' THEN ARRAY['kind','ticket_id','nonce','generation'] WHEN 'settle_delete' THEN ARRAY['kind','proof'] ELSE NULL END;
  IF allowed IS NULL OR NOT public.assistant_wf_keys(p_command,allowed) THEN RAISE EXCEPTION 'Closed native command required' USING ERRCODE='22023'; END IF;
@@ -259,7 +259,7 @@ CREATE FUNCTION public.assistant_native_file_reference(p_owner uuid,p_bucket tex
 LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
 DECLARE t public.assistant_native_file_intents%ROWTYPE;
 BEGIN
- IF p_owner IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'Owned native reference required' USING ERRCODE='42501'; END IF;
+ IF p_owner IS DISTINCT FROM public.assistant_patient_uid() THEN RAISE EXCEPTION 'Owned native reference required' USING ERRCODE='42501'; END IF;
  IF EXISTS(SELECT 1 FROM public.assistant_native_media_deletions WHERE owner=p_owner AND bucket_id=p_bucket AND object_ref=p_path) THEN
   RAISE EXCEPTION 'Deleting native file cannot be referenced' USING ERRCODE='40001'; END IF;
  SELECT i.* INTO t FROM public.assistant_native_file_intents i JOIN public.assistant_native_file_observations v
@@ -275,7 +275,7 @@ CREATE FUNCTION public.assistant_native_file_ack(p_owner uuid,p_bucket text,p_pa
 LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
 DECLARE t public.assistant_native_file_intents%ROWTYPE;current_native jsonb;
 BEGIN
- IF p_owner IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'Owned cleanup acknowledgement required' USING ERRCODE='42501'; END IF;
+ IF p_owner IS DISTINCT FROM public.assistant_patient_uid() THEN RAISE EXCEPTION 'Owned cleanup acknowledgement required' USING ERRCODE='42501'; END IF;
  SELECT i.* INTO t FROM public.assistant_native_file_intents i JOIN public.assistant_native_file_observations v
   ON v.owner=i.owner AND v.ticket_id=i.id AND v.generation=i.generation
   WHERE i.owner=p_owner AND i.bucket_id=p_bucket AND i.object_ref=p_path AND i.operation='delete' AND i.state='settled'
@@ -291,7 +291,7 @@ END $$;
 -- Native publication and acknowledgement adopt facts in their existing owner transaction.
 CREATE OR REPLACE FUNCTION public.assistant_media_reference_guard() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();path text;bucket text;image jsonb;native_id uuid;med uuid;checksum text;native_size integer;
+DECLARE o uuid:=public.assistant_patient_uid();path text;bucket text;image jsonb;native_id uuid;med uuid;v_checksum text;native_size integer;
 BEGIN
  IF o IS NULL OR NEW.patient_id IS DISTINCT FROM o THEN RAISE EXCEPTION 'Verified owned reference required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(o::text,35035));
@@ -299,13 +299,13 @@ BEGIN
   IF TG_OP='UPDATE' THEN
    IF NEW.data->>'storage_path' IS NOT DISTINCT FROM OLD.data->>'storage_path' AND NEW.source_id IS NOT DISTINCT FROM OLD.source_id THEN RETURN NEW; END IF;
   END IF;
-  path:=NEW.data->>'storage_path';bucket:='visual-references';native_id:=NEW.id;med:=NEW.medication_id;checksum:=NEW.data->>'checksum';
+  path:=NEW.data->>'storage_path';bucket:='visual-references';native_id:=NEW.id;med:=NEW.medication_id;v_checksum:=NEW.data->>'checksum';
  ELSIF TG_TABLE_NAME='medication_library_files' THEN
   IF TG_OP='UPDATE' THEN
    IF NEW.storage_path IS NOT DISTINCT FROM OLD.storage_path AND NEW.source_document_id IS NOT DISTINCT FROM OLD.source_document_id
    AND NEW.regimen_version_id IS NOT DISTINCT FROM OLD.regimen_version_id THEN RETURN NEW; END IF;
   END IF;
-  path:=NEW.storage_path;bucket:='medication-sources';native_id:=NEW.id;med:=NEW.medication_id;checksum:=NEW.checksum;native_size:=NEW.byte_size;
+  path:=NEW.storage_path;bucket:='medication-sources';native_id:=NEW.id;med:=NEW.medication_id;v_checksum:=NEW.checksum;native_size:=NEW.byte_size;
  ELSE
   -- Source association may reference several images; reject any deleting key.
   IF EXISTS(SELECT 1 FROM public.medication_images i JOIN public.assistant_native_media_deletions d
@@ -315,19 +315,19 @@ BEGIN
  END IF;
  IF path IS NULL OR EXISTS(SELECT 1 FROM public.assistant_native_media_deletions d WHERE d.owner=o AND d.bucket_id=bucket AND d.object_ref=path) THEN
   RAISE EXCEPTION 'Deleting native object cannot acquire references' USING ERRCODE='40001'; END IF;
- IF NOT public.assistant_native_file_reference(o,bucket,path,checksum,native_size)
+ IF NOT public.assistant_native_file_reference(o,bucket,path,v_checksum,native_size)
  AND NOT EXISTS(SELECT 1 FROM public.assistant_media_copy_tickets t JOIN public.assistant_media_copy_verifications v ON v.owner=t.owner AND v.ticket_id=t.id AND v.generation=t.generation
   WHERE t.owner=o AND t.bucket_id=bucket AND t.object_ref=path AND t.target->>'native_id'=native_id::text AND t.target->>'medication_id'=med::text
-  AND t.target->>'checksum'=checksum AND v.result='bytes_verified' AND v.checksum=checksum AND v.bucket_id=bucket
+  AND t.target->>'checksum'=v_checksum AND v.result='bytes_verified' AND v.checksum=v_checksum AND v.bucket_id=bucket
   AND v.byte_size=(t.target->>'byte_size')::int AND (native_size IS NULL OR native_size=v.byte_size) AND v.source_checksum=t.source_checksum) THEN
   RAISE EXCEPTION 'Actual independently verified native bytes required' USING ERRCODE='40001'; END IF;
  RETURN NEW;
 END $$;
 CREATE OR REPLACE FUNCTION public.assistant_media_ack(p_id uuid,p_photo boolean) RETURNS void
 LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();t public.assistant_media_delete_tickets%ROWTYPE;v public.assistant_media_delete_verifications%ROWTYPE;result jsonb;n jsonb;path text;bucket text;ref jsonb;
+DECLARE o uuid:=public.assistant_patient_uid();t public.assistant_media_delete_tickets%ROWTYPE;v public.assistant_media_delete_verifications%ROWTYPE;result jsonb;n jsonb;path text;bucket text;ref jsonb;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(o::text,35035));
  n:=public.assistant_media_native(o,p_photo,p_id);
  path:=n->>'storage_path';bucket:=CASE WHEN p_photo THEN 'visual-references' ELSE 'medication-sources' END;
@@ -338,7 +338,7 @@ BEGIN
   RETURN;
  END IF;
  SELECT * INTO t FROM public.assistant_media_delete_tickets WHERE owner=o AND native_ref->>'id'=p_id::text AND media_kind=CASE WHEN p_photo THEN 'photo' ELSE 'pdf' END;
- SELECT * INTO v FROM public.assistant_media_delete_verifications WHERE owner=o AND ticket_id=t.id AND generation=t.generation AND result='absent_after_delete' AND bucket_id=t.bucket_id;
+ SELECT p.* INTO v FROM public.assistant_media_delete_verifications p WHERE p.owner=o AND p.ticket_id=t.id AND p.generation=t.generation AND p.result='absent_after_delete' AND p.bucket_id=t.bucket_id;
  IF t.owner IS NULL OR v.owner IS NULL THEN RAISE EXCEPTION 'Independent native deletion proof required' USING ERRCODE='40001'; END IF;
  result:=public.assistant_media_cleanup_command(jsonb_build_object('kind','settle','reference',jsonb_build_object('family','native_media_delete',
   'ticket_id',t.id,'verification_id',v.id,'generation',v.generation,'result',v.result)));
@@ -348,12 +348,12 @@ CREATE OR REPLACE FUNCTION public.assistant_media_delete_current(p_owner uuid,p_
 LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
 DECLARE r public.assistant_business_receipts%ROWTYPE;c public.assistant_media_commands%ROWTYPE;n jsonb;photo boolean;path text;bucket text;
 BEGIN
- IF p_owner IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'Owned deletion required' USING ERRCODE='42501'; END IF;
+ IF p_owner IS DISTINCT FROM public.assistant_patient_uid() THEN RAISE EXCEPTION 'Owned deletion required' USING ERRCODE='42501'; END IF;
  SELECT * INTO r FROM public.assistant_business_receipts WHERE owner=p_owner AND action_key=p_action;
  SELECT * INTO c FROM public.assistant_media_commands WHERE owner=p_owner AND action_key=p_action;
  IF r.owner IS NULL OR c.owner IS NULL OR r.outcome IS DISTINCT FROM 'applied'
  OR r.capability_id NOT IN ('gallery.photo.delete','library.pdf.delete') OR r.business_ref->>'kind' IS DISTINCT FROM 'file'
- OR c.kind IS DISTINCT FROM CASE r.capability_id WHEN 'gallery.photo.delete' THEN 'delete_photo' ELSE 'tombstone_pdf' END THEN
+ OR c.kind IS DISTINCT FROM (CASE r.capability_id WHEN 'gallery.photo.delete' THEN 'delete_photo' ELSE 'tombstone_pdf' END) THEN
   RAISE EXCEPTION 'Actual confirmed native deletion receipt required' USING ERRCODE='P0002'; END IF;
  photo:=r.capability_id='gallery.photo.delete';n:=public.assistant_media_native(p_owner,photo,(r.business_ref->>'id')::uuid);
  IF n->>'deleted_at' IS NULL OR coalesce(n->'metadata_version',n->'version') IS DISTINCT FROM r.business_ref->'version'
@@ -376,9 +376,9 @@ END $$;
 -- Preserve the existing native signature, owner and ACL. An ACK cannot invent absence.
 CREATE OR REPLACE FUNCTION public.ack_draft_image_cleanup(p_kind text,p_id uuid,p_path text) RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();r public.draft_deletion_receipts%ROWTYPE;ref jsonb;
+DECLARE o uuid:=public.assistant_patient_uid();r public.draft_deletion_receipts%ROWTYPE;ref jsonb;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(o::text,35035));
  SELECT * INTO r FROM public.draft_deletion_receipts WHERE patient_id=o AND kind=p_kind AND target_id=p_id FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'Owned draft deletion receipt required' USING ERRCODE='P0002'; END IF;

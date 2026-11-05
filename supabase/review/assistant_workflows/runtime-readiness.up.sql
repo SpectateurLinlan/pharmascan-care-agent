@@ -62,7 +62,7 @@ BEGIN
         LEFT JOIN pg_catalog.pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
         WHERE n.nspname IN ('public', 'assistant_evidence', 'auth', 'storage') AND a.attnum > 0
         UNION ALL
-        SELECT 'policy:' || p.polrelid::text || ':' || p.polname || ':' || p.polcmd || ':' ||
+        SELECT 'policy:' || p.polrelid::text || ':' || p.polname || ':' || p.polcmd::text || ':' ||
                p.polpermissive::text || ':' || p.polroles::text || ':' ||
                coalesce(pg_catalog.pg_get_expr(p.polqual, p.polrelid), '') || ':' ||
                coalesce(pg_catalog.pg_get_expr(p.polwithcheck, p.polrelid), '')
@@ -82,13 +82,13 @@ BEGIN
         FROM pg_catalog.pg_constraint c JOIN pg_catalog.pg_namespace n ON n.oid = c.connamespace
         WHERE n.nspname IN ('public', 'assistant_evidence', 'auth', 'storage')
         UNION ALL
-        SELECT 'trigger:' || t.tgrelid::text || ':' || t.tgname || ':' || t.tgenabled || ':' ||
+        SELECT 'trigger:' || t.tgrelid::text || ':' || t.tgname || ':' || t.tgenabled::text || ':' ||
                pg_catalog.pg_get_triggerdef(t.oid)
         FROM pg_catalog.pg_trigger t JOIN pg_catalog.pg_class c ON c.oid = t.tgrelid
         JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
         WHERE n.nspname IN ('public', 'assistant_evidence', 'auth', 'storage')
         UNION ALL
-        SELECT 'rule:' || r.ev_class::text || ':' || r.rulename || ':' || r.ev_enabled || ':' ||
+        SELECT 'rule:' || r.ev_class::text || ':' || r.rulename || ':' || r.ev_enabled::text || ':' ||
                pg_catalog.pg_get_ruledef(r.oid)
         FROM pg_catalog.pg_rewrite r JOIN pg_catalog.pg_class c ON c.oid = r.ev_class
         JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
@@ -100,14 +100,15 @@ BEGIN
         FROM pg_catalog.pg_roles r
         WHERE r.rolname LIKE 'assistant_%' OR r.rolname IN ('anon', 'authenticated')
         UNION ALL
-        SELECT 'member:' || m.roleid::text || ':' || m.member::text || ':' || m.admin_option::text
+        SELECT 'member:' || m.roleid::text || ':' || m.member::text || ':' || m.grantor::text || ':' ||
+               m.admin_option::text || ':' || m.inherit_option::text || ':' || m.set_option::text
         FROM pg_catalog.pg_auth_members m
         UNION ALL
         SELECT 'schema:' || n.nspname || ':' || n.nspowner::text || ':' || coalesce(n.nspacl::text, '')
         FROM pg_catalog.pg_namespace n WHERE n.nspname IN ('public', 'assistant_evidence', 'auth', 'storage')
         UNION ALL
         SELECT 'default:' || d.defaclrole::text || ':' || d.defaclnamespace::text || ':' ||
-               d.defaclobjtype || ':' || d.defaclacl::text FROM pg_catalog.pg_default_acl d
+               d.defaclobjtype::text || ':' || d.defaclacl::text FROM pg_catalog.pg_default_acl d
     ) SELECT md5(string_agg(value, E'\n' ORDER BY value COLLATE "C")) INTO observed_digest FROM metadata;
 
     SELECT bool_and(to_regprocedure(name) IS NOT NULL) INTO required_present

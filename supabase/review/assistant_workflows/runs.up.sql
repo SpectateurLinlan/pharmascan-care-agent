@@ -11,9 +11,9 @@ GRANT USAGE ON SCHEMA assistant_evidence TO assistant_workflow_owner;
 GRANT SELECT,INSERT,UPDATE ON public.assistant_runtime_runs TO assistant_workflow_owner;
 GRANT SELECT,INSERT ON public.assistant_runtime_events TO assistant_workflow_owner;
 CREATE POLICY assistant_runtime_patient_command ON public.assistant_runtime_runs TO assistant_workflow_owner
- USING(owner=auth.uid()) WITH CHECK(owner=auth.uid());
+ USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid());
 CREATE POLICY assistant_runtime_event_patient_command ON public.assistant_runtime_events TO assistant_workflow_owner
- USING(owner=auth.uid()) WITH CHECK(owner=auth.uid());
+ USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid());
 
 CREATE FUNCTION assistant_evidence.run_projection(p_owner uuid,p_run uuid,p_acquired boolean DEFAULT false) RETURNS jsonb
 LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
@@ -48,7 +48,7 @@ CREATE FUNCTION public.assistant_run_assert_current(p_owner uuid,p_binding jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE r public.assistant_runtime_runs%ROWTYPE;
 BEGIN
- IF auth.uid() IS DISTINCT FROM p_owner OR p_owner IS NULL OR p_binding IS NULL
+ IF public.assistant_patient_uid() IS DISTINCT FROM p_owner OR p_owner IS NULL OR p_binding IS NULL
  OR NOT public.assistant_wf_keys(p_binding,ARRAY['run_id','epoch'])
  OR jsonb_typeof(p_binding->'epoch') IS DISTINCT FROM 'number' THEN
   RAISE EXCEPTION 'Invalid run write binding' USING ERRCODE='40001'; END IF;
@@ -64,9 +64,9 @@ GRANT EXECUTE ON FUNCTION public.assistant_run_assert_current(uuid,jsonb) TO ass
 
 CREATE FUNCTION public.assistant_run_control(p_command jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid(); rid uuid; kind text; r public.assistant_runtime_runs%ROWTYPE; at_time timestamptz;
+DECLARE o uuid:=public.assistant_patient_uid(); rid uuid; kind text; r public.assistant_runtime_runs%ROWTYPE; at_time timestamptz;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN
   RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  kind:=p_command->>'kind';
  IF kind IS NULL OR kind NOT IN ('start','read','cancel') OR NOT public.assistant_wf_keys(p_command,

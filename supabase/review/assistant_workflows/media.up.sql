@@ -26,22 +26,22 @@ DO $$ DECLARE relation_name text; BEGIN
   EXECUTE format('ALTER TABLE public.%I OWNER TO assistant_workflow_owner',relation_name);
   EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY',relation_name);
   EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY',relation_name);
-  EXECUTE format('CREATE POLICY assistant_media_domain_owner ON public.%I TO assistant_workflow_owner USING(owner=auth.uid()) WITH CHECK(owner=auth.uid())',relation_name);
+  EXECUTE format('CREATE POLICY assistant_media_domain_owner ON public.%I TO assistant_workflow_owner USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid())',relation_name);
   EXECUTE format('REVOKE ALL ON public.%I FROM PUBLIC,anon,authenticated,service_role,assistant_evidence_login,assistant_evidence_owner',relation_name);
  END LOOP;
 END $$;
 GRANT SELECT,INSERT,UPDATE ON public.medication_library_files TO assistant_workflow_owner;
 CREATE POLICY assistant_media_library_owner ON public.medication_library_files TO assistant_workflow_owner
- USING(patient_id=auth.uid()) WITH CHECK(patient_id=auth.uid());
+ USING(patient_id=public.assistant_patient_uid()) WITH CHECK(patient_id=public.assistant_patient_uid());
 GRANT SELECT,INSERT ON public.medication_image_audit TO assistant_workflow_owner;
 CREATE POLICY assistant_media_audit_owner ON public.medication_image_audit TO assistant_workflow_owner
- USING(patient_id=auth.uid()) WITH CHECK(patient_id=auth.uid());
+ USING(patient_id=public.assistant_patient_uid()) WITH CHECK(patient_id=public.assistant_patient_uid());
 
 CREATE FUNCTION public.assistant_original_verification_ref(p_task_id uuid,p_attachment_id uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();a jsonb;result jsonb;
+DECLARE o uuid:=public.assistant_patient_uid();a jsonb;result jsonb;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(o::text,35035));
  SELECT data INTO a FROM public.assistant_workflow_attachments WHERE owner=o AND task_id=p_task_id AND id=p_attachment_id;
  IF a IS NULL OR a->>'state' IS DISTINCT FROM 'saved' OR a->'object_written' IS DISTINCT FROM 'true'::jsonb
@@ -63,14 +63,14 @@ LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
  SELECT jsonb_build_object('ticket_id',id,'nonce',nonce,'task_id',task_id,'task_revision',task_revision,
  'capability_id',capability_id,'attachment_id',attachment_id,'writer_id',writer_id,'generation',generation,
  'source_checksum',source_checksum,'source_byte_size',source_byte_size,'target',target,'expires_at',expires_at)
- FROM public.assistant_media_copy_tickets WHERE owner=auth.uid() AND id=p_id
+ FROM public.assistant_media_copy_tickets WHERE owner=public.assistant_patient_uid() AND id=p_id
 $$;
 
 CREATE FUNCTION public.assistant_media_copy_current(p_owner uuid,p_ticket public.assistant_media_copy_tickets) RETURNS jsonb
 LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
 DECLARE t jsonb;ctl jsonb;a jsonb;proof jsonb;target jsonb:=p_ticket.target;
 BEGIN
- IF p_owner IS DISTINCT FROM auth.uid() OR p_ticket.owner IS DISTINCT FROM p_owner THEN
+ IF p_owner IS DISTINCT FROM public.assistant_patient_uid() OR p_ticket.owner IS DISTINCT FROM p_owner THEN
   RAISE EXCEPTION 'Verified owned copy required' USING ERRCODE='42501'; END IF;
  SELECT data INTO t FROM public.assistant_workflow_tasks WHERE owner=p_owner AND id=p_ticket.task_id FOR UPDATE;
  SELECT data INTO ctl FROM public.assistant_workflow_operations WHERE owner=p_owner AND task_id=p_ticket.task_id
@@ -112,7 +112,7 @@ CREATE FUNCTION public.assistant_media_copy_verified(p_owner uuid,p_reference js
 LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
 DECLARE t public.assistant_media_copy_tickets%ROWTYPE;
 BEGIN
- IF p_owner IS DISTINCT FROM auth.uid() OR NOT coalesce(public.assistant_wf_keys(p_reference,
+ IF p_owner IS DISTINCT FROM public.assistant_patient_uid() OR NOT coalesce(public.assistant_wf_keys(p_reference,
  ARRAY['family','ticket_id','verification_id','generation','result']),false)
  OR p_reference->>'family' IS DISTINCT FROM 'native_media' THEN
   RAISE EXCEPTION 'Owned distinct native media proof required' USING ERRCODE='42501'; END IF;
@@ -126,10 +126,10 @@ END $$;
 
 CREATE FUNCTION public.assistant_media_copy_command(p_command jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();kind text:=p_command->>'kind';ctx jsonb:=p_command->'context';target jsonb:=p_command->'target';
+DECLARE o uuid:=public.assistant_patient_uid();kind text:=p_command->>'kind';ctx jsonb:=p_command->'context';target jsonb:=p_command->'target';
  t public.assistant_media_copy_tickets%ROWTYPE;a jsonb;allowed text[];n integer;id uuid;run jsonb;recovered jsonb;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  allowed:=CASE kind WHEN 'reserve' THEN ARRAY['kind','context','attachment_id','writer_id','target','run_binding']
  WHEN 'claim' THEN ARRAY['kind','ticket_id','nonce','generation'] WHEN 'read_verified' THEN ARRAY['kind','reference']
  WHEN 'assert_current' THEN ARRAY['kind','context','reference']
@@ -191,10 +191,10 @@ BEGIN
  t.target:=target;t.bucket_id:=CASE WHEN target->>'media_kind'='pdf' THEN 'medication-sources' ELSE 'visual-references' END;
  t.object_ref:=CASE WHEN target->>'media_kind'='pdf' THEN o::text||'/library/'||(target->>'medication_id')||'/'||(target->>'checksum')||'.pdf'
   ELSE o::text||'/'||(target->>'medication_id')||'/'||(target->>'checksum')||'.png' END;
- IF target->>'owner' IS DISTINCT FROM o::text OR (target->>'native_id')::uuid IS DISTINCT FROM CASE WHEN target->>'media_kind'='pdf'
+ IF target->>'owner' IS DISTINCT FROM o::text OR (target->>'native_id')::uuid IS DISTINCT FROM (CASE WHEN target->>'media_kind'='pdf'
  THEN extensions.uuid_generate_v5(o,'medication-library-pdf:'||(target->>'medication_id')||':'||(target->>'checksum'))
  ELSE extensions.uuid_generate_v5((target->>'medication_id')::uuid,(target->>'checksum')||CASE WHEN target->>'media_kind'='source_image'
-  THEN target->>'source_kind' ELSE '' END) END THEN RAISE EXCEPTION 'Native copy identity differs from native policy' USING ERRCODE='22023'; END IF;
+  THEN target->>'source_kind' ELSE '' END) END) THEN RAISE EXCEPTION 'Native copy identity differs from native policy' USING ERRCODE='22023'; END IF;
  PERFORM public.assistant_media_copy_current(o,t);
  run:=nullif(p_command->'run_binding','null'::jsonb);
  IF run IS NOT NULL THEN PERFORM public.assistant_run_assert_current(o,run); END IF;
@@ -232,7 +232,7 @@ CREATE FUNCTION public.assistant_media_epoch_changed() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE o uuid:=CASE WHEN TG_OP='DELETE' THEN OLD.patient_id ELSE NEW.patient_id END;
 BEGIN
- IF o IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'Owned media epoch required' USING ERRCODE='42501'; END IF;
+ IF o IS DISTINCT FROM public.assistant_patient_uid() THEN RAISE EXCEPTION 'Owned media epoch required' USING ERRCODE='42501'; END IF;
  INSERT INTO public.assistant_media_generations(owner,revision) VALUES(o,1)
  ON CONFLICT(owner) DO UPDATE SET revision=public.assistant_media_generations.revision+1;
  RETURN NULL;
@@ -246,9 +246,9 @@ CREATE TRIGGER assistant_media_owner_first BEFORE INSERT OR UPDATE OR DELETE ON 
 
 CREATE FUNCTION public.assistant_media_revision() RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();n bigint;
+DECLARE o uuid:=public.assistant_patient_uid();n bigint;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(o::text,35035));
  SELECT coalesce((SELECT g.revision FROM public.assistant_media_generations g WHERE g.owner=o),0)
  +coalesce((SELECT g.revision FROM public.assistant_enrollment_generations g WHERE g.owner=o),0) INTO n;
@@ -259,7 +259,7 @@ CREATE FUNCTION public.assistant_media_native(p_owner uuid,p_photo boolean,p_id 
 LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
 DECLARE result jsonb;
 BEGIN
- IF p_owner IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'Owned media required' USING ERRCODE='42501'; END IF;
+ IF p_owner IS DISTINCT FROM public.assistant_patient_uid() THEN RAISE EXCEPTION 'Owned media required' USING ERRCODE='42501'; END IF;
  IF p_photo THEN
   SELECT jsonb_build_object('metadata_version',1,'gallery_removed',false,'deleted_at',NULL,'cleanup_pending',false,'source_id',NULL)
   ||i.data||jsonb_build_object('id',i.id,'patient_id',i.patient_id,'medication_id',i.medication_id,'source_id',i.source_id) INTO result
@@ -351,14 +351,14 @@ END $$;
 
 CREATE FUNCTION public.assistant_media_apply(p_command jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();b jsonb:=p_command->'binding';kind text:=p_command->>'kind';cap text:=b->>'capability_id';
+DECLARE o uuid:=public.assistant_patient_uid();b jsonb:=p_command->'binding';kind text:=p_command->>'kind';cap text:=b->>'capability_id';
  preparing boolean:=kind='prepare_media';registering boolean:=kind IN ('register_photo','register_pdf');
  tid uuid:=(b->>'task_id')::uuid;aid uuid:=(b->>'action_key')::uuid;rev int:=(b->>'task_revision')::int;ref jsonb:=b->'prepared_ref';
  t jsonb;ctl jsonb;f jsonb;native jsonb;selection jsonb;snapshot text;digest text;generation bigint;child jsonb;outref jsonb;allowed text[];
  prior public.assistant_media_commands%ROWTYPE;prep public.assistant_media_commands%ROWTYPE;copy_ticket public.assistant_media_copy_tickets%ROWTYPE;
  duplicate boolean:=false;version int;target uuid;fields jsonb;a jsonb;path text;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
  allowed:=CASE WHEN preparing THEN ARRAY['kind','binding'] WHEN registering THEN ARRAY['kind','binding','values','confirmed','copy_proof']
  ELSE ARRAY['kind','binding','values','confirmed'] END;
  IF kind='register_photo' THEN allowed:=allowed||ARRAY['reviewed','processing_consent']; END IF;
@@ -402,9 +402,9 @@ BEGIN
   outref:=ref;native:='null';
  ELSE
   IF t->>'state' IS DISTINCT FROM 'awaiting_confirmation' OR NOT(t->'business_refs' @> jsonb_build_array(ref)) OR p_command->'values' IS DISTINCT FROM f
-  OR kind IS DISTINCT FROM CASE cap WHEN 'gallery.photo.add' THEN 'register_photo' WHEN 'library.pdf.add' THEN 'register_pdf'
+  OR kind IS DISTINCT FROM (CASE cap WHEN 'gallery.photo.add' THEN 'register_photo' WHEN 'library.pdf.add' THEN 'register_pdf'
    WHEN 'gallery.photo.edit' THEN 'edit_photo' WHEN 'gallery.photo.remove' THEN 'remove_photo' WHEN 'gallery.photo.delete' THEN 'delete_photo'
-   WHEN 'gallery.photo.retire' THEN 'retire_photo' WHEN 'library.pdf.edit' THEN 'edit_pdf' WHEN 'library.pdf.delete' THEN 'tombstone_pdf' END THEN
+   WHEN 'gallery.photo.retire' THEN 'retire_photo' WHEN 'library.pdf.edit' THEN 'edit_pdf' WHEN 'library.pdf.delete' THEN 'tombstone_pdf' END) THEN
    RAISE EXCEPTION 'Native action differs from the independent patient review' USING ERRCODE='40001'; END IF;
   SELECT * INTO prep FROM public.assistant_media_commands c WHERE c.owner=o AND c.task_id=tid AND c.kind='prepare_media' AND c.prepared_ref=ref;
   IF prep.owner IS NULL OR prep.binding_revision<>rev OR prep.capability_id<>cap OR prep.domain_revision<>generation OR prep.snapshot_hash IS DISTINCT FROM snapshot THEN
@@ -414,7 +414,7 @@ BEGIN
    IF p_command->'copy_proof'->>'result' IS DISTINCT FROM 'bytes_verified' OR copy_ticket.task_id<>tid OR copy_ticket.task_revision<>rev
    OR copy_ticket.capability_id<>cap OR copy_ticket.attachment_id IS DISTINCT FROM (f->>'source_attachment_id')::uuid
    OR copy_ticket.target->>'medication_id' IS DISTINCT FROM f->>'medication_id'
-   OR copy_ticket.target->>'media_kind' IS DISTINCT FROM CASE kind WHEN 'register_photo' THEN 'photo' ELSE 'pdf' END THEN
+   OR copy_ticket.target->>'media_kind' IS DISTINCT FROM (CASE kind WHEN 'register_photo' THEN 'photo' ELSE 'pdf' END) THEN
     RAISE EXCEPTION 'Actual independent copy differs from this original/medication' USING ERRCODE='40001'; END IF;
    IF kind='register_photo' THEN
     SELECT public.assistant_media_native(o,true,i.id) INTO native FROM public.medication_images i WHERE i.patient_id=o
@@ -498,9 +498,9 @@ EXCEPTION WHEN SQLSTATE '40001' THEN RETURN jsonb_build_object('error','stale');
  WHEN SQLSTATE 'P0002' THEN RETURN jsonb_build_object('error','not_found'); WHEN invalid_parameter_value OR invalid_text_representation OR check_violation OR not_null_violation THEN RETURN jsonb_build_object('error','invalid'); END $$;
 CREATE FUNCTION public.assistant_media_read(p_command jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();c public.assistant_media_commands%ROWTYPE;
+DECLARE o uuid:=public.assistant_patient_uid();c public.assistant_media_commands%ROWTYPE;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(o::text,35035));
  SELECT * INTO c FROM public.assistant_media_commands WHERE owner=o AND action_key=(p_command->'binding'->>'action_key')::uuid;
  IF NOT FOUND THEN RETURN jsonb_build_object('error','not_found'); END IF;
@@ -525,8 +525,8 @@ END $$;
 CREATE FUNCTION public.assistant_media_owner_fence() RETURNS void
 LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
 BEGIN
- IF auth.uid() IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
- PERFORM pg_advisory_xact_lock(hashtextextended(auth.uid()::text,35035));
+ IF public.assistant_patient_uid() IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(public.assistant_patient_uid()::text,35035));
 END $$;
 CREATE FUNCTION public.register_medication_library_pdf(p_file jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
@@ -558,19 +558,19 @@ LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
  SELECT jsonb_build_object('ticket_id',id,'nonce',nonce,'generation',generation,'owner',owner,
  'task_id',task_id,'task_revision',task_revision,'action_key',action_key,'media_kind',media_kind,
  'medication_id',medication_id,'native_ref',native_ref,'object_ref',object_ref,'checksum',checksum,'expires_at',expires_at)
- FROM public.assistant_media_delete_tickets WHERE owner=auth.uid() AND id=p_id
+ FROM public.assistant_media_delete_tickets WHERE owner=public.assistant_patient_uid() AND id=p_id
 $$;
 
 CREATE FUNCTION public.assistant_media_delete_current(p_owner uuid,p_action uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
 DECLARE r public.assistant_business_receipts%ROWTYPE;c public.assistant_media_commands%ROWTYPE;n jsonb;photo boolean;path text;bucket text;
 BEGIN
- IF p_owner IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'Owned deletion required' USING ERRCODE='42501'; END IF;
+ IF p_owner IS DISTINCT FROM public.assistant_patient_uid() THEN RAISE EXCEPTION 'Owned deletion required' USING ERRCODE='42501'; END IF;
  SELECT * INTO r FROM public.assistant_business_receipts WHERE owner=p_owner AND action_key=p_action;
  SELECT * INTO c FROM public.assistant_media_commands WHERE owner=p_owner AND action_key=p_action;
  IF r.owner IS NULL OR c.owner IS NULL OR r.outcome IS DISTINCT FROM 'applied'
  OR r.capability_id NOT IN ('gallery.photo.delete','library.pdf.delete') OR r.business_ref->>'kind' IS DISTINCT FROM 'file'
- OR c.kind IS DISTINCT FROM CASE r.capability_id WHEN 'gallery.photo.delete' THEN 'delete_photo' ELSE 'tombstone_pdf' END THEN
+ OR c.kind IS DISTINCT FROM (CASE r.capability_id WHEN 'gallery.photo.delete' THEN 'delete_photo' ELSE 'tombstone_pdf' END) THEN
   RAISE EXCEPTION 'Actual confirmed native deletion receipt required' USING ERRCODE='P0002'; END IF;
  photo:=r.capability_id='gallery.photo.delete';n:=public.assistant_media_native(p_owner,photo,(r.business_ref->>'id')::uuid);
  IF n->>'deleted_at' IS NULL OR coalesce(n->'metadata_version',n->'version') IS DISTINCT FROM r.business_ref->'version'
@@ -590,11 +590,11 @@ END $$;
 
 CREATE FUNCTION public.assistant_media_cleanup_command(p_command jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();kind text:=p_command->>'kind';aid uuid;reference jsonb:=p_command->'reference';allowed text[];
+DECLARE o uuid:=public.assistant_patient_uid();kind text:=p_command->>'kind';aid uuid;reference jsonb:=p_command->'reference';allowed text[];
  r public.assistant_business_receipts%ROWTYPE;t public.assistant_media_delete_tickets%ROWTYPE;v public.assistant_media_delete_verifications%ROWTYPE;
  s public.assistant_media_cleanup_settlements%ROWTYPE;n jsonb;task jsonb;ctl jsonb;child jsonb;proof jsonb;bucket text;photo boolean;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
  allowed:=CASE kind WHEN 'start' THEN ARRAY['kind','action_key'] WHEN 'claim' THEN ARRAY['kind','ticket_id','nonce','generation']
  WHEN 'settle' THEN ARRAY['kind','reference'] END;
  IF allowed IS NULL OR NOT coalesce(public.assistant_wf_keys(p_command,allowed) AND p_command ?& allowed,false)
@@ -689,9 +689,9 @@ END $$;
 -- before any candidate can be enabled; a caller's own DELETE/404 is insufficient.
 CREATE FUNCTION public.assistant_media_ack(p_id uuid,p_photo boolean) RETURNS void
 LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();t public.assistant_media_delete_tickets%ROWTYPE;v public.assistant_media_delete_verifications%ROWTYPE;result jsonb;
+DECLARE o uuid:=public.assistant_patient_uid();t public.assistant_media_delete_tickets%ROWTYPE;v public.assistant_media_delete_verifications%ROWTYPE;result jsonb;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(o::text,35035));
  SELECT * INTO t FROM public.assistant_media_delete_tickets WHERE owner=o AND native_ref->>'id'=p_id::text AND media_kind=CASE WHEN p_photo THEN 'photo' ELSE 'pdf' END;
  SELECT * INTO v FROM public.assistant_media_delete_verifications WHERE owner=o AND ticket_id=t.id AND generation=t.generation AND result='absent_after_delete' AND bucket_id=t.bucket_id;
@@ -709,7 +709,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$ BEGIN PERFORM public.
 -- updates/cleanup acknowledgements do not acquire new object references.
 CREATE FUNCTION public.assistant_media_reference_guard() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();path text;bucket text;image jsonb;native_id uuid;med uuid;checksum text;
+DECLARE o uuid:=public.assistant_patient_uid();path text;bucket text;image jsonb;native_id uuid;med uuid;checksum text;
 BEGIN
  IF o IS NULL OR NEW.patient_id IS DISTINCT FROM o THEN RAISE EXCEPTION 'Verified owned reference required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(o::text,35035));

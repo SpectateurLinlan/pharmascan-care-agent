@@ -16,7 +16,7 @@ DO $$ DECLARE relation_name text; BEGIN
   EXECUTE format('ALTER TABLE public.%I OWNER TO assistant_workflow_owner',relation_name);
   EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY',relation_name);
   EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY',relation_name);
-  EXECUTE format('CREATE POLICY assistant_settings_owner ON public.%I TO assistant_workflow_owner USING(owner=auth.uid()) WITH CHECK(owner=auth.uid())',relation_name);
+  EXECUTE format('CREATE POLICY assistant_settings_owner ON public.%I TO assistant_workflow_owner USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid())',relation_name);
   EXECUTE format('REVOKE ALL ON public.%I FROM PUBLIC,anon,authenticated,service_role,assistant_evidence_login,assistant_evidence_owner',relation_name);
  END LOOP;
 END $$;
@@ -24,11 +24,11 @@ GRANT SELECT(user_id,display_name,language,speech_locale,text_size,text_scale_pe
  conversation_history_enabled,reminders_enabled,reminder_lead_minutes,timezone,created_at,updated_at) ON public.patient_profiles TO assistant_workflow_owner;
 GRANT UPDATE(display_name,language,text_size,text_scale_percent,voice_enabled,tts_autoplay,conversation_history_enabled,
  reminders_enabled,reminder_lead_minutes,timezone) ON public.patient_profiles TO assistant_workflow_owner;
-CREATE POLICY assistant_settings_profile ON public.patient_profiles TO assistant_workflow_owner USING(user_id=auth.uid()) WITH CHECK(user_id=auth.uid());
+CREATE POLICY assistant_settings_profile ON public.patient_profiles TO assistant_workflow_owner USING(user_id=public.assistant_patient_uid()) WITH CHECK(user_id=public.assistant_patient_uid());
 GRANT SELECT,INSERT,UPDATE,DELETE ON public.caregiver_contacts TO assistant_workflow_owner;
 GRANT SELECT,INSERT ON public.patient_feedback TO assistant_workflow_owner;
-CREATE POLICY assistant_settings_contact ON public.caregiver_contacts TO assistant_workflow_owner USING(patient_id=auth.uid()) WITH CHECK(patient_id=auth.uid());
-CREATE POLICY assistant_settings_feedback ON public.patient_feedback TO assistant_workflow_owner USING(patient_id=auth.uid()) WITH CHECK(patient_id=auth.uid());
+CREATE POLICY assistant_settings_contact ON public.caregiver_contacts TO assistant_workflow_owner USING(patient_id=public.assistant_patient_uid()) WITH CHECK(patient_id=public.assistant_patient_uid());
+CREATE POLICY assistant_settings_feedback ON public.patient_feedback TO assistant_workflow_owner USING(patient_id=public.assistant_patient_uid()) WITH CHECK(patient_id=public.assistant_patient_uid());
 
 CREATE FUNCTION public.assistant_settings_epoch_changed() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
@@ -36,7 +36,7 @@ DECLARE o uuid;row_json jsonb;
 BEGIN
  row_json:=CASE WHEN TG_OP='DELETE' THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END;
  o:=coalesce((row_json->>'patient_id')::uuid,(row_json->>'user_id')::uuid);
- IF o IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'Owned settings epoch required' USING ERRCODE='42501'; END IF;
+ IF o IS DISTINCT FROM public.assistant_patient_uid() THEN RAISE EXCEPTION 'Owned settings epoch required' USING ERRCODE='42501'; END IF;
  INSERT INTO public.assistant_settings_generations(owner,revision) VALUES(o,1)
  ON CONFLICT(owner) DO UPDATE SET revision=public.assistant_settings_generations.revision+1;
  -- Profile language/timezone and other reviewed preferences are shared inputs
@@ -57,9 +57,9 @@ DO $$ DECLARE relation_name text; BEGIN
 END $$;
 CREATE FUNCTION public.assistant_settings_revision() RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();n bigint;
+DECLARE o uuid:=public.assistant_patient_uid();n bigint;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(o::text,35035));
  SELECT coalesce((SELECT g.revision FROM public.assistant_settings_generations g WHERE g.owner=o),0)
  +coalesce((SELECT g.revision FROM public.assistant_enrollment_generations g WHERE g.owner=o),0) INTO n;
@@ -70,7 +70,7 @@ LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
  SELECT jsonb_build_object('patient_id',user_id,'display_name',display_name,'preferred_language',language,'speech_locale',speech_locale,
  'text_size',text_size,'text_scale_percent',text_scale_percent,'voice_enabled',voice_enabled,'tts_autoplay',tts_autoplay,
  'conversation_history_enabled',conversation_history_enabled,'reminders_enabled',reminders_enabled,'reminder_lead_minutes',reminder_lead_minutes,
- 'timezone',timezone,'created_at',created_at,'updated_at',updated_at) FROM public.patient_profiles WHERE user_id=p_owner AND user_id=auth.uid()
+ 'timezone',timezone,'created_at',created_at,'updated_at',updated_at) FROM public.patient_profiles WHERE user_id=p_owner AND user_id=public.assistant_patient_uid()
 $$;
 CREATE FUNCTION public.assistant_settings_contact_values(p_values jsonb) RETURNS jsonb
 LANGUAGE plpgsql IMMUTABLE SECURITY INVOKER SET search_path='' AS $$
@@ -95,7 +95,7 @@ CREATE FUNCTION public.assistant_settings_snapshot(p_owner uuid,p_task jsonb,p_r
 LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
 DECLARE cap text:=p_task->>'capability_id';f jsonb:=p_task->'fields';row_json jsonb;before jsonb;fields text[];payload jsonb;
 BEGIN
- IF p_owner IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'Owned settings review required' USING ERRCODE='42501'; END IF;
+ IF p_owner IS DISTINCT FROM public.assistant_patient_uid() THEN RAISE EXCEPTION 'Owned settings review required' USING ERRCODE='42501'; END IF;
  IF cap LIKE 'preference.%' OR cap='profile.edit' THEN
   fields:=CASE cap WHEN 'preference.language' THEN ARRAY['preferred_language'] WHEN 'preference.text' THEN ARRAY['text_size','text_scale_percent']
    WHEN 'preference.voice' THEN ARRAY['voice_enabled','tts_autoplay'] WHEN 'preference.reminder' THEN ARRAY['reminders_enabled','reminder_lead_minutes']
@@ -158,12 +158,12 @@ BEGIN
 END $$;
 CREATE FUNCTION public.assistant_settings_apply(p_command jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();b jsonb:=p_command->'binding';ref jsonb:=b->'prepared_ref';kind text:=p_command->>'kind';cap text:=b->>'capability_id';
+DECLARE o uuid:=public.assistant_patient_uid();b jsonb:=p_command->'binding';ref jsonb:=b->'prepared_ref';kind text:=p_command->>'kind';cap text:=b->>'capability_id';
  tid uuid:=(b->>'task_id')::uuid;aid uuid:=(b->>'action_key')::uuid;rev int:=(b->>'task_revision')::int;preparing boolean:=kind='prepare_settings';
  t jsonb;ctl jsonb;f jsonb;v jsonb:=p_command->'values';expected jsonb;native jsonb:='null';outref jsonb;child jsonb;generation bigint;snapshot text;digest text;allowed text[];
  prior public.assistant_settings_commands%ROWTYPE;prep public.assistant_settings_commands%ROWTYPE;target uuid;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
  allowed:=CASE kind WHEN 'prepare_settings' THEN ARRAY['kind','binding'] WHEN 'preferences' THEN ARRAY['kind','binding','values','previous','confirmed']
  WHEN 'create_contact' THEN ARRAY['kind','binding','values','confirmed'] WHEN 'edit_contact' THEN ARRAY['kind','binding','values','contact_id','previous','previous_updated_at','confirmed']
  WHEN 'delete_contact' THEN ARRAY['kind','binding','contact_id','previous','previous_updated_at','confirmed'] WHEN 'feedback' THEN ARRAY['kind','binding','values','confirmed'] END;
@@ -189,7 +189,7 @@ BEGIN
  IF nullif(b->'run_binding','null'::jsonb) IS NOT NULL THEN PERFORM public.assistant_run_assert_current(o,b->'run_binding'); END IF;
  f:=t->'fields';snapshot:=encode(sha256(convert_to(public.assistant_settings_snapshot(o,t,(ref->>'id')::uuid)::text,'UTF8')),'hex');
  IF preparing THEN
-  SELECT * INTO prep FROM public.assistant_settings_commands WHERE owner=o AND task_id=tid AND kind='prepare_settings' AND prepared_ref=t->'business_refs'->0;
+  SELECT * INTO prep FROM public.assistant_settings_commands cmd WHERE owner=o AND task_id=tid AND cmd.kind='prepare_settings' AND prepared_ref=t->'business_refs'->0;
   IF ref->>'id' IS DISTINCT FROM aid::text OR EXISTS(SELECT 1 FROM public.assistant_workflow_operations WHERE owner=o AND id=aid AND record_type='action')
   OR NOT(t->>'state'='ready_for_review' OR (t->>'state'='awaiting_confirmation' AND prep.owner IS NOT NULL
    AND (prep.binding_revision<rev OR prep.domain_revision<>generation OR prep.snapshot_hash IS DISTINCT FROM snapshot))) THEN
@@ -199,11 +199,11 @@ BEGIN
    'clinical_revision',coalesce((SELECT g.revision FROM public.assistant_enrollment_generations g WHERE g.owner=o),0),'updated_at',clock_timestamp()));
   outref:=ref;
  ELSE
-  SELECT * INTO prep FROM public.assistant_settings_commands WHERE owner=o AND task_id=tid AND action_key=(ref->>'id')::uuid AND kind='prepare_settings';
+  SELECT * INTO prep FROM public.assistant_settings_commands cmd WHERE owner=o AND task_id=tid AND action_key=(ref->>'id')::uuid AND cmd.kind='prepare_settings';
   IF t->>'state' IS DISTINCT FROM 'awaiting_confirmation' OR t->'business_refs' IS DISTINCT FROM jsonb_build_array(ref)
   OR prep.owner IS NULL OR prep.binding_revision<>rev OR prep.domain_revision<>generation OR prep.snapshot_hash IS DISTINCT FROM snapshot
-  OR kind IS DISTINCT FROM CASE WHEN cap LIKE 'preference.%' OR cap='profile.edit' THEN 'preferences' WHEN cap='caregiver.add' THEN 'create_contact'
-   WHEN cap='caregiver.edit' THEN 'edit_contact' WHEN cap='caregiver.delete' THEN 'delete_contact' WHEN cap='feedback.submit' THEN 'feedback' END THEN
+  OR kind IS DISTINCT FROM (CASE WHEN cap LIKE 'preference.%' OR cap='profile.edit' THEN 'preferences' WHEN cap='caregiver.add' THEN 'create_contact'
+   WHEN cap='caregiver.edit' THEN 'edit_contact' WHEN cap='caregiver.delete' THEN 'delete_contact' WHEN cap='feedback.submit' THEN 'feedback' END) THEN
    RAISE EXCEPTION 'Current independent settings review changed' USING ERRCODE='40001'; END IF;
   IF kind='preferences' THEN
    SELECT jsonb_object_agg(key,value) INTO expected FROM jsonb_each(f-'previous') WHERE value<>'null'::jsonb;
@@ -273,9 +273,9 @@ EXCEPTION WHEN SQLSTATE '40001' THEN RETURN jsonb_build_object('error','stale');
  WHEN SQLSTATE 'P0002' THEN RETURN jsonb_build_object('error','not_found'); WHEN invalid_parameter_value OR invalid_text_representation OR check_violation OR not_null_violation THEN RETURN jsonb_build_object('error','invalid'); END $$;
 CREATE FUNCTION public.assistant_settings_read(p_command jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();c public.assistant_settings_commands%ROWTYPE;
+DECLARE o uuid:=public.assistant_patient_uid();c public.assistant_settings_commands%ROWTYPE;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(o::text,35035));
  SELECT * INTO c FROM public.assistant_settings_commands WHERE owner=o AND action_key=(p_command->'binding'->>'action_key')::uuid;
  IF NOT FOUND THEN RETURN jsonb_build_object('error','not_found'); END IF;

@@ -31,9 +31,9 @@ ALTER TABLE public.assistant_care_generations FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.assistant_care_commands ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assistant_care_commands FORCE ROW LEVEL SECURITY;
 CREATE POLICY assistant_care_epoch_owner ON public.assistant_care_generations TO assistant_workflow_owner
- USING(owner=auth.uid()) WITH CHECK(owner=auth.uid());
+ USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid());
 CREATE POLICY assistant_care_command_owner ON public.assistant_care_commands TO assistant_workflow_owner
- USING(owner=auth.uid()) WITH CHECK(owner=auth.uid());
+ USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid());
 REVOKE ALL ON public.assistant_care_generations,public.assistant_care_commands
  FROM PUBLIC,anon,authenticated,service_role,assistant_evidence_login,assistant_evidence_owner;
 
@@ -44,7 +44,7 @@ GRANT SELECT ON public.effective_dose_events TO assistant_workflow_owner;
 DO $$ DECLARE relation_name text; BEGIN
  FOREACH relation_name IN ARRAY ARRAY['health_observations','adherence_barriers','inventory_transactions',
  'medication_care_tasks','dose_rules'] LOOP
-  EXECUTE format('CREATE POLICY assistant_care_owned_command ON public.%I TO assistant_workflow_owner USING(patient_id=auth.uid()) WITH CHECK(patient_id=auth.uid())',relation_name);
+  EXECUTE format('CREATE POLICY assistant_care_owned_command ON public.%I TO assistant_workflow_owner USING(patient_id=public.assistant_patient_uid()) WITH CHECK(patient_id=public.assistant_patient_uid())',relation_name);
  END LOOP;
 END $$;
 
@@ -62,22 +62,22 @@ GRANT EXECUTE ON FUNCTION public.assistant_care_inventory_legacy_022(uuid,jsonb)
 CREATE FUNCTION public.record_inventory_transaction(p_medication_id uuid,p_values jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 BEGIN
- IF auth.uid() IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
- PERFORM pg_advisory_xact_lock(hashtextextended(auth.uid()::text,35035));
+ IF public.assistant_patient_uid() IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(public.assistant_patient_uid()::text,35035));
  RETURN public.assistant_care_inventory_legacy_022(p_medication_id,p_values);
 END $$;
 CREATE FUNCTION public.create_medication_care_task(p_task jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 BEGIN
- IF auth.uid() IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
- PERFORM pg_advisory_xact_lock(hashtextextended(auth.uid()::text,35035));
+ IF public.assistant_patient_uid() IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(public.assistant_patient_uid()::text,35035));
  RETURN public.assistant_care_create_legacy_034(p_task);
 END $$;
 CREATE FUNCTION public.update_medication_care_task(p_task_id uuid,p_change jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 BEGIN
- IF auth.uid() IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
- PERFORM pg_advisory_xact_lock(hashtextextended(auth.uid()::text,35035));
+ IF public.assistant_patient_uid() IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended(public.assistant_patient_uid()::text,35035));
  RETURN public.assistant_care_update_legacy_034(p_task_id,p_change);
 END $$;
 
@@ -87,7 +87,7 @@ DECLARE o uuid; row_json jsonb;
 BEGIN
  row_json:=CASE WHEN TG_OP='DELETE' THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END;
  o:=coalesce((row_json->>'patient_id')::uuid,(row_json->>'user_id')::uuid);
- IF o IS DISTINCT FROM auth.uid() THEN RAISE EXCEPTION 'Owned care epoch required' USING ERRCODE='42501'; END IF;
+ IF o IS DISTINCT FROM public.assistant_patient_uid() THEN RAISE EXCEPTION 'Owned care epoch required' USING ERRCODE='42501'; END IF;
  INSERT INTO public.assistant_care_generations(owner,revision) VALUES(o,1)
  ON CONFLICT(owner) DO UPDATE SET revision=public.assistant_care_generations.revision+1;
  RETURN NULL;
@@ -103,9 +103,9 @@ END $$;
 
 CREATE FUNCTION public.assistant_care_revision() RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();n bigint;
+DECLARE o uuid:=public.assistant_patient_uid();n bigint;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(o::text,35035));
  SELECT coalesce((SELECT g.revision FROM public.assistant_care_generations g WHERE g.owner=o),0) INTO n;
  RETURN jsonb_build_object('revision',n);
@@ -139,8 +139,8 @@ BEGIN
    WHERE d.patient_id=p_owner AND d.regimen_id=r.id ORDER BY d.id LIMIT 1),zone))::date);
   frequency:=plan.frequency_rule;times:=jsonb_array_length(coalesce(frequency->'local_times','[]'));
   IF NOT plan.is_prn AND plan.dose_amount>0 AND
-  CASE lower(btrim(plan.dose_unit)) WHEN 'tablet' THEN 'tablet' WHEN 'tablets' THEN 'tablet'
-   WHEN 'capsule' THEN 'capsule' WHEN 'capsules' THEN 'capsule' END=physical.unit AND times>0 THEN
+  (CASE lower(btrim(plan.dose_unit)) WHEN 'tablet' THEN 'tablet' WHEN 'tablets' THEN 'tablet'
+   WHEN 'capsule' THEN 'capsule' WHEN 'capsules' THEN 'capsule' END)=physical.unit AND times>0 THEN
    IF frequency->>'kind'='daily' THEN daily:=plan.dose_amount*times;
    ELSIF frequency->>'kind'='weekly' THEN
     SELECT count(DISTINCT x) INTO days FROM jsonb_array_elements(coalesce(frequency->'days_of_week','[]')) x;
@@ -301,12 +301,12 @@ END $$;
 
 CREATE FUNCTION public.assistant_care_apply(p_command jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();b jsonb:=p_command->'binding';kind text:=p_command->>'kind';preparing boolean:=kind='prepare_care';
+DECLARE o uuid:=public.assistant_patient_uid();b jsonb:=p_command->'binding';kind text:=p_command->>'kind';preparing boolean:=kind='prepare_care';
  tid uuid;aid uuid;revision int;ref jsonb:=b->'prepared_ref';t jsonb;ctl jsonb;digest text;generation bigint;allowed text[];
  prior public.assistant_care_commands%ROWTYPE;prep public.assistant_care_commands%ROWTYPE;snapshot text;projection jsonb;
  v jsonb:=p_command->'values';target uuid;row_json jsonb;native_ref jsonb;child jsonb;action_json jsonb;stamp timestamptz;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  allowed:=CASE kind WHEN 'prepare_care' THEN ARRAY['kind','binding'] WHEN 'delete_observation' THEN ARRAY['kind','binding','confirmed','observation_id']
  WHEN 'stock' THEN ARRAY['kind','binding','confirmed','medication_id','values']
  WHEN 'update_followup' THEN ARRAY['kind','binding','confirmed','task_id','expected_version','values']
@@ -443,9 +443,9 @@ EXCEPTION WHEN SQLSTATE '40001' THEN RETURN jsonb_build_object('error','stale');
 END $$;
 CREATE FUNCTION public.assistant_care_read(p_command jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();prior public.assistant_care_commands%ROWTYPE;
+DECLARE o uuid:=public.assistant_patient_uid();prior public.assistant_care_commands%ROWTYPE;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(o::text,35035));
  SELECT * INTO prior FROM public.assistant_care_commands WHERE owner=o AND action_key=(p_command->'binding'->>'action_key')::uuid;
  IF NOT FOUND THEN RETURN jsonb_build_object('error','not_found'); END IF;

@@ -3,8 +3,9 @@
 BEGIN;
 SET LOCAL lock_timeout='5s';
 SET LOCAL statement_timeout='30s';
-GRANT USAGE ON SCHEMA public,auth TO assistant_message_owner;
-GRANT EXECUTE ON FUNCTION auth.uid(),auth.role(),public.assistant_wf_keys(jsonb,text[]),
+GRANT USAGE ON SCHEMA public TO assistant_message_owner;
+GRANT EXECUTE ON FUNCTION public.assistant_wf_ref(jsonb),public.assistant_wf_writer_ids(jsonb) TO assistant_message_owner;
+GRANT EXECUTE ON FUNCTION public.assistant_patient_uid(),public.assistant_patient_role(),public.assistant_wf_keys(jsonb,text[]),
  public.core_trace_summary_is_safe(jsonb),public.create_conversation(uuid,text),
  public.claim_conversation_turn(uuid,uuid,text),public.append_thread_turn(jsonb),
  public.fail_conversation_turn(uuid),public.append_conversation_turn(jsonb),public.clear_conversation_history()
@@ -16,24 +17,24 @@ GRANT INSERT,UPDATE ON public.agent_sessions TO assistant_message_owner;
 GRANT INSERT ON public.agent_tool_calls TO assistant_message_owner;
 GRANT INSERT ON public.assistant_workflow_operations TO assistant_message_owner;
 GRANT UPDATE ON public.assistant_workflow_tasks,public.assistant_workflow_operations TO assistant_message_owner;
-CREATE POLICY assistant_message_profile ON public.patient_profiles FOR SELECT TO assistant_message_owner USING(user_id=auth.uid());
+CREATE POLICY assistant_message_profile ON public.patient_profiles FOR SELECT TO assistant_message_owner USING(user_id=public.assistant_patient_uid());
 CREATE POLICY assistant_message_sessions ON public.agent_sessions TO assistant_message_owner
- USING(patient_id=auth.uid()) WITH CHECK(patient_id=auth.uid());
-CREATE POLICY assistant_message_threads ON public.conversations FOR SELECT TO assistant_message_owner USING(patient_id=auth.uid());
-CREATE POLICY assistant_message_turns ON public.conversation_turns FOR SELECT TO assistant_message_owner USING(patient_id=auth.uid());
-CREATE POLICY assistant_message_traces ON public.agent_tool_calls FOR INSERT TO assistant_message_owner WITH CHECK(patient_id=auth.uid());
-CREATE POLICY assistant_message_tasks ON public.assistant_workflow_tasks TO assistant_message_owner USING(owner=auth.uid()) WITH CHECK(owner=auth.uid());
+ USING(patient_id=public.assistant_patient_uid()) WITH CHECK(patient_id=public.assistant_patient_uid());
+CREATE POLICY assistant_message_threads ON public.conversations FOR SELECT TO assistant_message_owner USING(patient_id=public.assistant_patient_uid());
+CREATE POLICY assistant_message_turns ON public.conversation_turns FOR SELECT TO assistant_message_owner USING(patient_id=public.assistant_patient_uid());
+CREATE POLICY assistant_message_traces ON public.agent_tool_calls FOR INSERT TO assistant_message_owner WITH CHECK(patient_id=public.assistant_patient_uid());
+CREATE POLICY assistant_message_tasks ON public.assistant_workflow_tasks TO assistant_message_owner USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid());
 CREATE POLICY assistant_message_controls ON public.assistant_workflow_operations TO assistant_message_owner
- USING(owner=auth.uid() AND record_type IN ('control','action')) WITH CHECK(owner=auth.uid() AND record_type IN ('control','action'));
+ USING(owner=public.assistant_patient_uid() AND record_type IN ('control','action')) WITH CHECK(owner=public.assistant_patient_uid() AND record_type IN ('control','action'));
 
 -- Preserve this existing public signature/owner/ACL for older native callers.
 -- Its owner and original function definition must match the approved target
 -- baseline before applying this candidate. It remains a patient-only operation.
 CREATE OR REPLACE FUNCTION public.clear_conversation_history() RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();
+DECLARE o uuid:=public.assistant_patient_uid();
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN
   RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(o::text,35035));
  UPDATE public.assistant_workflow_tasks SET data=data||jsonb_build_object('conversation_id',NULL,
@@ -53,12 +54,12 @@ END $$;
 
 CREATE FUNCTION public.assistant_message_command(p_command jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid(); kind text; scope jsonb; control jsonb; payload jsonb;
+DECLARE o uuid:=public.assistant_patient_uid(); kind text; scope jsonb; control jsonb; payload jsonb;
  incoming public.agent_sessions%ROWTYPE; existing public.agent_sessions%ROWTYPE;
  claim_status text; saved public.conversation_turns%ROWTYPE; result jsonb:=jsonb_build_object('kind','ack');
  allowed text[];
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN
   RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  kind:=p_command->>'kind'; scope:=p_command->'scope';
  allowed:=CASE kind
@@ -184,11 +185,11 @@ GRANT EXECUTE ON FUNCTION public.assistant_message_command(jsonb) TO authenticat
 -- receipt share one owner fence. No callback, history body cache or clinical write.
 CREATE FUNCTION public.assistant_conversation_transition(p_command jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid(); t jsonb; c jsonb; a jsonb; tid uuid; aid uuid; sid uuid;
+DECLARE o uuid:=public.assistant_patient_uid(); t jsonb; c jsonb; a jsonb; tid uuid; aid uuid; sid uuid;
  cap text; target uuid; rev integer; native public.agent_sessions%ROWTYPE;
  context_data jsonb:='{"version":1,"recent_turns":[],"conversation_summary":""}'::jsonb; conversation uuid; result jsonb; stamp timestamptz:=clock_timestamp();
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN
   RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  IF NOT public.assistant_wf_keys(p_command,ARRAY['task_id','revision','capability_id','target','action_key','session_id','confirmed'])
  OR p_command->'confirmed' IS DISTINCT FROM 'true'::jsonb THEN
@@ -256,13 +257,13 @@ GRANT EXECUTE ON FUNCTION public.assistant_conversation_transition(jsonb) TO aut
 -- Browser-only subscription metadata. This function cannot send notifications.
 GRANT SELECT,INSERT,UPDATE ON public.push_subscriptions TO assistant_message_owner;
 CREATE POLICY assistant_message_subscriptions ON public.push_subscriptions TO assistant_message_owner
- USING(patient_id=auth.uid()) WITH CHECK(patient_id=auth.uid());
+ USING(patient_id=public.assistant_patient_uid()) WITH CHECK(patient_id=public.assistant_patient_uid());
 CREATE FUNCTION public.assistant_notification_transition(p_command jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid(); tid uuid; rev integer; aid uuid; cap text; t jsonb; c jsonb; a jsonb;
+DECLARE o uuid:=public.assistant_patient_uid(); tid uuid; rev integer; aid uuid; cap text; t jsonb; c jsonb; a jsonb;
  input jsonb; digest text; target uuid; selected_endpoint text; sub public.push_subscriptions%ROWTYPE;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN
   RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  IF NOT public.assistant_wf_keys(p_command,ARRAY['task_id','revision','capability_id','action_key','confirmed','subscription','subscription_id','endpoint'])
  OR p_command->'confirmed' IS DISTINCT FROM 'true'::jsonb THEN

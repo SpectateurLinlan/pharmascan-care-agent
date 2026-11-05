@@ -21,7 +21,7 @@ ALTER TABLE public.assistant_record_commands OWNER TO assistant_workflow_owner;
 ALTER TABLE public.assistant_record_commands ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assistant_record_commands FORCE ROW LEVEL SECURITY;
 CREATE POLICY assistant_record_command_owner ON public.assistant_record_commands TO assistant_workflow_owner
- USING(owner=auth.uid()) WITH CHECK(owner=auth.uid());
+ USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid());
 REVOKE ALL ON public.assistant_record_commands FROM PUBLIC,anon,authenticated,service_role,
  assistant_evidence_login,assistant_evidence_owner;
 
@@ -29,13 +29,13 @@ GRANT SELECT,INSERT ON public.dose_events,public.audit_events TO assistant_workf
 GRANT SELECT,UPDATE ON public.dose_occurrences TO assistant_workflow_owner;
 GRANT SELECT ON public.dose_report_entries,public.effective_dose_events TO assistant_workflow_owner;
 CREATE POLICY assistant_record_event_owner ON public.dose_events TO assistant_workflow_owner
- USING(patient_id=auth.uid()) WITH CHECK(patient_id=auth.uid());
+ USING(patient_id=public.assistant_patient_uid()) WITH CHECK(patient_id=public.assistant_patient_uid());
 CREATE POLICY assistant_record_audit_owner ON public.audit_events TO assistant_workflow_owner
- USING(patient_id=auth.uid()) WITH CHECK(patient_id=auth.uid());
+ USING(patient_id=public.assistant_patient_uid()) WITH CHECK(patient_id=public.assistant_patient_uid());
 CREATE POLICY assistant_record_occurrence_owner ON public.dose_occurrences TO assistant_workflow_owner
- USING(patient_id=auth.uid()) WITH CHECK(patient_id=auth.uid());
+ USING(patient_id=public.assistant_patient_uid()) WITH CHECK(patient_id=public.assistant_patient_uid());
 CREATE POLICY assistant_record_history_owner ON public.dose_report_entries FOR SELECT TO assistant_workflow_owner
- USING(patient_id=auth.uid());
+ USING(patient_id=public.assistant_patient_uid());
 -- The normal fixed domain owner can invoke the existing consumption helper.
 -- Neither restricted verification identity gets schema/function/clinical access.
 GRANT USAGE ON SCHEMA pharmascan_private TO assistant_workflow_owner;
@@ -76,7 +76,7 @@ CREATE FUNCTION public.assistant_record_assert_current(p_owner uuid,p_challenge 
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE binding public.assistant_record_commands%ROWTYPE;t jsonb;ctl jsonb;
 BEGIN
- IF auth.uid() IS DISTINCT FROM p_owner THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
+ IF public.assistant_patient_uid() IS DISTINCT FROM p_owner THEN RAISE EXCEPTION 'Verified owner required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(p_owner::text,35035));
  SELECT * INTO binding FROM public.assistant_record_commands WHERE owner=p_owner AND native_id=p_challenge
   AND kind IN ('prepare_report','prepare_late_report') AND state IN ('pending','applied') ORDER BY action_key LIMIT 1;
@@ -253,7 +253,7 @@ REVOKE ALL ON FUNCTION public.assistant_record_native_result(uuid,jsonb,boolean,
 
 CREATE FUNCTION public.assistant_record_apply(p_command jsonb,p_native_event uuid DEFAULT NULL) RETURNS jsonb
 LANGUAGE plpgsql SECURITY INVOKER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();b jsonb:=p_command->'binding';kind text:=p_command->>'kind';ref jsonb:=b->'prepared_ref';
+DECLARE o uuid:=public.assistant_patient_uid();b jsonb:=p_command->'binding';kind text:=p_command->>'kind';ref jsonb:=b->'prepared_ref';
  preparing boolean:=kind IN ('prepare_review','prepare_report','prepare_late_report');
  selecting boolean:=kind='prepare_review';historical boolean:=kind IN ('prepare_late_report','late_report','correction');
  tid uuid;action_id uuid;operation_id uuid;revision integer;digest text;allowed text[];t jsonb;ctl jsonb;native_key text;
@@ -262,7 +262,7 @@ DECLARE o uuid:=auth.uid();b jsonb:=p_command->'binding';kind text:=p_command->>
  values_json jsonb:=p_command->'values';native_ref jsonb;prep jsonb;native_id uuid;result jsonb;target jsonb;zone text;
  generation bigint;stamped timestamptz;token_once text:='';created boolean:=true;child jsonb;status text;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN
   RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  allowed:=CASE kind
  WHEN 'prepare_review' THEN ARRAY['kind','binding']
@@ -298,7 +298,7 @@ BEGIN
  IF EXISTS(SELECT 1 FROM public.assistant_business_receipts WHERE owner=o AND action_key=action_id) THEN
   RAISE EXCEPTION 'Action belongs to another transaction' USING ERRCODE='23505'; END IF;
  SELECT coalesce((SELECT g.revision FROM public.assistant_enrollment_generations g WHERE owner=o),0) INTO generation;
- IF t IS NULL OR ctl IS NULL OR t->>'state' IS DISTINCT FROM CASE WHEN selecting THEN 'ready_for_review' ELSE 'awaiting_confirmation' END
+ IF t IS NULL OR ctl IS NULL OR t->>'state' IS DISTINCT FROM (CASE WHEN selecting THEN 'ready_for_review' ELSE 'awaiting_confirmation' END)
  OR t->>'save_mode' IS DISTINCT FROM 'allowed' OR ctl->>'mode' IS DISTINCT FROM 'allowed'
  OR ctl->'revoked' IS DISTINCT FROM 'false'::jsonb OR ctl->>'status' IS DISTINCT FROM 'idle'
  OR t->>'capability_id' IS DISTINCT FROM b->>'capability_id' OR ctl->>'capability_id' IS DISTINCT FROM b->>'capability_id'
@@ -493,9 +493,9 @@ GRANT EXECUTE ON FUNCTION public.assistant_record_write(jsonb) TO authenticated;
 -- Owned read-only selection lookup distinguishes it from later patient summaries.
 CREATE FUNCTION public.assistant_record_review_receipt(p_task_id uuid,p_revision integer) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();result jsonb;n integer;
+DECLARE o uuid:=public.assistant_patient_uid();result jsonb;n integer;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN
   RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  SELECT count(*) INTO n FROM public.assistant_record_commands WHERE owner=o AND task_id=p_task_id
   AND binding_revision=p_revision AND kind='prepare_review' AND state='applied';
@@ -516,9 +516,9 @@ GRANT EXECUTE ON FUNCTION public.assistant_record_review_receipt(uuid,integer) T
 -- Reads immutable applied report identities; never synthesizes a patient request.
 CREATE FUNCTION public.assistant_record_result(p_action_key uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();c public.assistant_record_commands%ROWTYPE;
+DECLARE o uuid:=public.assistant_patient_uid();c public.assistant_record_commands%ROWTYPE;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN
   RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  SELECT * INTO c FROM public.assistant_record_commands WHERE owner=o AND action_key=p_action_key
   AND state='applied' AND kind IN ('self_report','prn_report','late_report','correction');
@@ -557,9 +557,9 @@ GRANT EXECUTE ON FUNCTION public.assistant_record_prepare(jsonb) TO authenticate
 
 CREATE FUNCTION public.assistant_record_read(p_command jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();c public.assistant_record_commands%ROWTYPE;
+DECLARE o uuid:=public.assistant_patient_uid();c public.assistant_record_commands%ROWTYPE;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN
   RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  IF jsonb_typeof(p_command) IS DISTINCT FROM 'object' OR octet_length(p_command::text)>32768 THEN
   RAISE EXCEPTION 'Invalid readback command fingerprint' USING ERRCODE='22023'; END IF;
@@ -584,10 +584,10 @@ GRANT EXECUTE ON FUNCTION public.assistant_record_read(jsonb) TO authenticated;
 -- challenge or publish an event outside the coupled transaction.
 CREATE FUNCTION public.record_confirmed_self_report(p_event jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();prep public.assistant_record_commands%ROWTYPE;ch public.confirmation_challenges%ROWTYPE;
+DECLARE o uuid:=public.assistant_patient_uid();prep public.assistant_record_commands%ROWTYPE;ch public.confirmation_challenges%ROWTYPE;
  event_row public.dose_events%ROWTYPE;b jsonb;cmd jsonb;result jsonb;generation bigint;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' OR p_event->>'patient_id' IS DISTINCT FROM o::text THEN
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' OR p_event->>'patient_id' IS DISTINCT FROM o::text THEN
   RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(o::text,35035));
  SELECT * INTO prep FROM public.assistant_record_commands WHERE owner=o AND native_id=(p_event->>'confirmation_challenge_id')::uuid
@@ -623,10 +623,10 @@ GRANT EXECUTE ON FUNCTION public.record_confirmed_self_report(jsonb) TO authenti
 
 CREATE FUNCTION public.record_late_dose_report(p_occurrence_id uuid,p_values jsonb,p_challenge_id uuid) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid();prep public.assistant_record_commands%ROWTYPE;ch public.confirmation_challenges%ROWTYPE;
+DECLARE o uuid:=public.assistant_patient_uid();prep public.assistant_record_commands%ROWTYPE;ch public.confirmation_challenges%ROWTYPE;
  entry public.dose_report_entries%ROWTYPE;b jsonb;cmd jsonb;result jsonb;generation bigint;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN
   RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(o::text,35035));
  SELECT * INTO prep FROM public.assistant_record_commands WHERE owner=o AND native_id=p_challenge_id

@@ -213,16 +213,24 @@ def admitted_live_profile(purpose: str):
 
 def sql_connection_parameters(profile: PersistentWorkflowTestProfile, *, verifier: bool, read_only: bool) -> dict:
     """Explicit parameters exclude ambient libpq services, host overrides and password files."""
+    import ipaddress
+    import os
+
+    if any(os.environ.get(name) for name in ("PGSERVICE", "PGSERVICEFILE", "PGHOSTADDR", "PGSSLCERT", "PGSSLKEY")):
+        raise PersistentProfileRefusal()
     parsed = urlparse(profile.evidence_dsn if verifier else profile.database_url)
     query = parse_qs(parsed.query)
+    try:
+        hostaddr = str(ipaddress.ip_address(parsed.hostname))
+    except ValueError:
+        hostaddr = ""
     return {
         "host": parsed.hostname,
-        "hostaddr": parsed.hostname,
+        "hostaddr": hostaddr,
         "port": parsed.port,
         "dbname": parsed.path[1:],
         "user": unquote(parsed.username or ""),
         "password": unquote(parsed.password or ""),
-        "service": "",
         "passfile": "",
         "sslmode": query.get("sslmode", ["disable"])[0],
         "sslrootcert": query.get("sslrootcert", [""])[0],

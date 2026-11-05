@@ -1,6 +1,26 @@
 -- REVIEW ONLY / NOT APPLIED. Requires reviewed035/036 and approved role provisioning.
 -- Technical metadata only. No clinical or storage-schema mutations.
 BEGIN;
+
+-- Supabase manages auth schema grants: its postgres role lacks GRANT OPTION.
+-- These invoker-only readers match auth.uid()/auth.role() JWT claim precedence.
+-- They read the verified request context without acquiring managed-schema or
+-- clinical privileges. No caller can set claims or choose an identity here.
+CREATE FUNCTION public.assistant_patient_uid() RETURNS uuid
+LANGUAGE sql STABLE SECURITY INVOKER SET search_path='' AS $$
+ SELECT coalesce(nullif(pg_catalog.current_setting('request.jwt.claim.sub',true),''),
+  nullif(pg_catalog.current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid
+$$;
+CREATE FUNCTION public.assistant_patient_role() RETURNS text
+LANGUAGE sql STABLE SECURITY INVOKER SET search_path='' AS $$
+ SELECT coalesce(nullif(pg_catalog.current_setting('request.jwt.claim.role',true),''),
+  nullif(pg_catalog.current_setting('request.jwt.claims',true),'')::jsonb->>'role')
+$$;
+REVOKE ALL ON FUNCTION public.assistant_patient_uid(),public.assistant_patient_role()
+ FROM PUBLIC,anon,authenticated,service_role,assistant_evidence_login,assistant_evidence_owner;
+GRANT EXECUTE ON FUNCTION public.assistant_patient_uid(),public.assistant_patient_role()
+ TO authenticated,assistant_workflow_owner,assistant_message_owner;
+
 SET LOCAL lock_timeout='5s';
 SET LOCAL statement_timeout='30s';
 CREATE SCHEMA assistant_evidence AUTHORIZATION assistant_evidence_owner;
@@ -8,6 +28,7 @@ REVOKE ALL ON SCHEMA assistant_evidence FROM PUBLIC,anon,authenticated,service_r
 GRANT USAGE ON SCHEMA assistant_evidence TO assistant_evidence_login;
 GRANT USAGE ON SCHEMA public TO assistant_evidence_owner,assistant_workflow_owner;
 GRANT EXECUTE ON FUNCTION public.assistant_wf_keys(jsonb,text[]) TO assistant_evidence_owner,assistant_workflow_owner;
+GRANT EXECUTE ON FUNCTION public.assistant_wf_ref(jsonb),public.assistant_wf_writer_ids(jsonb) TO assistant_workflow_owner;
 
 CREATE TABLE public.assistant_storage_tickets (
  owner uuid NOT NULL REFERENCES public.patient_profiles(user_id), id uuid PRIMARY KEY,
@@ -71,7 +92,7 @@ ALTER TABLE public.assistant_business_receipts FORCE ROW LEVEL SECURITY;
 CREATE POLICY assistant_business_receipt_internal ON public.assistant_business_receipts
  TO assistant_workflow_owner USING(true) WITH CHECK(true);
 CREATE POLICY assistant_business_receipt_patient ON public.assistant_business_receipts
- FOR SELECT TO authenticated USING(owner=(SELECT auth.uid()));
+ FOR SELECT TO authenticated USING(owner=(SELECT public.assistant_patient_uid()));
 REVOKE ALL ON public.assistant_business_receipts FROM PUBLIC,anon,authenticated,service_role,assistant_evidence_login,assistant_evidence_owner;
 GRANT SELECT ON public.assistant_business_receipts TO authenticated;
 
@@ -162,22 +183,71 @@ ALTER FUNCTION assistant_evidence.record_storage_observation(jsonb) OWNER TO ass
 REVOKE ALL ON FUNCTION assistant_evidence.record_storage_observation(jsonb) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION assistant_evidence.record_storage_observation(jsonb) TO assistant_evidence_login;
 
-GRANT USAGE ON SCHEMA auth TO assistant_workflow_owner;
-GRANT EXECUTE ON FUNCTION auth.uid(),auth.role() TO assistant_workflow_owner;
+-- Align the legacy JSON boundary with the typed preparation/result references.
+-- Existing control/event/cleanup branches and owner RLS remain unchanged.
+CREATE OR REPLACE FUNCTION public.assistant_wf_ref(v jsonb) RETURNS boolean
+LANGUAGE sql IMMUTABLE SECURITY INVOKER SET search_path='' AS $$
+ SELECT v IS NULL OR v='null'::jsonb OR coalesce(public.assistant_wf_keys(v,ARRAY['kind','id','version'])
+ AND v->>'kind'=ANY(ARRAY['medication','regimen','source','dose_event','dose_occurrence','late_report','enrollment_task','care_review','media_review',
+ 'reminder_review','reminder_action','settings_review','settings_action','agent_session','conversation_cleanup','observation','stock','barrier',
+ 'care_task','contact','file','conversation','feedback','preference']) AND (v->>'id')::uuid IS NOT NULL
+ AND (v->>'version' IS NULL OR (v->>'version')::int>0),false)
+$$;
+ALTER TABLE public.assistant_workflow_operations
+ DROP CONSTRAINT assistant_workflow_operations_check,
+ ADD CONSTRAINT assistant_workflow_operations_check CHECK(coalesce(CASE record_type
+ WHEN 'control' THEN id=task_id AND public.assistant_wf_keys(data,ARRAY['task_id','revision','capability_id',
+ 'workspace_id','conversation_id','status','mode','revoked','processing_event_id','lease_until'])
+ AND data->>'task_id'=task_id::text AND (data->>'revision')::int>0
+ AND data->>'mode'=ANY(ARRAY['allowed','ephemeral'])
+ AND data->>'status'=ANY(ARRAY['idle','processing','interrupted','suspended','cancelled','completed'])
+ AND jsonb_typeof(data->'revoked')='boolean' AND data->>'capability_id' ~ '^[a-z][a-z0-9_.]{1,119}$'
+ AND (data->>'workspace_id' IS NULL OR (data->>'workspace_id')::uuid IS NOT NULL)
+ AND (data->>'processing_event_id' IS NULL OR (data->>'processing_event_id')::uuid IS NOT NULL)
+ AND (data->>'lease_until' IS NULL OR (data->>'lease_until')::timestamptz IS NOT NULL)
+ WHEN 'used_event' THEN data='{}'::jsonb
+ WHEN 'event' THEN public.assistant_wf_keys(data,ARRAY['request_digest','result_revision'])
+ AND (data->>'result_revision')::int>0
+ AND (data->>'request_digest' IS NULL OR data->>'request_digest' ~ '^[a-f0-9]{64}(:[a-z_]{1,40})?$')
+ WHEN 'action' THEN (NOT(data ? 'owner') OR data->>'owner'=owner::text)
+ AND (NOT(data ? 'clinical_revision') OR data->'clinical_revision'='null'::jsonb
+ OR (jsonb_typeof(data->'clinical_revision')='number' AND data->>'clinical_revision' ~ '^[0-9]+$')) AND public.assistant_wf_keys(data,ARRAY['action_key','task_id','capability_id','binding_revision',
+ 'state','business_ref','safe_reason','updated_at','owner','clinical_revision']) AND data->>'action_key'=id::text
+ AND data->>'task_id'=task_id::text AND (data->>'binding_revision')::int>0
+ AND data->>'state'=ANY(ARRAY['pending','succeeded','failed','outcome_unknown'])
+ AND data->>'capability_id' ~ '^[a-z][a-z0-9_.]{1,119}$' AND public.assistant_wf_ref(data->'business_ref')
+ AND (data->>'safe_reason' IS NULL OR data->>'safe_reason' ~ '^[a-z_]{1,80}$'
+ OR (data->>'capability_id' IN ('notification.subscribe','notification.unsubscribe')
+ AND data->>'safe_reason' ~ '^[a-f0-9]{64}$'))
+ WHEN 'cleanup' THEN public.assistant_wf_keys(data,ARRAY['id','task_id','object_ref','content_type','source_ref',
+ 'state','writer_pending','reason','pending_writer_ids','multiple_writers']) AND data->>'id'=id::text AND data->>'task_id'=task_id::text
+ AND data->>'object_ref'=owner::text||'/workflow-originals/'||task_id::text||'/'||id::text
+ AND data->>'state'=ANY(ARRAY['pending','deleted','protected','failed'])
+ AND data->>'content_type'=ANY(ARRAY['image/png','image/jpeg']) AND jsonb_typeof(data->'writer_pending')='boolean'
+ AND public.assistant_wf_ref(data->'source_ref')
+ AND public.assistant_wf_writer_ids(data->'pending_writer_ids') AND jsonb_typeof(data->'multiple_writers')='boolean'
+ AND (data->>'reason' IS NULL OR data->>'reason'=ANY(ARRAY['upload_inflight','storage_unavailable',
+ 'protection_unavailable','formal_source','reference_unresolved','shared_reference','operation_unknown','business_record','removed']))
+ ELSE false END,false));
+
+GRANT EXECUTE ON FUNCTION public.assistant_patient_uid(),public.assistant_patient_role() TO assistant_workflow_owner;
 GRANT EXECUTE ON FUNCTION public.assistant_workflow_command(text,jsonb) TO assistant_workflow_owner;
 GRANT SELECT,UPDATE ON public.assistant_workflow_tasks,public.assistant_workflow_operations TO assistant_workflow_owner;
+-- Typed native preparation records an action before publishing its receipt.
+-- Keep INSERT limited to the workflow owner; its existing owner policy applies.
+GRANT INSERT ON public.assistant_workflow_operations TO assistant_workflow_owner;
 CREATE POLICY assistant_workflow_task_command ON public.assistant_workflow_tasks TO assistant_workflow_owner
- USING(owner=auth.uid()) WITH CHECK(owner=auth.uid());
+ USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid());
 CREATE POLICY assistant_workflow_operation_command ON public.assistant_workflow_operations TO assistant_workflow_owner
- USING(owner=auth.uid()) WITH CHECK(owner=auth.uid());
+ USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid());
 
 -- Closed structural/control commands only; native domain transactions own completion.
 CREATE FUNCTION public.assistant_workflow_mutate(p_command jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid(); kind text; tid uuid; target uuid; args jsonb; child jsonb;
+DECLARE o uuid:=public.assistant_patient_uid(); kind text; tid uuid; target uuid; args jsonb; child jsonb;
  source_data jsonb; target_data jsonb; change jsonb; allowed text[];
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN
   RAISE EXCEPTION 'Verified patient identity required' USING ERRCODE='42501';
  END IF;
  kind:=p_command->>'kind';

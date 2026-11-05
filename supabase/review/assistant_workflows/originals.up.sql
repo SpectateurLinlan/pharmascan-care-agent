@@ -47,11 +47,11 @@ ALTER TABLE public.assistant_workflow_attachments ADD CONSTRAINT assistant_origi
 GRANT SELECT,INSERT,UPDATE ON public.assistant_storage_tickets TO assistant_workflow_owner;
 GRANT SELECT ON public.assistant_verified_operations TO assistant_workflow_owner;
 CREATE POLICY assistant_storage_patient_command ON public.assistant_storage_tickets TO assistant_workflow_owner
- USING(owner=auth.uid()) WITH CHECK(owner=auth.uid());
+ USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid());
 CREATE POLICY assistant_verified_patient_command ON public.assistant_verified_operations FOR SELECT TO assistant_workflow_owner
- USING(owner=auth.uid());
+ USING(owner=public.assistant_patient_uid());
 CREATE POLICY assistant_workflow_original_command ON public.assistant_workflow_attachments TO assistant_workflow_owner
- USING(owner=auth.uid()) WITH CHECK(owner=auth.uid());
+ USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid());
 GRANT SELECT,UPDATE ON public.assistant_workflow_attachments TO assistant_workflow_owner;
 
 CREATE TABLE public.assistant_original_deletions (
@@ -63,7 +63,7 @@ ALTER TABLE public.assistant_original_deletions OWNER TO assistant_workflow_owne
 ALTER TABLE public.assistant_original_deletions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.assistant_original_deletions FORCE ROW LEVEL SECURITY;
 CREATE POLICY assistant_original_delete_owner ON public.assistant_original_deletions TO assistant_workflow_owner
- USING(owner=auth.uid()) WITH CHECK(owner=auth.uid());
+ USING(owner=public.assistant_patient_uid()) WITH CHECK(owner=public.assistant_patient_uid());
 REVOKE ALL ON public.assistant_original_deletions FROM PUBLIC,anon,authenticated,service_role,assistant_evidence_login,assistant_evidence_owner;
 
 CREATE FUNCTION assistant_evidence.storage_ticket_projection(p_ticket uuid) RETURNS jsonb
@@ -71,7 +71,7 @@ LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
  SELECT jsonb_build_object('ticket_id',t.id,'nonce',t.nonce,'task_id',t.task_id,'attachment_id',t.attachment_id,
  'writer_id',t.writer_id,'operation',t.operation,'generation',t.generation,'object_ref',t.object_ref,
  'expected_checksum',t.expected_checksum,'content_type',t.content_type,'byte_size',t.byte_size,'expires_at',t.expires_at)
- FROM public.assistant_storage_tickets t WHERE id=p_ticket AND owner=auth.uid()
+ FROM public.assistant_storage_tickets t WHERE id=p_ticket AND owner=public.assistant_patient_uid()
 $$;
 ALTER FUNCTION assistant_evidence.storage_ticket_projection(uuid) OWNER TO assistant_workflow_owner;
 REVOKE ALL ON FUNCTION assistant_evidence.storage_ticket_projection(uuid) FROM PUBLIC,anon,authenticated,service_role,assistant_evidence_login;
@@ -115,9 +115,9 @@ REVOKE ALL ON FUNCTION public.assistant_workflow_command_legacy_035(text,jsonb) 
 GRANT EXECUTE ON FUNCTION public.assistant_workflow_command_legacy_035(text,jsonb) TO assistant_workflow_owner;
 CREATE FUNCTION public.assistant_workflow_command(p_operation text,p_input jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid(); a jsonb;
+DECLARE o uuid:=public.assistant_patient_uid(); a jsonb;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(o::text,35035));
  IF p_operation IN ('original_publish','original_written','cleanup_written','cleanup_update') THEN
   RETURN jsonb_build_object('error','unavailable'); END IF;
@@ -134,11 +134,11 @@ GRANT EXECUTE ON FUNCTION public.assistant_workflow_command(text,jsonb) TO authe
 
 CREATE FUNCTION public.assistant_original_command(p_command jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid(); kind text; allowed text[]; ctx jsonb; tid uuid; aid uuid; a jsonb; c jsonb; args jsonb;
+DECLARE o uuid:=public.assistant_patient_uid(); kind text; allowed text[]; ctx jsonb; tid uuid; aid uuid; a jsonb; c jsonb; args jsonb;
  t public.assistant_storage_tickets%ROWTYPE; proof public.assistant_verified_operations%ROWTYPE;
  ref jsonb; child jsonb; remaining jsonb; ticket_id uuid; writer uuid; generation integer;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  kind:=p_command->>'kind';
  allowed:=CASE kind
  WHEN 'native' THEN ARRAY['kind','operation','input','run_binding']
@@ -174,8 +174,8 @@ BEGIN
  IF ref IS NOT NULL THEN
   IF NOT public.assistant_wf_keys(ref,ARRAY['ticket_id','verification_id','generation','result']) THEN
    RETURN jsonb_build_object('error','invalid'); END IF;
-  SELECT * INTO proof FROM public.assistant_verified_operations WHERE owner=o AND id=(ref->>'verification_id')::uuid
-   AND ticket_id=(ref->>'ticket_id')::uuid AND generation=(ref->>'generation')::int AND result=ref->>'result';
+  SELECT v.* INTO proof FROM public.assistant_verified_operations v WHERE v.owner=o AND v.id=(ref->>'verification_id')::uuid
+   AND v.ticket_id=(ref->>'ticket_id')::uuid AND v.generation=(ref->>'generation')::int AND v.result=ref->>'result';
   IF NOT FOUND THEN RETURN jsonb_build_object('error','unavailable'); END IF;
   SELECT * INTO t FROM public.assistant_storage_tickets WHERE owner=o AND id=proof.ticket_id FOR UPDATE;
   IF aid IS NOT NULL AND (aid<>t.attachment_id OR tid IS DISTINCT FROM t.task_id) THEN RETURN jsonb_build_object('error','stale'); END IF;
@@ -246,15 +246,21 @@ BEGIN
    RETURN jsonb_build_object('result',a||jsonb_build_object('owner',o,'state','pending','reason','upload_inflight')); END IF;
   IF kind='settle_cleanup' THEN
    IF proof.result IS DISTINCT FROM 'absent_after_delete' OR t.operation IS DISTINCT FROM 'delete'
-   OR NOT EXISTS(SELECT 1 FROM public.assistant_original_deletions WHERE owner=o AND attachment_id=aid AND ticket_id=t.id) THEN
+   OR NOT EXISTS(SELECT 1 FROM public.assistant_original_deletions d WHERE d.owner=o AND d.attachment_id=aid AND d.ticket_id=t.id) THEN
     RETURN jsonb_build_object('error','stale'); END IF;
    UPDATE public.assistant_original_deletions SET state='deleted' WHERE owner=o AND attachment_id=aid;
    a:=a||jsonb_build_object('state','deleted','reason','removed');
    UPDATE public.assistant_workflow_operations SET data=a WHERE owner=o AND record_type='cleanup' AND id=aid;
    RETURN jsonb_build_object('result',a||jsonb_build_object('owner',o));
   END IF;
-  IF EXISTS(SELECT 1 FROM public.assistant_original_deletions WHERE owner=o AND attachment_id=aid) THEN
+  SELECT s.* INTO t FROM public.assistant_original_deletions d
+   JOIN public.assistant_storage_tickets s ON s.id=d.ticket_id AND s.owner=d.owner
+   WHERE d.owner=o AND d.attachment_id=aid;
+  IF FOUND AND t.state<>'unknown' AND NOT (t.state='issued' AND clock_timestamp()>=t.expires_at) THEN
    RETURN jsonb_build_object('result',a||jsonb_build_object('owner',o,'state','pending','reason','operation_unknown')); END IF;
+  -- A retry repeats only DELETE on this immutable key. The permanent deletion
+  -- exclusion remains in place, so an unresolved older delete cannot race a
+  -- future upload/publication. Each retry still needs its own absence proof.
   -- Never lower recorded protection. Native references must be classified under
   -- this same fence before extending this check in I08/I11.
   IF a->'source_ref' IS NOT NULL AND a->'source_ref'<>'null'::jsonb OR a->>'state'='protected'
@@ -274,7 +280,8 @@ BEGIN
    expected_checksum,content_type,byte_size,expires_at,deleting)
   VALUES(o,ticket_id,gen_random_uuid(),tid,aid,'delete',generation,t.object_ref,t.expected_checksum,t.content_type,t.byte_size,
    clock_timestamp()+interval '45 seconds',true);
-  INSERT INTO public.assistant_original_deletions(owner,attachment_id,task_id,ticket_id,state) VALUES(o,aid,tid,ticket_id,'deleting');
+  INSERT INTO public.assistant_original_deletions AS d(owner,attachment_id,task_id,ticket_id,state) VALUES(o,aid,tid,ticket_id,'deleting')
+   ON CONFLICT(owner,attachment_id) DO UPDATE SET ticket_id=EXCLUDED.ticket_id WHERE d.state='deleting';
   RETURN jsonb_build_object('result',assistant_evidence.storage_ticket_projection(ticket_id));
  END IF;
  RETURN jsonb_build_object('error','invalid');
@@ -289,9 +296,9 @@ GRANT EXECUTE ON FUNCTION public.assistant_original_command(jsonb) TO authentica
 -- it cannot issue a ticket, release a writer or publish a cleanup assertion.
 CREATE FUNCTION public.assistant_original_object_access(p_task uuid,p_attachment uuid,p_operation text) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
-DECLARE o uuid:=auth.uid(); allowed boolean:=false; key text;
+DECLARE o uuid:=public.assistant_patient_uid(); allowed boolean:=false; key text;
 BEGIN
- IF o IS NULL OR auth.role() IS DISTINCT FROM 'authenticated' THEN
+ IF o IS NULL OR public.assistant_patient_role() IS DISTINCT FROM 'authenticated' THEN
   RAISE EXCEPTION 'Verified patient required' USING ERRCODE='42501'; END IF;
  IF p_task IS NULL OR p_attachment IS NULL OR p_operation IS NULL OR p_operation NOT IN ('read','put','delete') THEN
   RAISE EXCEPTION 'Invalid original operation' USING ERRCODE='22023'; END IF;
@@ -306,7 +313,12 @@ BEGIN
    JOIN public.assistant_workflow_operations c ON c.owner=a.owner AND c.task_id=a.task_id AND c.id=a.task_id AND c.record_type='control'
    JOIN public.assistant_storage_tickets t ON t.owner=a.owner AND t.task_id=a.task_id AND t.attachment_id=a.id
    WHERE a.owner=o AND a.task_id=p_task AND a.id=p_attachment AND a.data->>'state'='reserved'
-   AND c.data->>'mode'='allowed' AND c.data->>'revoked'='false' AND c.data->>'status'='idle'
+   AND c.data->>'mode'='allowed' AND c.data->>'revoked'='false' AND c.data->>'status'='processing'
+   AND c.data->>'processing_event_id'=a.data->>'operation_event_id'
+   AND c.data->>'revision'=a.data->>'binding_revision'
+   AND clock_timestamp()<(c.data->>'lease_until')::timestamptz
+   AND t.writer_id::text=a.data->>'operation_event_id'
+   AND a.data->'pending_writer_ids' @> jsonb_build_array(t.writer_id)
    AND t.operation='upload' AND t.object_ref=key AND t.state='inflight' AND NOT t.revoked
    AND clock_timestamp()<t.expires_at)
    AND NOT EXISTS(SELECT 1 FROM public.assistant_original_deletions WHERE owner=o AND attachment_id=p_attachment);
