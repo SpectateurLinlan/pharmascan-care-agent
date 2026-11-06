@@ -81,3 +81,20 @@ export function regimenStatusLabelKey(
   if (row.state === 'draft' || row.state === 'pending_clarification') return 'Plan awaiting review';
   return row.state;
 }
+
+// The medications endpoint returns active plans. A planned end date does not
+// transition the backend lifecycle or make an active plan a historical course.
+export function isPastCourse(
+  row: { state?: string; course_end_date?: string | null },
+  today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Singapore',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date()),
+) {
+  return (
+    (row.state !== undefined && ['ended', 'superseded'].includes(row.state)) ||
+    ((!row.state || row.state === 'active') && !!row.course_end_date && row.course_end_date < today)
+  );
+}

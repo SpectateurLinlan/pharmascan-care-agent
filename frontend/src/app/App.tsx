@@ -18,18 +18,10 @@ import {
 import { medicationSetupEntries } from '../features/enrollment/medicationSetup';
 import { AssistantEntry } from './AssistantEntry';
 import { historyName } from '../features/records/historyFilterLabels';
-import {
-  MedicinesHub,
-  MedicationDetail,
-  isPastCourse,
-  type MedicineDestination,
-} from '../features/medications/MedicinesHub';
+import type { MedicineDestination } from '../features/medications/MedicinesHub';
+import { isPastCourse } from '../features/medications/regimenHistoryModel';
 import type { MeDestination } from '../features/account/PatientHub';
-import { CareTasksScreen, CareTaskSummary } from '../features/care/CareTasksScreen';
 import { LateDoseFollowUps } from '../features/care/LateDoseFollowUps';
-import { RegimenHistoryScreen } from '../features/medications/RegimenHistoryScreen';
-import { InventoryPanel } from '../features/care/InventoryPanel';
-import { PendingEvidenceTasks } from '../features/media/PendingEvidenceTasks';
 import { Card, ErrorNotice } from '../components/primitives';
 import { Screen } from '../components/layout';
 import { TodayScreen } from '../features/today/TodayScreen';
@@ -44,6 +36,63 @@ import { StartupSection } from './StartupSection';
 import { canRenderClinicalToday, canClaimNoRegistrations, type StartupState } from './startupState';
 
 import { deferScreen } from './DeferredScreen';
+
+// Non-selected management screens are downloaded only when rendered.
+const MedicinesHub = deferScreen<
+  NonNullable<ComponentProps<typeof import('../features/medications/MedicinesHub').MedicinesHub>>
+>(() =>
+  import('../features/medications/MedicinesHub').then((module) => ({
+    default: module.MedicinesHub,
+  })),
+);
+const MedicationDetail = deferScreen<
+  NonNullable<
+    ComponentProps<typeof import('../features/medications/MedicinesHub').MedicationDetail>
+  >
+>(() =>
+  import('../features/medications/MedicinesHub').then((module) => ({
+    default: module.MedicationDetail,
+  })),
+);
+const CareTasksScreen = deferScreen<
+  NonNullable<ComponentProps<typeof import('../features/care/CareTasksScreen').CareTasksScreen>>
+>(() =>
+  import('../features/care/CareTasksScreen').then((module) => ({
+    default: module.CareTasksScreen,
+  })),
+);
+const CareTaskSummary = deferScreen<
+  NonNullable<ComponentProps<typeof import('../features/care/CareTasksScreen').CareTaskSummary>>
+>(() =>
+  import('../features/care/CareTasksScreen').then((module) => ({
+    default: module.CareTaskSummary,
+  })),
+);
+const RegimenHistoryScreen = deferScreen<
+  NonNullable<
+    ComponentProps<
+      typeof import('../features/medications/RegimenHistoryScreen').RegimenHistoryScreen
+    >
+  >
+>(() =>
+  import('../features/medications/RegimenHistoryScreen').then((module) => ({
+    default: module.RegimenHistoryScreen,
+  })),
+);
+const InventoryPanel = deferScreen<
+  NonNullable<ComponentProps<typeof import('../features/care/InventoryPanel').InventoryPanel>>
+>(() =>
+  import('../features/care/InventoryPanel').then((module) => ({ default: module.InventoryPanel })),
+);
+const PendingEvidenceTasks = deferScreen<
+  NonNullable<
+    ComponentProps<typeof import('../features/media/PendingEvidenceTasks').PendingEvidenceTasks>
+  >
+>(() =>
+  import('../features/media/PendingEvidenceTasks').then((module) => ({
+    default: module.PendingEvidenceTasks,
+  })),
+);
 
 const EnrollScreen = deferScreen<
   NonNullable<ComponentProps<typeof import('../features/enrollment/EnrollScreen').EnrollScreen>>
@@ -266,6 +315,7 @@ function CompanionApp() {
   const { t, preferences, loadPreferences, preferenceError } = useLanguage();
   const [evidenceTaskId, setEvidenceTaskId] = useState<string | null>(null);
   const [evidenceVisited, setEvidenceVisited] = useState(false);
+  const [regimenHistoryVisited, setRegimenHistoryVisited] = useState(false);
   const [conversationClearRevision, setConversationClearRevision] = useState(0);
   const [assistantSlots, setAssistantSlots] = useState<Record<string, unknown>>({});
   const [routedPhoto, setRoutedPhoto] = useState<File | null>(null);
@@ -329,6 +379,7 @@ function CompanionApp() {
   currentTab.current = tab;
   useEffect(() => {
     if (tab === 'label') setEvidenceVisited(true);
+    if (tab === 'past-medicines') setRegimenHistoryVisited(true);
   }, [tab]);
   const guideOrigin = useRef<GuideOrigin | null>(null);
   const guideFocus = useRef<HTMLElement | null>(null);
@@ -1048,11 +1099,15 @@ function CompanionApp() {
                   }}
                 />
               ) : null}
-              <RegimenHistoryScreen
-                regimens={versions}
-                active={visibleTab === 'past-medicines'}
-                onOpen={(id) => openMedicine('medicine-detail', id)}
-              />
+              {regimenHistoryVisited || visibleTab === 'past-medicines' ? (
+                <div hidden={visibleTab !== 'past-medicines'}>
+                  <RegimenHistoryScreen
+                    regimens={versions}
+                    active={visibleTab === 'past-medicines'}
+                    onOpen={(id) => openMedicine('medicine-detail', id)}
+                  />
+                </div>
+              ) : null}
               {visibleTab === 'medicine-detail' && !detail ? (
                 <Card title="Choose a medication">
                   <button onClick={() => setTab('medicines')}>{t('Medicines')}</button>

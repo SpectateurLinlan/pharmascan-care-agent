@@ -1,7 +1,6 @@
 import type { SupportClientActions } from '../workflow/AssistantSupportActions';
 import { Icon } from '../../../components/Icon';
 import { ConversationSurface } from '../../conversations/ConversationSurface';
-import { ConversationHistoryBrowser } from '../../conversations/ConversationHistoryBrowser';
 import { MedicationChoices, MedicationNameChoices } from './MedicationChoices';
 import { AnswerSources } from './AnswerSources';
 import { useLanguage } from '../../../i18n/language';
@@ -41,9 +40,35 @@ import {
 } from '../../../api/assistantWorkflows';
 import { sendWorkflowStream, WorkflowStreamError } from '../../../api/assistantWorkflowStream';
 import { AssistantProgress } from '../workflow/AssistantProgress';
-import { AssistantWorkflow } from '../workflow/AssistantWorkflow';
-import { AssistantWorkflowOriginals } from '../workflow/AssistantWorkflowOriginals';
+import { deferScreen } from '../../../components/DeferredScreen';
 import { WorkflowMemory, type WorkflowFile } from '../model/assistantWorkflowState';
+
+// Keep the composer mounted while the optional workflow form downloads or retries.
+const AssistantWorkflow = deferScreen<
+  import('react').ComponentProps<typeof import('../workflow/AssistantWorkflow').AssistantWorkflow>
+>(() =>
+  import('../workflow/AssistantWorkflow').then((module) => ({ default: module.AssistantWorkflow })),
+);
+
+const ConversationHistoryBrowser = deferScreen<
+  import('react').ComponentProps<
+    typeof import('../../conversations/ConversationHistoryBrowser').ConversationHistoryBrowser
+  >
+>(() =>
+  import('../../conversations/ConversationHistoryBrowser').then((module) => ({
+    default: module.ConversationHistoryBrowser,
+  })),
+);
+
+const AssistantWorkflowOriginals = deferScreen<
+  import('react').ComponentProps<
+    typeof import('../workflow/AssistantWorkflowOriginals').AssistantWorkflowOriginals
+  >
+>(() =>
+  import('../workflow/AssistantWorkflowOriginals').then((module) => ({
+    default: module.AssistantWorkflowOriginals,
+  })),
+);
 
 export function AssistantScreen({
   initialText = '',

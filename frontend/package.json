@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
     "check:architecture": "node --test tooling/architecture.test.mjs && node tooling/architecture.mjs",
+    "check:startup": "node --test tooling/startupResources.test.mjs",
     "test": "vitest run --maxWorkers=1",
     "test:browser": "playwright test",
     "format": "prettier --config .prettierrc.json --write \"src/**/*.{ts,tsx,css}\" \"e2e/**/*.{ts,tsx,html}\" \"tooling/*.mjs\" \"*.{js,ts,mjs}\" \"../scripts/**/*.js\"",

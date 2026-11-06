@@ -160,3 +160,9 @@ do not add `VITE_` versions of those secrets or flags. See
 for actual prerequisites and the difference between health configuration and
 authenticated workflow admission. Enabling a frontend entry does not enable the
 server's persistent workflow graph.
+
+### 首屏资源检查
+
+`npm run check:startup` 使用实际 Vite 生产构建，计算入口及其静态依赖的 JS/gzip 总体积，并验证管理页面和聊天办理表单按需加载。检查只读取内存中的构建产物，不访问后端。
+
+`e2e/platform/performanceLocal.spec.ts` 包含浏览器启动、延迟页面下载及响应清理测试；指向回环服务器运行时，相关用例的所有 API 都使用合成拦截。真实后端性能采样仍需显式开启对应环境开关。

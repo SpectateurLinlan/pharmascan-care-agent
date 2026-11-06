@@ -15,3 +15,5 @@
 | [VoiceInput.tsx](VoiceInput.tsx) | 语音状态及可编辑转录输入 |
 
 同目录 `*.test.ts(x)` 是 Vitest 单元/组件回归。新增文件按职责归属；依赖规则由 `npm run check:architecture` 检查。
+
+`DeferredScreen.tsx`：跨页面及聊天办理面板的独立加载、失败重试边界；加载时保留外围界面。

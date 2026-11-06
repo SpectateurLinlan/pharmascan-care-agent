@@ -1,6 +1,60 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+
+async function closeHeldPage(page: Page, release: () => void) {
+  // Keep the request guards installed until no app code can issue another fetch.
+  try {
+    await page.close({ runBeforeUnload: false });
+  } finally {
+    release();
+  }
+}
+
+test('held startup responses are released only after page disposal', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  expect(new URL(baseURL!).hostname).toBe('127.0.0.1');
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const escaped: string[] = [];
+  let held = false;
+  // Even the deliberately broken cleanup must never reach the local API proxy.
+  await context.route('**/api/**', async (route) => {
+    escaped.push(new URL(route.request().url()).pathname);
+    await route.abort();
+  });
+  await page.route('**/*', async (route) => {
+    if (new URL(route.request().url()).pathname === '/api/held') {
+      held = true;
+      await gate;
+      try {
+        await route.fulfill({ json: {} });
+      } catch (error) {
+        if (!page.isClosed()) throw error;
+      }
+      return;
+    }
+    await route.fulfill({
+      contentType: 'text/html',
+      body: '<script>fetch("/api/held").then(() => fetch("/api/escaped"))</script>',
+    });
+  });
+  await page.goto('/');
+  await expect.poll(() => held).toBe(true);
+  let closedWhenReleased = false;
+  await closeHeldPage(page, () => {
+    closedWhenReleased = page.isClosed();
+    release();
+  });
+  expect(closedWhenReleased).toBe(true);
+  expect(page.isClosed()).toBe(true);
+  expect(escaped).toEqual([]);
+});
 
 // Browser-only startup contract. Every API response is a synthetic fixture;
 // use a loopback Vite server with empty Supabase Auth environment variables.
@@ -20,6 +74,11 @@ for (const language of ['en', 'zh'] as const) {
     let releaseHealth!: () => void;
     let releaseSession!: () => void;
     let releaseRecords!: () => void;
+    let releaseSection!: () => void;
+    const section = new Promise<void>((resolve) => {
+      releaseSection = resolve;
+    });
+    const requestedSections = new Set<string>();
     const health = new Promise<void>((resolve) => {
       releaseHealth = resolve;
     });
@@ -33,7 +92,21 @@ for (const language of ['en', 'zh'] as const) {
     await page.route('**/*', async (route) => {
       const url = new URL(route.request().url());
       if (url.origin !== new URL(baseURL!).origin) return route.abort();
-      if (!url.pathname.startsWith('/api/')) return route.continue();
+      if (!url.pathname.startsWith('/api/')) {
+        // Cover both the Vite development module and emitted production chunk.
+        for (const name of ['MedicinesHub', 'RegimenHistoryScreen']) {
+          if (url.pathname.includes(`/${name}.`) || url.pathname.includes(`/${name}-`)) {
+            requestedSections.add(name);
+            if (name === 'MedicinesHub') await section;
+          }
+        }
+        try {
+          return await route.continue();
+        } catch (error) {
+          if (!page.isClosed()) throw error;
+          return;
+        }
+      }
       calls.push(`${route.request().method()} ${url.pathname}`);
       let body: unknown = [];
       if (url.pathname === '/api/health') {
@@ -68,7 +141,11 @@ for (const language of ['en', 'zh'] as const) {
       } else if (url.pathname === '/api/agent/usage') {
         body = { llm_user_turns: 0, limit: 20, next_reset_at: '2026-11-07T00:00:00+08:00' };
       }
-      await route.fulfill({ json: body });
+      try {
+        await route.fulfill({ json: body });
+      } catch (error) {
+        if (!page.isClosed()) throw error;
+      }
     });
     try {
       const started = Date.now();
@@ -132,14 +209,28 @@ for (const language of ['en', 'zh'] as const) {
           externalCalls: 0,
         }),
       );
+      expect(requestedSections.has('MedicinesHub')).toBe(false);
+      releaseRecords();
+      await page.locator('.patient-nav button').nth(1).click();
+      await expect.poll(() => requestedSections.has('MedicinesHub')).toBe(true);
+      // Unopened history stays absent even after records become available.
+      expect(requestedSections.has('RegimenHistoryScreen')).toBe(false);
+      await expect(page.locator('.patient-nav')).toBeVisible();
+      await expect(page.locator('.current-medications-card')).not.toBeVisible();
+      releaseSection();
+      await expect(page.locator('.current-medications-card')).toBeVisible();
+      await page.locator('.patient-nav button').first().click();
+      await expect(composer).toHaveValue('DEMO question typed before the backend wakes');
     } catch (error) {
       console.log('DEMO startup request paths', calls);
       throw error;
     } finally {
-      releaseHealth();
-      releaseSession();
-      releaseRecords();
-      await page.unrouteAll({ behavior: 'ignoreErrors' });
+      await closeHeldPage(page, () => {
+        releaseHealth();
+        releaseSession();
+        releaseRecords();
+        releaseSection();
+      });
     }
   });
 }

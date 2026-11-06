@@ -8,7 +8,7 @@ import {
 } from '../../api/client';
 import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from '../../i18n/language';
-import { regimenStatusLabelKey } from './regimenHistoryModel';
+import { isPastCourse, regimenStatusLabelKey } from './regimenHistoryModel';
 import { ErrorNotice } from '../../components/primitives';
 import { BottomSheet } from '../../components/BottomSheet';
 import { StopPlanReview } from './StopPlanReview';
@@ -27,22 +27,7 @@ export type MedicineDestination =
   | 'label'
   | 'manual';
 
-// The medications endpoint returns active plans. A planned end date does not
-// transition the backend lifecycle or make an active plan a historical course.
-export function isPastCourse(
-  row: { state?: string; course_end_date?: string | null },
-  today = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Singapore',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date()),
-) {
-  return (
-    (row.state !== undefined && ['ended', 'superseded'].includes(row.state)) ||
-    ((!row.state || row.state === 'active') && !!row.course_end_date && row.course_end_date < today)
-  );
-}
+export { isPastCourse } from './regimenHistoryModel';
 
 /** Review state plus the schedule, so a patient can see what is safe to act on. */
 function summaryHint(row: MedicationSummary, t: (value: string) => string) {
