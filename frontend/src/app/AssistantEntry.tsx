@@ -70,7 +70,7 @@ export function AssistantEntry({
           </button>
         ) : null}
         <form
-          className="composer-row"
+          className="composer-row composer-row--connecting"
           data-guide="assistant-composer"
           onSubmit={(event) => event.preventDefault()}
         >

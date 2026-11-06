@@ -75,6 +75,13 @@ for (const language of ['en', 'zh'] as const) {
       await page.goto('/');
       const composer = page.locator('.composer-row').getByRole('textbox');
       await expect(composer).toBeVisible({ timeout: 5000 });
+      const startupSize = await composer.boundingBox();
+      const startupSend = await page.locator('.composer-send').boundingBox();
+      expect(startupSize!.width).toBeGreaterThan(180);
+      expect(startupSize!.width).toBeGreaterThan(startupSend!.width);
+      await page.evaluate(() => document.documentElement.setAttribute('data-text-scale', '150'));
+      expect((await composer.boundingBox())!.width).toBeGreaterThan(180);
+      await page.evaluate(() => document.documentElement.setAttribute('data-text-scale', '100'));
       const firstInputMs = Date.now() - started;
       await composer.fill('DEMO question typed before the backend wakes');
       await composer.press('Enter');

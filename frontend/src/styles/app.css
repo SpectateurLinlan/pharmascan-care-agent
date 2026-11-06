@@ -5682,3 +5682,10 @@ button.history-info-row {
     font-size: var(--fs-body);
   }
 }
+
+/* Before connection there are only a text field and Send; reserve no photo/voice columns. */
+.today-assistant .composer-row--connecting,
+.conversation-workspace .composer-row--connecting,
+:root[data-text-scale] .today-assistant .composer-row.composer-row--connecting {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
