@@ -1,5 +1,10 @@
 /** Patient-facing language for the integrated account, photo and chat flows. */
 export const experienceCopy: Record<string, string> = {
+  'Connecting to your assistant. You can type while we connect.':
+    '正在连接助手，您可以先输入问题。',
+  'Assistant connection is unavailable. Your unsent message is kept on this page.':
+    '助手暂时无法连接，尚未发送的内容会保留在当前页面。',
+  'Retry connecting': '重新连接',
   'Care and reminders': '用药照护与提醒',
   'Make it comfortable': '使用偏好',
   'About the app': '应用信息',

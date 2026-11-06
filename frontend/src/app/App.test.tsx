@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { App } from './App';
 import { api } from '../api/client';
 import { accountAuth } from '../api/auth';
+import { StrictMode } from 'react';
 
 vi.mock('../api/client', () => ({
   ApiError: class extends Error {},
@@ -26,6 +27,17 @@ afterEach(() => {
   vi.resetAllMocks();
 });
 beforeEach(() => {
+  vi.mocked(api.preferences).mockResolvedValue({
+    patient_id: 'DEMO-owner',
+    preferred_language: 'en',
+    timezone: 'Asia/Singapore',
+  } as Awaited<ReturnType<typeof api.preferences>>);
+  vi.mocked(api.listMedications).mockResolvedValue({
+    medications: [],
+    item_count: 0,
+    note: 'DEMO_ONLY',
+  });
+  vi.mocked(api.regimenHistory).mockResolvedValue([]);
   vi.mocked(api.evidenceTasks).mockResolvedValue([]);
   vi.mocked(api.reminderAlerts).mockResolvedValue([]);
   for (const owner of ['demo-patient', 'DEMO-owner', 'DEMO-A', 'DEMO-retry'])
@@ -39,6 +51,170 @@ it('shows the home shell immediately while all backend responses remain pending'
   render(<App />);
   expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeTruthy();
   expect(screen.getByRole('heading', { level: 1, name: /MediThread|Today|Welcome/ })).toBeTruthy();
+  expect(screen.queryByText('No medication plans have been added.')).toBeNull();
+});
+it('starts independent record reads while health is pending, without creating a session', async () => {
+  vi.mocked(api.health).mockReturnValue(new Promise(() => {}));
+  vi.mocked(api.preferences).mockReturnValue(new Promise(() => {}));
+  vi.mocked(api.listMedications).mockReturnValue(new Promise(() => {}));
+  vi.mocked(api.regimenHistory).mockReturnValue(new Promise(() => {}));
+  render(<App />);
+  await waitFor(() => expect(api.preferences).toHaveBeenCalledOnce());
+  expect(api.listMedications).toHaveBeenCalledOnce();
+  expect(api.regimenHistory).toHaveBeenCalledOnce();
+  expect(api.startDemo).not.toHaveBeenCalled();
+  expect(screen.queryByText('No medication plans have been added.')).toBeNull();
+});
+it('shows an editable composer before health and session, preserving text when chat becomes ready', async () => {
+  let resolveHealth!: (value: Awaited<ReturnType<typeof api.health>>) => void;
+  let resolveSession!: (value: Awaited<ReturnType<typeof api.startDemo>>) => void;
+  vi.mocked(api.health).mockReturnValue(
+    new Promise((resolve) => {
+      resolveHealth = resolve;
+    }),
+  );
+  vi.mocked(api.startDemo).mockReturnValue(
+    new Promise((resolve) => {
+      resolveSession = resolve;
+    }),
+  );
+  vi.mocked(api.preferences).mockResolvedValue({
+    patient_id: 'DEMO-owner',
+    preferred_language: 'en',
+    timezone: 'Asia/Singapore',
+  } as Awaited<ReturnType<typeof api.preferences>>);
+  vi.mocked(api.listMedications).mockReturnValue(new Promise(() => {}));
+  vi.mocked(api.regimenHistory).mockReturnValue(new Promise(() => {}));
+  render(<App />);
+  const input = screen.getByRole('textbox', { name: 'Review your message before sending' });
+  fireEvent.change(input, { target: { value: 'DEMO unsent medicine question' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
+  expect(api.startDemo).not.toHaveBeenCalled();
+  await act(async () => {
+    resolveHealth({ status: 'ok', runtime_contract: 'patient-ux-reminders-v1' } as Awaited<
+      ReturnType<typeof api.health>
+    >);
+  });
+  await waitFor(() => expect(api.startDemo).toHaveBeenCalledOnce());
+  await act(async () => {
+    resolveSession({
+      patient_id: 'DEMO-owner',
+      session_id: 'DEMO-session',
+      demo_only: true,
+      seeded_medication_count: 0,
+      note: 'DEMO_ONLY',
+    });
+  });
+  expect(
+    screen.getByRole('textbox', { name: 'Review your message before sending' }),
+  ).toHaveProperty('value', 'DEMO unsent medicine question');
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', false),
+  );
+  expect(screen.queryByText('No medication plans have been added.')).toBeNull();
+});
+it('shares startup GETs across StrictMode without creating a premature session', async () => {
+  vi.mocked(api.health).mockReturnValue(new Promise(() => {}));
+  vi.mocked(api.preferences).mockReturnValue(new Promise(() => {}));
+  vi.mocked(api.listMedications).mockReturnValue(new Promise(() => {}));
+  vi.mocked(api.regimenHistory).mockReturnValue(new Promise(() => {}));
+  render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+  await waitFor(() => expect(api.health).toHaveBeenCalledOnce());
+  expect(api.preferences).toHaveBeenCalledOnce();
+  expect(api.listMedications).toHaveBeenCalledOnce();
+  expect(api.regimenHistory).toHaveBeenCalledOnce();
+  expect(api.startDemo).not.toHaveBeenCalled();
+});
+it('retries a failed session without losing or automatically sending the startup draft', async () => {
+  vi.mocked(api.health).mockResolvedValue({
+    status: 'ok',
+    runtime_contract: 'patient-ux-reminders-v1',
+  } as Awaited<ReturnType<typeof api.health>>);
+  vi.mocked(api.startDemo)
+    .mockRejectedValueOnce(new Error('DEMO session unavailable'))
+    .mockResolvedValue({
+      patient_id: 'DEMO-owner',
+      session_id: 'DEMO-session',
+      demo_only: true,
+      seeded_medication_count: 0,
+      note: 'DEMO_ONLY',
+    });
+  vi.mocked(api.listMedications).mockReturnValue(new Promise(() => {}));
+  render(<App />);
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'DEMO retain across retry' } });
+  fireEvent.click(await screen.findByRole('button', { name: 'Retry connecting' }));
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', false),
+  );
+  expect(screen.getByRole('textbox')).toHaveProperty('value', 'DEMO retain across retry');
+  expect(api.startDemo).toHaveBeenCalledTimes(2);
+});
+it('refuses a session from another owner while retaining the local draft', async () => {
+  vi.mocked(api.health).mockResolvedValue({
+    status: 'ok',
+    runtime_contract: 'patient-ux-reminders-v1',
+  } as Awaited<ReturnType<typeof api.health>>);
+  vi.mocked(api.startDemo).mockResolvedValue({
+    patient_id: 'DEMO-other',
+    session_id: 'DEMO-wrong-session',
+    demo_only: true,
+    seeded_medication_count: 0,
+    note: 'DEMO_ONLY',
+  });
+  render(<App />);
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'DEMO local only' } });
+  await screen.findByRole('button', { name: 'Retry connecting' });
+  expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
+  expect(screen.getByRole('textbox')).toHaveProperty('value', 'DEMO local only');
+  expect(localStorage.getItem('pharmascan.agent-session')).toBeNull();
+});
+it('clears a recovered startup failure after explicit reconnect', async () => {
+  vi.mocked(api.health)
+    .mockRejectedValueOnce(new Error('DEMO health offline'))
+    .mockResolvedValue({ status: 'ok', runtime_contract: 'patient-ux-reminders-v1' } as Awaited<
+      ReturnType<typeof api.health>
+    >);
+  vi.mocked(api.startDemo).mockResolvedValue({
+    patient_id: 'DEMO-owner',
+    session_id: 'DEMO-session',
+    demo_only: true,
+    seeded_medication_count: 0,
+    note: 'DEMO_ONLY',
+  });
+  render(<App />);
+  const retry = await screen.findByRole('button', { name: 'Retry connecting' });
+  expect(document.querySelector('.app-main')?.getAttribute('data-load-state')).toBe('error');
+  fireEvent.click(retry);
+  await waitFor(() =>
+    expect(document.querySelector('.app-main')?.getAttribute('data-load-state')).toBe('ready'),
+  );
+  expect(screen.queryByText('DEMO health offline')).toBeNull();
+  await waitFor(() => expect(api.reminderAlerts).toHaveBeenCalled());
+});
+it('keeps a current medication failure visible after reconnecting successfully', async () => {
+  vi.mocked(api.health)
+    .mockRejectedValueOnce(new Error('DEMO health offline'))
+    .mockResolvedValue({ status: 'ok', runtime_contract: 'patient-ux-reminders-v1' } as Awaited<
+      ReturnType<typeof api.health>
+    >);
+  vi.mocked(api.listMedications).mockRejectedValue(new Error('DEMO medications unavailable'));
+  vi.mocked(api.startDemo).mockResolvedValue({
+    patient_id: 'DEMO-owner',
+    session_id: 'DEMO-session',
+    demo_only: true,
+    seeded_medication_count: 0,
+    note: 'DEMO_ONLY',
+  });
+  render(<App />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Retry connecting' }));
+  await waitFor(() => expect(api.listMedications).toHaveBeenCalledTimes(2));
+  await screen.findByText('DEMO medications unavailable');
+  expect(document.querySelector('.app-main')?.getAttribute('data-load-state')).toBe('error');
   expect(screen.queryByText('No medication plans have been added.')).toBeNull();
 });
 it('does not wait for history to load the core, or claim no registrations while history is unknown', async () => {
@@ -229,11 +405,13 @@ it('clears the previous owner immediately on an identity change while the new ow
   vi.mocked(api.startDemo).mockReturnValue(new Promise(() => {}));
   render(<App />);
   await screen.findByText(/DEMO Alice!/);
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'DEMO previous owner draft' } });
   vi.mocked(api.health).mockReturnValue(new Promise(() => {}));
   await act(async () => {
     changed();
   });
   expect(screen.queryByText(/DEMO Alice/)).toBeNull();
+  expect(screen.getByRole('textbox')).toHaveProperty('value', '');
   expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeTruthy();
 });
 it('loads essential records alongside session setup and does not wait for session or evidence tasks', async () => {
@@ -286,7 +464,7 @@ it('loads essential records alongside session setup and does not wait for sessio
   expect(screen.getByText('Your medication and self-care companion')).toBeTruthy();
   expect(screen.queryByText('Your records could not be loaded')).toBeNull();
 });
-it('refuses stale backend before any authenticated setup or business query', async () => {
+it('refuses stale backend before session creation or clinical display despite parallel safe reads', async () => {
   vi.mocked(api.health).mockResolvedValue({
     status: 'ok',
     service: 'pharmascan-care-agent',
@@ -297,7 +475,7 @@ it('refuses stale backend before any authenticated setup or business query', asy
   render(<App />);
   await screen.findByText(/app connection needs a restart/);
   expect(api.startDemo).not.toHaveBeenCalled();
-  expect(api.listMedications).not.toHaveBeenCalled();
+  expect(api.listMedications).toHaveBeenCalledOnce();
   expect(screen.queryByText(/No dose due right now/)).toBeNull();
 });
 it('failed medication read is shown as unavailable instead of zero active medicines', async () => {

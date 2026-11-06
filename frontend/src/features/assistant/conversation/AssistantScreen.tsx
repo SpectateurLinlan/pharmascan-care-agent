@@ -5,7 +5,7 @@ import { ConversationHistoryBrowser } from '../../conversations/ConversationHist
 import { MedicationChoices, MedicationNameChoices } from './MedicationChoices';
 import { AnswerSources } from './AnswerSources';
 import { useLanguage } from '../../../i18n/language';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   api,
   type AgentUsage,
@@ -46,6 +46,8 @@ import { AssistantWorkflowOriginals } from '../workflow/AssistantWorkflowOrigina
 import { WorkflowMemory, type WorkflowFile } from '../model/assistantWorkflowState';
 
 export function AssistantScreen({
+  initialText = '',
+  initialSelection,
   sessionId,
   onSession,
   ownerId,
@@ -66,6 +68,8 @@ export function AssistantScreen({
   onConversationCleared,
   contextSlots = {},
 }: {
+  initialText?: string;
+  initialSelection?: { start: number; end: number };
   onSupportNavigate?: SupportClientActions['navigate'];
   onGuide?: () => void;
   onConversationCleared?: () => void;
@@ -93,7 +97,8 @@ export function AssistantScreen({
    *  open conversation can never disagree. */
   const remaining = Math.max(0, (usage?.limit ?? 0) - (usage?.llm_user_turns ?? 0));
   const [careProposal, setCareProposal] = useState<CareReview | null>(null);
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialText);
+  const startupDraft = useRef({ owner: ownerId, text: initialText });
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [workflow, setWorkflow] = useState<WorkflowView | null>(null);
   const enrollmentPhotoTask =
@@ -327,6 +332,14 @@ export function AssistantScreen({
   const photoInput = useRef<HTMLInputElement>(null);
   const messageInput = useRef<HTMLInputElement>(null);
   const workspaceInput = useRef<HTMLTextAreaElement>(null);
+
+  // One-time handover from the focused startup composer, before the next paint.
+  useLayoutEffect(() => {
+    if (!initialSelection) return;
+    const input = (workspace ? workspaceInput : messageInput).current;
+    input?.focus({ preventScroll: true });
+    input?.setSelectionRange(initialSelection.start, initialSelection.end);
+  }, []);
 
   function focusMessage() {
     (workspace ? workspaceInput.current : messageInput.current)?.focus();
@@ -1273,6 +1286,7 @@ export function AssistantScreen({
     id: string,
     restoredTask?: WorkflowView,
     prepared?: Awaited<ReturnType<typeof api.resumeConversation>>,
+    initialDraft?: string,
   ) {
     if (sending.current || busy || turns.some((row) => Boolean(row.pending_report)) || careProposal)
       return;
@@ -1320,7 +1334,7 @@ export function AssistantScreen({
       setConfirmationIndex(null);
       setSelectedHistory(null);
       if (!wideWorkspace) setHistoryOpen(false);
-      setText(saved?.text ?? '');
+      setText(initialDraft ?? saved?.text ?? '');
       setPhoto(saved?.photo ?? null);
       setPhotoType(saved?.photoType ?? 'pharmacy_label');
       setViewSlots(saved?.slots ?? {});
@@ -1341,7 +1355,13 @@ export function AssistantScreen({
       return;
     selectionLoaded.current = selectionKey;
     const saved = localStorage.getItem(selectionKey);
-    if (saved) void selectConversation(saved);
+    if (saved)
+      void selectConversation(
+        saved,
+        undefined,
+        undefined,
+        startupDraft.current.owner === ownerId ? startupDraft.current.text : undefined,
+      );
   }, [selectionKey]);
 
   async function earlierMessages() {

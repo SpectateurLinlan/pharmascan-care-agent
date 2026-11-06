@@ -2,6 +2,141 @@ import { expect, test } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
+// Browser-only startup contract. Every API response is a synthetic fixture;
+// use a loopback Vite server with empty Supabase Auth environment variables.
+for (const language of ['en', 'zh'] as const) {
+  test(`startup composer is immediate and preserves its draft in ${language}`, async ({
+    page,
+    baseURL,
+  }) => {
+    expect(new URL(baseURL!).hostname).toBe('127.0.0.1');
+    const owner = 'DEMO-startup-browser';
+    await page.addInitScript((owner) => {
+      localStorage.setItem(
+        `pharmascan.quick-start.v5:${owner}`,
+        JSON.stringify({ version: 5, status: 'skipped', step: 0 }),
+      );
+    }, owner);
+    let releaseHealth!: () => void;
+    let releaseSession!: () => void;
+    let releaseRecords!: () => void;
+    const health = new Promise<void>((resolve) => {
+      releaseHealth = resolve;
+    });
+    const session = new Promise<void>((resolve) => {
+      releaseSession = resolve;
+    });
+    const records = new Promise<void>((resolve) => {
+      releaseRecords = resolve;
+    });
+    const calls: string[] = [];
+    await page.route('**/*', async (route) => {
+      const url = new URL(route.request().url());
+      if (url.origin !== new URL(baseURL!).origin) return route.abort();
+      if (!url.pathname.startsWith('/api/')) return route.continue();
+      calls.push(`${route.request().method()} ${url.pathname}`);
+      let body: unknown = [];
+      if (url.pathname === '/api/health') {
+        await health;
+        body = {
+          status: 'ok',
+          database: 'simulated_in_memory',
+          runtime_contract: 'patient-ux-reminders-v1',
+        };
+      } else if (url.pathname === '/api/me/preferences') {
+        body = {
+          patient_id: owner,
+          preferred_language: language,
+          timezone: 'Asia/Singapore',
+          voice_enabled: false,
+          text_size: 'standard',
+        };
+      } else if (url.pathname === '/api/demo/start') {
+        await session;
+        body = {
+          patient_id: owner,
+          session_id: 'DEMO-startup-session',
+          demo_only: true,
+          seeded_medication_count: 0,
+          note: 'DEMO_ONLY',
+        };
+      } else if (url.pathname === '/api/me/medications') {
+        await records;
+        body = { medications: [], item_count: 0, note: 'DEMO_ONLY' };
+      } else if (url.pathname === '/api/agent/workflows/capabilities') {
+        body = { contract_version: 1, enabled: false, capabilities: [] };
+      } else if (url.pathname === '/api/agent/usage') {
+        body = { llm_user_turns: 0, limit: 20, next_reset_at: '2026-11-07T00:00:00+08:00' };
+      }
+      await route.fulfill({ json: body });
+    });
+    try {
+      const started = Date.now();
+      await page.goto('/');
+      const composer = page.locator('.composer-row').getByRole('textbox');
+      await expect(composer).toBeVisible({ timeout: 5000 });
+      const firstInputMs = Date.now() - started;
+      await composer.fill('DEMO question typed before the backend wakes');
+      await composer.press('Enter');
+      await composer.press('ArrowLeft');
+      await composer.press('Shift+ArrowLeft');
+      const selection = await composer.evaluate((input: HTMLInputElement) => [
+        input.selectionStart,
+        input.selectionEnd,
+      ]);
+      await expect
+        .poll(() => calls.filter((call) => call === 'GET /api/me/preferences').length)
+        .toBe(1);
+      expect(calls.some((call) => call.startsWith('POST '))).toBe(false);
+      await expect(page.locator('.composer-send')).toBeDisabled();
+      releaseHealth();
+      await expect
+        .poll(() => calls.filter((call) => call === 'POST /api/demo/start').length)
+        .toBe(1);
+      await expect(composer).toHaveValue('DEMO question typed before the backend wakes');
+      await expect(page.locator('.composer-send')).toBeDisabled();
+      releaseSession();
+      await expect(page.locator('.composer-send')).toBeEnabled();
+      await expect(composer).toBeFocused();
+      expect(
+        await composer.evaluate((input: HTMLInputElement) => [
+          input.selectionStart,
+          input.selectionEnd,
+        ]),
+      ).toEqual(selection);
+      await expect(composer).toHaveValue('DEMO question typed before the backend wakes');
+      expect(calls.filter((call) => call.startsWith('POST '))).toEqual(['POST /api/demo/start']);
+      await expect(page.getByText('No medication plans have been added.')).not.toBeVisible();
+      await expect(page.getByText('尚未添加用药计划。')).not.toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      const output = path.resolve('../internal/acceptance/startup-browser');
+      mkdirSync(output, { recursive: true });
+      await page.screenshot({ path: path.join(output, `${language}.png`), fullPage: true });
+      writeFileSync(
+        path.join(output, `${language}.json`),
+        JSON.stringify({
+          mode: 'intercepted_loopback_demo',
+          firstInputMs,
+          delayedHealth: true,
+          delayedSession: true,
+          delayedRecords: true,
+          externalCalls: 0,
+        }),
+      );
+    } catch (error) {
+      console.log('DEMO startup request paths', calls);
+      throw error;
+    } finally {
+      releaseHealth();
+      releaseSession();
+      releaseRecords();
+      await page.unrouteAll({ behavior: 'ignoreErrors' });
+    }
+  });
+}
+
 // Real local FastAPI + in-memory synthetic fixture, never hosted patient data.
 // Start create_review_test_app as documented in frontend/README.md; use a Vite
 // server with empty Supabase Auth variables and that API as VITE_API_TARGET.

@@ -133,6 +133,8 @@ vi.mock('../../../api/client', () => ({
     newConversation: vi.fn(),
     conversationHistory: vi.fn(),
     agentUsage: vi.fn(),
+    resumeConversation: vi.fn(),
+    conversation: vi.fn(),
   },
 }));
 beforeEach(() => {
@@ -149,7 +151,52 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  localStorage.removeItem('pharmascan.conversation:DEMO-startup-owner');
   vi.resetAllMocks();
+});
+
+it('restores focused startup text selection on the connected composer', () => {
+  render(
+    <AssistantScreen
+      sessionId="DEMO-session"
+      ownerId="DEMO-startup-owner"
+      onSession={vi.fn()}
+      initialText="DEMO startup draft"
+      initialSelection={{ start: 2, end: 7 }}
+    />,
+  );
+  const input = screen.getByRole('textbox') as HTMLInputElement;
+  expect(document.activeElement).toBe(input);
+  expect([input.selectionStart, input.selectionEnd]).toEqual([2, 7]);
+});
+
+it('keeps a draft typed during startup when restoring the existing owned conversation', async () => {
+  localStorage.setItem('pharmascan.conversation:DEMO-startup-owner', 'DEMO-saved-conversation');
+  vi.mocked(api.resumeConversation).mockResolvedValue({ session_id: 'DEMO-restored' } as Awaited<
+    ReturnType<typeof api.resumeConversation>
+  >);
+  vi.mocked(api.conversation).mockResolvedValue({
+    conversation: {
+      id: 'DEMO-saved-conversation',
+      title: 'DEMO saved conversation',
+      created_at: '2026-11-06T00:00:00Z',
+      updated_at: '2026-11-06T00:00:00Z',
+    },
+    entries: [],
+    next_before: null,
+  });
+  const session = vi.fn();
+  render(
+    <AssistantScreen
+      sessionId="DEMO-session"
+      ownerId="DEMO-startup-owner"
+      onSession={session}
+      initialText="DEMO startup draft"
+    />,
+  );
+  await waitFor(() => expect(session).toHaveBeenCalledWith('DEMO-restored'));
+  expect(screen.getByRole('textbox')).toHaveProperty('value', 'DEMO startup draft');
+  expect(api.sendMessage).not.toHaveBeenCalled();
 });
 
 function Host({ onViewTodayMedication }: { onViewTodayMedication?: () => void } = {}) {

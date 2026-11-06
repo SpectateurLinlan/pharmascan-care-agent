@@ -16,7 +16,7 @@ import {
   type PatientPreferences,
 } from '../api/client';
 import { medicationSetupEntries } from '../features/enrollment/medicationSetup';
-import { AssistantScreen } from '../features/assistant/conversation/AssistantScreen';
+import { AssistantEntry } from './AssistantEntry';
 import { historyName } from '../features/records/historyFilterLabels';
 import {
   MedicinesHub,
@@ -469,105 +469,115 @@ function CompanionApp() {
     const failure = core.find((result) => result.status === 'rejected');
     setFatal(failure?.status === 'rejected' ? failure.reason : null);
   }, [loadSourceTasks, loadPreferences, startup.preferences.status, applyPreferences]);
-  const bootstrap = useRef<Promise<HealthResponse> | null>(null);
+  const [connectionAttempt, setConnectionAttempt] = useState(0);
+  const bootstrap = useRef<{
+    health: ReturnType<typeof api.health>;
+    active: ReturnType<typeof api.listMedications>;
+    regimens: ReturnType<typeof api.regimenHistory>;
+    preferences: ReturnType<typeof loadPreferences>;
+    session?: ReturnType<typeof api.startDemo>;
+  } | null>(null);
+  const retryAssistantConnection = () => {
+    bootstrap.current = null;
+    setFatal(null);
+    setLoading(true);
+    setSessionError(null);
+    setStartup((previous) => ({
+      ...previous,
+      health: { status: 'loading' },
+      session: { status: 'loading' },
+    }));
+    setConnectionAttempt((value) => value + 1);
+  };
   useEffect(() => {
     let live = true;
-    if (!bootstrap.current) bootstrap.current = api.health();
-    void bootstrap.current
-      .then(async (state) => {
+    // Independent GETs do not need a chat session or a completed health probe.
+    // Share promises across StrictMode; adopt results only in this owner scope.
+    if (!bootstrap.current) {
+      bootstrap.current = {
+        health: api.health(),
+        active: api.listMedications(),
+        regimens: api.regimenHistory(),
+        preferences: loadPreferences(),
+      };
+      void loadSourceTasks();
+    }
+    const requests = bootstrap.current;
+    void requests.active
+      .then((value) => {
         if (!live) return;
-        if (state.runtime_contract !== 'patient-ux-reminders-v1')
+        setMedications(value);
+        setStartup((previous) => ({ ...previous, active: { status: 'ready', data: value } }));
+      })
+      .catch((error) => {
+        if (!live) return;
+        setFatal(error);
+        setStartup((previous) => ({ ...previous, active: { status: 'error', error } }));
+      });
+    void requests.preferences
+      .then((value) => {
+        if (!value) throw new Error('Patient preferences unavailable');
+        if (live) applyPreferences(value);
+      })
+      .catch((error) => {
+        if (!live) return;
+        setFatal(error);
+        setStartup((previous) => ({ ...previous, preferences: { status: 'error', error } }));
+      });
+    void requests.regimens
+      .then((rows) => {
+        if (!live) return;
+        setVersions(rows);
+        setDrafts(
+          rows.filter((row) => row.state === 'draft' || row.state === 'pending_clarification'),
+        );
+        setStartup((previous) => ({ ...previous, regimens: { status: 'ready', data: rows } }));
+      })
+      .catch((error) => {
+        if (live) setStartup((previous) => ({ ...previous, regimens: { status: 'error', error } }));
+      });
+    void requests.health
+      .then((state) => {
+        if (!live) return;
+        if (state.runtime_contract !== 'patient-ux-reminders-v1') {
           throw new Error(
             'The app connection needs a restart. Please restart the development servers.',
           );
-        // Each request resolves its own verified identity. Agent setup does not
-        // supply credentials to medication reads, so it can run alongside them.
-        // Evidence tasks retain their own loading/error state outside this gate.
-        void loadSourceTasks();
+        }
         setHealth(state);
         setStartup((previous) => ({ ...previous, health: { status: 'ready', data: state } }));
-        void api
-          .startDemo()
-          .then((value) => {
+        // Session creation is a write: keep it behind the compatibility check.
+        requests.session ??= api.startDemo();
+        void requests.session
+          .then(async (value) => {
+            const preference = await requests.preferences;
             if (!live) return;
+            if (!preference || value.patient_id !== preference.patient_id) {
+              throw new Error('Assistant identity could not be verified. Please reconnect.');
+            }
             localStorage.setItem('pharmascan.agent-session', value.session_id);
             setSessionId(value.session_id);
             setSessionError(null);
             setStartup((previous) => ({ ...previous, session: { status: 'ready', data: value } }));
           })
           .catch((error) => {
-            if (live) {
-              setSessionError(error);
-              setStartup((previous) => ({ ...previous, session: { status: 'error', error } }));
-            }
-          });
-        void api
-          .regimenHistory()
-          .then((rows) => {
             if (!live) return;
-            setVersions(rows);
-            setDrafts(
-              rows.filter((row) => row.state === 'draft' || row.state === 'pending_clarification'),
-            );
-            setStartup((previous) => ({ ...previous, regimens: { status: 'ready', data: rows } }));
-          })
-          .catch((error) => {
-            if (live)
-              setStartup((previous) => ({ ...previous, regimens: { status: 'error', error } }));
+            setSessionError(error);
+            setStartup((previous) => ({ ...previous, session: { status: 'error', error } }));
           });
-        const [active] = await Promise.all([
-          api
-            .listMedications()
-            .then((value) => {
-              if (live)
-                setStartup((previous) => ({
-                  ...previous,
-                  active: { status: 'ready', data: value },
-                }));
-              return value;
-            })
-            .catch((error) => {
-              if (live)
-                setStartup((previous) => ({ ...previous, active: { status: 'error', error } }));
-              throw error;
-            }),
-          loadPreferences()
-            .then((value) => {
-              if (!value) throw new Error('Patient preferences unavailable');
-              if (live) applyPreferences(value);
-            })
-            .catch((error) => {
-              if (live)
-                setStartup((previous) => ({
-                  ...previous,
-                  preferences: { status: 'error', error },
-                }));
-              throw error;
-            }),
-        ]);
-        if (live) {
-          setMedications(active);
-          setFatal(null);
-        }
       })
       .catch((error) => {
-        bootstrap.current = null;
-        if (live) {
-          setFatal(error);
-          setStartup((previous) => ({
-            ...previous,
-            health:
-              previous.health.status === 'ready' ? previous.health : { status: 'error', error },
-          }));
-        }
-      })
-      .finally(() => {
-        if (live) setLoading(false);
+        if (!live) return;
+        setFatal(error);
+        setStartup((previous) => ({ ...previous, health: { status: 'error', error } }));
       });
+    void Promise.allSettled([requests.health, requests.active, requests.preferences]).then(() => {
+      if (live) setLoading(false);
+    });
     return () => {
       live = false;
     };
-  }, [loadPreferences, loadSourceTasks, applyPreferences]);
+  }, [loadPreferences, loadSourceTasks, applyPreferences, connectionAttempt]);
   const historyReady = startup.regimens.status === 'ready';
   const historyPage =
     [
@@ -781,7 +791,70 @@ function CompanionApp() {
               onSettings={() => setTab('reminder-settings')}
             />
           ) : null}
-          {(loading || (!canRenderClinicalToday(startup) && !fatal)) && !accountPage ? (
+          <div hidden={!assistantVisible}>
+            <AssistantEntry
+              onConversationCleared={() => setConversationClearRevision((value) => value + 1)}
+              onGuide={openGuide}
+              onSupportNavigate={(route, query) => {
+                const id = query.id;
+                if (route === 'gallery') setGalleryMedicationId(id ?? null);
+                if (route === 'check') setVisualRegimen(id ?? null);
+                if (
+                  id &&
+                  [
+                    'medicine-detail',
+                    'medicine-history',
+                    'edit-medication',
+                    'medication-inventory',
+                  ].includes(route)
+                ) {
+                  const row =
+                    route === 'medication-inventory'
+                      ? versions.find((item) => item.medication_id === id)
+                      : versions.find((item) => item.regimen_id === id);
+                  if (!row) return;
+                  setDetailId(row.regimen_id);
+                  if (route === 'edit-medication') setEditTarget(row);
+                }
+                setTab(route, query, { preserveOrigin: true });
+              }}
+              onSourceReturn={(source) => {
+                if (source.page === 'medicine-detail' && source.regimen_id) {
+                  setDetailId(source.regimen_id);
+                  setTab('medicine-detail');
+                } else if (source.page !== 'medicine-detail') setTab(source.page);
+              }}
+              workspace={tab === 'assistant'}
+              ownerId={guideOwner}
+              clearRevision={conversationClearRevision}
+              onClose={goBack}
+              contextSlots={assistantSlots}
+              onExpand={openAssistant}
+              onViewTodayMedication={viewTodayMedication}
+              active={tab === 'today' || tab === 'assistant'}
+              onHealthReview={(description) => {
+                setHealthDescription(description);
+                setTab('health-notes');
+              }}
+              onVisualCheck={(id) => {
+                setVisualRegimen(id);
+                setTab('check');
+              }}
+              connectionReady={
+                startup.health.status === 'ready' &&
+                startup.preferences.status === 'ready' &&
+                startup.session.status === 'ready'
+              }
+              connectionError={sessionError ?? startup.health.error ?? startup.preferences.error}
+              onRetryConnection={retryAssistantConnection}
+              sessionId={sessionId}
+              onSession={setSessionId}
+              todayEntry={tab === 'today'}
+              compact={tab !== 'assistant'}
+              onChanged={refreshMedications}
+            />
+          </div>
+          {!fatal && (loading || !canRenderClinicalToday(startup)) && !accountPage ? (
             <Card title="Getting your records ready">
               <p role="status">{t('Starting your private demo session…')}</p>
             </Card>
@@ -794,8 +867,8 @@ function CompanionApp() {
               </p>
               <button
                 onClick={() => {
-                  if (health && sessionId) void refreshMedications();
-                  else window.location.reload();
+                  if (health) void refreshMedications();
+                  else retryAssistantConnection();
                 }}
               >
                 {t('Retry loading records')}
@@ -803,66 +876,6 @@ function CompanionApp() {
             </Card>
           ) : (
             <>
-              <div hidden={!assistantVisible}>
-                {sessionId ? (
-                  <AssistantScreen
-                    onConversationCleared={() => setConversationClearRevision((value) => value + 1)}
-                    onGuide={openGuide}
-                    onSupportNavigate={(route, query) => {
-                      const id = query.id;
-                      if (route === 'gallery') setGalleryMedicationId(id ?? null);
-                      if (route === 'check') setVisualRegimen(id ?? null);
-                      if (
-                        id &&
-                        [
-                          'medicine-detail',
-                          'medicine-history',
-                          'edit-medication',
-                          'medication-inventory',
-                        ].includes(route)
-                      ) {
-                        const row =
-                          route === 'medication-inventory'
-                            ? versions.find((item) => item.medication_id === id)
-                            : versions.find((item) => item.regimen_id === id);
-                        if (!row) return;
-                        setDetailId(row.regimen_id);
-                        if (route === 'edit-medication') setEditTarget(row);
-                      }
-                      setTab(route, query, { preserveOrigin: true });
-                    }}
-                    onSourceReturn={(source) => {
-                      if (source.page === 'medicine-detail' && source.regimen_id) {
-                        setDetailId(source.regimen_id);
-                        setTab('medicine-detail');
-                      } else if (source.page !== 'medicine-detail') setTab(source.page);
-                    }}
-                    workspace={tab === 'assistant'}
-                    ownerId={guideOwner}
-                    clearRevision={conversationClearRevision}
-                    onClose={goBack}
-                    contextSlots={assistantSlots}
-                    onExpand={openAssistant}
-                    onViewTodayMedication={viewTodayMedication}
-                    active={tab === 'today' || tab === 'assistant'}
-                    onHealthReview={(description) => {
-                      setHealthDescription(description);
-                      setTab('health-notes');
-                    }}
-                    onVisualCheck={(id) => {
-                      setVisualRegimen(id);
-                      setTab('check');
-                    }}
-                    sessionId={sessionId}
-                    onSession={setSessionId}
-                    todayEntry={tab === 'today'}
-                    compact={tab !== 'assistant'}
-                    onChanged={refreshMedications}
-                  />
-                ) : assistantVisible ? (
-                  <p role="status">{t('Starting your private demo session\u2026')}</p>
-                ) : null}
-              </div>
               {historyPage && !historyReady ? (
                 <StartupSection state={startup.regimens} onRetry={refreshMedications} />
               ) : null}
