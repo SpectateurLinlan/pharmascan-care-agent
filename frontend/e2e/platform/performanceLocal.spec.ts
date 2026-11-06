@@ -11,6 +11,194 @@ async function closeHeldPage(page: Page, release: () => void) {
   }
 }
 
+for (const { language, width } of [
+  { language: 'en', width: 390 },
+  { language: 'zh', width: 1280 },
+]) {
+  test(`composer stays editable and consistent across loading stages in ${language}`, async ({
+    page,
+    baseURL,
+  }) => {
+    expect(new URL(baseURL!).hostname).toBe('127.0.0.1');
+    await page.setViewportSize({ width, height: 844 });
+    const owner = 'DEMO-composer-owner';
+    await page.addInitScript((owner) => {
+      localStorage.setItem(
+        `pharmascan.quick-start.v5:${owner}`,
+        JSON.stringify({ version: 5, status: 'skipped', step: 0 }),
+      );
+      localStorage.setItem(`pharmascan.conversation:${owner}`, 'DEMO-owned-conversation');
+    }, owner);
+    let releaseApp!: () => void,
+      releaseHealth!: () => void,
+      releaseResume!: () => void,
+      releaseUsage!: () => void;
+    const app = new Promise<void>((resolve) => {
+      releaseApp = resolve;
+    });
+    const health = new Promise<void>((resolve) => {
+      releaseHealth = resolve;
+    });
+    const resume = new Promise<void>((resolve) => {
+      releaseResume = resolve;
+    });
+    const usage = new Promise<void>((resolve) => {
+      releaseUsage = resolve;
+    });
+    let appRequested = false;
+    const calls: string[] = [];
+    const pageErrors: string[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error.name));
+    await page.route('**/*', async (route) => {
+      const url = new URL(route.request().url());
+      if (url.origin !== new URL(baseURL!).origin) return route.abort();
+      if (!url.pathname.startsWith('/api/')) {
+        if (/\/assets\/mountApplication-.*\.js$/.test(url.pathname)) {
+          appRequested = true;
+          await app;
+        }
+        try {
+          return await route.continue();
+        } catch (error) {
+          if (!page.isClosed()) throw error;
+          return;
+        }
+      }
+      calls.push(`${route.request().method()} ${url.pathname}`);
+      let body: unknown = [];
+      if (url.pathname === '/api/health') {
+        await health;
+        body = {
+          status: 'ok',
+          database: 'simulated_in_memory',
+          runtime_contract: 'patient-ux-reminders-v1',
+        };
+      } else if (url.pathname === '/api/me/preferences')
+        body = {
+          patient_id: owner,
+          preferred_language: language,
+          timezone: 'Asia/Singapore',
+          voice_enabled: true,
+          text_size: 'standard',
+        };
+      else if (url.pathname === '/api/demo/start')
+        body = {
+          patient_id: owner,
+          session_id: 'DEMO-session',
+          demo_only: true,
+          seeded_medication_count: 0,
+          note: 'DEMO_ONLY',
+        };
+      else if (url.pathname === '/api/me/medications')
+        body = { medications: [], item_count: 0, note: 'DEMO_ONLY' };
+      else if (url.pathname === '/api/agent/workflows/capabilities')
+        body = { contract_version: 1, enabled: false, capabilities: [] };
+      else if (url.pathname === '/api/agent/usage') {
+        await usage;
+        body = { llm_user_turns: 1, limit: 20, next_reset_at: '2026-11-07T00:00:00+08:00' };
+      } else if (url.pathname.endsWith('/DEMO-owned-conversation/resume')) {
+        await resume;
+        body = { session_id: 'DEMO-restored' };
+      } else if (url.pathname.endsWith('/DEMO-owned-conversation'))
+        body = {
+          conversation: {
+            id: 'DEMO-owned-conversation',
+            title: 'DEMO',
+            created_at: '2026-11-06T00:00:00Z',
+            updated_at: '2026-11-06T00:00:00Z',
+          },
+          entries: [],
+          next_before: null,
+        };
+      try {
+        await route.fulfill({ json: body });
+      } catch (error) {
+        if (!page.isClosed()) throw error;
+      }
+    });
+    const output = path.resolve('../internal/acceptance/composer-browser');
+    mkdirSync(output, { recursive: true });
+    try {
+      await page.goto('/', { waitUntil: 'commit' });
+      await expect.poll(() => appRequested).toBe(true);
+      const input = page.locator('.composer-row').getByRole('textbox');
+      await input.fill('DEMO early draft');
+      // The capsule owns focus; the inner field cannot draw a square over its corners.
+      expect(await input.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe('none');
+      await page.screenshot({ path: path.join(output, `${language}-html.png`), fullPage: true });
+      releaseApp();
+      await expect(page.locator('#startup-shell')).toHaveCount(0);
+      await expect.poll(() => calls.includes('GET /api/me/preferences')).toBe(true);
+      const send = page.locator('.composer-send');
+      await expect(send).toHaveText(language === 'zh' ? '发送' : 'Send');
+      await input.fill('DEMO pending connection');
+      const pendingColor = await send.evaluate((el) => getComputedStyle(el).backgroundColor);
+      expect(await input.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe('none');
+      await page.screenshot({ path: path.join(output, `${language}-pending.png`), fullPage: true });
+      releaseHealth();
+      await expect
+        .poll(() => calls.includes('POST /api/agent/conversations/DEMO-owned-conversation/resume'))
+        .toBe(true);
+      await expect(input).toBeEnabled();
+      await input.fill('DEMO editable during restore');
+      await input.press('Enter');
+      await expect(send).toBeDisabled();
+      expect(calls.some((call) => call === 'POST /api/agent/message')).toBe(false);
+      expect(await send.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(pendingColor);
+      expect(
+        await page
+          .locator('.composer-row')
+          .evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length),
+      ).toBe(4);
+      expect(await send.evaluate((el) => getComputedStyle(el).whiteSpace)).toBe('nowrap');
+      releaseUsage();
+      await expect(page.locator('.composer-allowance')).toBeVisible();
+      expect(
+        await page
+          .locator('.composer-row')
+          .evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length),
+      ).toBe(5);
+      releaseResume();
+      await expect(send).toBeEnabled();
+      await expect(input).toHaveValue('DEMO editable during restore');
+      await expect(input).toBeFocused();
+      await expect(send).toHaveText(language === 'zh' ? '发送' : 'Send');
+      await page.screenshot({ path: path.join(output, `${language}-ready.png`), fullPage: true });
+      await page.evaluate(() => {
+        document.documentElement.setAttribute('data-text-scale', '150');
+        document.documentElement.style.setProperty('--font-scale', '1.5');
+      });
+      expect(
+        await page
+          .locator('.composer-row')
+          .evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(' ').length),
+      ).toBe(4);
+      expect(await send.evaluate((el) => getComputedStyle(el).whiteSpace)).toBe('nowrap');
+      await expect(input).toBeEnabled();
+      if (width === 390) {
+        await page.setViewportSize({ width: 318, height: 844 });
+        await page.getByRole('button', { name: 'Open full chat' }).click();
+        const workspaceRow = page.locator('.conversation-workspace .composer-row');
+        await expect(workspaceRow).toBeVisible();
+        const row = await workspaceRow.boundingBox();
+        const button = await workspaceRow.locator('.composer-send').boundingBox();
+        expect(button!.x + button!.width).toBeLessThanOrEqual(row!.x + row!.width);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      expect(pageErrors).toEqual([]);
+    } finally {
+      await closeHeldPage(page, () => {
+        releaseApp();
+        releaseHealth();
+        releaseResume();
+        releaseUsage();
+      });
+    }
+  });
+}
+
 for (const width of [390, 1280]) {
   test(`HTML and local input survive held scripts and IME handover at ${width}px`, async ({
     page,

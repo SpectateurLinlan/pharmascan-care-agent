@@ -7,6 +7,7 @@
 | [app.css](app.css) | 现有患者页面样式，保留层叠顺序 |
 | [base.css](base.css) | 元素默认样式、可访问性和重置 |
 | [components.css](components.css) | 共享控件样式 |
+| [composer.css](composer.css) | 启动和正式聊天共用的胶囊焦点框、按钮尺寸及可用／禁用配色；同时内联到启动 HTML |
 | [followups.css](followups.css) | 跟进和补记页面样式 |
 | [index.css](index.css) | 全局样式唯一入口，保持加载顺序 |
 | [records.css](records.css) | 记录页面样式 |

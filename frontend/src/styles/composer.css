@@ -1,0 +1,62 @@
+/* Shared by the inline HTML shell and React: one capsule, one focus indicator. */
+.composer-row:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.composer-row > input:not([type='file']):focus-visible,
+.composer-row > textarea:focus-visible {
+  outline: none;
+}
+.composer-row > button.composer-send {
+  flex-shrink: 0;
+  width: max-content;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: var(--s-1) var(--s-2);
+  border: 1px solid var(--brand);
+  border-radius: var(--r-pill);
+  background: var(--brand);
+  color: var(--on-brand);
+  font: inherit;
+  font-weight: var(--fw-strong);
+  white-space: nowrap;
+  word-break: normal;
+}
+.composer-row > button.composer-send:disabled {
+  background: var(--brand-100);
+  border-color: var(--brand-100);
+  color: var(--brand);
+  opacity: 1;
+  cursor: not-allowed;
+}
+.composer-row > .photo-button,
+.composer-row > .voice-inline > .mic-button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 var(--tap);
+  width: var(--tap);
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: var(--s-1);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--ink-2);
+}
+.composer-row > .voice-inline > .mic-button {
+  background: var(--brand-100);
+  color: var(--brand);
+}
+.composer-row > .voice-inline > .mic-button.is-listening {
+  background: var(--brand);
+  color: var(--on-brand);
+}
+.composer-row button:disabled {
+  cursor: not-allowed;
+}
+.composer-row > .photo-button svg,
+.today-assistant .composer-row > .photo-button svg,
+.composer-row > .voice-inline > .mic-button svg {
+  width: var(--icon-control);
+  height: var(--icon-control);
+}

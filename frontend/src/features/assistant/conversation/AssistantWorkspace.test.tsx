@@ -170,11 +170,14 @@ it('restores focused startup text selection on the connected composer', () => {
   expect([input.selectionStart, input.selectionEnd]).toEqual([2, 7]);
 });
 
-it('keeps a draft typed during startup when restoring the existing owned conversation', async () => {
+it('allows typing during automatic startup restore and keeps the latest unsent draft', async () => {
   localStorage.setItem('pharmascan.conversation:DEMO-startup-owner', 'DEMO-saved-conversation');
-  vi.mocked(api.resumeConversation).mockResolvedValue({ session_id: 'DEMO-restored' } as Awaited<
-    ReturnType<typeof api.resumeConversation>
-  >);
+  let resume!: (value: Awaited<ReturnType<typeof api.resumeConversation>>) => void;
+  vi.mocked(api.resumeConversation).mockReturnValue(
+    new Promise((resolve) => {
+      resume = resolve;
+    }),
+  );
   vi.mocked(api.conversation).mockResolvedValue({
     conversation: {
       id: 'DEMO-saved-conversation',
@@ -194,9 +197,84 @@ it('keeps a draft typed during startup when restoring the existing owned convers
       initialText="DEMO startup draft"
     />,
   );
-  await waitFor(() => expect(session).toHaveBeenCalledWith('DEMO-restored'));
-  expect(screen.getByRole('textbox')).toHaveProperty('value', 'DEMO startup draft');
+  await waitFor(() => expect(api.resumeConversation).toHaveBeenCalledOnce());
+  const input = screen.getByRole('textbox') as HTMLInputElement;
+  expect(input.disabled).toBe(false);
+  fireEvent.change(input, { target: { value: 'DEMO edited while history loads' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
   expect(api.sendMessage).not.toHaveBeenCalled();
+  await act(async () =>
+    resume({ session_id: 'DEMO-restored' } as Awaited<ReturnType<typeof api.resumeConversation>>),
+  );
+  await waitFor(() => expect(session).toHaveBeenCalledWith('DEMO-restored'));
+  expect(screen.getByRole('textbox')).toHaveProperty('value', 'DEMO edited while history loads');
+  expect(api.sendMessage).not.toHaveBeenCalled();
+});
+
+it('keeps an edited startup draft if the automatic resume fails', async () => {
+  localStorage.setItem('pharmascan.conversation:DEMO-startup-owner', 'DEMO-saved-conversation');
+  let reject!: (error: Error) => void;
+  vi.mocked(api.resumeConversation).mockReturnValue(
+    new Promise((_resolve, fail) => {
+      reject = fail;
+    }),
+  );
+  vi.mocked(api.conversation).mockResolvedValue({
+    entries: [],
+    next_before: null,
+  } as unknown as Awaited<ReturnType<typeof api.conversation>>);
+  render(
+    <AssistantScreen
+      sessionId="DEMO-session"
+      ownerId="DEMO-startup-owner"
+      onSession={vi.fn()}
+      initialText="DEMO initial"
+    />,
+  );
+  await waitFor(() => expect(api.resumeConversation).toHaveBeenCalledOnce());
+  fireEvent.change(screen.getByRole('textbox'), {
+    target: { value: 'DEMO retained after failure' },
+  });
+  await act(async () => reject(new Error('DEMO resume unavailable')));
+  expect(screen.getByRole('textbox')).toHaveProperty('disabled', false);
+  expect(screen.getByRole('textbox')).toHaveProperty('value', 'DEMO retained after failure');
+  expect(api.sendMessage).not.toHaveBeenCalled();
+});
+
+it('ignores an old owner automatic resume after identity changes', async () => {
+  localStorage.setItem('pharmascan.conversation:DEMO-startup-owner', 'DEMO-saved-conversation');
+  let resolve!: (value: Awaited<ReturnType<typeof api.resumeConversation>>) => void;
+  vi.mocked(api.resumeConversation).mockReturnValue(
+    new Promise((done) => {
+      resolve = done;
+    }),
+  );
+  vi.mocked(api.conversation).mockResolvedValue({
+    entries: [],
+    next_before: null,
+  } as unknown as Awaited<ReturnType<typeof api.conversation>>);
+  const session = vi.fn();
+  const view = render(
+    <AssistantScreen
+      sessionId="DEMO-A"
+      ownerId="DEMO-startup-owner"
+      onSession={session}
+      initialText="DEMO old"
+    />,
+  );
+  await waitFor(() => expect(api.resumeConversation).toHaveBeenCalledOnce());
+  view.rerender(
+    <AssistantScreen sessionId="DEMO-B" ownerId="DEMO-next-owner" onSession={session} />,
+  );
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'DEMO new owner draft' } });
+  await act(async () =>
+    resolve({ session_id: 'DEMO-old-restored' } as Awaited<
+      ReturnType<typeof api.resumeConversation>
+    >),
+  );
+  expect(session).not.toHaveBeenCalled();
+  expect(screen.getByRole('textbox')).toHaveProperty('value', 'DEMO new owner draft');
+  expect(screen.getByRole('textbox')).toHaveProperty('disabled', false);
 });
 
 function Host({ onViewTodayMedication }: { onViewTodayMedication?: () => void } = {}) {

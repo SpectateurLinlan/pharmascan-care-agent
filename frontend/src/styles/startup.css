@@ -56,9 +56,9 @@ body {
   display: flex;
   gap: var(--s-2);
   align-items: center;
-  padding: var(--s-2);
+  padding: var(--s-1);
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-pill);
 }
 #startup-shell input {
@@ -74,7 +74,7 @@ body {
 #startup-shell input::placeholder {
   color: var(--ink-2);
 }
-#startup-shell button {
+#startup-shell #startup-retry {
   min-height: var(--tap);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
@@ -86,10 +86,13 @@ body {
 #startup-shell button:disabled {
   cursor: not-allowed;
 }
-#startup-shell :focus-visible {
+#startup-shell button:focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
 #startup-shell #startup-retry {
   margin-bottom: var(--s-3);
+}
+#startup-shell .composer-row > .voice-inline {
+  flex: 0 0 var(--tap);
 }

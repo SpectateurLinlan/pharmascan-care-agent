@@ -123,7 +123,14 @@ export function AssistantScreen({
   const remaining = Math.max(0, (usage?.limit ?? 0) - (usage?.llm_user_turns ?? 0));
   const [careProposal, setCareProposal] = useState<CareReview | null>(null);
   const [text, setText] = useState(initialText);
-  const startupDraft = useRef({ owner: ownerId, text: initialText });
+  const startupRestoreDraft = useRef<string | null>(null);
+
+  function editText(value: string) {
+    if (startupRestoreDraft.current !== null) startupRestoreDraft.current = value;
+    setText(value);
+  }
+
+  const startupDraft = useRef({ owner: ownerId });
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [workflow, setWorkflow] = useState<WorkflowView | null>(null);
   const enrollmentPhotoTask =
@@ -398,6 +405,7 @@ export function AssistantScreen({
   const recentLoad = useRef(0);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const [restoringStartup, setRestoringStartup] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [speakingIndex, setSpeakingIndex] = useState<number | null>(null);
   const [reportNotice, setReportNotice] = useState('');
@@ -470,6 +478,8 @@ export function AssistantScreen({
       setConfirmationIndex(null);
       sending.current = false;
       setBusy(false);
+      setRestoringStartup(false);
+      startupRestoreDraft.current = null;
     }
     previousOwner.current = ownerId;
   }, [ownerId]);
@@ -1311,12 +1321,16 @@ export function AssistantScreen({
     id: string,
     restoredTask?: WorkflowView,
     prepared?: Awaited<ReturnType<typeof api.resumeConversation>>,
-    initialDraft?: string,
+    preserveInput = false,
   ) {
     if (sending.current || busy || turns.some((row) => Boolean(row.pending_report)) || careProposal)
       return;
     rememberView();
     const requestOwner = currentOwner.current;
+    if (preserveInput) {
+      startupRestoreDraft.current = text;
+      setRestoringStartup(true);
+    }
     sending.current = true;
     setBusy(true);
     setError(null);
@@ -1359,17 +1373,21 @@ export function AssistantScreen({
       setConfirmationIndex(null);
       setSelectedHistory(null);
       if (!wideWorkspace) setHistoryOpen(false);
-      setText(initialDraft ?? saved?.text ?? '');
+      setText(preserveInput ? (startupRestoreDraft.current ?? '') : (saved?.text ?? ''));
       setPhoto(saved?.photo ?? null);
       setPhotoType(saved?.photoType ?? 'pharmacy_label');
       setViewSlots(saved?.slots ?? {});
       setSource(saved?.source ?? null);
-      requestAnimationFrame(() => focusMessage());
+      if (!preserveInput) requestAnimationFrame(() => focusMessage());
     } catch (caught) {
       if (mounted.current && currentOwner.current === requestOwner) setError(caught);
     } finally {
       if (currentOwner.current === requestOwner) {
         sending.current = false;
+        if (preserveInput) {
+          startupRestoreDraft.current = null;
+          if (mounted.current) setRestoringStartup(false);
+        }
         if (mounted.current) setBusy(false);
       }
     }
@@ -1381,12 +1399,7 @@ export function AssistantScreen({
     selectionLoaded.current = selectionKey;
     const saved = localStorage.getItem(selectionKey);
     if (saved)
-      void selectConversation(
-        saved,
-        undefined,
-        undefined,
-        startupDraft.current.owner === ownerId ? startupDraft.current.text : undefined,
-      );
+      void selectConversation(saved, undefined, undefined, startupDraft.current.owner === ownerId);
   }, [selectionKey]);
 
   async function earlierMessages() {
@@ -2131,6 +2144,13 @@ export function AssistantScreen({
               </button>
             </div>
           ) : null}
+          {restoringStartup ? (
+            <p role="status">
+              {language === 'zh'
+                ? '正在恢复对话，您可以继续输入；恢复后可发送。'
+                : 'Restoring your conversation. You can keep typing; sending will be available when it is ready.'}
+            </p>
+          ) : null}
           <div
             className="composer-row"
             data-guide="assistant-composer"
@@ -2151,6 +2171,7 @@ export function AssistantScreen({
             <button
               className="photo-button"
               type="button"
+              disabled={busy}
               aria-label={t('Add a photo to chat')}
               onClick={() => photoInput.current?.click()}
             >
@@ -2175,8 +2196,8 @@ export function AssistantScreen({
                 maxLength={2000}
                 aria-label={t('Review your message before sending')}
                 value={text}
-                disabled={busy}
-                onChange={(event) => setText(event.target.value)}
+                disabled={busy && !restoringStartup}
+                onChange={(event) => editText(event.target.value)}
                 placeholder={t('Ask about your medication...')}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -2191,8 +2212,8 @@ export function AssistantScreen({
                 maxLength={2000}
                 aria-label={t('Review your message before sending')}
                 value={text}
-                disabled={busy}
-                onChange={(event) => setText(event.target.value)}
+                disabled={busy && !restoringStartup}
+                onChange={(event) => editText(event.target.value)}
                 placeholder={t('Ask about your medication...')}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !event.nativeEvent.isComposing) void send();
@@ -2223,8 +2244,8 @@ export function AssistantScreen({
             ) : null}
             <button
               className="primary composer-send"
-              aria-label={t(busy ? 'Sending...' : 'Send')}
-              title={t(busy ? 'Sending...' : 'Send')}
+              aria-label={t(busy && !restoringStartup ? 'Sending...' : 'Send')}
+              title={t(busy && !restoringStartup ? 'Sending...' : 'Send')}
               onClick={() => void send()}
               disabled={
                 busy ||
@@ -2236,7 +2257,7 @@ export function AssistantScreen({
                   !(enrollmentPhotoTask && workflow.save_mode === 'allowed'),
                 )
               }
-              aria-busy={busy}
+              aria-busy={busy && !restoringStartup}
             >
               {workspace ? <Icon name="send" /> : t('Send')}
             </button>

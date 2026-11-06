@@ -46,6 +46,7 @@ it('keeps startup text local and does not mount chat effects until verified read
   fireEvent.change(input, { target: { value: 'DEMO typed before connection' } });
   fireEvent.keyDown(input, { key: 'Enter' });
   expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
+  expect(screen.getByRole('button', { name: 'Send' }).textContent).toBe('Send');
   expect(mounted).not.toHaveBeenCalled();
   view.rerender(<AssistantEntry {...props} sessionId="DEMO-session" ownerId="DEMO-owner" />);
   expect(mounted).not.toHaveBeenCalled();

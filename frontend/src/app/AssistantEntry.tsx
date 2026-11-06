@@ -2,6 +2,7 @@
 import { useLayoutEffect, useRef, useState, type ComponentProps } from 'react';
 import type { StartupDraft } from './startupDraft';
 import { Icon } from '../components/Icon';
+import { VoiceInput } from '../components/VoiceInput';
 import { AssistantScreen } from '../features/assistant/conversation/AssistantScreen';
 import { ConversationSurface } from '../features/conversations/ConversationSurface';
 import { useLanguage } from '../i18n/language';
@@ -20,7 +21,7 @@ export function AssistantEntry({
   startupDraft,
   ...props
 }: Props) {
-  const { t } = useLanguage();
+  const { t, preferences } = useLanguage();
   const [draft, setDraft] = useState(startupDraft?.text ?? '');
   const [focused, setFocused] = useState(startupDraft?.focused ?? false);
   const [selection, setSelection] = useState(startupDraft?.selection ?? { start: 0, end: 0 });
@@ -89,6 +90,14 @@ export function AssistantEntry({
           data-guide="assistant-composer"
           onSubmit={(event) => event.preventDefault()}
         >
+          <button
+            className="photo-button"
+            type="button"
+            disabled
+            aria-label={t('Add a photo to chat')}
+          >
+            <Icon name="image" />
+          </button>
           <input
             ref={pendingInput}
             aria-label={t('Review your message before sending')}
@@ -112,8 +121,9 @@ export function AssistantEntry({
               setComposing(false);
             }}
           />
+          {preferences.voice_enabled ? <VoiceInput onTranscript={setDraft} disabled /> : null}
           <button className="primary composer-send" type="submit" disabled aria-label={t('Send')}>
-            <Icon name="send" />
+            {props.workspace ? <Icon name="send" /> : t('Send')}
           </button>
         </form>
       </section>

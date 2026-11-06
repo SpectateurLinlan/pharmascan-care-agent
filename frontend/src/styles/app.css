@@ -4918,9 +4918,9 @@ button.history-info-row {
   inset: auto;
   transform: none;
   display: grid;
-  grid-template-columns: var(--tap) minmax(0, 1fr) auto auto;
+  grid-template-columns: var(--tap) minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: var(--s-2);
   width: 100%;
   min-width: 0;
   max-width: none;
@@ -4932,6 +4932,12 @@ button.history-info-row {
   z-index: auto;
 }
 .today-assistant .composer-row:has(.voice-inline) {
+  grid-template-columns: var(--tap) minmax(0, 1fr) var(--tap) auto;
+}
+.today-assistant .composer-row:has(.composer-allowance) {
+  grid-template-columns: var(--tap) minmax(0, 1fr) auto auto;
+}
+.today-assistant .composer-row:has(.voice-inline):has(.composer-allowance) {
   grid-template-columns: var(--tap) minmax(0, 1fr) auto var(--tap) auto;
 }
 .today-assistant .composer-row input:not([type='file']) {
@@ -5023,10 +5029,12 @@ button.history-info-row {
   .today-assistant .composer-allowance {
     display: none;
   }
-  .today-assistant .composer-row {
+  .today-assistant .composer-row,
+  .today-assistant .composer-row:has(.composer-allowance) {
     grid-template-columns: var(--tap) minmax(0, 1fr) auto;
   }
-  .today-assistant .composer-row:has(.voice-inline) {
+  .today-assistant .composer-row:has(.voice-inline),
+  .today-assistant .composer-row:has(.voice-inline):has(.composer-allowance) {
     grid-template-columns: var(--tap) minmax(0, 1fr) var(--tap) auto;
   }
   .today-assistant__allowance {
@@ -5356,7 +5364,7 @@ button.history-info-row {
   transform: none;
   z-index: auto;
   display: grid;
-  grid-template-columns: var(--tap) minmax(0, 1fr) var(--tap);
+  grid-template-columns: var(--tap) minmax(0, 1fr) auto;
   align-items: center;
   gap: 2px;
   width: 100%;
@@ -5368,7 +5376,7 @@ button.history-info-row {
   border-radius: var(--r-md);
 }
 .conversation-workspace .composer-row:has(.voice-inline) {
-  grid-template-columns: var(--tap) minmax(0, 1fr) var(--tap) var(--tap);
+  grid-template-columns: var(--tap) minmax(0, 1fr) var(--tap) auto;
 }
 .conversation-workspace .composer-row textarea {
   width: 100%;
@@ -5681,11 +5689,4 @@ button.history-info-row {
   .conversation-workspace .conversation-toolbar strong {
     font-size: var(--fs-body);
   }
-}
-
-/* Before connection there are only a text field and Send; reserve no photo/voice columns. */
-.today-assistant .composer-row--connecting,
-.conversation-workspace .composer-row--connecting,
-:root[data-text-scale] .today-assistant .composer-row.composer-row--connecting {
-  grid-template-columns: minmax(0, 1fr) auto;
 }
