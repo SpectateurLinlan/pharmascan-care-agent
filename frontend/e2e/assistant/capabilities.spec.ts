@@ -277,7 +277,7 @@ for (const language of ['en', 'zh'] as const) {
     const list = await call('GET', '/api/agent/workflows/tasks');
     expect(list.some((row: { task_id: string }) => row.task_id === unrelated.task_id)).toBe(true);
     await page
-      .getByRole('button', { name: say('Unfinished tasks', '未完成的办理'), exact: true })
+      .getByRole('button', { name: /Continue assistant tasks|继续助手任务/, exact: true })
       .click();
     await expect(
       page.getByRole('button', { name: /DEMO retained independent draft/ }),

@@ -87,8 +87,12 @@
 }
 .records-pending-disclosure__copy {
   display: grid;
+  flex: 1 1 auto;
   gap: var(--s-1);
   min-width: 0;
+}
+.records-pending-disclosure > summary > .today-unrecorded__count {
+  flex: 0 0 auto;
 }
 .records-pending-disclosure__copy strong {
   font-weight: var(--fw-strong);

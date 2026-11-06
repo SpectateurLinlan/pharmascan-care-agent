@@ -679,6 +679,34 @@ details > * + * {
   margin-top: var(--s-3);
 }
 
+.today-medication-shortcut {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--s-2);
+  min-height: var(--button-height);
+  padding: var(--s-2) var(--s-3);
+  color: var(--brand);
+  text-align: left;
+  text-decoration: none;
+  border-radius: var(--r-sm);
+}
+
+.today-medication-shortcut .app-icon {
+  flex: 0 0 auto;
+  width: var(--icon-control);
+  height: var(--icon-control);
+}
+
+.today-medication-shortcut span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.today-medication-shortcut:hover:not(:disabled) {
+  background: var(--brand-50);
+}
+
 /* --- standalone sign-in ---------------------------------------------------
  * Rendered without the app shell: no tabs, no rail, no composer. The guest
  * path is a first-class action, not a fallback hidden behind a link. */
@@ -1137,14 +1165,12 @@ button.danger:hover:not(:disabled) {
 .dose-secondary-action {
   align-self: flex-start;
   min-height: var(--button-height);
-  padding: 0;
+  padding: var(--s-2) var(--s-3);
   border: 0;
   background: none;
   color: var(--brand);
   font: inherit;
   font-weight: var(--fw-medium);
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
   cursor: pointer;
 }
 
@@ -4868,6 +4894,7 @@ button.history-info-row {
   display: none;
 }
 .today-assistant .assistant-tasks button {
+  min-height: 40px;
   flex: 0 1 auto;
   max-width: 100%;
   padding: 6px 10px;

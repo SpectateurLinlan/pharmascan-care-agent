@@ -2657,4 +2657,26 @@ Object.assign(translations, {
   'Could not play audio. Please read the guide text.':
     '\u65e0\u6cd5\u64ad\u653e\u8bed\u97f3\uff0c\u8bf7\u9605\u8bfb\u5c4f\u5e55\u4e0a\u7684\u6307\u5f15\u6587\u5b57\u3002',
 });
+Object.assign(translations, {
+  'Save your medication draft?': '保存药物草稿后退出？',
+  'Save draft and leave': '保存草稿并退出',
+  'Keep saved draft and leave': '保留已保存草稿并退出',
+  'Leave without saving these changes': '不保存本次修改并退出',
+  'Discard unsaved input and leave': '放弃未保存内容并退出',
+  'Check saved medication setup': '查看已保存的药物登记',
+  'The previous save result is unknown. Check saved medication setup before submitting again.':
+    '暂时无法确认上次保存结果，请先查看已保存的药物登记，避免重复提交。',
+  'Your saved draft will stay in Finish medication setup. You can save your current edits before leaving.':
+    '已保存的草稿会保留在未完成药物登记中。退出前，您可以保存本次修改。',
+  'Save these details as a draft to continue later, or explicitly discard this page’s unsaved input.':
+    '您可以保存草稿后稍后继续，也可以明确放弃本页尚未保存的内容。',
+  'Your medication registration is saved, but activation is not confirmed. Check your medication list before adding it again.':
+    '药物登记已保存，但尚未确认是否启用。请先到药物列表核对，避免重复添加。',
+  'Your earlier draft is saved. The current edits have not been saved yet.':
+    '之前的草稿已保存，本次修改尚未保存。',
+  'Your draft is saved. Review or confirmation is not finished; retry continues this draft without creating another.':
+    '草稿已保存，后续核对或确认尚未完成。重试会继续这份草稿，不会重复新建。',
+  'Check saved medication setup before submitting again. The previous save result is unknown.':
+    '请先核对已保存的药物登记；上次保存结果尚未确认，暂不重复提交。',
+});
 export { englishLabels, guideEnglishLabels, translations, galleryTranslations, guideTranslations };

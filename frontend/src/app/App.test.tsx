@@ -18,6 +18,11 @@ vi.mock('../api/client', () => ({
     preferences: vi.fn().mockResolvedValue({ preferred_language: 'en' }),
     listMedications: vi.fn(),
     regimenHistory: vi.fn(),
+    createDraft: vi.fn(),
+    reviewDraft: vi.fn(),
+    activate: vi.fn(),
+    historyCatalogue: vi.fn(),
+    medicationHistory: vi.fn(),
   },
 }));
 afterEach(() => {
@@ -45,6 +50,109 @@ beforeEach(() => {
       `pharmascan.quick-start.v5:${owner}`,
       JSON.stringify({ version: 5, status: 'skipped', step: 0 }),
     );
+});
+
+it('offers saving a manual medication draft on exit without activating it or saving twice', async () => {
+  window.history.replaceState({}, '', '#manual');
+  vi.mocked(api.health).mockResolvedValue({
+    status: 'ok',
+    runtime_contract: 'patient-ux-reminders-v1',
+  } as Awaited<ReturnType<typeof api.health>>);
+  vi.mocked(api.startDemo).mockResolvedValue({
+    patient_id: 'DEMO-owner',
+    session_id: 'DEMO-session',
+    demo_only: true,
+    seeded_medication_count: 0,
+    note: 'DEMO_ONLY',
+  });
+  vi.mocked(api.createDraft).mockResolvedValue({
+    medication_id: 'DEMO-med',
+    regimen_id: 'DEMO-draft',
+    source_id: 'DEMO-source',
+    state: 'pending_clarification',
+    missing_instructions: ['dose_amount'],
+    reviewable_field_ids: [],
+    note: 'DEMO_ONLY',
+  });
+  try {
+    render(<App />);
+    await screen.findByLabelText('Medication name');
+    fireEvent.change(screen.getByLabelText('Medication name'), {
+      target: { value: 'DEMO draft for later' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Medicines' }));
+    const save = await screen.findByRole('button', { name: 'Save draft and leave' });
+    act(() => {
+      fireEvent.click(save);
+      fireEvent.click(save);
+    });
+    await waitFor(() => expect(api.createDraft).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Save draft and leave' })).toBeNull(),
+    );
+    expect(api.reviewDraft).not.toHaveBeenCalled();
+    expect(api.activate).not.toHaveBeenCalled();
+  } finally {
+    window.history.replaceState({}, '', '/');
+  }
+});
+
+it('opens My medication records directly from the verified pending-dose summary', async () => {
+  window.history.replaceState({}, '', '/');
+  vi.mocked(api.health).mockResolvedValue({
+    status: 'ok',
+    runtime_contract: 'patient-ux-reminders-v1',
+    late_dose_reports_enabled: true,
+  } as Awaited<ReturnType<typeof api.health>>);
+  vi.mocked(api.startDemo).mockResolvedValue({
+    patient_id: 'DEMO-owner',
+    session_id: 'DEMO-session',
+    demo_only: true,
+    seeded_medication_count: 0,
+    note: 'DEMO_ONLY',
+  });
+  vi.mocked(api.doseFollowUps).mockResolvedValue({
+    as_of: '2026-11-06T10:00:00Z',
+    timezone: 'Asia/Singapore',
+    has_more: false,
+    items: [
+      {
+        occurrence_id: 'DEMO-dose',
+        regimen_id: 'DEMO-plan',
+        medication_id: 'DEMO-med',
+        medication_name: 'DEMO medicine',
+        due_at: '2026-11-06T08:00:00Z',
+        dose_amount: 1,
+        dose_unit: 'tablet',
+        can_report: true,
+        report_id: null,
+        intake_status: null,
+        actual_administration_at: null,
+        recorded_at: null,
+        reason: null,
+        notes: '',
+      },
+    ],
+  });
+  vi.mocked(api.historyCatalogue).mockResolvedValue({ medications: [], plans: [] });
+  vi.mocked(api.medicationHistory).mockResolvedValue({
+    entries: [],
+    next_cursor: null,
+    window_start: null,
+    window_end: '2026-11-06T10:00:00Z',
+    as_of: '2026-11-06T10:00:00Z',
+    scope: 'stored_records_only',
+    missing_plan_start: false,
+  });
+  try {
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'View medication records' }));
+    await screen.findByRole('heading', { name: 'My medication records' });
+    expect(window.location.hash).toBe('#medication-records');
+    expect(screen.queryByRole('heading', { name: 'Records' })).toBeNull();
+  } finally {
+    window.history.replaceState({}, '', '/');
+  }
 });
 it('shows the home shell immediately while all backend responses remain pending', async () => {
   vi.mocked(api.health).mockReturnValue(new Promise(() => {}));

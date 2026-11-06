@@ -27,7 +27,7 @@ import { useLanguage } from '../../i18n/language';
  *   Total dose     derived by the server from both, or honestly "not calculated"
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   api,
   ApiError,
@@ -43,11 +43,22 @@ import { Card, ErrorNotice, Tag, AutoDismissNotice } from '../../components/prim
 
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+export interface EnrollmentExitActions {
+  saved: boolean;
+  hasUnsavedChanges: boolean;
+  busy: boolean;
+  canSave: boolean;
+  uncertain: boolean;
+  save: () => Promise<boolean>;
+}
+
 export function EnrollScreen({
   sessionId,
   medications,
   onChanged,
   onDirtyChange,
+  onExitActionsChange,
+  onOpenSavedDrafts,
   sourceSelection,
   resumeRegimenId,
   resumeRow,
@@ -63,6 +74,8 @@ export function EnrollScreen({
   sessionId: string | null;
   medications: MedicationListResponse | null;
   onDirtyChange?: (dirty: boolean) => void;
+  onExitActionsChange?: (actions: EnrollmentExitActions | null) => void;
+  onOpenSavedDrafts?: () => void;
   onChanged: () => void;
   resumeRegimenId?: string | null;
   resumeRow?: RegimenHistoryItem | null;
@@ -100,9 +113,18 @@ export function EnrollScreen({
   const [reviewed, setReviewed] = useState(false);
   const [identityChecked, setIdentityChecked] = useState(false);
   const [activated, setActivated] = useState(false);
+  const [activationAttempted, setActivationAttempted] = useState(false);
   const [total, setTotal] = useState<DoseDisplay | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const saving = useRef(false);
+  const savedSubmission = useRef<{ key: string; result: DraftCreateResponse } | null>(null);
+  const adoptResumed = useRef<DraftCreateResponse | null>(null);
+  const [savedInputKey, setSavedInputKey] = useState<string | null>(null);
+  const [uncertainSave, setUncertainSave] = useState(false);
+  const uncertain = useRef(false);
+  const exitAction = useRef<() => Promise<boolean>>(async () => false);
+  const saveForExit = useCallback(() => exitAction.current(), []);
   const reviewLive = useRef(true);
   useEffect(() => {
     reviewLive.current = true;
@@ -149,6 +171,7 @@ export function EnrollScreen({
           rule?.interval_anchor?.time_source === 'default_0800' ? '' : (rule?.local_times[0] ?? ''),
         );
         setDraft(saved);
+        adoptResumed.current = saved;
         setMedicationId(saved.medication_id);
         setStep('review');
       })
@@ -182,43 +205,6 @@ export function EnrollScreen({
     setFirstTime('');
   }
 
-  useEffect(() => {
-    onDirtyChange?.(
-      !activated &&
-        Boolean(
-          name ||
-          doseAmount ||
-          courseStart ||
-          courseEnd ||
-          courseDays ||
-          draft ||
-          foodInstruction ||
-          doseBasis.strength_text ||
-          doseBasis.instructions_text ||
-          isPrn ||
-          frequency !== 'daily' ||
-          everyHours ||
-          firstTime ||
-          times.join(',') !== '08:00',
-        ),
-    );
-  }, [
-    activated,
-    name,
-    doseAmount,
-    courseStart,
-    courseEnd,
-    courseDays,
-    draft,
-    foodInstruction,
-    doseBasis,
-    isPrn,
-    times,
-    frequency,
-    everyHours,
-    firstTime,
-    onDirtyChange,
-  ]);
   const prefilled = useRef<string | null>(null);
   useEffect(() => {
     if (!editFrom || prefilled.current === editFrom.regimen_id) return;
@@ -277,9 +263,36 @@ export function EnrollScreen({
       .then((saved) => {
         if (!active) return;
         resumed.current = resumeRegimenId;
+        uncertain.current = false;
+        setUncertainSave(false);
+        adoptResumed.current = saved;
         setMedicationId(saved.medication_id);
         setDraft(saved);
-        if (resumeRow) {
+        if (saved.review_inputs) {
+          const fields = saved.review_inputs;
+          const rule = fields.frequency_rule;
+          setName(fields.medication_name);
+          setDoseAmount(fields.dose_amount == null ? '' : String(fields.dose_amount));
+          setDoseUnit(fields.dose_unit ?? '');
+          setDoseBasis(fields.dose_basis ?? emptyDoseBasis);
+          setIsPrn(fields.is_prn === true);
+          setFoodInstruction(fields.food_instruction ?? '');
+          setCourseStart(fields.course_start_date ?? '');
+          setCourseEnd(fields.course_end_date ?? '');
+          setCourseMode(fields.course_end_date ? 'end' : 'days');
+          setCourseDays('');
+          setFrequency(
+            rule?.kind === 'weekly' ? 'weekly' : rule?.kind === 'interval' ? 'interval' : 'daily',
+          );
+          setTimes(rule?.local_times ?? []);
+          setWeekdays(rule?.days_of_week ?? []);
+          setEveryHours(rule?.every_hours == null ? '' : String(rule.every_hours));
+          setFirstTime(
+            rule?.interval_anchor?.time_source === 'default_0800'
+              ? ''
+              : (rule?.local_times[0] ?? ''),
+          );
+        } else if (resumeRow) {
           setCourseMode(resumeRow.course_end_date ? 'end' : 'days');
           setDoseBasis(emptyDoseBasis);
           setCourseDays('');
@@ -320,14 +333,19 @@ export function EnrollScreen({
   }, [resumeRegimenId, resumeRow]);
 
   async function run(action: () => Promise<void>) {
+    if (saving.current) return false;
+    saving.current = true;
     setBusy(true);
     setError(null);
     try {
       await action();
+      return true;
     } catch (caught) {
       setError(caught);
+      return false;
     } finally {
       setBusy(false);
+      saving.current = false;
     }
   }
 
@@ -387,6 +405,84 @@ export function EnrollScreen({
         Number(everyHours) < 1 ||
         Number(everyHours) > 720));
 
+  const inputKey = JSON.stringify(draftInput());
+  useLayoutEffect(() => {
+    const saved = adoptResumed.current;
+    if (saved && draft?.regimen_id === saved.regimen_id) {
+      savedSubmission.current = { key: inputKey, result: saved };
+      setSavedInputKey(inputKey);
+      adoptResumed.current = null;
+    }
+  }, [inputKey, draft]);
+
+  async function persistDraft() {
+    if (uncertain.current)
+      throw new Error(
+        'Check saved medication setup before submitting again. The previous save result is unknown.',
+      );
+    const input = draftInput();
+    const key = JSON.stringify(input);
+    if (savedSubmission.current?.key === key) return savedSubmission.current.result;
+    let created: DraftCreateResponse;
+    try {
+      created = await api.createDraft(input, medicationId ?? undefined);
+    } catch (caught) {
+      if (
+        !(caught instanceof ApiError) ||
+        caught.status >= 500 ||
+        caught.code === 'PROVIDER_UNAVAILABLE'
+      ) {
+        uncertain.current = true;
+        setUncertainSave(true);
+      }
+      throw caught;
+    }
+    // Record the receipt before any refresh/review request can fail.
+    savedSubmission.current = { key, result: created };
+    setSavedInputKey(key);
+    setDraft(created);
+    setMedicationId(created.medication_id);
+    await onChanged();
+    return created;
+  }
+
+  exitAction.current = () =>
+    run(async () => {
+      await persistDraft();
+    });
+  const hasUnsavedChanges =
+    !activated &&
+    Boolean(
+      name ||
+      doseAmount ||
+      courseStart ||
+      courseEnd ||
+      courseDays ||
+      foodInstruction ||
+      doseBasis.strength_text ||
+      doseBasis.instructions_text ||
+      isPrn ||
+      frequency !== 'daily' ||
+      everyHours ||
+      firstTime ||
+      times.join(',') !== '08:00',
+    ) &&
+    savedInputKey !== inputKey;
+  useEffect(() => {
+    onExitActionsChange?.({
+      saved: Boolean(draft),
+      hasUnsavedChanges,
+      busy,
+      canSave: Boolean(name.trim()) && !busy && !uncertainSave,
+      uncertain: uncertainSave,
+      save: saveForExit,
+    });
+  }, [onExitActionsChange, draft, hasUnsavedChanges, busy, name, uncertainSave, saveForExit]);
+  useEffect(() => () => onExitActionsChange?.(null), [onExitActionsChange]);
+  useEffect(() => {
+    onDirtyChange?.(!activated && (hasUnsavedChanges || busy || uncertainSave));
+  }, [onDirtyChange, activated, hasUnsavedChanges, busy, uncertainSave]);
+
   /**
    * Commit: the single action that walks the real state machine.
    *
@@ -433,17 +529,16 @@ export function EnrollScreen({
       if (!isPrn && frequency !== 'interval' && selectedTimes.length === 0) {
         throw new Error('Add at least one time of day, or tick "only when needed".');
       }
-      const created = await api.createDraft(draftInput(), medicationId ?? undefined);
+      const cached = savedSubmission.current?.key === JSON.stringify(draftInput());
+      const receipt = await persistDraft();
+      const created = cached ? await api.resumeDraft(receipt.regimen_id) : receipt;
       setDraft(created);
-      setMedicationId(created.medication_id);
-      // A saved draft belongs in pending setup immediately, even if confirmation is cancelled.
-      await onChanged();
       if (created.missing_instructions.length > 0) {
         // The draft is stored but is NOT active. Nothing is inferred to fill the
         // gap; the patient supplies it and commits again.
         return;
       }
-      await api.reviewDraft(created.source_id);
+      if (!created.source_reviewed) await api.reviewDraft(created.source_id);
       if (!sessionId) {
         throw new Error('No agent session yet — start the demo session first.');
       }
@@ -453,6 +548,7 @@ export function EnrollScreen({
   const confirmActivation = () =>
     run(async () => {
       if (!challenge) return;
+      setActivationAttempted(true);
       const activatedRow = await api.activate({
         regimen_id: challenge.regimen_id,
         challenge_id: challenge.challenge_id,
@@ -472,12 +568,17 @@ export function EnrollScreen({
     });
 
   const reset = () => {
+    savedSubmission.current = null;
+    setSavedInputKey(null);
+    uncertain.current = false;
+    setUncertainSave(false);
     setStep('form');
     setDraft(null);
     setReviewed(false);
     setError(null);
     setChallenge(null);
     setActivated(false);
+    setActivationAttempted(false);
   };
 
   /** The server's own arithmetic. Never a locally derived pill count. */
@@ -787,6 +888,20 @@ export function EnrollScreen({
     </>
   );
 
+  const persistenceNotice = uncertainSave
+    ? t(
+        'The previous save result is unknown. Check saved medication setup before submitting again.',
+      )
+    : draft && !activated
+      ? t(
+          activationAttempted
+            ? 'Your medication registration is saved, but activation is not confirmed. Check your medication list before adding it again.'
+            : hasUnsavedChanges
+              ? 'Your earlier draft is saved. The current edits have not been saved yet.'
+              : 'Your draft is saved. Review or confirmation is not finished; retry continues this draft without creating another.',
+        )
+      : undefined;
+
   // --- added ---------------------------------------------------------------
   if (activated) {
     return (
@@ -810,13 +925,24 @@ export function EnrollScreen({
 
   // --- step 2: review and add ----------------------------------------------
   if (step === 'review') {
-    const missing = draft?.missing_instructions ?? [];
+    const missing =
+      preparedReview || savedInputKey === inputKey ? (draft?.missing_instructions ?? []) : [];
     return (
       <>
         <Card
           title={t('Review and add')}
           hint={t('Check the details below. Nothing becomes an active plan until you confirm.')}
         >
+          {persistenceNotice ? (
+            <p className="notice" role="status">
+              {persistenceNotice}
+            </p>
+          ) : null}
+          {uncertainSave && onOpenSavedDrafts ? (
+            <button type="button" onClick={onOpenSavedDrafts}>
+              {t('Check saved medication setup')}
+            </button>
+          ) : null}
           <dl className="review-summary">
             <div>
               <dt>{t('Medication name')}</dt>
@@ -900,6 +1026,7 @@ export function EnrollScreen({
               onClick={() => void commit()}
               disabled={
                 busy ||
+                uncertainSave ||
                 formBlocked() ||
                 missing.length > 0 ||
                 !reviewed ||
@@ -922,7 +1049,7 @@ export function EnrollScreen({
           </div>
         </Card>
 
-        {error ? <ErrorNotice error={error} /> : null}
+        {error ? <ErrorNotice error={error} context={persistenceNotice} /> : null}
 
         {challenge ? (
           <BottomSheet
@@ -967,7 +1094,7 @@ export function EnrollScreen({
     return (
       <>
         {busy ? <p role="status">{t('Loading...')}</p> : null}
-        {error ? <ErrorNotice error={error} /> : null}
+        {error ? <ErrorNotice error={error} context={persistenceNotice} /> : null}
       </>
     );
   return (
@@ -990,7 +1117,7 @@ export function EnrollScreen({
         </button>
       </div>
 
-      {error ? <ErrorNotice error={error} /> : null}
+      {error ? <ErrorNotice error={error} context={persistenceNotice} /> : null}
 
       {medications && medications.item_count > 0 ? (
         <p className="notice">

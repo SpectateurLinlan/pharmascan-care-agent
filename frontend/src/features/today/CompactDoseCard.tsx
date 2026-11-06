@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import type { DueDoseResponse, MedicationSummary } from '../../api/client';
 import { useLanguage } from '../../i18n/language';
 import { Card } from '../../components/primitives';
+import { Icon } from '../../components/Icon';
 
 /**
  * The dose card, which is the screen a patient opens most often.
@@ -78,7 +79,7 @@ export function CompactDoseCard({
     ? medication.food_instruction.split('; ').map(t).join(' · ')
     : null;
   return (
-    <Card {...(showTitle ? { title: "Today's medication" } : {})}>
+    <Card {...(showTitle ? { title: 'Today medication schedule' } : {})}>
       <div
         className="dose-head"
         data-today-dose-state={loadFailed ? 'error' : due ? 'ready' : 'loading'}
@@ -173,8 +174,14 @@ export function CompactDoseCard({
       {/* A visible, low-emphasis action rather than a disclosure: a patient looking
       for the photo check should not have to guess that it exists. The safety
       statement for the check is stated on the check itself. */}
-      <button type="button" className="dose-secondary-action" disabled={busy} onClick={onCheck}>
-        {t('Compare a pill photo')}
+      <button
+        type="button"
+        className="dose-secondary-action today-medication-shortcut"
+        disabled={busy}
+        onClick={onCheck}
+      >
+        <Icon name="camera" />
+        <span>{t('Compare a pill photo')}</span>
       </button>
 
       {children}

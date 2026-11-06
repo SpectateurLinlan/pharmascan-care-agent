@@ -5,6 +5,185 @@ import { EnrollScreen, courseDuration, courseEndForDuration } from './EnrollScre
 import { AutoDismissNotice } from '../../components/primitives';
 import { api, type RegimenHistoryItem } from '../../api/client';
 
+const savedDraft = {
+  medication_id: 'DEMO-med',
+  regimen_id: 'DEMO-draft',
+  source_id: 'DEMO-source',
+  state: 'draft',
+  missing_instructions: [],
+  reviewable_field_ids: [],
+  note: 'DEMO_ONLY',
+};
+
+function enterReviewedMedication() {
+  fireEvent.change(screen.getByLabelText('Medication name'), { target: { value: 'DEMO course' } });
+  fireEvent.change(screen.getByLabelText('Dose amount'), { target: { value: '1' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Review and add' }));
+  fireEvent.click(
+    screen.getByLabelText('I have checked these details against my original instructions.'),
+  );
+}
+
+it('retries source review on the saved draft instead of creating another course', async () => {
+  const create = vi.spyOn(api, 'createDraft').mockResolvedValue(savedDraft);
+  vi.spyOn(api, 'resumeDraft').mockResolvedValue(savedDraft);
+  const review = vi
+    .spyOn(api, 'reviewDraft')
+    .mockRejectedValueOnce(new Error('DEMO review unavailable'))
+    .mockResolvedValue({ source_id: 'DEMO-source', reviewed_field_count: 2, note: 'DEMO_ONLY' });
+  const challenge = vi
+    .spyOn(api, 'requestChallenge')
+    .mockRejectedValue(new Error('DEMO stop before confirmation'));
+  render(<EnrollScreen sessionId="DEMO-session" medications={null} onChanged={vi.fn()} />);
+  enterReviewedMedication();
+  fireEvent.click(screen.getByRole('button', { name: 'Add this medication' }));
+  await waitFor(() => expect(review).toHaveBeenCalledOnce());
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Add this medication' })).toHaveProperty(
+      'disabled',
+      false,
+    ),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Add this medication' }));
+  await waitFor(() => expect(challenge).toHaveBeenCalledOnce());
+  expect(create).toHaveBeenCalledOnce();
+  expect(review).toHaveBeenLastCalledWith('DEMO-source');
+});
+
+it('accepts only one concurrent save attempt even before React updates the disabled button', async () => {
+  let finish!: (draft: typeof savedDraft) => void;
+  const create = vi.spyOn(api, 'createDraft').mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  vi.spyOn(api, 'reviewDraft').mockRejectedValue(new Error('DEMO review unavailable'));
+  render(<EnrollScreen sessionId="DEMO-session" medications={null} onChanged={vi.fn()} />);
+  enterReviewedMedication();
+  const save = screen.getByRole('button', { name: 'Add this medication' });
+  act(() => {
+    fireEvent.click(save);
+    fireEvent.click(save);
+  });
+  expect(create).toHaveBeenCalledOnce();
+  await act(async () => finish(savedDraft));
+});
+
+it('does not rewrite reviewed source fields when confirmation preparation is retried', async () => {
+  const create = vi.spyOn(api, 'createDraft').mockResolvedValue(savedDraft);
+  vi.spyOn(api, 'resumeDraft').mockResolvedValue({ ...savedDraft, source_reviewed: true });
+  const review = vi
+    .spyOn(api, 'reviewDraft')
+    .mockResolvedValue({ source_id: 'DEMO-source', reviewed_field_count: 2, note: 'DEMO_ONLY' });
+  const confirmation = vi
+    .spyOn(api, 'requestChallenge')
+    .mockRejectedValue(new Error('DEMO confirmation unavailable'));
+  render(<EnrollScreen sessionId="DEMO-session" medications={null} onChanged={vi.fn()} />);
+  enterReviewedMedication();
+  fireEvent.click(screen.getByRole('button', { name: 'Add this medication' }));
+  await waitFor(() => expect(confirmation).toHaveBeenCalledOnce());
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Add this medication' })).toHaveProperty(
+      'disabled',
+      false,
+    ),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Add this medication' }));
+  await waitFor(() => expect(confirmation).toHaveBeenCalledTimes(2));
+  expect(create).toHaveBeenCalledOnce();
+  expect(review).toHaveBeenCalledOnce();
+});
+
+it('completes a saved name-only draft after filling its missing instructions', async () => {
+  const incomplete = {
+    ...savedDraft,
+    state: 'pending_clarification',
+    missing_instructions: ['dose_amount'],
+    review_inputs: {
+      medication_name: 'DEMO course',
+      dose_amount: null,
+      dose_unit: 'tablet',
+      frequency_rule: { kind: 'daily', local_times: ['08:00'], days_of_week: [] },
+      is_prn: false,
+    },
+  };
+  const completed = { ...savedDraft, regimen_id: 'DEMO-completed' };
+  vi.spyOn(api, 'resumeDraft').mockImplementation(async (id) =>
+    id === incomplete.regimen_id ? incomplete : completed,
+  );
+  const create = vi.spyOn(api, 'createDraft').mockResolvedValue(completed);
+  const review = vi.spyOn(api, 'reviewDraft').mockResolvedValue({
+    source_id: completed.source_id,
+    reviewed_field_count: 2,
+    note: 'DEMO_ONLY',
+  });
+  vi.spyOn(api, 'requestChallenge').mockResolvedValue({
+    regimen_id: completed.regimen_id,
+    challenge_id: 'DEMO-confirmation',
+    session_id: 'DEMO-session',
+    session_state: 'awaiting_confirmation',
+    session_state_version: 1,
+    expires_at: '2099-11-06T10:10:00Z',
+    summary: {
+      medication_name: 'DEMO course',
+      dose_amount: 1,
+      dose_unit: 'tablet',
+      frequency: { kind: 'daily', local_times: ['08:00'], days_of_week: [] },
+      is_prn: false,
+      version_no: 2,
+      local_timezone: 'Asia/Singapore',
+    },
+    note: 'DEMO_ONLY',
+  });
+  const activate = vi.spyOn(api, 'activate').mockResolvedValue({
+    regimen_id: completed.regimen_id,
+    state: 'active',
+    superseded_regimen_ids: [],
+  });
+  render(
+    <EnrollScreen
+      sessionId="DEMO-session"
+      medications={null}
+      resumeRegimenId={incomplete.regimen_id}
+      onChanged={vi.fn()}
+    />,
+  );
+  await waitFor(() =>
+    expect(screen.getByLabelText('Medication name')).toHaveProperty('value', 'DEMO course'),
+  );
+  fireEvent.change(screen.getByLabelText('Dose amount'), { target: { value: '1' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Review and add' }));
+  fireEvent.click(
+    screen.getByLabelText('I have checked these details against my original instructions.'),
+  );
+  const add = screen.getByRole('button', { name: 'Add this medication' });
+  expect(add).toHaveProperty('disabled', false);
+  fireEvent.click(add);
+  await waitFor(() => expect(review).toHaveBeenCalledOnce());
+  expect(create).toHaveBeenCalledOnce();
+  expect(create.mock.calls[0]?.[0].dose_amount).toBe(1);
+  expect(create.mock.calls[0]?.[1]).toBe(incomplete.medication_id);
+  const confirm = await screen.findByRole('button', { name: 'Yes, save this medication' });
+  expect(activate).not.toHaveBeenCalled();
+  fireEvent.click(confirm);
+  await waitFor(() => expect(activate).toHaveBeenCalledOnce());
+  expect(activate.mock.calls[0]?.[0].regimen_id).toBe(completed.regimen_id);
+});
+
+it('blocks a blind second create when the first save response is unknown', async () => {
+  const create = vi.spyOn(api, 'createDraft').mockRejectedValue(new Error('DEMO response lost'));
+  render(<EnrollScreen sessionId="DEMO-session" medications={null} onChanged={vi.fn()} />);
+  enterReviewedMedication();
+  const add = screen.getByRole('button', { name: 'Add this medication' });
+  fireEvent.click(add);
+  await waitFor(() => expect(add).toHaveProperty('disabled', true));
+  await screen.findAllByText(
+    'The previous save result is unknown. Check saved medication setup before submitting again.',
+  );
+  fireEvent.click(add);
+  expect(create).toHaveBeenCalledOnce();
+});
+
 afterEach(() => {
   cleanup();
   vi.useRealTimers();

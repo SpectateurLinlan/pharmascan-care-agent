@@ -55,9 +55,10 @@ for (const language of ['en', 'zh'] as const) {
       page.getByRole('button', { name: language === 'zh' ? '查看原图 1' : 'View original 1' }),
     ).toBeVisible();
     await page.reload();
+    await page.getByRole('button', { name: /Open full chat|打开完整聊天/, exact: true }).click();
     await page
       .getByRole('button', {
-        name: language === 'zh' ? '未完成的办理' : 'Unfinished tasks',
+        name: /Continue assistant tasks|继续助手任务/,
         exact: true,
       })
       .click();
@@ -138,7 +139,8 @@ test('no-save photo stays on page and refresh reports lost input with chat histo
     await (await page.request.get(`/api/agent/workflows/tasks?client_id=${client}`)).json(),
   ).toEqual([]);
   await page.reload();
-  await page.getByRole('button', { name: 'Unfinished tasks', exact: true }).click();
+  await page.getByRole('button', { name: /Open full chat|打开完整聊天/, exact: true }).click();
+  await page.getByRole('button', { name: /^Continue assistant tasks/, exact: true }).click();
   await page.getByRole('button', { name: 'Resume task: Unsaved task', exact: true }).click();
   await expect(
     page.getByText('Page details are unavailable. Please enter them again.', { exact: true }),

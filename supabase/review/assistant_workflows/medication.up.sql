@@ -228,7 +228,7 @@ BEGIN
  ELSIF TG_TABLE_NAME='regimen_versions' THEN
   IF NEW.state='active' THEN PERFORM public.assistant_enrollment_assert_current(NEW.patient_id,NEW.id); END IF;
  ELSE
-  sid:=CASE WHEN TG_TABLE_NAME='source_documents' THEN NEW.id ELSE NEW.source_id END;
+  IF TG_TABLE_NAME='source_documents' THEN sid:=NEW.id; ELSE sid:=NEW.source_id; END IF;
   FOR rid IN SELECT regimen_id FROM public.assistant_enrollment_operations WHERE owner=NEW.patient_id AND source_id=sid LOOP
    PERFORM public.assistant_enrollment_assert_current(NEW.patient_id,rid);
   END LOOP;

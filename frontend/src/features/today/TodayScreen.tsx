@@ -22,6 +22,7 @@ import {
 import { CompactDoseCard } from './CompactDoseCard';
 import { ConfirmReportSheet } from './ConfirmReportSheet';
 import { Card, ErrorNotice, Tag } from '../../components/primitives';
+import { Icon } from '../../components/Icon';
 
 const CHOICES: { label: string; value: string }[] = [
   { label: 'Taken', value: 'Taken' },
@@ -322,7 +323,7 @@ export function TodayScreen({
 
   if (medications.length === 0) {
     return (
-      <Card title={compact ? "Today's medication" : 'Today'}>
+      <Card title={compact ? 'Today medication schedule' : 'Today'}>
         <p className="notice" data-today-empty-state="ready">
           {t(
             setupCount > 0
@@ -347,13 +348,23 @@ export function TodayScreen({
               </button>
             ) : null}
             {onMedicines ? (
-              <button className="text-button" type="button" onClick={onMedicines}>
-                {t('My Medicines')}
+              <button
+                className="text-button today-medication-shortcut"
+                type="button"
+                onClick={onMedicines}
+              >
+                <Icon name="pill" />
+                <span>{t('My Medicines')}</span>
               </button>
             ) : null}
             {onVisualCheck ? (
-              <button className="text-button" type="button" onClick={() => onVisualCheck(null)}>
-                {t('Compare a pill photo')}
+              <button
+                className="text-button today-medication-shortcut"
+                type="button"
+                onClick={() => onVisualCheck(null)}
+              >
+                <Icon name="camera" />
+                <span>{t('Compare a pill photo')}</span>
               </button>
             ) : null}
           </nav>
@@ -408,25 +419,31 @@ export function TodayScreen({
           className="today-medication-shortcuts"
           aria-label={t('Medication management shortcuts')}
         >
-          <button className="text-button" type="button" onClick={onMedicines}>
-            {t('My Medicines')}
+          <button
+            className="text-button today-medication-shortcut"
+            type="button"
+            onClick={onMedicines}
+          >
+            <Icon name="pill" />
+            <span>{t('My Medicines')}</span>
           </button>
           {due?.occurrence_id &&
           hideDoseOccurrenceIds.includes(due.occurrence_id) &&
           onVisualCheck ? (
             <button
-              className="text-button"
+              className="text-button today-medication-shortcut"
               type="button"
               onClick={() => onVisualCheck(selected.regimen_id)}
             >
-              {t('Compare a pill photo')}
+              <Icon name="camera" />
+              <span>{t('Compare a pill photo')}</span>
             </button>
           ) : null}
         </nav>
       </>
     );
   return (
-    <Card title={compact ? "Today's medication" : 'Today'}>
+    <Card title={compact ? 'Today medication schedule' : 'Today'}>
       <div className="field" hidden={compact && medications.length === 1}>
         <label htmlFor={selectorId}>{t('Medication')}</label>
         <select

@@ -292,9 +292,10 @@ for (const language of ['en', 'zh'] as const) {
       ),
     ).toBeVisible();
     await page.reload();
+    await page.getByRole('button', { name: /Open full chat|打开完整聊天/, exact: true }).click();
     await page
       .getByRole('button', {
-        name: language === 'zh' ? '未完成的办理' : 'Unfinished tasks',
+        name: /Continue assistant tasks|继续助手任务/,
         exact: true,
       })
       .click();
@@ -409,9 +410,10 @@ for (const language of ['en', 'zh'] as const) {
       await (await page.request.get(`/api/agent/workflows/tasks?client_id=${client}`)).json(),
     ).toEqual([]);
     await page.reload();
+    await page.getByRole('button', { name: /Open full chat|打开完整聊天/, exact: true }).click();
     await page
       .getByRole('button', {
-        name: language === 'zh' ? '未完成的办理' : 'Unfinished tasks',
+        name: /Continue assistant tasks|继续助手任务/,
         exact: true,
       })
       .click();

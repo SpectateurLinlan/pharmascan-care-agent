@@ -17,6 +17,7 @@ beforeEach(() =>
         due_at: '2026-10-18T00:00:00Z',
         dose_amount: 1,
         dose_unit: 'tablet',
+        can_report: true,
         report_id: null,
         intake_status: null,
         actual_administration_at: null,
@@ -121,7 +122,7 @@ it('loads dose confirmations independently of a slow schedule and does not overl
   await act(async () => {});
   expect(api.doseFollowUps).toHaveBeenCalledOnce();
   expect(screen.getByText('Loading your reviewed schedule…')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Record status' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'View medication records' })).toBeTruthy();
   await act(async () => {
     await vi.advanceTimersByTimeAsync(45000);
   });
@@ -157,9 +158,9 @@ it('removes expired and PRN plans from the attention list without claiming not t
   );
   expect(await screen.findByRole('button', { name: 'Next dose report' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Old dose report' })).toBeNull();
-  await screen.findByRole('button', { name: 'Record status' });
-  expect(document.querySelector('.today-unrecorded')?.textContent).toContain('Old dose');
-  expect(document.querySelector('.today-unrecorded')?.textContent).toContain(
+  await screen.findByRole('button', { name: 'View medication records' });
+  expect(document.querySelector('.today-pending-summary')?.textContent).toContain('1 dose');
+  expect(document.querySelector('.today-pending-summary')?.textContent).toContain(
     'Not recorded does not mean not taken.',
   );
   expect(document.querySelector('.today-prn')?.hasAttribute('open')).toBe(false);
@@ -205,6 +206,7 @@ it('keeps today medication visible when there are no eligible late reports', asy
         due_at: '2026-10-18T15:00:00Z',
         dose_amount: 1,
         dose_unit: 'tablet',
+        can_report: true,
         report_id: null,
         intake_status: null,
         actual_administration_at: null,
@@ -227,10 +229,11 @@ it('keeps today medication visible when there are no eligible late reports', asy
     </TodayAttentionOverview>,
   );
   expect(await screen.findByRole('button', { name: 'Old dose schedule' })).toBeTruthy();
-  expect(await screen.findByText('No eligible doses to report today.')).toBeTruthy();
+  expect(screen.queryByText('Dose reports still to add')).toBeNull();
+  expect(document.querySelector('.today-pending-summary')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Report dose status' })).toBeNull();
 });
-it('groups confirmation, patient-local date and medication schedule in one compact Today card', async () => {
+it('distinguishes the schedule from a counted navigation summary without duplicate reporting actions', async () => {
   vi.spyOn(api, 'todayAttention').mockResolvedValue({
     as_of: '2026-10-18T16:30:00Z',
     local_date: '2026-10-19',
@@ -254,6 +257,7 @@ it('groups confirmation, patient-local date and medication schedule in one compa
         due_at: '2026-10-18T16:00:00Z',
         dose_amount: 1,
         dose_unit: 'tablet',
+        can_report: true,
         report_id: null,
         intake_status: null,
         actual_administration_at: null,
@@ -269,6 +273,7 @@ it('groups confirmation, patient-local date and medication schedule in one compa
         due_at: '2026-10-18T15:00:00Z',
         dose_amount: 1,
         dose_unit: 'tablet',
+        can_report: true,
         report_id: null,
         intake_status: null,
         actual_administration_at: null,
@@ -290,12 +295,13 @@ it('groups confirmation, patient-local date and medication schedule in one compa
       {(medicine) => <p>{medicine.display_name}</p>}
     </TodayAttentionOverview>,
   );
-  const card = await screen.findByRole('region', { name: "Today's medication" });
+  const card = await screen.findByRole('region', { name: 'Today medication schedule' });
   expect(card.classList.contains('card')).toBe(true);
   expect(card.querySelector('time')?.getAttribute('dateTime')).toBe('2026-10-19');
-  expect(await screen.findByRole('heading', { name: "Today's confirmation" })).toBeTruthy();
-  expect(card.querySelector('.today-unrecorded__count')?.textContent).toBe('1 item');
-  expect(screen.getByText('Today dose')).toBeTruthy();
+  expect(await screen.findByRole('heading', { name: 'Dose reports still to add' })).toBeTruthy();
+  expect(card.querySelector('.today-unrecorded__count')?.textContent).toBe('1 dose');
+  expect(screen.queryByText('Today dose')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Record status' })).toBeNull();
   expect(screen.queryByText('Previous dose')).toBeNull();
   expect(card.querySelectorAll('.today-overview.card')).toHaveLength(0);
 });

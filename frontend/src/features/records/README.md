@@ -1,5 +1,10 @@
 # records
 
+`MedicationRecordsScreen.tsx` composes the eligible pending-dose disclosure with
+the existing stored-history filters. A verified empty pending view is omitted;
+loading/error states remain explicit and previous-report corrections stay reachable.
+`RecordsOverview.tsx` owns navigation into that screen without duplicating its details.
+
 历史记录、筛选、周期总结与导出。
 
 | 文件 | 职责 |

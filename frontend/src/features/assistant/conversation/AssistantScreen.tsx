@@ -157,6 +157,8 @@ export function AssistantScreen({
   const [savedTasksOpen, setSavedTasksOpen] = useState(false);
   const [savedTasksError, setSavedTasksError] = useState(false);
   const [savedTasksLoading, setSavedTasksLoading] = useState(false);
+  const [savedTasksLoaded, setSavedTasksLoaded] = useState(false);
+  const savedTaskViews = useRef(new Map<string, WorkflowView>());
   const pendingWorkflowEvent = useRef<{ task: string; event: WorkflowEvent } | null>(null);
   const [uploadingTask, setUploadingTask] = useState<string | null>(null);
   const revoking = useRef(false);
@@ -171,8 +173,17 @@ export function AssistantScreen({
       mounted.current && currentOwner.current === owner && savedTasksRequest.current === request;
     try {
       const rows = await workflowApi.list(undefined, true);
-      if (current())
-        setSavedWorkflows(rows.filter((row) => !['completed', 'cancelled'].includes(row.state)));
+      if (current()) {
+        const latest = new Map(rows.map((row) => [row.task_id, row]));
+        for (const local of savedTaskViews.current.values()) {
+          const listed = latest.get(local.task_id);
+          if (!listed || local.revision >= listed.revision) latest.set(local.task_id, local);
+        }
+        setSavedWorkflows(
+          [...latest.values()].filter((row) => !['completed', 'cancelled'].includes(row.state)),
+        );
+        setSavedTasksLoaded(true);
+      }
     } catch {
       if (current()) setSavedTasksError(true);
     } finally {
@@ -189,9 +200,13 @@ export function AssistantScreen({
     setRunProgress(null);
     blockedTurns.current.clear();
     workflowMemory.current.reset(ownerId ?? '');
+    savedTaskViews.current.clear();
+    savedTasksRequest.current++;
     setSavedWorkflows([]);
     setSavedTasksOpen(false);
     setSavedTasksError(false);
+    setSavedTasksLoaded(false);
+    setSavedTasksLoading(false);
     setWorkflowSupported(false);
     setWorkflow(null);
     setWorkflowFormDirty(false);
@@ -280,6 +295,11 @@ export function AssistantScreen({
     if (view) {
       if (!workflowMemory.current.remember(view)) return false;
       if (view.workspace_id) workflowWorkspace.current = view.workspace_id;
+      savedTaskViews.current.set(view.task_id, view);
+      setSavedWorkflows((previous) => {
+        const remaining = previous.filter((row) => row.task_id !== view.task_id);
+        return ['completed', 'cancelled'].includes(view.state) ? remaining : [...remaining, view];
+      });
     }
     setWorkflow(view);
     return true;
@@ -1877,23 +1897,50 @@ export function AssistantScreen({
             </details>
           ) : null}
 
-          {workflowSupported ? (
-            <section aria-label={t('Unfinished tasks')}>
+          {workflowSupported &&
+          !compact &&
+          (!savedTasksLoaded || savedTasksLoading || savedTasksError || savedWorkflows.length) ? (
+            <section className="assistant-source" aria-label={t('Continue assistant tasks')}>
               <button
                 type="button"
+                className="text-button"
                 disabled={workspaceLocked}
                 aria-expanded={savedTasksOpen}
-                onClick={() => setSavedTasksOpen((value) => !value)}
+                onClick={() => {
+                  setSavedTasksOpen((value) => !value);
+                  if (!savedTasksOpen && !savedTasksLoading && !savedTasksError)
+                    void loadSavedTasks();
+                }}
               >
-                {t('Unfinished tasks')}
+                {t('Continue assistant tasks')}
+                {savedTasksLoaded && !savedTasksLoading && !savedTasksError
+                  ? ` · ${savedWorkflows.length}`
+                  : ''}
               </button>
-              {savedTasksOpen ? (
+              <p className="notice">
+                {t(
+                  'Resume unfinished assistant steps. Unsaved details may need to be entered again.',
+                )}
+              </p>
+              {savedTasksLoading ? (
+                <p role="status">{t('Loading tasks...')}</p>
+              ) : savedTasksError ? (
+                <>
+                  <p role="status">{t('Could not load unfinished tasks. Try again.')}</p>
+                  <button
+                    type="button"
+                    disabled={savedTasksLoading}
+                    onClick={() => {
+                      setSavedTasksOpen(true);
+                      void loadSavedTasks();
+                    }}
+                  >
+                    {t('Retry loading tasks')}
+                  </button>
+                </>
+              ) : savedTasksOpen ? (
                 <div>
-                  {savedTasksLoading ? (
-                    <p role="status">{t('Loading tasks...')}</p>
-                  ) : savedTasksError ? (
-                    <p role="status">{t('Could not load unfinished tasks. Try again.')}</p>
-                  ) : savedWorkflows.length ? (
+                  {savedWorkflows.length ? (
                     <ul>
                       {savedWorkflows.map((row) => (
                         <li key={row.task_id}>
@@ -1915,11 +1962,6 @@ export function AssistantScreen({
                 </div>
               ) : null}
             </section>
-          ) : null}
-          {savedTasksOpen && savedTasksError ? (
-            <button disabled={savedTasksLoading} onClick={() => void loadSavedTasks()}>
-              {t('Retry loading tasks')}
-            </button>
           ) : null}
           {!selectedHistory && workflow ? (
             <>

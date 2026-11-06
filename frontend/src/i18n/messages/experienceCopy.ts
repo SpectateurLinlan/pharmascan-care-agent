@@ -1,5 +1,13 @@
 /** Patient-facing language for the integrated account, photo and chat flows. */
 export const experienceCopy: Record<string, string> = {
+  'Continue assistant tasks': '继续助手任务',
+  'Resume unfinished assistant steps. Unsaved details may need to be entered again.':
+    '继续尚未完成的助手步骤；未保存的资料可能需要重新填写。',
+  'Medication setup drafts': '药物登记草稿',
+  'Use Finish medication setup in Medications to reopen saved medication drafts and source registrations. A saved draft is not an active medication plan.':
+    '在「药物」页面打开「完成药物设置」，继续已保存的药物草稿或来源登记。已保存的草稿尚未启用为用药计划。',
+  'In full chat, Continue assistant tasks reopens unfinished assistant steps. These are separate from medication setup drafts; unsaved details may need to be entered again.':
+    '在完整聊天页面打开「继续助手任务」，继续尚未完成的助手步骤。助手任务与药物登记草稿分开；未保存的资料可能需要重新填写。',
   'Connecting to your assistant. You can type while we connect.':
     '正在连接助手，您可以先输入问题。',
   'Assistant connection is unavailable. Your unsent message is kept on this page.':

@@ -58,6 +58,32 @@ function SelectChinese() {
   );
 }
 
+it('gives both Today secondary shortcuts decorative icons and clear action names beside the distinct schedule title', () => {
+  const medicines = vi.fn();
+  const photo = vi.fn();
+  render(
+    <TodayScreen
+      compact
+      medications={[]}
+      onChanged={vi.fn()}
+      onMedicines={medicines}
+      onVisualCheck={photo}
+      hasMedicationRecords
+    />,
+  );
+  expect(screen.getByRole('heading', { name: 'Today medication schedule' })).toBeTruthy();
+  const medicinesLink = screen.getByRole('button', { name: 'My Medicines' });
+  const photoLink = screen.getByRole('button', { name: 'Compare a pill photo' });
+  for (const link of [medicinesLink, photoLink]) {
+    expect(link.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(link.classList.contains('today-medication-shortcut')).toBe(true);
+  }
+  fireEvent.click(medicinesLink);
+  fireEvent.click(photoLink);
+  expect(medicines).toHaveBeenCalledOnce();
+  expect(photo).toHaveBeenCalledWith(null);
+});
+
 it('keeps a slow due-dose read single and does not restart it for an equivalent medication array', async () => {
   vi.useFakeTimers();
   let finish!: (value: Awaited<ReturnType<typeof api.dueDose>>) => void;

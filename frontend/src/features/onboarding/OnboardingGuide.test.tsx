@@ -139,6 +139,14 @@ it('guides through the six real destinations and restores the origin before comp
     expect(screen.getByRole('heading', { name: pair[0] })).toBeTruthy();
     expect(screen.getByTestId('guide-route').textContent).toBe(pair[1]);
     expect(screen.getByText(new RegExp(`^${i + 2} / 6`))).toBeTruthy();
+    if (i === 0) {
+      expect(screen.getByRole('heading', { name: 'Medication setup drafts' })).toBeTruthy();
+      expect(screen.getByText(/Use Finish medication setup in Medications/)).toBeTruthy();
+    }
+    if (i === 2) {
+      expect(screen.getByRole('heading', { name: 'Continue assistant tasks' })).toBeTruthy();
+      expect(screen.getByText(/These are separate from medication setup drafts/)).toBeTruthy();
+    }
   }
   fireEvent.click(screen.getByRole('button', { name: 'Finish' }));
   expect(screen.getByRole('dialog', { name: "You're All Set!" })).toBeTruthy();
@@ -191,6 +199,14 @@ it('localizes the new guide using the saved Chinese preference', async () => {
   fireEvent.click(screen.getByRole('button', { name: '\u4e0b\u4e00\u6b65' }));
   expect(
     screen.getByRole('heading', { name: '\u6dfb\u52a0\u4e0e\u7ba1\u7406\u836f\u7269' }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole('heading', { name: '\u836f\u7269\u767b\u8bb0\u8349\u7a3f' }),
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: '\u4e0b\u4e00\u6b65' }));
+  fireEvent.click(screen.getByRole('button', { name: '\u4e0b\u4e00\u6b65' }));
+  expect(
+    screen.getByRole('heading', { name: '\u7ee7\u7eed\u52a9\u624b\u4efb\u52a1' }),
   ).toBeTruthy();
 });
 

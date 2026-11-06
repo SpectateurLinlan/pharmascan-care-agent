@@ -185,11 +185,12 @@ for (const language of ['en', 'zh'] as const) {
     expect(nativeAttempts).toBe(0);
     // A reload loses the page File, so the actual authenticated saved original must supply the eventual native request.
     await page.reload();
+    await page.getByRole('button', { name: /Open full chat|打开完整聊天/, exact: true }).click();
     await page
-      .getByRole('button', { name: say('Unfinished tasks', '未完成的办理'), exact: true })
+      .getByRole('button', { name: /Continue assistant tasks|继续助手任务/, exact: true })
       .click();
     await page
-      .getByRole('region', { name: say('Unfinished tasks', '未完成的办理'), exact: true })
+      .getByRole('region', { name: /Continue assistant tasks|继续助手任务/, exact: true })
       .getByRole('button', { name: /DEMO reference medicine/ })
       .click();
     await expect(

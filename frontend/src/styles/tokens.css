@@ -62,6 +62,8 @@
   --e-1: 0 1px 2px rgb(22 41 42 / 6%), 0 8px 24px rgb(22 41 42 / 6%);
 
   --tap: 40px;
+  --composer-control-height: 40px;
+  --composer-inset: 1px;
   --tap-lg: 44px;
   --icon-control: 18px;
   --control-padding-block: 0.25rem;

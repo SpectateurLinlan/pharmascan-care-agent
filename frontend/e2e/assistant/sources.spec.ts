@@ -539,11 +539,12 @@ test.describe('Private source preview', () => {
       const path = `/api/agent/workflows/tasks/${task.task_id}/attachments/${original.id}?client_id=${client}`;
       expect((await (await page.request.get(path)).body()).equals(bytes)).toBe(true);
       await page.reload();
+      await page.getByRole('button', { name: /Open full chat|打开完整聊天/, exact: true }).click();
       await page
-        .getByRole('button', { name: say('Unfinished tasks', '未完成的办理'), exact: true })
+        .getByRole('button', { name: /Continue assistant tasks|继续助手任务/, exact: true })
         .click();
       await page
-        .getByRole('region', { name: say('Unfinished tasks', '未完成的办理'), exact: true })
+        .getByRole('region', { name: /Continue assistant tasks|继续助手任务/, exact: true })
         .getByRole('button')
         .last()
         .click();

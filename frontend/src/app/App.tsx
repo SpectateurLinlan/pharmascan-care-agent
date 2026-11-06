@@ -17,6 +17,7 @@ import {
 } from '../api/client';
 import { medicationSetupEntries } from '../features/enrollment/medicationSetup';
 import { AssistantEntry } from './AssistantEntry';
+import type { EnrollmentExitActions } from '../features/enrollment/EnrollScreen';
 import type { StartupDraft } from './startupDraft';
 import { historyName } from '../features/records/historyFilterLabels';
 import type { MedicineDestination } from '../features/medications/MedicinesHub';
@@ -106,6 +107,17 @@ const HistoryScreen = deferScreen<
   NonNullable<ComponentProps<typeof import('../features/records/HistoryScreen').HistoryScreen>>
 >(() =>
   import('../features/records/HistoryScreen').then((module) => ({ default: module.HistoryScreen })),
+);
+const MedicationRecordsScreen = deferScreen<
+  NonNullable<
+    ComponentProps<
+      typeof import('../features/records/MedicationRecordsScreen').MedicationRecordsScreen
+    >
+  >
+>(() =>
+  import('../features/records/MedicationRecordsScreen').then((module) => ({
+    default: module.MedicationRecordsScreen,
+  })),
 );
 const HealthTrackingScreen = deferScreen<
   NonNullable<
@@ -349,6 +361,9 @@ function CompanionApp({ startupDraft }: { startupDraft?: StartupDraft | undefine
     }
   }, []);
   const [manualDirty, setManualDirty] = useState(false);
+  const [manualExit, setManualExit] = useState<EnrollmentExitActions | null>(null);
+  const [savingExit, setSavingExit] = useState(false);
+  const exitSaveLock = useRef(false);
   const [profileDirty, setProfileDirty] = useState(false);
   const [resumeId, setResumeId] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthResponse | null>(null);
@@ -378,6 +393,23 @@ function CompanionApp({ startupDraft }: { startupDraft?: StartupDraft | undefine
     confirmLeave,
     cancelLeave,
   } = useCareNavigation(false, manualDirty || profileDirty);
+
+  async function saveDraftAndLeave() {
+    if (exitSaveLock.current || !manualExit || !manualExit.canSave) return;
+    exitSaveLock.current = true;
+    setSavingExit(true);
+    try {
+      if (await manualExit.save()) {
+        setManualDirty(false);
+        setResumeId(null);
+        confirmLeave();
+      }
+    } finally {
+      exitSaveLock.current = false;
+      setSavingExit(false);
+    }
+  }
+
   const currentTab = useRef(tab);
   currentTab.current = tab;
   useEffect(() => {
@@ -785,16 +817,40 @@ function CompanionApp({ startupDraft }: { startupDraft?: StartupDraft | undefine
         ) : null}
         {preferenceError ? <p role="alert">{preferenceError}</p> : null}
         {pending ? (
-          <BottomSheet title={t('Leave without saving?')} onCancel={cancelLeave}>
+          <BottomSheet
+            title={t(manualDirty ? 'Save your medication draft?' : 'Leave without saving?')}
+            onCancel={cancelLeave}
+            busy={savingExit || Boolean(manualExit?.busy)}
+          >
             <p>
               {t(
                 profileDirty && !manualDirty
                   ? 'Leaving will discard your unsaved profile name.'
-                  : 'Leaving clears the unsaved details on this page. Saved registrations can be managed in Finish medication setup.',
+                  : manualExit?.uncertain
+                    ? 'The previous save result is unknown. Check saved medication setup before submitting again.'
+                    : manualExit?.saved
+                      ? 'Your saved draft will stay in Finish medication setup. You can save your current edits before leaving.'
+                      : 'Save these details as a draft to continue later, or explicitly discard this page’s unsaved input.',
               )}
             </p>
+            {manualDirty && !manualExit?.uncertain ? (
+              <button
+                className="primary"
+                disabled={!manualExit?.canSave || savingExit}
+                onClick={() => void saveDraftAndLeave()}
+              >
+                {t(
+                  savingExit
+                    ? 'Saving...'
+                    : manualExit?.saved && !manualExit.hasUnsavedChanges
+                      ? 'Keep saved draft and leave'
+                      : 'Save draft and leave',
+                )}
+              </button>
+            ) : null}
             <button
               className="danger"
+              disabled={savingExit || Boolean(manualExit?.busy)}
               onClick={() => {
                 setManualDirty(false);
                 setProfileDirty(false);
@@ -802,9 +858,17 @@ function CompanionApp({ startupDraft }: { startupDraft?: StartupDraft | undefine
                 confirmLeave();
               }}
             >
-              {t('Leave and clear')}
+              {t(
+                manualDirty
+                  ? manualExit?.saved
+                    ? 'Leave without saving these changes'
+                    : 'Discard unsaved input and leave'
+                  : 'Leave and clear',
+              )}
             </button>
-            <button onClick={cancelLeave}>{t('Keep editing')}</button>
+            <button onClick={cancelLeave} disabled={savingExit}>
+              {t('Keep editing')}
+            </button>
           </BottomSheet>
         ) : null}
         {fatal ? <ErrorNotice error={fatal} /> : null}
@@ -955,7 +1019,9 @@ function CompanionApp({ startupDraft }: { startupDraft?: StartupDraft | undefine
                           lateReportsEnabled={health?.late_dose_reports_enabled === true}
                           medications={currentMedications}
                           focusRegimenId={focusRegimen}
-                          onHistory={() => setTab('records', undefined, { preserveOrigin: true })}
+                          onHistory={() =>
+                            setTab('medication-records', undefined, { preserveOrigin: true })
+                          }
                         >
                           {(medication, onInteractionChange, todayOccurrenceIds) => (
                             <TodayScreen
@@ -1005,13 +1071,14 @@ function CompanionApp({ startupDraft }: { startupDraft?: StartupDraft | undefine
                       )}
                     </div>
                     {!currentMedications.length ? (
-                      <section className="card today-confirmation-card">
-                        <LateDoseFollowUps
-                          enabled={health?.late_dose_reports_enabled === true}
-                          todayOnly
-                          onHistory={() => setTab('records', undefined, { preserveOrigin: true })}
-                        />
-                      </section>
+                      <LateDoseFollowUps
+                        enabled={health?.late_dose_reports_enabled === true}
+                        todayOnly
+                        presentation="summary"
+                        onHistory={() =>
+                          setTab('medication-records', undefined, { preserveOrigin: true })
+                        }
+                      />
                     ) : null}
                     <StartupSection state={startup.regimens} onRetry={refreshMedications}>
                       <CareTaskSummary
@@ -1061,6 +1128,8 @@ function CompanionApp({ startupDraft }: { startupDraft?: StartupDraft | undefine
                 <div>
                   <EnrollScreen
                     onDirtyChange={setManualDirty}
+                    onExitActionsChange={setManualExit}
+                    onOpenSavedDrafts={() => setTab('unfinished')}
                     resumeRegimenId={resumeId}
                     resumeRow={versions.find((row) => row.regimen_id === resumeId) ?? null}
                     sourceSelection={sourceSelection}
@@ -1214,7 +1283,9 @@ function CompanionApp({ startupDraft }: { startupDraft?: StartupDraft | undefine
                   lead="View saved dose reports and past scheduled doses by medicine and date."
                   className="records-detail"
                 >
-                  <HistoryScreen />
+                  <MedicationRecordsScreen
+                    lateReportsEnabled={health?.late_dose_reports_enabled === true}
+                  />
                 </Screen>
               ) : null}
               {visibleTab === 'records' ? (

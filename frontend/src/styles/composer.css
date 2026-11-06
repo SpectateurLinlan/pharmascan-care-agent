@@ -1,4 +1,14 @@
 /* Shared by the inline HTML shell and React: one capsule, one focus indicator. */
+.composer-row {
+  --tap: var(--composer-control-height);
+}
+.today-assistant .composer-row,
+.conversation-workspace .composer-row,
+#startup-shell .composer-row {
+  padding: var(--composer-inset);
+  gap: var(--s-1);
+  border-radius: var(--r-md);
+}
 .composer-row:focus-within {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
@@ -14,7 +24,7 @@
   min-height: var(--tap);
   padding: var(--s-1) var(--s-2);
   border: 1px solid var(--brand);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   background: var(--brand);
   color: var(--on-brand);
   font: inherit;

@@ -673,9 +673,15 @@ class MedicationEnrollmentService:
         for field_dto in self._source_fields.list_for_source(patient_id, source_id):
             if field_ids is not None and field_dto.id not in field_ids:
                 continue
-            self._source_fields.update(
-                field_dto.model_copy(update={"review_status": SourceReviewStatus.USER_REVIEWED, "reviewed_at": now})
-            )
+            # Separate remote writes may have reviewed fields before the source
+            # update failed. Preserve those immutable fields and their timestamps.
+            if field_dto.review_status not in (
+                SourceReviewStatus.USER_REVIEWED,
+                SourceReviewStatus.PROFESSIONAL_VERIFIED,
+            ):
+                self._source_fields.update(
+                    field_dto.model_copy(update={"review_status": SourceReviewStatus.USER_REVIEWED, "reviewed_at": now})
+                )
             reviewed_names.add(field_dto.field_name)
             reviewed += 1
         self._sources.update(

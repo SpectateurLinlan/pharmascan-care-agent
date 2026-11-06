@@ -25,7 +25,7 @@ export function AutoDismissNotice({ children }: { children: ReactNode }) {
  * Renders a backend/network failure. The stable error code is always shown so
  * the failure cannot be mistaken for a success.
  */
-export function ErrorNotice({ error }: { error: unknown }) {
+export function ErrorNotice({ error, context }: { error: unknown; context?: ReactNode }) {
   const { t } = useLanguage();
   const [dismissed, setDismissed] = useState(false);
   const [insideHiddenPage, setInsideHiddenPage] = useState(false);
@@ -83,6 +83,7 @@ export function ErrorNotice({ error }: { error: unknown }) {
           : createPortal(
               <div className="patient-toast patient-toast--error" role="alert">
                 <strong>{t('Please review this')}</strong>
+                {context ? <p>{context}</p> : null}
                 <p>{t(reason)}</p>
                 {error.code === 'REGIMEN_OVERLAP' ? (
                   <p>
@@ -107,6 +108,7 @@ export function ErrorNotice({ error }: { error: unknown }) {
         : createPortal(
             <div className="patient-toast patient-toast--error" role="alert">
               <strong>{t('Please review this')}</strong>
+              {context ? <p>{context}</p> : null}
               <p>{t(message)}</p>
               {close}
             </div>,

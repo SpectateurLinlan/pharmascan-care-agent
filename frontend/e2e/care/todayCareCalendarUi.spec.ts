@@ -45,6 +45,7 @@ for (const language of ['en', 'zh'] as const) {
           dose_amount: 1,
           dose_unit: 'tablet',
           report_id: null,
+          can_report: true,
           intake_status: null,
           actual_administration_at: null,
           recorded_at: null,
@@ -79,14 +80,18 @@ for (const language of ['en', 'zh'] as const) {
     ]);
     await page.goto('/#today');
     const c = (en: string, zh: string) => (language === 'zh' ? zh : en);
-    const medication = page.getByRole('region', { name: c("Today's medication", '今日用药') });
+    const medication = page.getByRole('region', {
+      name: c('Today medication schedule', '今日用药安排'),
+    });
     await expect(
-      medication.getByRole('heading', { name: c("Today's confirmation", '今日待确认') }),
+      medication.getByRole('heading', { name: c('Today medication schedule', '今日用药安排') }),
     ).toBeVisible();
     await expect(medication.locator('time')).toHaveAttribute('datetime', '2026-10-19');
-    await expect(medication.getByText(language === 'zh' ? '1 项' : '1 item')).toBeVisible();
     await expect(
-      medication.getByRole('button', { name: c('Record status', '记录情况') }),
+      medication.getByText(language === 'zh' ? '1 剂' : '1 dose', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      medication.getByRole('button', { name: c('Taken', '已服用'), exact: true }),
     ).toBeVisible();
     await expect(medication.getByText('DEMO Amlodipine')).toHaveCount(1);
     await expect(page.getByText('DEMO medication review')).toBeVisible();

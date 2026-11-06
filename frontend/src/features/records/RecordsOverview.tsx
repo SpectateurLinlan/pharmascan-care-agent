@@ -1,10 +1,8 @@
 import { useLanguage } from '../../i18n/language';
 import { Row, RowGroup } from '../../components/layout';
-import { LateDoseFollowUps } from '../care/LateDoseFollowUps';
 import { Icon } from '../../components/Icon';
 
 export function RecordsOverview({
-  lateReportsEnabled,
   onOpenSummary,
   onOpenMedicationRecords,
   onOpenArea,
@@ -37,24 +35,11 @@ export function RecordsOverview({
           ))}
         </div>
       </RowGroup>
-      <details className="records-pending-disclosure">
-        <summary>
-          <span className="records-pending-disclosure__copy">
-            <strong data-guide="medication-records">{t('Medication reports to confirm')}</strong>
-            <span>
-              {t('Open to review scheduled doses from the past 7 days; eligibility still applies.')}
-            </span>
-          </span>
-          <span className="records-pending-disclosure__chevron">
-            <Icon name="chevron-right" />
-          </span>
-        </summary>
-        <LateDoseFollowUps enabled={lateReportsEnabled} showHeading={false} />
-      </details>
       <section className="card records-medication-history-card">
         <button
           type="button"
           className="records-medication-history-link"
+          data-guide="medication-records"
           onClick={onOpenMedicationRecords}
         >
           <span className="records-history-icon">

@@ -14,6 +14,7 @@ import { useLanguage } from '../../i18n/language';
 import { patientInstant } from '../../shared/time/patientDateTime';
 import { careTaskLocalDate } from './careTaskCalendar';
 import { BottomSheet } from '../../components/BottomSheet';
+import { Icon } from '../../components/Icon';
 import { FollowUpError } from './FollowUpError';
 import { careCopy, careLabel } from './followUpCopy';
 import '../../styles/followups.css';
@@ -22,6 +23,7 @@ export function LateDoseFollowUps({
   enabled = true,
   todayOnly = false,
   showHeading = true,
+  presentation = 'full',
   onHistory,
   onInteractionChange,
   onTodayItemsChange,
@@ -29,6 +31,7 @@ export function LateDoseFollowUps({
   enabled?: boolean;
   todayOnly?: boolean;
   showHeading?: boolean;
+  presentation?: 'full' | 'summary' | 'disclosure';
   onHistory?: () => void;
   onInteractionChange?: (regimen: string, locked: boolean) => void;
   onTodayItemsChange?: (items: DoseFollowUp[]) => void;
@@ -40,11 +43,15 @@ export function LateDoseFollowUps({
   const [retry, setRetry] = useState(0);
   const [selected, setSelected] = useState<DoseFollowUp | null>(null);
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
     if (!enabled) return;
     let live = true;
-    void Promise.resolve().then(() => {
-      if (!live) return;
+    let pending = false;
+    setLoading(true);
+    const refresh = () => {
+      if (!live || pending || document.visibilityState === 'hidden') return;
+      pending = true;
       return api
         .doseFollowUps(reported)
         .then((value) => {
@@ -55,25 +62,56 @@ export function LateDoseFollowUps({
         })
         .catch((caught) => {
           if (live) setError(caught);
+        })
+        .finally(() => {
+          pending = false;
+          if (live) setLoading(false);
         });
+    };
+    void Promise.resolve().then(() => {
+      if (live) void refresh();
     });
+    const timer =
+      presentation === 'summary' ? window.setInterval(() => void refresh(), 15000) : null;
+    if (presentation === 'summary') {
+      document.addEventListener('visibilitychange', refresh);
+      window.addEventListener('pharmascan:reminder-refresh', refresh);
+    }
     return () => {
       live = false;
+      if (timer !== null) window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('pharmascan:reminder-refresh', refresh);
     };
-  }, [enabled, reported, retry]);
+  }, [enabled, reported, retry, presentation]);
   const zone = data?.timezone ?? preferences.timezone;
   const day = data ? careTaskLocalDate(data.as_of, zone) : null;
   const items = (data?.items ?? []).filter(
     (item) =>
-      !todayOnly ||
-      (!item.report_id &&
-        item.can_report !== false &&
-        day !== null &&
-        careTaskLocalDate(item.due_at, zone) === day),
+      (!todayOnly ||
+        (!item.report_id &&
+          item.can_report !== false &&
+          day !== null &&
+          careTaskLocalDate(item.due_at, zone) === day)) &&
+      (presentation !== 'disclosure' || reported || item.can_report === true),
   );
+  const pendingCount = new Set(
+    items
+      .filter((item) => !item.report_id && item.can_report === true)
+      .map((item) => item.occurrence_id),
+  ).size;
+  const eligibilityUnknown = (data?.items ?? []).some(
+    (item) =>
+      !item.report_id &&
+      typeof item.can_report !== 'boolean' &&
+      (!todayOnly || (day !== null && careTaskLocalDate(item.due_at, zone) === day)),
+  );
+  const emptyUnverified = pendingCount === 0 && (eligibilityUnknown || data?.has_more === true);
+  const countLabel = `${data?.has_more || eligibilityUnknown ? t('At least') + ' ' : ''}${pendingCount} ${t(pendingCount === 1 ? 'dose' : 'doses')}`;
   useEffect(() => {
-    if (todayOnly && data) onTodayItemsChange?.(items);
-  }, [data, onTodayItemsChange, todayOnly, zone, reported]);
+    // The read-only summary does not replace the current dose action.
+    if (todayOnly && data) onTodayItemsChange?.(presentation === 'summary' ? [] : items);
+  }, [data, onTodayItemsChange, todayOnly, zone, reported, presentation]);
   const when = (value: string) =>
     Number.isFinite(Date.parse(value))
       ? new Date(value).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-SG', { timeZone: zone })
@@ -92,6 +130,89 @@ export function LateDoseFollowUps({
     if (value) onInteractionChange?.(value.regimen_id, true);
     setSelected(value);
     setSaved(false);
+  }
+
+  const correctionControl = (
+    <label className="late-report-corrections">
+      <input
+        type="checkbox"
+        checked={reported}
+        onChange={(event) => setReported(event.target.checked)}
+      />
+      {t('Include reported occurrences to review or correct')}
+    </label>
+  );
+  if (presentation === 'summary') {
+    if (!enabled) return null;
+    if (data && !loading && !error && pendingCount === 0 && !emptyUnverified) return null;
+    return (
+      <section className="today-pending-summary" aria-label={t('Dose reports still to add')}>
+        {error ? (
+          <>
+            <FollowUpError error={error} kind="read" />
+            <button type="button" onClick={() => setRetry((value) => value + 1)}>
+              {t('Retry')}
+            </button>
+          </>
+        ) : loading || !data ? (
+          <p role="status">{t('Loading dose reports\u2026')}</p>
+        ) : emptyUnverified ? (
+          <>
+            <p role="status">
+              {t('Dose report availability could not be verified. Please retry.')}
+            </p>
+            <button type="button" onClick={() => setRetry((value) => value + 1)}>
+              {t('Retry')}
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="today-pending-summary__heading">
+              <h3>{t('Dose reports still to add')}</h3>
+              <span className="today-unrecorded__count">{countLabel}</span>
+            </div>
+            <p>{t('Not recorded does not mean not taken.')}</p>
+            {onHistory ? (
+              <button type="button" className="today-records-link" onClick={onHistory}>
+                {t('View medication records')}
+                <Icon name="chevron-right" />
+              </button>
+            ) : null}
+          </>
+        )}
+      </section>
+    );
+  }
+  if (
+    presentation === 'disclosure' &&
+    enabled &&
+    data &&
+    !loading &&
+    !error &&
+    !pendingCount &&
+    !emptyUnverified &&
+    !reported &&
+    !saved
+  ) {
+    return correctionControl;
+  }
+  if (
+    presentation === 'disclosure' &&
+    enabled &&
+    !loading &&
+    !error &&
+    emptyUnverified &&
+    !reported
+  ) {
+    return (
+      <section className="today-unrecorded">
+        <p role="status">{t('Dose report availability could not be verified. Please retry.')}</p>
+        <button type="button" onClick={() => setRetry((value) => value + 1)}>
+          {t('Retry')}
+        </button>
+        {correctionControl}
+      </section>
+    );
   }
 
   if (!enabled)
@@ -114,14 +235,14 @@ export function LateDoseFollowUps({
         </p>
       </section>
     );
-  return (
+  const content = (
     <section
       className={`today-unrecorded${todayOnly ? ' today-unrecorded--compact' : ''}`}
       aria-label={
         showHeading ? t(todayOnly ? "Today's confirmation" : 'Recent dose reports') : undefined
       }
     >
-      {showHeading ? (
+      {showHeading && presentation !== 'disclosure' ? (
         <header className="today-unrecorded__header">
           <h3>{t(todayOnly ? "Today's confirmation" : 'Medication reports to confirm')}</h3>
           {todayOnly && data ? (
@@ -236,14 +357,7 @@ export function LateDoseFollowUps({
                 {t('Showing the 50 most recent occurrences. Earlier records remain in Records.')}
               </p>
             ) : null}
-            <label>
-              <input
-                type="checkbox"
-                checked={reported}
-                onChange={(event) => setReported(event.target.checked)}
-              />
-              {t('Include reported occurrences to review or correct')}
-            </label>
+            {correctionControl}
           </>
         )
       ) : null}
@@ -261,6 +375,30 @@ export function LateDoseFollowUps({
         />
       ) : null}
     </section>
+  );
+  if (presentation !== 'disclosure') return content;
+  if (!data || loading || error) return content;
+  return (
+    <details
+      className="records-pending-disclosure"
+      open={reported || selected !== null || saved ? true : undefined}
+    >
+      <summary>
+        <span className="records-pending-disclosure__copy">
+          <strong>{t(reported ? 'Recent dose reports' : 'Dose reports still to add')}</strong>
+          {!reported ? (
+            <span>
+              {t('Recent scheduled doses without a patient report; reporting limits still apply.')}
+            </span>
+          ) : null}
+        </span>
+        {!reported ? <span className="today-unrecorded__count">{countLabel}</span> : null}
+        <span className="records-pending-disclosure__chevron">
+          <Icon name="chevron-right" />
+        </span>
+      </summary>
+      {content}
+    </details>
   );
 }
 export interface LateReportPatientPort {

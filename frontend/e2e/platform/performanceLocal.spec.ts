@@ -131,6 +131,10 @@ for (const { language, width } of [
       await expect.poll(() => calls.includes('GET /api/me/preferences')).toBe(true);
       const send = page.locator('.composer-send');
       await expect(send).toHaveText(language === 'zh' ? '发送' : 'Send');
+      expect((await page.locator('.composer-row').boundingBox())!.height).toBeLessThanOrEqual(44);
+      expect(
+        await send.evaluate((el) => Number.parseFloat(getComputedStyle(el).borderTopLeftRadius)),
+      ).toBeLessThan(20);
       await input.fill('DEMO pending connection');
       const pendingColor = await send.evaluate((el) => getComputedStyle(el).backgroundColor);
       expect(await input.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe('none');
@@ -160,6 +164,7 @@ for (const { language, width } of [
       ).toBe(5);
       releaseResume();
       await expect(send).toBeEnabled();
+      expect((await page.locator('.composer-row').boundingBox())!.height).toBeLessThanOrEqual(44);
       await expect(input).toHaveValue('DEMO editable during restore');
       await expect(input).toBeFocused();
       await expect(send).toHaveText(language === 'zh' ? '发送' : 'Send');

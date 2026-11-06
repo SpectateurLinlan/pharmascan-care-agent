@@ -22,10 +22,17 @@ for (const language of ['en', 'zh'] as const) {
     });
     const c = (en: string, zh: string) => (language === 'zh' ? zh : en);
     await page.goto('/#today');
-    const followups = page.getByRole('region', { name: c("Today's confirmation", '今日待确认') });
+    const pending = page.getByRole('region', {
+      name: c('Dose reports still to add', '待补记的服药记录'),
+    });
     await expect(
-      followups.getByText(c('Not recorded does not mean not taken.', '未记录不代表未服药。')),
+      pending.getByText(c('Not recorded does not mean not taken.', '未记录不代表未服药。')),
     ).toBeVisible();
+    await pending
+      .getByRole('button', { name: c('View medication records', '查看用药记录') })
+      .click();
+    await page.locator('.records-pending-disclosure > summary').click();
+    const followups = page.getByRole('region', { name: c('Recent dose reports', '近期服药记录') });
     const dose = followups.getByRole('button', { name: c('Record status', '记录情况') }).first();
     await dose.click();
     const dialog = page.getByRole('dialog');
@@ -189,7 +196,10 @@ test('no active medicines still exposes and confirms existing ended-plan follow-
     ).medications,
   ).toEqual([]);
   await page.goto('/#today');
-  const section = page.getByRole('region', { name: "Today's confirmation" });
+  const pending = page.getByRole('region', { name: 'Dose reports still to add' });
+  await pending.getByRole('button', { name: 'View medication records' }).click();
+  await page.locator('.records-pending-disclosure > summary').click();
+  const section = page.getByRole('region', { name: 'Recent dose reports' });
   await section.getByRole('button', { name: 'Record status' }).first().click();
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('radio').nth(2).check();
@@ -218,8 +228,10 @@ test('unreleased capabilities remain unavailable without dose reads or silent ad
   setCapabilities({ late_dose_reports_enabled: false, care_task_followups_enabled: false });
   await page.clock.install({ time: new Date('2026-10-19T04:00:00Z') });
   await page.goto('/#today');
+  await page.goto('/#medication-records');
   await expect(page.getByText(/Late reporting is not enabled yet/)).toBeVisible();
   expect(reads.some((url) => new URL(url).pathname === '/api/me/dose-follow-ups')).toBe(false);
+  await page.goto('/#today');
   await page.getByRole('button', { name: 'Add Follow-up' }).click();
   await expect(page.getByLabel('Advance reminder')).toBeDisabled();
   await expect(page.getByLabel('Advance reminder')).toHaveValue('0');

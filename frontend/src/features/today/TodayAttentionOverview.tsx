@@ -4,7 +4,6 @@ import { useLanguage } from '../../i18n/language';
 import { careTaskLocalDate } from '../care/careTaskCalendar';
 import { LateDoseFollowUps } from '../care/LateDoseFollowUps';
 import { TodayMedicationCarousel } from './TodayMedicationCarousel';
-import type { DoseFollowUp } from '../../api/doseFollowUps';
 
 type Attention = Awaited<ReturnType<typeof api.todayAttention>>;
 
@@ -30,16 +29,11 @@ export function TodayAttentionOverview({
   const [data, setData] = useState<Attention | null>(null);
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
-  const [todayOccurrenceIds, setTodayOccurrenceIds] = useState<string[]>([]);
   const locks = useRef(new Set<string>());
   const onInteractionChange = useCallback((regimen: string, locked: boolean) => {
     if (locked) locks.current.add(regimen);
     else locks.current.delete(regimen);
   }, []);
-  const onTodayItemsChange = useCallback(
-    (items: DoseFollowUp[]) => setTodayOccurrenceIds(items.map((item) => item.occurrence_id)),
-    [],
-  );
   const medicationKey = medications.map((row) => row.regimen_id).join('|');
   useEffect(() => {
     let live = true;
@@ -106,10 +100,10 @@ export function TodayAttentionOverview({
               : 'ready'
       }
       data-today-needs-dose={current.length > 0 ? 'true' : 'false'}
-      aria-label={t("Today's medication")}
+      aria-label={t('Today medication schedule')}
     >
       <header className="today-attention__heading">
-        <h2>{t("Today's medication")}</h2>
+        <h2>{t('Today medication schedule')}</h2>
         {formattedDate ? <time dateTime={patientDate ?? undefined}>{formattedDate}</time> : null}
       </header>
       {failed ? (
@@ -125,7 +119,7 @@ export function TodayAttentionOverview({
         <>
           {current.length ? (
             <TodayMedicationCarousel embedded medications={current} focusRegimenId={focusRegimenId}>
-              {(medicine) => children(medicine, onInteractionChange, todayOccurrenceIds)}
+              {(medicine) => children(medicine, onInteractionChange, [])}
             </TodayMedicationCarousel>
           ) : !unavailable.length ? (
             <p className="today-schedule-empty" role="status">
@@ -155,21 +149,18 @@ export function TodayAttentionOverview({
               </summary>
               <p>{t('As-needed medicines have no daily required dose.')}</p>
               <TodayMedicationCarousel embedded medications={prn} focusRegimenId={focusRegimenId}>
-                {(medicine) => children(medicine, onInteractionChange, todayOccurrenceIds)}
+                {(medicine) => children(medicine, onInteractionChange, [])}
               </TodayMedicationCarousel>
             </details>
           ) : null}
         </>
       )}
-      <div className="today-confirmation-region">
-        <LateDoseFollowUps
-          enabled={lateReportsEnabled}
-          todayOnly
-          onHistory={onHistory}
-          onInteractionChange={onInteractionChange}
-          onTodayItemsChange={onTodayItemsChange}
-        />
-      </div>
+      <LateDoseFollowUps
+        enabled={lateReportsEnabled}
+        todayOnly
+        presentation="summary"
+        onHistory={onHistory}
+      />
     </section>
   );
 }

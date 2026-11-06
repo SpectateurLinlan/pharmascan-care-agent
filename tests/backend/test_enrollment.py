@@ -11,11 +11,12 @@ from uuid import UUID
 
 import pytest
 from app.contracts.dto import DoseOccurrenceDTO, FrequencyRuleDTO, RegimenDraftInput
-from app.contracts.enums import FieldName, IdentityStatus, OccurrenceStatus, RegimenState
+from app.contracts.enums import FieldName, IdentityStatus, OccurrenceStatus, RegimenState, SourceReviewStatus
 from app.domain.errors import (
     ConfirmationRequiredError,
     IncompleteRegimenError,
     NotFoundError,
+    ProviderUnavailableError,
     RegimenOverlapError,
     SourceUnreviewedError,
     ValidationError,
@@ -249,6 +250,84 @@ def test_reviewed_source_is_immutable(wired):
 
     with pytest.raises(ValidationError):
         wired.enrollment.review_source_fields(patient_id=PATIENT, source_id=result.regimen.source_id)
+
+
+@pytest.mark.parametrize("failure_point", ["field", "source"])
+def test_partial_source_review_retry_preserves_reviewed_fields_and_same_draft(wired, monkeypatch, failure_point):
+    """SIMULATED SQL freeze rules and separate PostgREST transactions, not SQL evidence."""
+    result = wired.enrollment.enroll_draft(patient_id=PATIENT, draft=_complete_draft())
+    source_id = result.regimen.source_id
+    update_field = wired.source_fields.update
+    update_source = wired.sources.update
+    failed = False
+
+    def guarded_field_update(field):
+        nonlocal failed
+        current = next(row for row in wired.source_fields.list_for_source(PATIENT, source_id) if row.id == field.id)
+        if current.review_status in (SourceReviewStatus.USER_REVIEWED, SourceReviewStatus.PROFESSIONAL_VERIFIED):
+            raise ValidationError("Reviewed source is immutable; create a new source revision")
+        if failure_point == "field" and field.id == result.source_fields[1].id and not failed:
+            failed = True
+            raise ProviderUnavailableError("SIMULATED interrupted field PATCH")
+        update_field(field)
+
+    def interrupted_source_update(document):
+        nonlocal failed
+        if failure_point == "source" and not failed:
+            failed = True
+            raise ProviderUnavailableError("SIMULATED unavailable source PATCH")
+        update_source(document)
+
+    monkeypatch.setattr(wired.source_fields, "update", guarded_field_update)
+    monkeypatch.setattr(wired.sources, "update", interrupted_source_update)
+    with pytest.raises(ProviderUnavailableError):
+        wired.enrollment.review_source_fields(patient_id=PATIENT, source_id=source_id)
+
+    persisted = wired.source_fields.list_for_source(PATIENT, source_id)
+    reviewed = {row.id: row for row in persisted if row.review_status == SourceReviewStatus.USER_REVIEWED}
+    assert reviewed
+    assert wired.sources.get(PATIENT, source_id).review_status == SourceReviewStatus.EXTRACTED
+    assert wired.medications.get(PATIENT, result.medication.id).identity_status == IdentityStatus.UNVERIFIED
+    wired.clock.advance(minutes=1)
+
+    assert wired.enrollment.review_source_fields(patient_id=PATIENT, source_id=source_id) == 6
+
+    fields = wired.source_fields.list_for_source(PATIENT, source_id)
+    assert all(row.review_status == SourceReviewStatus.USER_REVIEWED for row in fields)
+    assert all(row == reviewed[row.id] for row in fields if row.id in reviewed)
+    assert wired.sources.get(PATIENT, source_id).reviewed_at == wired.clock.now()
+    assert wired.medications.get(PATIENT, result.medication.id).identity_status == IdentityStatus.USER_REVIEWED_DOCUMENT
+    assert wired.enrollment.resume_draft(PATIENT, result.regimen.id).regimen == result.regimen
+    assert len(wired.medications.list_for_patient(PATIENT)) == 1
+    assert len(wired.regimens.list_for_medication(PATIENT, result.medication.id)) == 1
+
+
+@pytest.mark.parametrize("status", [SourceReviewStatus.USER_REVIEWED, SourceReviewStatus.PROFESSIONAL_VERIFIED])
+def test_partial_review_retry_respects_selected_fields_and_retains_prior_verification(wired, monkeypatch, status):
+    result = wired.enrollment.enroll_draft(patient_id=PATIENT, draft=_complete_draft())
+    name, quantity, unit = result.source_fields[:3]
+    original = name.model_copy(update={"review_status": status, "reviewed_at": wired.clock.now()})
+    wired.source_fields.update(original)
+    wired.clock.advance(minutes=1)
+    update_field = wired.source_fields.update
+
+    def guarded_update(field):
+        if field.id == name.id:
+            raise ValidationError("Reviewed source is immutable; create a new source revision")
+        update_field(field)
+
+    monkeypatch.setattr(wired.source_fields, "update", guarded_update)
+    count = wired.enrollment.review_source_fields(
+        patient_id=PATIENT, source_id=result.regimen.source_id, field_ids=[name.id, quantity.id]
+    )
+
+    fields = {row.id: row for row in wired.source_fields.list_for_source(PATIENT, result.regimen.source_id)}
+    assert count == 2
+    assert fields[name.id] == original
+    assert fields[quantity.id].review_status == SourceReviewStatus.USER_REVIEWED
+    assert fields[quantity.id].reviewed_at == wired.clock.now()
+    assert fields[unit.id] == unit
+    assert wired.medications.get(PATIENT, result.medication.id).identity_status == IdentityStatus.USER_REVIEWED_DOCUMENT
 
 
 def test_invalid_dose_and_prn_frequency_are_rejected(wired):

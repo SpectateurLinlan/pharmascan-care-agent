@@ -127,7 +127,7 @@ it('opens the original saved enrollment returned by the guarded recovery endpoin
     note: 'DEMO-only recovery test',
   });
   await start(recovery);
-  fireEvent.click(screen.getByRole('button', { name: 'Continue original enrollment' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Continue original enrollment' }));
   await waitFor(() => expect(workflowApi.resumeDraft).toHaveBeenCalledWith('DEMO-task', 1));
   await screen.findByText(
     'The draft is saved. Check the original instructions, then confirm separately.',
@@ -442,8 +442,8 @@ it('restores an owned saved task after refresh using its original workspace', as
     explanations: [],
   });
   render(<AssistantScreen ownerId="DEMO-A" sessionId={null} onSession={vi.fn()} />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Unfinished tasks' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Resume task: DEMO restored' }));
+  fireEvent.click(await screen.findByRole('button', { name: /^Continue assistant tasks/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Resume task: DEMO restored' }));
   await screen.findByText(
     'The original photo is saved, but its medication details could not be read.',
   );
@@ -476,8 +476,8 @@ it('explains no-save refresh loss without pretending its photo or fields were re
     note: 'DEMO',
   });
   render(<AssistantScreen ownerId="DEMO-A" sessionId={null} onSession={vi.fn()} />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Unfinished tasks' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Resume task: Unsaved task' }));
+  fireEvent.click(await screen.findByRole('button', { name: /^Continue assistant tasks/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Resume task: Unsaved task' }));
   await screen.findByText('Page details are unavailable. Please enter them again.');
   expect(screen.queryByText('Task progress saved.')).toBeNull();
   expect(workflowApi.originals).not.toHaveBeenCalled();
@@ -650,10 +650,134 @@ it('retries failed task listing and restores a task without resending the origin
     .mockRejectedValueOnce(new Error('DEMO list unavailable'))
     .mockResolvedValue([{ ...view, visible_fields: { medication_name: 'DEMO recovery' } }]);
   render(<AssistantScreen ownerId="DEMO-A" sessionId={null} onSession={vi.fn()} />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Unfinished tasks' }));
+  fireEvent.click(await screen.findByRole('button', { name: /^Continue assistant tasks/ }));
   fireEvent.click(await screen.findByRole('button', { name: 'Retry loading tasks' }));
   await screen.findByRole('button', { name: 'Resume task: DEMO recovery' });
   expect(workflowApi.sendMessage).not.toHaveBeenCalled();
+});
+
+it('hides recovery only after a verified empty task list', async () => {
+  let finish!: (rows: WorkflowView[]) => void;
+  vi.mocked(workflowApi.list).mockReturnValue(new Promise((resolve) => (finish = resolve)));
+  render(<AssistantScreen ownerId="DEMO-A" sessionId={null} onSession={vi.fn()} />);
+  await screen.findByText('Loading tasks...');
+  expect(screen.getByRole('button', { name: 'Continue assistant tasks' })).toBeTruthy();
+  expect(screen.queryByText(/Continue assistant tasks · 0/)).toBeNull();
+  await act(async () => finish([]));
+  expect(screen.queryByRole('region', { name: 'Continue assistant tasks' })).toBeNull();
+});
+
+it('keeps a failed task list distinct from empty and retries without inventing a count', async () => {
+  vi.mocked(workflowApi.list)
+    .mockRejectedValueOnce(new Error('DEMO unavailable'))
+    .mockResolvedValue([]);
+  render(<AssistantScreen ownerId="DEMO-A" sessionId={null} onSession={vi.fn()} />);
+  await screen.findByText('Could not load unfinished tasks. Try again.');
+  expect(screen.getByRole('button', { name: 'Continue assistant tasks' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry loading tasks' }));
+  await waitFor(() =>
+    expect(screen.queryByRole('region', { name: 'Continue assistant tasks' })).toBeNull(),
+  );
+});
+
+it('counts open tasks, explains unsaved recovery and keeps it out of the compact Today assistant', async () => {
+  vi.mocked(workflowApi.list).mockResolvedValue([
+    view,
+    { ...view, task_id: 'DEMO-unsaved', save_mode: 'ephemeral', storage_state: 'ephemeral' },
+    { ...view, task_id: 'DEMO-complete', state: 'completed' },
+    { ...view, task_id: 'DEMO-cancelled', state: 'cancelled' },
+  ]);
+  const rendered = render(
+    <AssistantScreen ownerId="DEMO-A" sessionId={null} onSession={vi.fn()} compact todayEntry />,
+  );
+  await waitFor(() => expect(workflowApi.list).toHaveBeenCalled());
+  expect(
+    screen.queryByRole('button', { name: /Continue assistant tasks|Unfinished tasks/ }),
+  ).toBeNull();
+  rendered.rerender(<AssistantScreen ownerId="DEMO-A" sessionId={null} onSession={vi.fn()} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Continue assistant tasks · 2' }));
+  await screen.findByRole('button', { name: 'Resume task: Unsaved task' });
+  expect(
+    screen.getByText(
+      'Resume unfinished assistant steps. Unsaved details may need to be entered again.',
+    ),
+  ).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Resume task: Saved task' })).toBeTruthy();
+});
+
+it('refreshes recovery on reopen and does not restore an externally completed task', async () => {
+  vi.mocked(workflowApi.list)
+    .mockResolvedValueOnce([view])
+    .mockResolvedValueOnce([view])
+    .mockResolvedValueOnce([{ ...view, revision: 2, state: 'completed' }]);
+  render(<AssistantScreen ownerId="DEMO-A" sessionId={null} onSession={vi.fn()} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Continue assistant tasks · 1' }));
+  await screen.findByRole('button', { name: 'Resume task: Saved task' });
+  fireEvent.click(screen.getByRole('button', { name: 'Continue assistant tasks · 1' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Continue assistant tasks · 1' }));
+  await waitFor(() =>
+    expect(screen.queryByRole('region', { name: 'Continue assistant tasks' })).toBeNull(),
+  );
+});
+
+it('merges current task revisions so a late list cannot resurrect a completed task', async () => {
+  let finish!: (rows: WorkflowView[]) => void;
+  vi.mocked(workflowApi.list).mockReturnValue(new Promise((resolve) => (finish = resolve)));
+  await start();
+  expect(screen.getByRole('button', { name: 'Continue assistant tasks' })).toBeTruthy();
+  vi.mocked(workflowApi.sendMessage).mockResolvedValue({
+    reply: { ...reply, message: 'DEMO task finished' },
+    workflow: { ...view, revision: 2, state: 'completed', actions: [] },
+    explanations: [],
+  });
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'DEMO finish' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  await screen.findByText('DEMO task finished');
+  await act(async () => finish([view]));
+  expect(screen.queryByRole('region', { name: 'Continue assistant tasks' })).toBeNull();
+});
+
+it('does not expose the previous owners tasks when their list arrives late', async () => {
+  let finish!: (rows: WorkflowView[]) => void;
+  vi.mocked(workflowApi.list)
+    .mockReturnValueOnce(new Promise((resolve) => (finish = resolve)))
+    .mockResolvedValue([]);
+  const rendered = render(
+    <AssistantScreen ownerId="DEMO-A" sessionId={null} onSession={vi.fn()} />,
+  );
+  await screen.findByText('Loading tasks...');
+  rendered.rerender(<AssistantScreen ownerId="DEMO-B" sessionId={null} onSession={vi.fn()} />);
+  await waitFor(() =>
+    expect(screen.queryByRole('region', { name: 'Continue assistant tasks' })).toBeNull(),
+  );
+  await act(async () => finish([view]));
+  expect(screen.queryByRole('button', { name: /Continue assistant tasks/ })).toBeNull();
+});
+
+it('locks recovery navigation while a message is still processing', async () => {
+  let finish!: (value: Awaited<ReturnType<typeof workflowApi.sendMessage>>) => void;
+  vi.mocked(workflowApi.list).mockResolvedValue([view]);
+  vi.mocked(workflowApi.sendMessage).mockReturnValue(new Promise((resolve) => (finish = resolve)));
+  render(<AssistantScreen ownerId="DEMO-A" sessionId={null} onSession={vi.fn()} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Continue assistant tasks · 1' }));
+  await screen.findByRole('button', { name: 'Resume task: Saved task' });
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'DEMO still processing' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Continue assistant tasks · 1' })).toHaveProperty(
+      'disabled',
+      true,
+    ),
+  );
+  expect(screen.getByRole('button', { name: 'Resume task: Saved task' })).toHaveProperty(
+    'disabled',
+    true,
+  );
+  await act(async () => finish({ reply, workflow: view, explanations: [] }));
+  expect(screen.getByRole('button', { name: 'Continue assistant tasks · 1' })).not.toHaveProperty(
+    'disabled',
+    true,
+  );
 });
 
 it('preserves unsent form values while checking a lost no-save field response and retries with the current revision', async () => {
@@ -692,6 +816,10 @@ it('preserves unsent form values while checking a lost no-save field response an
     target: { value: 'DEMO retained input' },
   });
   expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
+  expect(screen.getByRole('button', { name: 'Continue assistant tasks · 1' })).toHaveProperty(
+    'disabled',
+    true,
+  );
   fireEvent.click(screen.getByRole('button', { name: 'Use these details' }));
   await screen.findByText('DEMO field response lost');
   fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));

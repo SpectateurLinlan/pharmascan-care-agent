@@ -10,7 +10,7 @@ export default defineConfig({
     {
       name: 'startup-critical-styles',
       transformIndexHtml() {
-        const styles = ['tokens.css', 'composer.css', 'startup.css']
+        const styles = ['tokens.css', 'startup.css', 'composer.css']
           .map((name) => readFileSync(new URL(`./src/styles/${name}`, import.meta.url), 'utf8'))
           .join('\n');
         return [

@@ -41,6 +41,10 @@ const steps: readonly GuideStep[] = [
         heading: 'Review the Schedule',
         body: 'Check the medication name, dose, and schedule before relying on the information for daily management.',
       },
+      {
+        heading: 'Medication setup drafts',
+        body: 'Use Finish medication setup in Medications to reopen saved medication drafts and source registrations. A saved draft is not an active medication plan.',
+      },
     ],
     note: "A photo alone cannot confirm a medication's identity.",
   },
@@ -71,6 +75,10 @@ const steps: readonly GuideStep[] = [
       {
         heading: 'Conversation History',
         body: 'If chat saving is enabled, you can revisit previous conversations in the full chat view.',
+      },
+      {
+        heading: 'Continue assistant tasks',
+        body: 'In full chat, Continue assistant tasks reopens unfinished assistant steps. These are separate from medication setup drafts; unsaved details may need to be entered again.',
       },
     ],
     note: 'The AI assistant does not independently change your medication schedule or replace a doctor or pharmacist.',

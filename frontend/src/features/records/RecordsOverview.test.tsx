@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { api } from '../../api/client';
 import { LanguageProvider, useLanguage } from '../../app/LanguageProvider';
 import { RecordsOverview } from './RecordsOverview';
@@ -30,7 +30,7 @@ function fixture() {
   };
 }
 
-it('puts the pale-green summary first and keeps pending reports collapsed until requested', () => {
+it('keeps the summary first and moves pending report handling into the medication-records destination', () => {
   const props = fixture();
   const { container } = render(
     <LanguageProvider>
@@ -38,22 +38,13 @@ it('puts the pale-green summary first and keeps pending reports collapsed until 
     </LanguageProvider>,
   );
   const summary = container.querySelector('.records-summary--highlight')!;
-  const pending = container.querySelector<HTMLDetailsElement>('.records-pending-disclosure')!;
   expect(container.firstElementChild).toBe(summary);
-  expect(pending.open).toBe(false);
-  expect(
-    screen.getByText(
-      'Open to review scheduled doses from the past 7 days; eligibility still applies.',
-    ),
-  ).toBeTruthy();
-  expect(pending.querySelector('.records-pending-disclosure__chevron svg')).toBeTruthy();
-  expect(screen.getByTestId('pending-records').getAttribute('data-heading')).toBe('false');
-  fireEvent.click(
-    within(pending).getByText(
-      'Open to review scheduled doses from the past 7 days; eligibility still applies.',
-    ),
-  );
-  expect(pending.open).toBe(true);
+  expect(container.querySelector('.records-pending-disclosure')).toBeNull();
+  expect(screen.queryByTestId('pending-records')).toBeNull();
+  const records = screen.getByRole('button', { name: /My medication records/ });
+  expect(records.getAttribute('data-guide')).toBe('medication-records');
+  fireEvent.click(records);
+  expect(props.onOpenMedicationRecords).toHaveBeenCalledOnce();
 });
 
 it('shows Chinese summary period labels and opens the medication-records destination from its card', async () => {
@@ -77,9 +68,6 @@ it('shows Chinese summary period labels and opens the medication-records destina
     </LanguageProvider>,
   );
   fireEvent.click(screen.getByText('Set Chinese'));
-  expect(
-    await screen.findByText('点击查看近 7 天的计划剂次；是否可补记仍取决于计划状态。'),
-  ).toBeTruthy();
   expect(await screen.findByRole('heading', { name: '用药与健康总结' })).toBeTruthy();
   expect(await screen.findByRole('button', { name: '本周' })).toBeTruthy();
   expect(screen.getByRole('button', { name: '本月' })).toBeTruthy();

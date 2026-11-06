@@ -1,5 +1,11 @@
 # today
 
+Today distinguishes the medication schedule from a read-only pending report summary.
+Only API-verified eligible, unreported occurrences on the API patient-local date
+contribute to its count; the summary opens My medication records. It does not add
+a second dose-report action or remove the current schedule action. The care owner
+retains reporting windows, challenge confirmation and corrections.
+
 今日剂次展示及患者状态报告。
 
 | 文件 | 职责 |

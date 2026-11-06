@@ -1,5 +1,15 @@
 /** Patient-facing additions; product names and source evidence are never translated guesses. */
 export const patientCopy: Record<string, string> = {
+  'Today medication schedule': '今日用药安排',
+  'Dose reports still to add': '待补记的服药记录',
+  'View medication records': '查看用药记录',
+  'Recent scheduled doses without a patient report; reporting limits still apply.':
+    '近期尚无患者自述的计划剂次；补记仍须符合时间及计划条件。',
+  'Dose report availability could not be verified. Please retry.':
+    '暂时无法核实可补记的服药记录，请重试。',
+  'At least': '至少',
+  dose: '剂',
+  doses: '剂',
   'Your medication and self-care companion': '您的用药与自我照护伙伴',
   'This version cannot save overlapping plans for the same medicine, including different doses or as-needed and scheduled combinations. This does not mean your prescription is wrong. Review the existing records; do not change your medication because of this message.':
     '当前版本暂不支持同一种药物的重叠计划，包括不同用量或按需与定时组合。这不表示您的处方有误。请核对现有记录，不要因此自行停药或改变用量。',

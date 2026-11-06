@@ -71,6 +71,7 @@ export default {
     onboarding: ['OnboardingGuide.tsx', 'onboarding.ts'],
     records: [
       'HistoryScreen.tsx',
+      'MedicationRecordsScreen.tsx',
       'RecordsOverview.tsx',
       'ReviewSummaryScreen.tsx',
       'SummaryOverview.tsx',
