@@ -5,6 +5,9 @@
 | 文件 | 职责 |
 |---|---|
 | [App.tsx](App.tsx) | 应用外壳、各业务入口与页面装配；保留延迟加载 |
+| [bootstrap.ts](bootstrap.ts) | 不依赖 React／认证的轻量启动、应用下载失败重试与输入法交接 |
+| [mountApplication.tsx](mountApplication.tsx) | 延迟加载 React、完整样式与应用；开发诊断仍仅在原允许地址启用 |
+| [startupDraft.ts](startupDraft.ts) | 当前页面内存中的一次性输入交接 DTO；切换身份后清除 |
 | [AssistantEntry.tsx](AssistantEntry.tsx) | 连接前可输入的本地聊天入口；核对身份与会话后交接文字，不自动发送 |
 | [DeferredScreen.tsx](DeferredScreen.tsx) | 页面独立加载/错误边界与重试 |
 | [greeting.ts](greeting.ts) | 时段问候和显示名称格式 |

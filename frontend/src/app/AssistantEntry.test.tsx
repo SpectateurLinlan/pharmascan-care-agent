@@ -15,6 +15,25 @@ afterEach(() => {
   mounted.mockClear();
 });
 
+it('restores the lightweight startup draft and caret while the connection is pending', () => {
+  const props = {
+    sessionId: null,
+    onSession: vi.fn(),
+    connectionReady: false,
+    onRetryConnection: vi.fn(),
+    startupDraft: { text: 'DEMO early draft', focused: true, selection: { start: 2, end: 6 } },
+  };
+  const view = render(<AssistantEntry {...props} />);
+  const input = screen.getByRole('textbox') as HTMLInputElement;
+  expect(input.value).toBe('DEMO early draft');
+  expect(document.activeElement).toBe(input);
+  expect([input.selectionStart, input.selectionEnd]).toEqual([2, 6]);
+  view.rerender(
+    <AssistantEntry {...props} sessionId="DEMO-session" ownerId="DEMO-owner" connectionReady />,
+  );
+  expect(mounted.mock.calls.at(-1)![0].initialSelection).toEqual({ start: 2, end: 6 });
+});
+
 it('keeps startup text local and does not mount chat effects until verified readiness', () => {
   const props = {
     sessionId: null,

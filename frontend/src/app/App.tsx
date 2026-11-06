@@ -17,6 +17,7 @@ import {
 } from '../api/client';
 import { medicationSetupEntries } from '../features/enrollment/medicationSetup';
 import { AssistantEntry } from './AssistantEntry';
+import type { StartupDraft } from './startupDraft';
 import { historyName } from '../features/records/historyFilterLabels';
 import type { MedicineDestination } from '../features/medications/MedicinesHub';
 import { isPastCourse } from '../features/medications/regimenHistoryModel';
@@ -257,24 +258,26 @@ const tabs: { id: Tab; label: string; symbol: IconName }[] = [
   { id: 'assistant', label: 'AI assistant', symbol: 'message' },
 ];
 
-export function App() {
+export function App({ initialDraft }: { initialDraft?: StartupDraft } = {}) {
   const [identityRevision, setIdentityRevision] = useState(0);
+  const [startupDraft, setStartupDraft] = useState(initialDraft);
   useEffect(
     () =>
       accountAuth.watchIdentity?.(() => {
         window.localStorage.removeItem('pharmascan.agent-session');
+        setStartupDraft(undefined);
         setIdentityRevision((value) => value + 1);
       }),
     [],
   );
   return (
     <LanguageProvider key={identityRevision}>
-      <CompanionApp />
+      <CompanionApp startupDraft={startupDraft} />
     </LanguageProvider>
   );
 }
 
-function CompanionApp() {
+function CompanionApp({ startupDraft }: { startupDraft?: StartupDraft | undefined }) {
   const headerRef = useRef<HTMLElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const mainRef = useRef<HTMLElement>(null);
@@ -844,6 +847,7 @@ function CompanionApp() {
           ) : null}
           <div hidden={!assistantVisible}>
             <AssistantEntry
+              startupDraft={startupDraft}
               onConversationCleared={() => setConversationClearRevision((value) => value + 1)}
               onGuide={openGuide}
               onSupportNavigate={(route, query) => {

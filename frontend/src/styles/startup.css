@@ -1,0 +1,95 @@
+/* Inlined with tokens.css by Vite; no external resource blocks this shell. */
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+#startup-shell {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+}
+#startup-shell * {
+  box-sizing: border-box;
+}
+#startup-shell .startup-header {
+  padding: var(--s-6) var(--s-8);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  font-weight: var(--fw-strong);
+}
+#startup-shell .startup-main {
+  max-width: var(--content-max);
+  margin: auto;
+  padding: var(--s-6) var(--s-4);
+}
+#startup-shell h1 {
+  font-size: var(--fs-h1);
+  margin: 0 0 var(--s-2);
+}
+#startup-shell h2 {
+  font-size: var(--fs-h2);
+  margin: 0 0 var(--s-3);
+}
+#startup-shell p {
+  margin: 0 0 var(--s-4);
+}
+#startup-shell .startup-lead,
+#startup-shell .startup-records {
+  color: var(--ink-2);
+}
+#startup-shell .startup-assistant {
+  background: var(--brand-50);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--s-4);
+  margin-block: var(--s-4);
+}
+#startup-shell .composer-row {
+  /* Full-app CSS can arrive before its JS; keep the shell's composer in its card. */
+  position: static;
+  transform: none;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  box-shadow: none;
+  display: flex;
+  gap: var(--s-2);
+  align-items: center;
+  padding: var(--s-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+}
+#startup-shell input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  min-height: var(--tap);
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+}
+#startup-shell input::placeholder {
+  color: var(--ink-2);
+}
+#startup-shell button {
+  min-height: var(--tap);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding-inline: var(--s-3);
+  background: var(--surface);
+  color: var(--ink-2);
+  font: inherit;
+}
+#startup-shell button:disabled {
+  cursor: not-allowed;
+}
+#startup-shell :focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+#startup-shell #startup-retry {
+  margin-bottom: var(--s-3);
+}

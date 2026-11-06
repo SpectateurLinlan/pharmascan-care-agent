@@ -9,4 +9,4 @@
 不允许通过全目录通配导出或忽略错误来绕过新产生的边界问题。
 新增 feature 必须先在配置中声明归属与公开入口；无法静态确定目标的动态 import 会报错。
 
-`startupResources.test.mjs`：用生产构建检查首屏静态依赖总量和按需界面边界；运行 `npm run check:startup`。只读取构建内存，不调用业务 API，也不输出源码或环境值。
+`startupResources.test.mjs`：用生产构建分别检查轻量入口与完整应用的静态依赖、按需界面边界、HTML 关键样式及静态资源缓存规则；运行 `npm run check:startup`。只读取构建内存，不调用业务 API，也不输出源码或环境值。

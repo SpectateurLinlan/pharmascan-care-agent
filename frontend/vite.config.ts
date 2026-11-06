@@ -1,10 +1,29 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { readFileSync } from 'node:fs';
 
 // The dev server proxies /api to the FastAPI backend so the browser never
 // needs to know the backend origin and CORS stays simple in development.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'startup-critical-styles',
+      transformIndexHtml() {
+        const styles = ['tokens.css', 'startup.css']
+          .map((name) => readFileSync(new URL(`./src/styles/${name}`, import.meta.url), 'utf8'))
+          .join('\n');
+        return [
+          {
+            tag: 'style',
+            attrs: { id: 'startup-critical-styles' },
+            children: styles,
+            injectTo: 'head',
+          },
+        ];
+      },
+    },
+  ],
   server: {
     port: 5173,
     proxy: {

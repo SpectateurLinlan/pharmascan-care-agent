@@ -11,6 +11,175 @@ async function closeHeldPage(page: Page, release: () => void) {
   }
 }
 
+for (const width of [390, 1280]) {
+  test(`HTML and local input survive held scripts and IME handover at ${width}px`, async ({
+    page,
+    baseURL,
+  }) => {
+    expect(new URL(baseURL!).hostname).toBe('127.0.0.1');
+    await page.setViewportSize({ width, height: 844 });
+    let releaseEntry!: () => void;
+    let releaseApp!: () => void;
+    const entry = new Promise<void>((resolve) => {
+      releaseEntry = resolve;
+    });
+    const app = new Promise<void>((resolve) => {
+      releaseApp = resolve;
+    });
+    let appRequested = false;
+    const apiCalls: string[] = [];
+    await page.route('**/*', async (route) => {
+      const url = new URL(route.request().url());
+      if (url.origin !== new URL(baseURL!).origin) return route.abort();
+      if (url.pathname.startsWith('/api/')) {
+        apiCalls.push(`${route.request().method()} ${url.pathname}`);
+        return route.abort();
+      }
+      if (/\/assets\/index-.*\.js$|\/src\/main\.tsx$/.test(url.pathname)) await entry;
+      if (
+        /\/assets\/mountApplication-.*\.js$|\/src\/app\/mountApplication\.tsx$/.test(url.pathname)
+      ) {
+        appRequested = true;
+        await app;
+      }
+      try {
+        await route.continue();
+      } catch (error) {
+        if (!page.isClosed()) throw error;
+      }
+    });
+    try {
+      const started = Date.now();
+      await page.goto('/', { waitUntil: 'commit' });
+      const early = page.locator('#startup-message');
+      await expect(early).toBeVisible();
+      const firstInputMs = Date.now() - started;
+      expect(
+        await page.locator('#startup-shell').evaluate((el) => getComputedStyle(el).fontFamily),
+      ).toContain('Segoe');
+      await early.fill('DEMO before entry downloaded');
+      await early.press('Enter');
+      expect(apiCalls).toEqual([]);
+      // Composition can start while even the tiny entry is still downloading.
+      await early.dispatchEvent('compositionstart');
+      releaseEntry();
+      await expect.poll(() => appRequested).toBe(true);
+      await expect(early).toHaveValue('DEMO before entry downloaded');
+      expect(apiCalls).toEqual([]);
+      await early.fill('布洛芬 DEMO local draft');
+      await early.evaluate((input: HTMLInputElement) => input.setSelectionRange(1, 4));
+      if (width === 1280)
+        await page.locator('#startup-shell h1').evaluate((el) => {
+          el.setAttribute('tabindex', '-1');
+          (el as HTMLElement).focus();
+        });
+      const output = path.resolve('../internal/acceptance/progressive-browser');
+      mkdirSync(output, { recursive: true });
+      const card = await page.locator('.startup-assistant').boundingBox();
+      const composer = await early.boundingBox();
+      expect(composer!.y + composer!.height).toBeLessThanOrEqual(card!.y + card!.height);
+      await page.screenshot({ path: path.join(output, `shell-${width}.png`), fullPage: true });
+      await page.evaluate(() => (document.documentElement.style.fontSize = '150%'));
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      await page.evaluate(() => document.documentElement.style.removeProperty('font-size'));
+      releaseApp();
+      await expect
+        .poll(() =>
+          page.evaluate(() => performance.getEntriesByName('medithread:runtime-ready').length),
+        )
+        .toBe(1);
+      await expect(early).toBeVisible();
+      await early.dispatchEvent('compositionend');
+      await expect(page.locator('#startup-shell')).toHaveCount(0);
+      const connected = page.locator('.composer-row').getByRole('textbox');
+      await expect(connected).toHaveValue('布洛芬 DEMO local draft');
+      if (width === 390) {
+        await expect(connected).toBeFocused();
+        expect(
+          await connected.evaluate((input: HTMLInputElement) => [
+            input.selectionStart,
+            input.selectionEnd,
+          ]),
+        ).toEqual([1, 4]);
+      } else await expect(connected).not.toBeFocused();
+      expect(apiCalls.some((call) => call.startsWith('POST '))).toBe(false);
+      await expect(page.locator('.composer-send')).toBeDisabled();
+      await page.screenshot({ path: path.join(output, `handover-${width}.png`), fullPage: true });
+      writeFileSync(
+        path.join(output, `${width}.json`),
+        JSON.stringify({
+          mode: 'production_static_scripts_held',
+          firstInputMs,
+          apiCallsBeforeRuntime: 0,
+        }),
+      );
+    } finally {
+      await closeHeldPage(page, () => {
+        releaseEntry();
+        releaseApp();
+      });
+    }
+  });
+}
+
+for (const kind of ['js', 'css']) {
+  test(`a failed application ${kind} download can retry with its local draft intact`, async ({
+    page,
+    baseURL,
+  }) => {
+    expect(new URL(baseURL!).hostname).toBe('127.0.0.1');
+    let failDownload = true;
+    const html = await (await page.request.get('/')).text();
+    test.skip(
+      !html.includes('/assets/index-'),
+      'Asset retry checks require a production Vite preview.',
+    );
+    await page.route('**/*', async (route) => {
+      const url = new URL(route.request().url());
+      if (url.origin !== new URL(baseURL!).origin || url.pathname.startsWith('/api/'))
+        return route.abort();
+      if (
+        (new RegExp(`/assets/mountApplication-.*\\.${kind}$`).test(url.pathname) ||
+          (kind === 'js' && url.pathname === '/src/app/mountApplication.tsx')) &&
+        failDownload
+      )
+        return route.abort();
+      return route.continue();
+    });
+    try {
+      await page.goto('/', { waitUntil: 'commit' });
+      await expect(page.locator('#startup-retry')).toBeVisible();
+      await page.locator('#startup-message').fill('DEMO kept after asset failure');
+      failDownload = false;
+      await page.locator('#startup-retry').click();
+      await expect(page.locator('#startup-shell')).toHaveCount(0, { timeout: 5000 });
+      await expect(page.locator('.composer-row').getByRole('textbox')).toHaveValue(
+        'DEMO kept after asset failure',
+      );
+      await expect
+        .poll(
+          () =>
+            page.evaluate(() =>
+              Array.from(document.styleSheets).some((sheet) => {
+                if (!sheet.href?.includes('/mountApplication-')) return false;
+                try {
+                  return sheet.cssRules.length > 0;
+                } catch {
+                  return false;
+                }
+              }),
+            ),
+          { timeout: 5000 },
+        )
+        .toBe(true);
+    } finally {
+      await closeHeldPage(page, () => undefined);
+    }
+  });
+}
+
 test('held startup responses are released only after page disposal', async ({
   page,
   context,
@@ -152,6 +321,9 @@ for (const language of ['en', 'zh'] as const) {
       await page.goto('/');
       const composer = page.locator('.composer-row').getByRole('textbox');
       await expect(composer).toBeVisible({ timeout: 5000 });
+      // These cases cover backend/session readiness after the separate HTML/JS
+      // handover cases above; measure the React composer, not a replacing DOM node.
+      await expect(page.locator('#startup-shell')).toHaveCount(0);
       const startupSize = await composer.boundingBox();
       const startupSend = await page.locator('.composer-send').boundingBox();
       expect(startupSize!.width).toBeGreaterThan(180);

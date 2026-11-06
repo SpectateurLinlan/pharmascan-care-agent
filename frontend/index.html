@@ -3,26 +3,70 @@
   <head>
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0f3d3e" />
     <title>MediThread — Your medication and self-care companion</title>
     <link rel="icon" href="/branding/medithread-32.png" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="/branding/medithread-180.png" sizes="180x180" />
     <meta name="application-name" content="MediThread" />
     <meta name="apple-mobile-web-app-title" content="MediThread" />
-    <meta name="description" content="Your medication and self-care companion. Review medication plans, record your experiences and prepare for professional reviews. A demonstration prototype, not a substitute for medical advice." />
+    <meta
+      name="description"
+      content="Your medication and self-care companion. Review medication plans, record your experiences and prepare for professional reviews. A demonstration prototype, not a substitute for medical advice."
+    />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="MediThread" />
-    <meta property="og:description" content="A Personalised Medication &amp; Long-Term Self-Care Agent" />
+    <meta
+      property="og:description"
+      content="A Personalised Medication &amp; Long-Term Self-Care Agent"
+    />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="MediThread" />
     <meta name="twitter:description" content="Your medication and self-care companion" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Nonclinical HTML remains useful while the application downloads. -->
+      <div id="startup-shell">
+        <header class="startup-header">MediThread</header>
+        <main class="startup-main">
+          <h1>Welcome to MediThread</h1>
+          <p class="startup-lead">Your medication and self-care companion</p>
+          <section class="startup-assistant" aria-labelledby="startup-assistant-title">
+            <h2 id="startup-assistant-title">MediThread Assistant</h2>
+            <p id="startup-status" role="status">
+              Loading MediThread. You can type while we prepare the app.
+            </p>
+            <button id="startup-retry" type="button" hidden>Retry loading MediThread</button>
+            <div class="composer-row composer-row--connecting">
+              <input
+                id="startup-message"
+                type="text"
+                maxlength="2000"
+                aria-label="Review your message before sending"
+                placeholder="Ask about your medication..."
+                autocomplete="off"
+              />
+              <script>
+                // Observe IME before the external entry is available; retain no text.
+                {
+                  const input = document.getElementById('startup-message');
+                  input.addEventListener('compositionstart', () => {
+                    input.dataset.composing = 'true';
+                  });
+                  input.addEventListener('compositionend', () => {
+                    input.dataset.composing = 'false';
+                  });
+                }
+              </script>
+              <button class="composer-send" type="button" disabled aria-label="Send">Send</button>
+            </div>
+          </section>
+          <p class="startup-records">Your records will appear after a secure connection.</p>
+          <noscript>Enable JavaScript to use MediThread.</noscript>
+        </main>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

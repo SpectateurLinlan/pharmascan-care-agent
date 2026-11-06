@@ -1,5 +1,6 @@
 /** Show a local composer while identity/session setup runs; never queue a send. */
-import { useState, type ComponentProps } from 'react';
+import { useLayoutEffect, useRef, useState, type ComponentProps } from 'react';
+import type { StartupDraft } from './startupDraft';
 import { Icon } from '../components/Icon';
 import { AssistantScreen } from '../features/assistant/conversation/AssistantScreen';
 import { ConversationSurface } from '../features/conversations/ConversationSurface';
@@ -9,18 +10,32 @@ type Props = ComponentProps<typeof AssistantScreen> & {
   connectionReady: boolean;
   connectionError?: unknown;
   onRetryConnection: () => void;
+  startupDraft?: StartupDraft | undefined;
 };
 
 export function AssistantEntry({
   connectionReady,
   connectionError,
   onRetryConnection,
+  startupDraft,
   ...props
 }: Props) {
   const { t } = useLanguage();
-  const [draft, setDraft] = useState('');
-  const [focused, setFocused] = useState(false);
-  const [selection, setSelection] = useState({ start: 0, end: 0 });
+  const [draft, setDraft] = useState(startupDraft?.text ?? '');
+  const [focused, setFocused] = useState(startupDraft?.focused ?? false);
+  const [selection, setSelection] = useState(startupDraft?.selection ?? { start: 0, end: 0 });
+  const pendingInput = useRef<HTMLInputElement>(null);
+  useLayoutEffect(() => {
+    if (startupDraft?.focused && pendingInput.current) {
+      pendingInput.current.focus({ preventScroll: true });
+      pendingInput.current.setSelectionRange(
+        startupDraft.selection.start,
+        startupDraft.selection.end,
+      );
+      // focus fires onFocus with the pre-restoration caret; retain the final range.
+      setSelection(startupDraft.selection);
+    }
+  }, [startupDraft]);
   const [composing, setComposing] = useState(false);
   const captureSelection = (input: HTMLInputElement) =>
     setSelection({
@@ -75,6 +90,7 @@ export function AssistantEntry({
           onSubmit={(event) => event.preventDefault()}
         >
           <input
+            ref={pendingInput}
             aria-label={t('Review your message before sending')}
             placeholder={t('Ask about your medication...')}
             maxLength={2000}

@@ -403,8 +403,17 @@ it('clears the previous owner immediately on an identity change while the new ow
   });
   vi.mocked(api.regimenHistory).mockResolvedValue([]);
   vi.mocked(api.startDemo).mockReturnValue(new Promise(() => {}));
-  render(<App />);
+  render(
+    <App
+      initialDraft={{
+        text: 'DEMO bootstrap owner draft',
+        focused: false,
+        selection: { start: 0, end: 0 },
+      }}
+    />,
+  );
   await screen.findByText(/DEMO Alice!/);
+  expect(screen.getByRole('textbox')).toHaveProperty('value', 'DEMO bootstrap owner draft');
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'DEMO previous owner draft' } });
   vi.mocked(api.health).mockReturnValue(new Promise(() => {}));
   await act(async () => {
