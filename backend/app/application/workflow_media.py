@@ -39,4 +39,7 @@ class WorkflowMediaService:
         )
 
     def run_unbound(self, owner, write):
+        if self.transactions is not None:
+            # The unbound native API owns its SQL transaction and proof guards.
+            return write()
         return self.adapter.clinical.run(owner, self.adapter.clinical.revision(owner), write)

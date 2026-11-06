@@ -39,5 +39,8 @@ class WorkflowSettingsService:
             write=lambda: adapter.run_bound_request(context, values, ref, target, payload, confirmed, write))
 
     def run_unbound(self, owner, write):
+        if self.transactions is not None:
+            # Keep native SQL validation; task-bound calls use apply_native.
+            return write()
         adapter = next(iter(self.adapters.values()))
         return adapter.clinical.run(owner, adapter.clinical.revision(owner), write)

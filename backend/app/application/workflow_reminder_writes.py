@@ -41,4 +41,7 @@ class WorkflowReminderWriteService:
             write=lambda: self.adapter.run_bound_request(context, values, ref, payload, confirmed, write))
 
     def run_unbound(self, owner: UUID, write: Callable[[], T]) -> T:
+        if self.transactions is not None:
+            # The native reminder RPC owns validation and its atomic write.
+            return write()
         return self.adapter.clinical.run(owner, self.adapter.clinical.revision(owner), write)

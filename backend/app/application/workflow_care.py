@@ -60,4 +60,7 @@ class WorkflowCareService:
         )
 
     def run_unbound(self, owner, write):
+        if self.transactions is not None:
+            # The unbound native API owns its SQL validation and transaction.
+            return write()
         return self.adapter.clinical.run(owner, self.adapter.clinical.revision(owner), write)
