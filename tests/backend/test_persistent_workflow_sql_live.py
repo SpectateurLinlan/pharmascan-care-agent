@@ -174,6 +174,30 @@ def test_live_preparation_reference_contract_matches_typed_application(live_pers
         assert c.execute("SELECT public.assistant_wf_ref(%s)", (Jsonb(invalid),)).fetchone()[0] is False
 
 
+@pytest.mark.parametrize("status,reason", [("completed", None), ("failed", "execution_failed"),
+                                           ("cancelled", "cancelled")])
+def test_live_run_terminal_status_and_reason(live_persistence_sql, status, reason):
+    from app.contracts.workflow_run_control import ClaimRun, FinishRun, RunControlState
+    from app.infrastructure.workflow_verification import (
+        EvidenceConnectionSettings, PostgresEvidenceVerifier, RestrictedEvidenceConnection,
+    )
+
+    profile, target, connection = live_persistence_sql
+    run = uuid4()
+    started = patient(connection, target.owner_a, "assistant_run_control",
+                      {"kind": "start", "run_id": str(run), "task_id": None})
+    initial = RunControlState.model_validate(started["result"])
+    verifier = PostgresEvidenceVerifier(RestrictedEvidenceConnection(EvidenceConnectionSettings(profile.evidence_dsn)))
+    claimed = verifier.record_run(ClaimRun(ticket_id=initial.worker_ticket, nonce=initial.worker_nonce,
+                                         epoch=0, event_id=uuid4()), timeout_seconds=3)
+    finished = verifier.record_run(FinishRun(ticket_id=claimed.worker_ticket, nonce=claimed.worker_nonce,
+                                          epoch=claimed.epoch, event_id=uuid4(), status=status,
+                                          reason=reason, duration_ms=1), timeout_seconds=3)
+    assert finished.status == status
+    assert finished.snapshot.events[-1].reason_key == reason
+    assert finished.snapshot.events[-1].kind == "run_" + status
+
+
 def test_live_cross_owner_task_and_forged_result_are_rejected(live_persistence_sql):
     from .test_workflow_sql import _sql_command
 

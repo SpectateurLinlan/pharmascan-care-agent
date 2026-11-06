@@ -106,7 +106,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 DECLARE r public.assistant_runtime_runs%ROWTYPE; o uuid; rid uuid; kind text; allowed text[];
  event_key text; fingerprint text; previous text; obs jsonb; phase text; span text; attempt text;
  counter text; count_before integer; new_metadata jsonb; retry boolean; usage jsonb; old_usage jsonb;
- combined jsonb; field_name text; step_kind text; next_status text; reason text; duration numeric; at_time timestamptz;
+ combined jsonb; field_name text; step_kind text; next_status text; terminal_reason text; duration numeric; at_time timestamptz;
 BEGIN
  IF session_user<>'assistant_evidence_login' THEN
   RAISE EXCEPTION 'Restricted verifier required' USING ERRCODE='42501'; END IF;
@@ -235,7 +235,7 @@ BEGIN
   UPDATE public.assistant_runtime_runs SET status='failed',reason='worker_interrupted' WHERE owner=o AND id=rid;
   PERFORM assistant_evidence.append_run_event(o,rid,(p_command->>'event_id')::uuid,'run_failed',NULL,'worker_interrupted');
  ELSIF kind='finish' THEN
-  next_status:=p_command->>'status'; reason:=p_command->>'reason'; duration:=(p_command->>'duration_ms')::numeric;
+  next_status:=p_command->>'status'; terminal_reason:=p_command->>'reason'; duration:=(p_command->>'duration_ms')::numeric;
   IF r.status IN ('completed','cancelled','failed') THEN RETURN jsonb_build_object('error','stale'); END IF;
   IF next_status IS NULL OR next_status NOT IN ('completed','cancelled','failed') OR duration IS NULL OR duration<0 THEN
    RAISE EXCEPTION 'Invalid final run status' USING ERRCODE='22023'; END IF;
@@ -244,10 +244,10 @@ BEGIN
    IF at_time>=r.deadline_at THEN RETURN jsonb_build_object('error','deadline'); END IF;
    IF r.active_spans<>'{}'::jsonb THEN RETURN jsonb_build_object('error','stale'); END IF;
   END IF;
-  UPDATE public.assistant_runtime_runs SET status=next_status,reason=reason,
+  UPDATE public.assistant_runtime_runs SET status=next_status,reason=terminal_reason,
    metadata=metadata||jsonb_build_object('duration_ms',duration) WHERE owner=o AND id=rid;
   PERFORM assistant_evidence.append_run_event(o,rid,(p_command->>'event_id')::uuid,
-   CASE next_status WHEN 'completed' THEN 'run_completed' WHEN 'cancelled' THEN 'run_cancelled' ELSE 'run_failed' END,NULL,reason);
+   CASE next_status WHEN 'completed' THEN 'run_completed' WHEN 'cancelled' THEN 'run_cancelled' ELSE 'run_failed' END,NULL,terminal_reason);
  END IF;
  UPDATE public.assistant_runtime_runs SET operations=operations||jsonb_build_object(event_key,fingerprint) WHERE owner=o AND id=rid;
  RETURN assistant_evidence.run_projection(o,rid);
